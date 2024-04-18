@@ -1,5 +1,18 @@
 from bs4 import BeautifulSoup
 import requests
+import os
+import re
+
+# Función para modificar el enlace de la imagen
+def modify_cover_url(cover_url):
+    # Utilizar expresiones regulares para encontrar y reemplazar el número aleatorio después de SY o SX
+    return re.sub(r'(_SX\d+_SY\d+_|_SY\d+_SX\d+_|_SX\d+_|_SY\d+_)', '_SY700_', cover_url)
+
+
+# Crear la carpeta si no existe
+folder_path = "Bookshelf/Img/Covers"
+if not os.path.exists(folder_path):
+    os.makedirs(folder_path)
 
 # URL base
 base_url = "https://www.goodreads.com/review/list/27786474-johan-gonzalez?print=true&ref=nav_mybooks&shelf=read&utf8=%E2%9C%93"
@@ -8,7 +21,7 @@ headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
 }
 
-# Realizar la solicitud GET a la primera página
+# Realizar la solicitud GET a la última página
 response = requests.get(base_url, headers=headers)
 
 # Verificar si la solicitud fue exitosa
@@ -21,8 +34,17 @@ if response.status_code == 200:
     last_page_link = pagination_div.find_all("a")[-2]  # El penúltimo enlace es el último número de página
     total_pages = int(last_page_link.text)
 
-    # Iterar sobre todas las páginas de revisión
-    for page_number in range(1, total_pages + 1):
+    # Encontrar el número de libros en la última página
+    last_page_url = f"{base_url}&page={total_pages}"
+    last_page_response = requests.get(last_page_url, headers=headers)
+    last_page_soup = BeautifulSoup(last_page_response.text, 'html.parser')
+    last_page_reviews = last_page_soup.find_all('tr', class_='bookalike review')
+    last_page_book_count = len(last_page_reviews)
+    # Calcular el contador de libros
+    book_counter = 0
+
+    # Iterar sobre todas las páginas de revisión en orden inverso
+    for page_number in range(total_pages, 0, -1):
         # Construir la URL de la página actual
         page_url = f"{base_url}&page={page_number}"
         
@@ -33,19 +55,32 @@ if response.status_code == 200:
         # Encontrar todas las revisiones en la página actual
         reviews = soup.find_all('tr', class_='bookalike review')
         
+        # Contar el número de libros en esta página
+        page_book_count = len(reviews)
+        
         # Iterar sobre cada revisión para extraer la información
-        for review in reviews:
-            # Tu código de extracción de información aquí
+        for review in reversed(reviews):  # Iterar en orden inverso para empezar desde abajo hacia arriba
+            # Incrementar el contador de libros
+            book_counter += 1
+            
             # Extraer el enlace de la portada del libro con extensión .jpg
             cover_info = review.find('td', class_='field cover')
             if cover_info:
                 cover_link = cover_info.find('img')['src']
                 if cover_link.endswith('.jpg'):
-                    cover_url = cover_link
-                else:
-                    cover_url = "N/A"
-            else:
-                cover_url = "N/A"
+                    # Modificar el enlace de la portada
+                    modified_cover_url = modify_cover_url(cover_link)
+                    
+                    # Obtener el nombre del archivo de la portada
+                    file_name = f"{book_counter}.jpg"
+                    
+                    # Verificar si el archivo ya existe en la carpeta de destino
+                    if not os.path.exists(os.path.join(folder_path, file_name)):
+                        # Descargar la imagen de la portada
+                        with open(os.path.join(folder_path, file_name), 'wb') as f:
+                            response = requests.get(modified_cover_url)
+                            f.write(response.content)
+
 
             # Extraer el título del libro
             title_info = review.find('td', class_='field title')
@@ -87,8 +122,9 @@ if response.status_code == 200:
             date_read = review.find('td', class_='field date_read').find('div', class_='value').find('span', class_='date_read_value').get_text(strip=True)
 
             # Imprimir la información extraída
+            print(f"Consecutivo de libro: {book_counter}")
             print("Nombre del libro:", title)
-            print("Enlace de la portada:", cover_url)
+            print("Enlace de la portada:", modified_cover_url)
             print("Mis estrellas:", my_rating)
             print("Nota del público:", public_rating)
             print("Fecha de leído:", date_read)
