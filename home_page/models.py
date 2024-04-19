@@ -3,7 +3,6 @@ from bs4 import BeautifulSoup
 import requests
 import os
 import re
-import sqlite3
 from datetime import datetime
 
 def modify_cover_url(cover_url):
