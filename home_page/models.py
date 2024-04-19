@@ -3,15 +3,31 @@ from bs4 import BeautifulSoup
 import requests
 import os
 import re
+import sqlite3
 from datetime import datetime
 
 def modify_cover_url(cover_url):
     return re.sub(r'(_SX\d+_SY\d+_|_SY\d+_SX\d+_|_SX\d+_|_SY\d+_)', '_SY700_', cover_url)
 
 def scrap_books():
-    folder_path = "home_page/Img/Covers"
+    folder_path = "static/Img/Covers"
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
+
+    # Crear una conexión a la base de datos
+    conn = sqlite3.connect('database.db')    
+    # Crear un cursor
+    c = conn.cursor()
+    # Crear la tabla si no existe
+    c.execute('''CREATE TABLE IF NOT EXISTS books
+                (id INTEGER PRIMARY KEY,
+                title TEXT,
+                author TEXT,
+                cover_link TEXT,
+                my_rating INTEGER,
+                public_rating TEXT,
+                date_read TEXT,
+                book_link TEXT UNIQUE)''')
 
     base_url = "https://www.goodreads.com/review/list/27786474-johan-gonzalez?print=true&ref=nav_mybooks&shelf=read&utf8=%E2%9C%93"
     headers = {
@@ -73,6 +89,16 @@ def scrap_books():
                     else:
                         title = "N/A"
                         
+                    author_info = review.find('td', class_='field author')
+                    if author_info:
+                        author_element = author_info.find('a')
+                        if author_element:
+                            author = author_element.get_text(strip=True)
+                        else:
+                            author = "N/A"
+                    else:
+                        author = "N/A"
+    
                     rating_element = review.find('td', class_='field rating')
                     if rating_element:
                         rating_title = rating_element.find('span', class_='staticStars').get('title', '')
@@ -114,6 +140,7 @@ def scrap_books():
                         # El libro no existe, insertarlo en la base de datos
                         new_book = Book(
                             title=title,
+                            author=author,
                             cover_link=cover_link,
                             my_rating=my_rating,
                             public_rating=public_rating,
@@ -124,6 +151,7 @@ def scrap_books():
 
                     print(f"Consecutivo de libro: {book_counter}")
                     print("Nombre del libro:", title)
+                    print("Autor:", author)
                     print("Enlace del libro:", book_link)
                     print("Mis estrellas:", my_rating)
                     print("Nota del público:", public_rating)
@@ -140,6 +168,7 @@ class Book(models.Model):
         db_table = 'books'
 
     title = models.CharField(max_length=200)
+    author = models.CharField(max_length=200)
     cover_link = models.TextField()  
     my_rating = models.IntegerField()
     public_rating = models.CharField(max_length=20)
