@@ -2,15 +2,21 @@ from bs4 import BeautifulSoup
 import requests
 import os
 import re
+import sqlite3
 
 # Función para modificar el enlace de la imagen
 def modify_cover_url(cover_url):
     # Utilizar expresiones regulares para encontrar y reemplazar el número aleatorio después de SY o SX
     return re.sub(r'(_SX\d+_SY\d+_|_SY\d+_SX\d+_|_SX\d+_|_SY\d+_)', '_SY700_', cover_url)
 
+# Crear una conexión a la base de datos
+conn = sqlite3.connect('Home/bookshelf.db')
+
+# Crear un cursor
+c = conn.cursor()
 
 # Crear la carpeta si no existe
-folder_path = "Bookshelf/Img/Covers"
+folder_path = "Home/Img/Covers"
 if not os.path.exists(folder_path):
     os.makedirs(folder_path)
 
@@ -42,6 +48,16 @@ if response.status_code == 200:
     last_page_book_count = len(last_page_reviews)
     # Calcular el contador de libros
     book_counter = 0
+
+    # Crear la tabla si no existe
+    c.execute('''CREATE TABLE IF NOT EXISTS books
+                (id INTEGER PRIMARY KEY,
+                title TEXT,
+                cover_link TEXT,
+                my_rating INTEGER,
+                public_rating TEXT,
+                date_read TEXT,
+                book_link TEXT UNIQUE)''')
 
     # Iterar sobre todas las páginas de revisión en orden inverso
     for page_number in range(total_pages, 0, -1):
@@ -121,13 +137,29 @@ if response.status_code == 200:
             # Extraer la fecha de leído
             date_read = review.find('td', class_='field date_read').find('div', class_='value').find('span', class_='date_read_value').get_text(strip=True)
 
+            # Extraer enlace del libro
+            book_link = review.find('td', class_='field title').find('a')['href']
+
+            # Insertar los datos en la base de datos si el enlace del libro no está duplicado
+            try:
+                c.execute("INSERT INTO books (title, cover_link, my_rating, public_rating, date_read, book_link) VALUES (?, ?, ?, ?, ?, ?)",
+                        (title, cover_link, my_rating, public_rating, date_read, book_link))
+            except sqlite3.IntegrityError:
+                print(f"El libro '{title}' ya existe en la base de datos. No se insertará duplicado.")
+
             # Imprimir la información extraída
             print(f"Consecutivo de libro: {book_counter}")
             print("Nombre del libro:", title)
-            print("Enlace de la portada:", modified_cover_url)
+            print("Enlace del libro:", book_link)
             print("Mis estrellas:", my_rating)
             print("Nota del público:", public_rating)
             print("Fecha de leído:", date_read)
             print("----------------------------------")
-else:
-    print("Error al realizar la solicitud GET a la página web")
+
+    # Guardar los cambios en la base de datos
+    conn.commit()
+
+    # Cerrar la conexión a la base de datos
+    conn.close()
+
+    print(f"Se insertaron {book_counter} libros en la base de datos.")
