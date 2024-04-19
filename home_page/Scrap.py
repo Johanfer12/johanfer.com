@@ -10,13 +10,13 @@ def modify_cover_url(cover_url):
     return re.sub(r'(_SX\d+_SY\d+_|_SY\d+_SX\d+_|_SX\d+_|_SY\d+_)', '_SY700_', cover_url)
 
 # Crear una conexión a la base de datos
-conn = sqlite3.connect('Home/bookshelf.db')
+conn = sqlite3.connect('database.db')
 
 # Crear un cursor
 c = conn.cursor()
 
 # Crear la carpeta si no existe
-folder_path = "Home/Img/Covers"
+folder_path = "home_page/Img/Covers"
 if not os.path.exists(folder_path):
     os.makedirs(folder_path)
 
