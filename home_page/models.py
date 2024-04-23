@@ -106,10 +106,10 @@ def scrap_books():
                             my_rating = 1
                         elif 'it was ok' in rating_title:
                             my_rating = 2
+                        elif 'really liked it' in rating_title: #Primero esta opción para que no me equivoque con el otro del mismo contenido
+                            my_rating = 4
                         elif 'liked it' in rating_title:
                             my_rating = 3
-                        elif 'really liked it' in rating_title:
-                            my_rating = 4
                         elif 'it was amazing' in rating_title:
                             my_rating = 5
                         else:

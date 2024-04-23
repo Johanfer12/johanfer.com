@@ -41,6 +41,10 @@
             font-weight: bold;
             white-space: normal;
         }
+        .stars {
+            color: gold;
+            font-size: 20px;
+        }
     </style>
 </head>
 <body>
@@ -54,7 +58,12 @@
             <div class="book-info">
                 <p class="book-title">{{ book.title }}</p>
                 <p>Autor: {{ book.author }}</p>
-                <p>Nota General: {{ book.public_rating }}</p>
+                <p>Mi calificación: 
+                    {% for _ in "x"|ljust:book.my_rating %}
+                        <span class="stars">&#9733;</span>
+                    {% endfor %}
+                </p>                
+                <p>Calificación General: {{ book.public_rating }}</p>
                 <p>Fecha de Leído: {{ book.date_read }}</p>
             </div>
         </div>
