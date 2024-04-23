@@ -56,7 +56,7 @@
                 <img src="{% static 'Img/Covers/' %}{{ book.id }}.jpg" alt="{{ book.title }}">
             </div>
             <div class="book-info">
-                <p class="book-title">{{ book.title }}</p>
+                <a href="https://www.goodreads.com{{ book.book_link }}" target="_blank" class="book-title">{{ book.title }}</a>
                 <p>Autor: {{ book.author }}</p>
                 <p>Mi calificación: 
                     {% for _ in "x"|ljust:book.my_rating %}
