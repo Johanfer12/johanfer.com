@@ -5,66 +5,26 @@
     <meta charset="UTF-8">
     <title>Lista de Libros</title>
     <link rel="shortcut icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
-    <style>
-        .book-container {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            margin-bottom: 20px;
-        }
-        .book-item {
-            width: calc(20% - 20px);
-            margin-bottom: 20px;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .book-cover {
-            width: 170px;
-            height: 225px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 10px;
-            background-color: #bebebe;
-        }
-        .book-cover img {
-            max-width: 100%;
-            max-height: 100%;
-        }
-        .book-info {
-            width: 100%;
-            text-align: center;
-        }
-        .book-title {
-            font-weight: bold;
-            white-space: normal;
-        }
-        .stars {
-            color: gold;
-            font-size: 20px;
-        }
-    </style>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 </head>
 <body>
     <h1>Lista de Libros</h1>
     <div class="book-container">
         {% for book in books %}
         <div class="book-item">
-            <div class="book-cover">
-                <img src="{% static 'Img/Covers/' %}{{ book.id }}.jpg" alt="{{ book.title }}">
-            </div>
-            <div class="book-info">
-                <a href="https://www.goodreads.com{{ book.book_link }}" target="_blank" class="book-title">{{ book.title }}</a>
-                <p>Autor: {{ book.author }}</p>
-                <p>Mi calificación: 
-                    {% for _ in "x"|ljust:book.my_rating %}
+            <div class="book-info-container">
+                <div class="book-cover">
+                    <img src="{% static 'Img/Covers/' %}{{ book.id }}.jpg" alt="{{ book.title }}">
+                </div>
+                <div class="book-info">
+                    <a href="https://www.goodreads.com{{ book.book_link }}" target="_blank" class="book-title">{{ book.title }}</a>
+                    <p>Autor: {{ book.author }}</p>
+                    <p>Mi calificación: {% for _ in "x"|ljust:book.my_rating %}
                         <span class="stars">&#9733;</span>
-                    {% endfor %}
-                </p>                
-                <p>Calificación General: {{ book.public_rating }}</p>
-                <p>Fecha de Leído: {{ book.date_read }}</p>
+                    {% endfor %}</p>
+                    <p>Calificación General: {{ book.public_rating }}</p>
+                    <p>Fecha de Leído: {{ book.date_read }}</p>
+                </div>
             </div>
         </div>
         {% endfor %}
