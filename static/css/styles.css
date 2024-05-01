@@ -59,3 +59,23 @@ body {
 .book-info-container:hover .book-cover {
     transform: rotateY(-180deg);
 }
+
+@media (max-width: 767px) {
+    .book-container {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .book-item {
+        height: 250px; /* Ajusta la altura según sea necesario */
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .book-container {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .book-item {
+        height: 275px; /* Ajusta la altura según sea necesario */
+    }
+}
