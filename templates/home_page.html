@@ -1,6 +1,7 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
+{% include 'header.html' %}
 <head>
     <meta charset="UTF-8">
     <title>Lista de Libros</title>
@@ -8,7 +9,6 @@
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 </head>
 <body>
-    <h1>Lista de Libros</h1>
     <div class="book-container">
         {% for book in books %}
         <div class="book-item">
@@ -18,12 +18,16 @@
                 </div>
                 <div class="book-info">
                     <a href="https://www.goodreads.com{{ book.book_link }}" target="_blank" class="book-title">{{ book.title }}</a>
-                    <p>Autor: {{ book.author }}</p>
-                    <p>Mi calificación: {% for _ in "x"|ljust:book.my_rating %}
+                    <p><strong>Autor</strong><br>
+                    {{ book.author }}</p>
+                    <p><strong>Mi Calificación</strong><br>
+                        {% for _ in "x"|ljust:book.my_rating %}
                         <span class="stars">&#9733;</span>
                     {% endfor %}</p>
-                    <p>Calificación General: {{ book.public_rating }}</p>
-                    <p>Fecha de Leído: {{ book.date_read }}</p>
+                    <p><strong>Calificación General</strong><br>
+                         {{ book.public_rating }}</p>
+                    <p><strong>Lo leí el...</strong><br>
+                         {{ book.date_read }}</p>
                 </div>
             </div>
         </div>
