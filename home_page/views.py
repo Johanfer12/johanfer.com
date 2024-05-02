@@ -9,6 +9,9 @@ def book_list(request):
     for book in books:
         if ':' in book.title:
             book.title = book.title.split(':', 1)[0]
-
-    scrap_books()
+                
     return render(request, 'home_page.html', {'books': books})
+
+def about(request):
+    scrap_books()
+    return render(request, 'about.html')

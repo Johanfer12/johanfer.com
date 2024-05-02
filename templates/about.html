@@ -1,0 +1,20 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Acerca de</title>
+    <link rel="shortcut icon" type="image/x-icon" href="{% static 'favicon.ico' %}">    
+    <link rel="stylesheet" href="{% static 'css/about.css' %}">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body>
+    {% include 'header.html' %}
+
+    <div class="about-container">
+        <div class="about-content">
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam ultrices nunc ut enim pulvinar, vel lacinia velit bibendum. Sed ac libero nec magna eleifend efficitur. Donec convallis dolor id neque tristique, nec bibendum justo blandit. Nulla facilisi. Sed eu mauris sollicitudin, dictum sapien sit amet, gravida diam. Donec a nisi et mauris maximus tincidunt. Cras ut odio ac tellus fringilla iaculis. Nunc posuere risus ac libero rhoncus, at bibendum ligula efficitur. Sed vel dolor sit amet purus pharetra pulvinar in eget tellus.</p>
+        </div>
+    </div>
+</body>
+</html>

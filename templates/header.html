@@ -6,7 +6,11 @@
       <h1>Mi Biblioteca</h1>
     </div>
     <nav class="header-nav">
-      <a href="#"><strong>Acerca de</strong></a>
+        {% if request.path == '/about/' %}
+            <a href="/"><strong>Volver</strong></a>
+        {% else %}
+            <a href="/about/"><strong>Acerca de</strong></a>
+        {% endif %}
     </nav>
   </div>
 </header>
