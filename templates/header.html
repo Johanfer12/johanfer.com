@@ -4,6 +4,7 @@
   <div class="header-container">
     <div class="header-title">
       <h1>Mi Biblioteca</h1>
+        Total: {{ books|length }}      
     </div>
     <nav class="header-nav">
         {% if request.path == '/about/' %}
