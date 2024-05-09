@@ -92,10 +92,6 @@ a {
     transform: rotateY(-180deg);
 }
 
-.total {
-    margin: 0%;
-}
-
 @media (max-width: 1080px) {
     .book-container {
         grid-template-columns: repeat(3, 1fr);
@@ -114,7 +110,4 @@ a {
         font-size: 24px;
     }
 
-    .total {
-        font-size: 24px;
-    }
 }
