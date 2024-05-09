@@ -1,10 +1,16 @@
 {% load static %}
+<head>
+  <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>  
 <header class="header">
 <link rel="stylesheet" href="{% static 'css/header.css' %}">  
   <div class="header-container">
     <div class="header-title">
       <h1>Mi Biblioteca</h1>
-        Total: {{ books|length }}      
+      {% if request.path == '/' %}
+        Total: {{ books|length }} 
+      {% endif %}     
     </div>
     <nav class="header-nav">
         {% if request.path == '/about/' %}
