@@ -13,5 +13,4 @@ def book_list(request):
     return render(request, 'home_page.html', {'books': books})
 
 def about(request):
-    scrap_books()
     return render(request, 'about.html')
