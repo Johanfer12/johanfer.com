@@ -7,16 +7,16 @@
 <link rel="stylesheet" href="{% static 'css/header.css' %}">  
   <div class="header-container">
     <div class="header-title">
-      <h1>Mi Biblioteca</h1>
+      <h1>Biblioteca de Johan</h1>
       {% if request.path == '/' %}
-        Total: {{ books|length }} 
+        <p class="total">Total: {{ books|length }}</p>
       {% endif %}     
     </div>
     <nav class="header-nav">
         {% if request.path == '/about/' %}
             <a href="/"><strong>Volver</strong></a>
         {% else %}
-            <a href="/about/"><strong>Acerca de</strong></a>
+            <a href="/about/"><strong>Información</strong></a>
         {% endif %}
     </nav>
   </div>

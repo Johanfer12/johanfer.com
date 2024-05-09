@@ -7,7 +7,7 @@
     border-radius: 5px; 
     box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.3), 0 12px 30px 0 rgba(0, 0, 0, 0.25);
     padding: 0 30px;
-    max-width: 85%; /* Ajusta el ancho máximo según sea necesario */
+    max-width: 85%; 
     margin: 0 auto 50px;
   }
   
@@ -32,9 +32,14 @@
   }
 
   @media (max-width: 1080px) {
+    
+    .header-container {
+      max-width: 100%;
+    }
+
     .header {
-        max-width: 767px;
-        height: 100px;
+      max-width: 90%; 
+        height: 120px;
 
     }
     .header-title h1 {
@@ -44,5 +49,9 @@
 
     .header-nav a {
       font-size: 24px;
+    }
+
+    .header-text {
+        font-size: 24px;
     }
   }

@@ -6,9 +6,9 @@
 }
 
 .about-content {
-    background-color: rgba(2, 0, 0, 0.521); 
-    padding: 20px;
-    color: #cabeeb;
+    background-color: rgba(2, 0, 0, 0.603); 
+    padding: 40px;
+    color: #ffffff;
     border-radius: 10px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     max-width: 75%; /* Ajusta este valor según tus necesidades */
@@ -20,7 +20,11 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        height: calc(50vh - 100px); 
-        font-size: 24px;
+        height: calc(80vh - 100px); 
+        font-size: 36px;
+    }
+
+    .about-content {
+        max-width: 90%;
     }
 }

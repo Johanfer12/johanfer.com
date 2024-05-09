@@ -75,7 +75,7 @@ a {
 
 .book-info {
     background-color: #272727;
-    color: #9980df;
+    color: #bca8f3;
     transform: rotateY(180deg);
     flex-direction: column;
     padding: 10px;
@@ -92,6 +92,10 @@ a {
     transform: rotateY(-180deg);
 }
 
+.total {
+    margin: 0%;
+}
+
 @media (max-width: 1080px) {
     .book-container {
         grid-template-columns: repeat(3, 1fr);
@@ -105,5 +109,12 @@ a {
     .book-item {
         height: 450px; 
         width: 300px;
+    }
+    .book-info {
+        font-size: 24px;
+    }
+
+    .total {
+        font-size: 24px;
     }
 }
