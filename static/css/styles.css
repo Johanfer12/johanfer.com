@@ -134,5 +134,8 @@ a {
     .book-info {
         font-size: 24px;
     }
-
+    .floating-button {
+        width: 80px;
+        height: 80px;
+      }
 }
