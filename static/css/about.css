@@ -28,3 +28,14 @@
         max-width: 90%;
     }
 }
+
+@media (max-width: 1368px) {
+    .about-container {
+        height: calc(85vh - 100px); 
+        font-size: 14px;
+    }
+
+    .about-content {
+        max-width: 90%;
+    }
+}

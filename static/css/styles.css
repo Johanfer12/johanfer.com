@@ -139,3 +139,16 @@ a {
         height: 80px;
       }
 }
+
+
+@media (max-width: 1360px) {
+    .book-container {
+        grid-template-columns: repeat(5, 1fr);
+        grid-gap: 20px;
+        margin: 0 auto; 
+        max-width: 767px; 
+        justify-content: center; 
+    
+    }
+
+}
