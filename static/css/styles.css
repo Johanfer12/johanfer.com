@@ -117,12 +117,25 @@ a {
     object-fit: contain;
 }
 
+
+@media (max-width: 1360px) {
+    .book-container {
+        grid-template-columns: repeat(5, 1fr);
+        grid-gap: 20px;
+        margin: 0 auto; 
+        max-width: 100%;
+        justify-content: center; 
+    
+    }
+
+}
+
 @media (max-width: 1080px) {
     .book-container {
         grid-template-columns: repeat(3, 1fr);
         grid-gap: 20px;
         margin: 0 auto; 
-        max-width: 767px; 
+        max-width: 100%;
         justify-content: center; 
     
     }
@@ -135,20 +148,10 @@ a {
         font-size: 24px;
     }
     .floating-button {
-        width: 80px;
-        height: 80px;
+        width: 120px;
+        height: 120px;
+        margin-right: 15px;
+        margin-bottom: 15px;
       }
 }
 
-
-@media (max-width: 1360px) {
-    .book-container {
-        grid-template-columns: repeat(5, 1fr);
-        grid-gap: 20px;
-        margin: 0 auto; 
-        max-width: 767px; 
-        justify-content: center; 
-    
-    }
-
-}
