@@ -26,7 +26,6 @@ a {
     justify-content: center; 
 }
 
-
 .book-item {
     perspective: 1000px;
     width: 100%;
@@ -116,8 +115,21 @@ a {
     height: 100%;
     object-fit: contain;
 }
-
-
+  
+  /* style scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0);
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background-color: rgba(143, 137, 137, 0.582);
+    border-radius: 20px;
+  }
+  
 @media (max-width: 1360px) {
     .book-container {
         grid-template-columns: repeat(5, 1fr);
