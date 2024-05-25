@@ -1,0 +1,39 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Estadísticas de Lectura</title>
+    <link rel="stylesheet" href="{% static 'css/stats.css' %}">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    {% include 'header.html' %}
+    <div class="statistics-container">
+        <div class="statistics-content">
+            <h2>Estadísticas de Lectura</h2>
+            <div class="charts-row">
+                <div class="chart-container">
+                    <h3>Libros Leídos por Año</h3>
+                    <div id="booksPerYearChart"></div>
+                </div>
+                <div class="chart-container">
+                    <h3>Cantidad de Estrellas</h3>
+                    <div id="starsChart"></div>
+                </div>
+                <div class="chart-container">
+                    <h3>Top Autores Más Leídos</h3>
+                    <div id="topAuthorsChart"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script id="books-per-year-data" type="application/json">{{ books_per_year_labels|safe }}</script>
+    <script id="books-per-year-values" type="application/json">{{ books_per_year_values|safe }}</script>
+    <script id="stars-labels" type="application/json">{{ stars_labels|safe }}</script>
+    <script id="stars-values" type="application/json">{{ stars_values|safe }}</script>
+    <script id="top-authors-labels" type="application/json">{{ top_authors_labels|safe }}</script>
+    <script id="top-authors-values" type="application/json">{{ top_authors_values|safe }}</script>
+    <script src="{% static 'js/stats.js' %}"></script>
+</body>
+</html>

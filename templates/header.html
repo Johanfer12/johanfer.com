@@ -9,13 +9,14 @@
     <div class="header-title">
       <h1>Biblioteca de Johan</h1>
       {% if request.path == '/' %}
-        <p class="total">Total: {{ books|length }}</p>
+        <p class="total">{{ books|length }} libros</p>
       {% endif %}     
     </div>
     <nav class="header-nav">
-        {% if request.path == '/about/' %}
+        {% if request.path != '/' %}
             <a href="/"><strong>Volver</strong></a>
         {% else %}
+            <a href="/stats/"><strong>Estadísticas</strong></a>
             <a href="/about/"><strong>Información</strong></a>
         {% endif %}
     </nav>
