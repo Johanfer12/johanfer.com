@@ -32,6 +32,13 @@
     transition: transform 0.3s ease;
 }
 
+.cat img {
+    width: 500px;
+    height: 375px;
+    margin-top: 10px;
+    transition: transform 0.3s ease;
+}
+
 .social-icons img:hover {
     transform: scale(1.5);
 }
