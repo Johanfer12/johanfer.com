@@ -2,6 +2,6 @@ from django.contrib import admin
 from django.urls import path, include  # Importa la función include
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    #path('admin/', admin.site.urls),
     path('', include('home_page.urls')),  #Urls de home_page
 ]
