@@ -73,7 +73,7 @@ a {
 }
 
 .book-info {
-    background-color: #272727;
+    background-color: rgba(0, 0, 0, 0.6);
     color: #bca8f3;
     transform: rotateY(180deg);
     flex-direction: column;
@@ -135,11 +135,10 @@ a {
         grid-template-columns: repeat(5, 1fr);
         grid-gap: 20px;
         margin: 0 auto; 
-        max-width: 100%;
+        max-width: 85%;
         justify-content: center; 
     
     }
-
 }
 
 @media (max-width: 1080px) {
