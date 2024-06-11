@@ -5,6 +5,7 @@ import os
 import re
 import sqlite3
 from datetime import datetime
+from PIL import Image
 
 def modify_cover_url(cover_url):
     return re.sub(r'(_SX\d+_SY\d+_|_SY\d+_SX\d+_|_SX\d+_|_SY\d+_)', '_SY700_', cover_url)
@@ -177,3 +178,11 @@ class Book(models.Model):
 
     def __str__(self):
         return self.title
+    
+def convert_to_webp(image_path, output_path):
+    with Image.open(image_path) as img:
+        img = img.convert("RGB")  # Asegurarse de que la imagen está en modo RGB
+        width, height = img.size
+        if width > 300 or height > 450:
+            img.thumbnail((300, 450), Image.ANTIALIAS)
+        img.save(output_path, "webp")
