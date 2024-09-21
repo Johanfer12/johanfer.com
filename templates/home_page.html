@@ -1,39 +1,33 @@
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
+
 {% include 'header.html' %}
-<head>
-    <meta charset="UTF-8">
-    <title>Biblioteca de Johan</title>
-</head>
-<body>
-    <div class="book-container">
-        {% for book in books %}
-        <div class="book-item">
-            <div class="book-info-container">
-                <div class="book-cover">
-                    <img src="{% static 'Img/Covers/' %}{{ book.id }}.jpg" alt="{{ book.title }}">
-                </div>
-                <div class="book-info">
-                    <a href="https://www.goodreads.com{{ book.book_link }}" target="_blank" class="book-title">{{ book.title }}</a>
-                    <p><strong>Autor</strong><br>
-                    {{ book.author }}</p>
-                    <p><strong>Mi Calificación</strong><br>
-                        {% for _ in "x"|ljust:book.my_rating %}
-                        <span class="stars">&#9733;</span>
-                    {% endfor %}</p>
-                    <p><strong>Calificación General</strong><br>
-                         {{ book.public_rating }}</p>
-                    <p><strong>Lo leí el...</strong><br>
-                         {{ book.date_read }}</p>
-                </div>
+
+<div id="book-container" class="book-container">
+    {% for book in page_obj %}
+    <div class="book-item">
+        <div class="book-info-container">
+            <div class="book-cover">
+                <img src="{% static 'Img/Covers/' %}{{ book.id }}.jpg" alt="{{ book.title }}">
+            </div>
+            <div class="book-info">
+                <a href="https://www.goodreads.com{{ book.book_link }}" class="book-title" target="_blank">{{ book.title }}</a>
+                <p><strong>Autor</strong><br>{{ book.author }}</p>
+                <p><strong>Mi Calificación</strong><br>
+                    {% for _ in "x"|ljust:book.my_rating %}<span class="stars">★</span>{% endfor %}
+                </p>
+                <p><strong>Calificación General</strong><br>{{ book.public_rating }}</p>
+                <p><strong>Lo leí el...</strong><br>{{ book.date_read }}</p>
             </div>
         </div>
-        {% endfor %}
     </div>
-    <div class="floating-button">
-        <a href="#"><img src="{% static 'Img/circle.svg' %}" alt="Scroll to Top"></a>
-    </div>
-    <script src="{% static 'js/scroll_button.js' %}"></script>
-</body>
-</html>
+    {% endfor %}
+</div>
+
+<div id="loading" style="display: none;">Loading more books...</div>
+
+<div class="floating-button">
+    <a href="#"><img src="{% static 'Img/circle.svg' %}" alt="Scroll to Top"></a>
+</div>
+
+<script src="{% static 'js/infinite_scroll.js' %}"></script>
+<script src="{% static 'js/scroll_button.js' %}"></script>

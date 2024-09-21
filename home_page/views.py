@@ -1,22 +1,44 @@
 from django.shortcuts import render
+from django.core.paginator import Paginator
+from django.http import JsonResponse
 from .models import Book
 from django.db.models import Count
 import json
 
 def book_list(request):
-    # Ordenar los libros por fecha de lectura en orden descendente    
     books = Book.objects.all().order_by('-id')
-
-    # Truncar el título de cada libro si contiene dos puntos
+    total_books = books.count()  # Total de libros en la base de datos
+    
+    # Truncar el título de los libros que tienen ':' en el título
     for book in books:
         if ':' in book.title:
             book.title = book.title.split(':', 1)[0]
-                
-    return render(request, 'home_page.html', {'books': books})
+    
+    # Set up pagination
+    paginator = Paginator(books, 20)  # 20 libros por vista
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        # Si la petición es AJAX, devolver los datos en formato JSON
+        book_data = []
+        for book in page_obj:
+            book_data.append({
+                'title': book.title,
+                'author': book.author,
+                'my_rating': book.my_rating,
+                'public_rating': book.public_rating,
+                'date_read': book.date_read.strftime('%Y-%m-%d'),
+                'book_link': book.book_link,
+                'cover_image': f"/static/Img/Covers/{book.id}.jpg"
+            })
+        return JsonResponse({'books': book_data, 'has_next': page_obj.has_next()})
+    else:
+        # Para peticiones normales, renderizar la plantilla
+        return render(request, 'home_page.html', {'page_obj': page_obj, 'total_books': total_books})
 
 def about(request):
     return render(request, 'about.html')
-
 
 def stats(request):
     books = Book.objects.all()

@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', (event) => {
-        
+    
     const WIDTH_IN_PERCENT_OF_PARENT = 100;
     const HEIGHT_IN_PERCENT_OF_PARENT = 50;
     const booksPerYearChartContainer = document.getElementById('booksPerYearChart');
@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
     const topAuthorsChartContainer = document.getElementById('topAuthorsChart');
     var d3 = Plotly.d3;
 
-    function createResponsiveChart(container, data, layout) {
+    function createNonInteractiveChart(container, data, layout) {
         const gd3 = d3.select(container)
             .style({
                 width: `${WIDTH_IN_PERCENT_OF_PARENT}%`,
@@ -24,7 +24,13 @@ document.addEventListener('DOMContentLoaded', (event) => {
         // Modificar la configuración de la fuente en el layout
         layout.font.size = fontSize;
     
-        Plotly.plot(gd, data, layout);
+        // Configuración para gráficas no interactivas
+        const config = {
+            staticPlot: true,
+            displayModeBar: false
+        };
+    
+        Plotly.newPlot(gd, data, layout, config);
     
         window.onresize = function() {
             Plotly.Plots.resize(gd);
@@ -69,7 +75,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         textfont: { color: 'white' }
     };
 
-    createResponsiveChart(booksPerYearChartContainer, [booksPerYearData], {
+    createNonInteractiveChart(booksPerYearChartContainer, [booksPerYearData], {
         paper_bgcolor: 'rgba(0,0,0,0.5)',
         plot_bgcolor: '#212121',
         font: {
@@ -89,7 +95,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         }
     });
 
-    createResponsiveChart(starsChartContainer, [starsData], {
+    createNonInteractiveChart(starsChartContainer, [starsData], {
         paper_bgcolor: 'rgba(0,0,0,0.5)',
         font: {
             color: 'white',
@@ -101,10 +107,9 @@ document.addEventListener('DOMContentLoaded', (event) => {
             },
             bgcolor : '#212121',
         }
-        
     });
 
-    createResponsiveChart(topAuthorsChartContainer, [topAuthorsData], {
+    createNonInteractiveChart(topAuthorsChartContainer, [topAuthorsData], {
         paper_bgcolor: 'rgba(0,0,0,0.5)',
         plot_bgcolor: '#212121',
         font: {
