@@ -17,11 +17,13 @@ function loadMoreBooks() {
     .then(data => {
         data.books.forEach(book => {
             const bookItem = document.createElement('div');
-            bookItem.className = 'book-item';
+            bookItem.className = 'book-item';            
+            const coverImage = book.cover_image.replace('.jpg', '.webp');
+            
             bookItem.innerHTML = `
                 <div class="book-info-container">
                     <div class="book-cover">
-                        <img src="${book.cover_image}" alt="${book.title}">
+                        <img src="${coverImage}" alt="${book.title}">
                     </div>
                     <div class="book-info">
                         <a href="https://www.goodreads.com${book.book_link}" class="book-title" target="_blank">${book.title}</a>
@@ -42,6 +44,11 @@ function loadMoreBooks() {
         if (!data.has_next) {
             window.removeEventListener('scroll', handleScroll);
         }
+    })
+    .catch(error => {
+        console.error('Error al cargar más libros:', error);
+        loading = false;
+        loadingDiv.style.display = 'none';
     });
 }
 

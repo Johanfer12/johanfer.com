@@ -73,13 +73,22 @@ def scrap_books():
                         cover_link = cover_info.find('img')['src']
                         if cover_link.endswith('.jpg'):
                             modified_cover_url = modify_cover_url(cover_link)
-                            file_name = f"{book_counter}.jpg"
-                            if not os.path.exists(os.path.join(folder_path, file_name)):
-                                with open(os.path.join(folder_path, file_name), 'wb') as f:
-                                    response = requests.get(modified_cover_url)
-                                    f.write(response.content)
+                            file_name = f"{book_counter}.webp"
+                            file_path = os.path.join(folder_path, file_name)
+                            
+                            if not os.path.exists(file_path):
+                                temp_jpg_path = os.path.join(folder_path, f"temp_{book_counter}.jpg")
+                                try:
+                                    with open(temp_jpg_path, 'wb') as f:
+                                        response = requests.get(modified_cover_url)
+                                        f.write(response.content)
+                                    convert_to_webp(temp_jpg_path, file_path)
+                                    os.remove(temp_jpg_path)
+                                    print(f"Imagen descargada y convertida: {file_name}")
+                                except Exception as e:
+                                    print(f"Error al descargar o convertir la imagen {file_name}: {e}")
                             else:
-                                print(f"File {file_name} already exists in the destination folder.")
+                                print(f"El archivo {file_name} ya existe, omitiendo descarga y conversión.")
                     title_info = review.find('td', class_='field title')
                     if title_info:
                         title_element = title_info.find('a')
@@ -179,10 +188,21 @@ class Book(models.Model):
     def __str__(self):
         return self.title
     
-def convert_to_webp(image_path, output_path):
-    with Image.open(image_path) as img:
-        img = img.convert("RGB")  # Asegurarse de que la imagen está en modo RGB
-        width, height = img.size
-        if width > 300 or height > 450:
-            img.thumbnail((300, 450), Image.ANTIALIAS)
-        img.save(output_path, "webp")
+from PIL import Image
+
+def convert_to_webp(source_path, destination_path):
+    try:
+        with Image.open(source_path) as img:
+            # Redimensionar la imagen
+            img.thumbnail((300, 450), Image.Resampling.LANCZOS)
+            
+            # Convertir a modo RGB si es necesario
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            
+            # Guardar como WebP
+            img.save(destination_path, 'WEBP')
+        
+        print(f"Imagen convertida y guardada como {destination_path}")
+    except Exception as e:
+        print(f"Error al convertir la imagen: {e}")
