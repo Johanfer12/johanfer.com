@@ -5,7 +5,10 @@ from .models import Book
 from django.db.models import Count
 import json
 
-def book_list(request):
+def home(request):
+    return render(request, 'home_page.html')
+
+def bookshelf(request):
     books = Book.objects.all().order_by('-id')
     total_books = books.count()  # Total de libros en la base de datos
     
@@ -35,7 +38,7 @@ def book_list(request):
         return JsonResponse({'books': book_data, 'has_next': page_obj.has_next()})
     else:
         # Para peticiones normales, renderizar la plantilla
-        return render(request, 'home_page.html', {'page_obj': page_obj, 'total_books': total_books})
+        return render(request, 'bookshelf.html', {'page_obj': page_obj, 'total_books': total_books})
 
 def about(request):
     return render(request, 'about.html')

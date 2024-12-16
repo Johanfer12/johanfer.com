@@ -8,16 +8,17 @@
   <div class="header-container">
     <div class="header-title">
       <h1>Biblioteca de Johan</h1>
-      {% if request.path == '/' %}
+      {% if request.path == '/bookshelf/' %}
         <p class="total">{{ total_books }} libros</p>
       {% endif %}     
     </div>
     <nav class="header-nav">
-        {% if request.path != '/' %}
-            <a href="/"><strong>Volver</strong></a>
-        {% else %}
+        {% if request.path == '/bookshelf/' %}
             <a href="/stats/"><strong>Estadísticas</strong></a>
             <a href="/about/"><strong>Información</strong></a>
+            <a href="/"><strong>Volver</strong></a>
+        {% elif request.path != '/' %}
+            <a href="/bookshelf/"><strong>Volver</strong></a>
         {% endif %}
     </nav>
   </div>

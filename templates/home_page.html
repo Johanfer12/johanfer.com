@@ -1,33 +1,34 @@
 {% load static %}
 
-{% include 'header.html' %}
-
-<div id="book-container" class="book-container">
-    {% for book in page_obj %}
-    <div class="book-item">
-        <div class="book-info-container">
-            <div class="book-cover">
-                <img src="{% static 'Img/Covers/' %}{{ book.id }}.webp" alt="{{ book.title }}">
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Johan's Hub</title>
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    <link rel="stylesheet" href="{% static 'css/home.css' %}">
+</head>
+<body>
+    <div class="content-container">
+        <div class="welcome-text">
+            <h1>Johan's Hub</h1>
+            <p>Bienvenido a mi espacio digital</p>
+        </div>
+        <div class="main-icons-container">
+            <div class="main-icon">
+                <a href="/bookshelf/">
+                    <img src="{% static 'Img/library-icon.svg' %}" alt="Biblioteca">
+                    <h2>Biblioteca</h2>
+                </a>
             </div>
-            <div class="book-info">
-                <a href="https://www.goodreads.com{{ book.book_link }}" class="book-title" target="_blank">{{ book.title }}</a>
-                <p><strong>Autor</strong><br>{{ book.author }}</p>
-                <p><strong>Mi Calificación</strong><br>
-                    {% for _ in "x"|ljust:book.my_rating %}<span class="stars">★</span>{% endfor %}
-                </p>
-                <p><strong>Calificación General</strong><br>{{ book.public_rating }}</p>
-                <p><strong>Lo leí el...</strong><br>{{ book.date_read }}</p>
+            <div class="main-icon">
+                <a href="https://johanfer.pythonanywhere.com/">
+                    <img src="{% static 'Img/spotify-icon.svg' %}" alt="Spotify">
+                    <h2>Spotify</h2>
+                </a>
             </div>
         </div>
     </div>
-    {% endfor %}
-</div>
-
-<div id="loading" style="display: none;">Loading more books...</div>
-
-<div class="floating-button">
-    <a href="#"><img src="{% static 'Img/circle.svg' %}" alt="Scroll to Top"></a>
-</div>
-
-<script src="{% static 'js/infinite_scroll.js' %}"></script>
-<script src="{% static 'js/scroll_button.js' %}"></script>
+</body>
+</html>
