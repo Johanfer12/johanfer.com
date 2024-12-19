@@ -8,7 +8,7 @@ function loadMoreBooks() {
     loading = true;
     loadingDiv.style.display = 'block';
 
-    fetch(`/?page=${page + 1}`, {
+    fetch(`/bookshelf?page=${page + 1}`, {
         headers: {
             'X-Requested-With': 'XMLHttpRequest'
         }
