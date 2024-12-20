@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
+
 <div class="container py-4">
     <h1 class="mb-4">Dashboard de Spotify</h1>
 
@@ -33,6 +34,7 @@
                             <a href="{{ song.song_url }}" target="_blank">
                                 {{ song.song_name }} - {{ song.artist_name }}
                             </a>
+                            <img src="{{ song.album_cover }}" alt="{{ song.song_name }}" class="album-cover">
                         </li>
                     {% empty %}
                         <li class="list-group-item">No hay canciones top</li>
@@ -52,13 +54,18 @@
                     <ul class="list-group">
                     {% for song in favorite_songs %}
                         <li class="list-group-item">
-                            <a href="{{ song.song_url }}" target="_blank">
-                                {{ song.song_name }} - {{ song.artist_name }}
-                            </a>
-                            <small class="d-block text-muted">
-                                Género: {{ song.genre }}<br>
-                                Agregada: {{ song.added_at|date:"d/m/Y" }}
-                            </small>
+                            <div class="song-info">
+                                <a href="{{ song.song_url }}" target="_blank">
+                                    {{ song.song_name }} - {{ song.artist_name }}
+                                </a>
+                                <small class="d-block text-muted">
+                                    Género: {{ song.genre|default:"N/A" }}<br>
+                                    Agregada: {{ song.added_at|date:"d/m/Y" }}
+                                </small>
+                            </div>
+                            {% if song.album_cover %}
+                                <img src="{{ song.album_cover }}" alt="{{ song.song_name }}" class="album-cover">
+                            {% endif %}
                         </li>
                     {% empty %}
                         <li class="list-group-item">No hay canciones favoritas</li>
@@ -84,6 +91,7 @@
                             <small class="d-block text-muted">
                                 Eliminada: {{ song.deleted_at|date:"d/m/Y" }}
                             </small>
+                            <img src="{{ song.album_cover }}" alt="{{ song.song_name }}" class="album-cover">
                         </li>
                     {% empty %}
                         <li class="list-group-item">No hay canciones eliminadas</li>

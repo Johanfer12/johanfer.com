@@ -25,10 +25,16 @@ def refresh_spotify_data():
     SpotifyTopSongs.objects.all().delete()
     
     for track in top_tracks['items']:
+        # Obtener la URL de la carátula del álbum (usar la imagen más grande)
+        album_cover = None
+        if track['album']['images']:
+            album_cover = track['album']['images'][0]['url']
+
         SpotifyTopSongs.objects.create(
             song_name=track['name'],
             artist_name=track['artists'][0]['name'],
-            song_url=track['external_urls']['spotify']
+            song_url=track['external_urls']['spotify'],
+            album_cover=album_cover
         )
 
     # Obtener y actualizar favoritos
@@ -41,6 +47,11 @@ def refresh_spotify_data():
             song_url = track['external_urls']['spotify']
             current_favorites.add(song_url)
 
+            # Obtener la URL de la carátula del álbum (usar la imagen más grande)
+            album_cover = None
+            if track['album']['images']:
+                album_cover = track['album']['images'][0]['url']
+
             # Convertir la fecha UTC string a datetime con timezone
             added_at = datetime.strptime(item['added_at'], "%Y-%m-%dT%H:%M:%SZ")
             added_at = pytz.utc.localize(added_at)
@@ -51,17 +62,14 @@ def refresh_spotify_data():
                     'song_name': track['name'],
                     'artist_name': track['artists'][0]['name'],
                     'duration_ms': track['duration_ms'],
-                    'added_at': added_at
+                    'added_at': added_at,
+                    'album_cover': album_cover
                 }
             )
 
-            if created:
-                # Obtener información adicional solo para nuevas canciones
-                artist = sp.artist(track['artists'][0]['external_urls']['spotify'])
-                genres = artist.get('genres', [])
-                genre = genres[0] if genres else "N/A"
-                
-                favorite.genre = genre
+            # Importante: actualizar la carátula incluso si la canción ya existe
+            if not created:
+                favorite.album_cover = album_cover
                 favorite.save()
 
         if results['next']:
