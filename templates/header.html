@@ -7,9 +7,19 @@
 <link rel="stylesheet" href="{% static 'css/header.css' %}">  
   <div class="header-container">
     <div class="header-title">
-      <h1>Biblioteca de Johan</h1>
+      <h1>
+        {% if request.path == '/bookshelf/' %}
+          Biblioteca de Johan
+        {% elif request.path == '/spotify/' %}
+          Spotify de Johan
+        {% else %}
+          Biblioteca de Johan
+        {% endif %}
+      </h1>
       {% if request.path == '/bookshelf/' %}
         <p class="total">{{ total_books }} libros</p>
+      {% elif request.path == '/spotify/' %}
+        <p class="total">{{ total_songs }} canciones</p>
       {% endif %}     
     </div>
     <nav class="header-nav">
@@ -18,7 +28,7 @@
             <a href="/about/"><strong>Información</strong></a>
             <a href="/"><strong>Volver</strong></a>
         {% elif request.path != '/' %}
-            <a href="/bookshelf/"><strong>Volver</strong></a>
+            <a href="/"><strong>Volver</strong></a>
         {% endif %}
     </nav>
   </div>

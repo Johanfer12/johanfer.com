@@ -1,19 +1,211 @@
+@font-face {
+    font-family: 'Ubuntu';
+    src: url('../fonts/ubuntu.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+body {
+    background-color: #000000;
+    font-family: 'Ubuntu', sans-serif;
+    background-image: url('../Img/bg.webp');
+    opacity: 0.9;
+    background-repeat: repeat;
+    background-size: auto;
+    margin: 0;
+    min-height: 100vh;
+    padding-top: 2rem;
+}
+
+.content-container {
+    background-color: rgba(2, 0, 0, 0.85);
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin: 2rem auto;
+    width: 90%;
+    max-width: 1400px;
+}
+
+h1, h3 {
+    color: #ffffff;
+    margin-bottom: 1.5rem;
+}
+
+.update-form {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 1000;
+}
+
+.update-button {
+    background-color: rgba(60, 60, 60, 0.9);
+    color: white;
+    border: none;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.3s ease, background-color 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.update-button:hover {
+    background-color: rgba(80, 80, 80, 0.9);
+    transform: rotate(180deg);
+}
+
+.update-button img {
+    width: 24px;
+    height: 24px;
+}
+
+.message {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 5px;
+    background-color: rgba(40, 40, 40, 0.9);
+    color: white;
+}
+
+.music-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 2rem;
+}
+
+.music-section {
+    background-color: rgba(30, 30, 30, 0.9);
+    border-radius: 10px;
+    padding: 1.5rem;
+}
+
+.song-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.song-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background-color: rgba(40, 40, 40, 0.9);
+    border-radius: 8px;
+    transition: transform 0.2s ease;
+}
+
+.song-item:hover {
+    transform: translateY(-2px);
+}
+
 .album-cover {
     width: 60px;
     height: 60px;
     object-fit: cover;
     border-radius: 4px;
-    margin-top: 8px;
-    float: right;
 }
 
-.list-group-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.song-info {
+.song-details {
     flex: 1;
-    margin-right: 10px;
+}
+
+.song-details a {
+    color: #ffffff;
+    text-decoration: none;
+    display: block;
+    font-size: 1.1rem;
+}
+
+.artist-name {
+    display: block;
+    color: #999999;
+    font-size: 0.9rem;
+    margin-top: 0.2rem;
+}
+
+.song-meta {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: #999999;
+}
+
+.song-meta span {
+    display: block;
+    margin-top: 0.2rem;
+}
+
+.empty-message {
+    color: #999999;
+    text-align: center;
+    padding: 1rem;
+}
+
+/* Nuevo: estilo específico para la lista de favoritas */
+.music-section:last-child .song-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 768px) {
+    body {
+        padding-top: 1rem;
+    }
+
+    .content-container {
+        width: 90%;
+        margin: 1rem auto;
+        padding: 15px;
+        border-radius: 10px;
+    }
+
+    .music-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .music-section {
+        padding: 15px;
+        border-radius: 8px;
+    }
+
+    .song-item {
+        padding: 10px;
+        margin-bottom: 8px;
+    }
+
+    .album-cover {
+        width: 45px;
+        height: 45px;
+    }
+
+    .song-details a {
+        font-size: 0.9rem;
+    }
+
+    .artist-name {
+        font-size: 0.8rem;
+    }
+
+    /* Ajuste del botón para que no tape contenido */
+    .update-form {
+        bottom: 15px;
+        right: 15px;
+    }
+
+    .update-button {
+        width: 40px;
+        height: 40px;
+    }
+
+    .update-button img {
+        width: 20px;
+        height: 20px;
+    }
 }

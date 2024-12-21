@@ -11,9 +11,10 @@ def spotify_dashboard(request):
         except Exception as e:
             messages.error(request, f'Error al actualizar datos: {str(e)}')
     
+    favorite_songs = SpotifyFavorites.objects.all()
     context = {
-        'favorite_songs': SpotifyFavorites.objects.all()[:10],  # últimas 10 canciones
+        'favorite_songs': favorite_songs[:10],  # últimas 10 canciones
         'top_songs': SpotifyTopSongs.objects.all(),
-        'deleted_songs': DeletedSongs.objects.all()[:5],  # últimas 5 canciones eliminadas
+        'total_songs': favorite_songs.count()  #Conteo de canciones
     }
     return render(request, 'dashboard.html', context)

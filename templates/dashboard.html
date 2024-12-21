@@ -1,105 +1,75 @@
-{% extends 'base.html' %}
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Spotify</title>
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+</head>
+<body>
+    {% include 'header.html' %}
+    
+    <div class="content-container">
+        <!-- Botón de actualización -->
+        <form method="POST" class="update-form">
+            {% csrf_token %}
+            <button type="submit" name="update_spotify" class="update-button">
+                <img src="{% static 'Img/refresh.svg' %}" alt="Actualizar">
+            </button>
+        </form>
 
-{% block content %}
-
-<div class="container py-4">
-    <h1 class="mb-4">Dashboard de Spotify</h1>
-
-    <!-- Botón de actualización -->
-    <form method="POST" class="mb-4">
-        {% csrf_token %}
-        <button type="submit" name="update_spotify" class="btn btn-primary">Actualizar datos de Spotify</button>
-    </form>
-
-    <!-- Mensajes -->
-    {% if messages %}
-        {% for message in messages %}
-            <div class="alert alert-{{ message.tags }}">
-                {{ message }}
-            </div>
-        {% endfor %}
-    {% endif %}
-
-    <div class="row">
-        <!-- Top canciones -->
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <h3>Top 5 Canciones</h3>
+        <!-- Mensajes -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">
+                    {{ message }}
                 </div>
-                <div class="card-body">
-                    <ul class="list-group">
+            {% endfor %}
+        {% endif %}
+
+        <div class="music-grid">
+            <!-- Top canciones -->
+            <div class="music-section">
+                <h3>Top 5 Canciones</h3>
+                <div class="song-list">
                     {% for song in top_songs %}
-                        <li class="list-group-item">
-                            <a href="{{ song.song_url }}" target="_blank">
-                                {{ song.song_name }} - {{ song.artist_name }}
-                            </a>
+                        <div class="song-item">
                             <img src="{{ song.album_cover }}" alt="{{ song.song_name }}" class="album-cover">
-                        </li>
-                    {% empty %}
-                        <li class="list-group-item">No hay canciones top</li>
-                    {% endfor %}
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <!-- Últimas canciones favoritas -->
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <h3>Últimas Favoritas</h3>
-                </div>
-                <div class="card-body">
-                    <ul class="list-group">
-                    {% for song in favorite_songs %}
-                        <li class="list-group-item">
-                            <div class="song-info">
+                            <div class="song-details">
                                 <a href="{{ song.song_url }}" target="_blank">
-                                    {{ song.song_name }} - {{ song.artist_name }}
+                                    {{ song.song_name }}
+                                    <span class="artist-name">{{ song.artist_name }}</span>
                                 </a>
-                                <small class="d-block text-muted">
-                                    Género: {{ song.genre|default:"N/A" }}<br>
-                                    Agregada: {{ song.added_at|date:"d/m/Y" }}
-                                </small>
                             </div>
-                            {% if song.album_cover %}
-                                <img src="{{ song.album_cover }}" alt="{{ song.song_name }}" class="album-cover">
-                            {% endif %}
-                        </li>
+                        </div>
                     {% empty %}
-                        <li class="list-group-item">No hay canciones favoritas</li>
+                        <div class="empty-message">No hay canciones top</div>
                     {% endfor %}
-                    </ul>
                 </div>
             </div>
-        </div>
 
-        <!-- Últimas canciones eliminadas -->
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <h3>Últimas Eliminadas</h3>
-                </div>
-                <div class="card-body">
-                    <ul class="list-group">
-                    {% for song in deleted_songs %}
-                        <li class="list-group-item">
-                            <a href="{{ song.song_url }}" target="_blank">
-                                {{ song.song_name }} - {{ song.artist_name }}
-                            </a>
-                            <small class="d-block text-muted">
-                                Eliminada: {{ song.deleted_at|date:"d/m/Y" }}
-                            </small>
+            <!-- Últimas favoritas -->
+            <div class="music-section">
+                <h3>Últimas Favoritas</h3>
+                <div class="song-list">
+                    {% for song in favorite_songs|slice:":10" %}
+                        <div class="song-item">
                             <img src="{{ song.album_cover }}" alt="{{ song.song_name }}" class="album-cover">
-                        </li>
+                            <div class="song-details">
+                                <a href="{{ song.song_url }}" target="_blank">
+                                    {{ song.song_name }}
+                                    <span class="artist-name">{{ song.artist_name }}</span>
+                                </a>
+                            </div>
+                        </div>
                     {% empty %}
-                        <li class="list-group-item">No hay canciones eliminadas</li>
+                        <div class="empty-message">No hay canciones favoritas</div>
                     {% endfor %}
-                    </ul>
                 </div>
             </div>
         </div>
     </div>
-</div>
-{% endblock %} 
+</body>
+</html>
