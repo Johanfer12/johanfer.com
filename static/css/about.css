@@ -45,37 +45,38 @@
 
 @media (max-width: 1368px) {
     .about-container {
-        height: calc(95vh - 150px); 
-        font-size: 14px;
+        height: auto;
+        min-height: calc(95vh - 150px);
+        padding: 20px 0;
     }
 
     .about-content {
         max-width: 90%;
-        max-height: 100%;
+        font-size: 14px;
         padding: 20px;
     }
     
     .social-icons img {
-        margin-top: -20px;
+        width: 25px;
+        height: 25px;
     }
 }
 
 @media (max-width: 1080px) {
     .about-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: calc(85vh - 160px); 
-        font-size: 34px;
+        height: auto;
+        min-height: calc(85vh - 160px);
+        padding: 20px 0;
     }
 
     .about-content {
         max-width: 90%;
+        font-size: 16px;
+        padding: 15px;
     }
 
     .social-icons img {
-        width: 60px;
-        height: 60px;
-        transition: transform 0.3s ease;
+        width: 30px;
+        height: 30px;
     }
 }

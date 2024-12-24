@@ -1,5 +1,5 @@
 .statistics-container {
-    width: 90%;
+    width: 85%;
     margin: 0 auto;
     text-align: center;
 }
@@ -20,8 +20,16 @@
 
 .chart-container {
     flex: 1 1 30%;
-    max-width: 90%;
+    max-width: 95%;
     margin: 20px;
+    height: 350px;
+    position: relative;
+    padding-bottom: 20px;
+}
+
+.chart-container canvas {
+    position: relative;
+    top: -20px;
 }
 
 .chart-container h3 {
@@ -31,14 +39,14 @@
 @media (max-width: 1368px) {
     
     .charts-row {
-        width: 90%; 
+        width: 95%; 
         flex-direction: column;
         align-items: center;
         margin: 0 auto;
     }
 
     .chart-container {
-        width: 75%; /* Ocupa todo el ancho del contenedor */
+        width: 5%;
         max-width: 100%;
         margin: 10px 0;
     }
@@ -47,26 +55,32 @@
         width: 90%;
         font-size: 16px;
     }
+
 }
 
 @media (max-width: 1080px) {
 
     .charts-row {
-        width: 90%; 
+        width: 95%; 
         flex-direction: column;
         align-items: center;
         margin: 0 auto;
     }
 
     .chart-container {
-        width: 100%; /* Ocupa todo el ancho del contenedor */
+        width: 95%;
         max-width: 100%;
         margin: 10px 0;
+        height: 300px;
     }
 
     .statistics-container {
-        width: 100%;
-        font-size: 32px;
+        width: 90%;
+        font-size: 14px;
+    }
+
+    .chart-container h3 {
+        font-size: 1.1em;
     }
 
 /*     #booksPerYearChart, #starsChart, #topAuthorsChart {

@@ -40,23 +40,31 @@
     
     .header-container {
       max-width: 100%;
+      padding: 0 10px;
     }
 
     .header {
       max-width: 90%; 
-        height: 120px;
-
+      height: auto;
+      padding: 10px 15px;
+      margin-bottom: 20px;
     }
     .header-title h1 {
-      font-size: 36px;
-      margin: 0;
+      font-size: 18px;
+    }
+
+    .header-nav {
+      display: flex;
+      gap: 10px;
     }
 
     .header-nav a {
-      font-size: 24px;
+      font-size: 14px;
+      margin-left: 0;
     }
 
     .total {
-        font-size: 30px;
+        font-size: 14px;
+        margin: 5px 0 0 0;
     }
   }

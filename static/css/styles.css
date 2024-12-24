@@ -19,18 +19,19 @@ a {
 
   .book-container {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    grid-gap: 50px;
-    margin: 0 auto; 
-    max-width: 1200px; 
-    justify-content: center; 
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin: 0 auto;
+    max-width: 1400px;
+    padding: 0 20px;
+    justify-items: center;
 }
 
 .book-item {
-    perspective: 1000px;
     width: 100%;
-    height: 300px;
-    width: 200px;
+    max-width: 300px;
+    height: 450px;
+    margin: 0 auto;
 }
 
 .book-info-container {
@@ -54,7 +55,11 @@ a {
 }
 
 .book-info p {
-    margin-bottom: 0.005rem; 
+    margin: 5px 0;
+    font-size: 0.9em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .book-cover {
@@ -77,9 +82,29 @@ a {
     color: #bca8f3;
     transform: rotateY(180deg);
     flex-direction: column;
-    padding: 10px;
+    padding: 15px;
     box-sizing: border-box;
-    border-radius: 10px; 
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.book-info a.book-title {
+    font-size: 1.1em;
+    margin-bottom: 10px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.book-info p {
+    margin: 5px 0;
+    font-size: 0.9em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .book-info-container:hover .book-info {
@@ -130,39 +155,112 @@ a {
     border-radius: 20px;
   }
   
-@media (max-width: 1366px) {
+@media (min-width: 1200px) {
     .book-container {
-        grid-template-columns: repeat(5, 1fr);
-        grid-gap: 20px;
-        margin: 0 auto; 
-        max-width: 85%;
-        justify-content: center; 
-    
-    }
-}
-
-@media (max-width: 1080px) {
-    .book-container {
-        grid-template-columns: repeat(3, 1fr);
-        grid-gap: 20px;
-        margin: 0 auto; 
-        max-width: 100%;
-        justify-content: center; 
-    
+        grid-template-columns: repeat(6, 1fr);
     }
 
     .book-item {
-        height: 450px; 
-        width: 300px;
+        width: 200px;
+        height: 300px;
     }
+    
+    .book-info a.book-title {
+        font-size: 1.2em;
+    }
+
+    .book-info p {
+        font-size: 1em;
+    }
+}
+
+/* Pantallas medianas (4-5 libros) */
+@media (max-width: 1199px) and (min-width: 992px) {
+    .book-container {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    
+    .book-item {
+        width: 250px;
+        height: 375px;
+    }
+
+    .book-info a.book-title {
+        font-size: 1.1em;
+    }
+
+    .book-info p {
+        font-size: 0.9em;
+    }
+}
+
+/* Tablets (3 libros) */
+@media (max-width: 991px) and (min-width: 768px) {
+    .book-container {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .book-item {
+        width: 200px;
+        height: 300px;
+    }
+
+    .book-info a.book-title {
+        font-size: 1em;
+    }
+
+    .book-info p {
+        font-size: 0.85em;
+    }
+}
+
+/* Móviles (2 libros) */
+@media (max-width: 767px) {
+    .book-container {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+        padding: 0 15px;
+    }
+    
+    .book-item {
+        width: calc((100vw - 50px) / 2); 
+        height: calc(((100vw - 50px) / 2) * 1.5); 
+        max-width: 200px;
+        max-height: 300px;
+    }
+
     .book-info {
-        font-size: 24px;
+        padding: 10px;
     }
-    .floating-button {
-        width: 120px;
-        height: 120px;
-        margin-right: 15px;
-        margin-bottom: 15px;
-      }
+
+    .book-info a.book-title {
+        font-size: 0.9em;
+    }
+
+    .book-info p {
+        font-size: 0.8em;
+        margin: 3px 0;
+    }
+}
+
+/* Móviles pequeños */
+@media (max-width: 479px) {
+    .book-container {
+        padding: 0 10px;
+        gap: 10px;
+    }
+
+    .book-info {
+        padding: 8px;
+    }
+
+    .book-info a.book-title {
+        font-size: 0.8em;
+    }
+
+    .book-info p {
+        font-size: 0.7em;
+        margin: 2px 0;
+    }
 }
 

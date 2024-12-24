@@ -9,11 +9,11 @@
     <div class="header-title">
       <h1>
         {% if request.path == '/bookshelf/' %}
-          Biblioteca de Johan
+          Mis Libros
         {% elif request.path == '/spotify/' %}
-          Spotify de Johan
+          Mi Música
         {% else %}
-          Biblioteca de Johan
+          Mis Libros
         {% endif %}
       </h1>
       {% if request.path == '/bookshelf/' %}
@@ -27,6 +27,8 @@
             <a href="/stats/"><strong>Estadísticas</strong></a>
             <a href="/about/"><strong>Información</strong></a>
             <a href="/"><strong>Volver</strong></a>
+        {% elif request.path == '/stats/' or request.path == '/about/' %}
+            <a href="/bookshelf/"><strong>Volver</strong></a>
         {% elif request.path != '/' %}
             <a href="/"><strong>Volver</strong></a>
         {% endif %}

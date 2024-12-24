@@ -1,13 +1,18 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="es">
-{% include 'header.html' %}
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Acerca de</title>
-    <link rel="stylesheet" href="{% static 'css/about.css' %}">    
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'css/header.css' %}">
+    <link rel="stylesheet" href="{% static 'css/about.css' %}">
 </head>
 <body>
+    {% include 'header.html' %}
+    
     <div class="about-container">
         <div class="about-content">
             <h2>¿Por qué?</h2>

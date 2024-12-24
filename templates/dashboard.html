@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mi Spotify</title>
+    <title>Mi Música</title>
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 </head>
@@ -32,7 +32,7 @@
         <div class="music-grid">
             <!-- Top canciones -->
             <div class="music-section">
-                <h3>Top 5 Canciones</h3>
+                <h3>Top 5 Canciones este Mes</h3>
                 <div class="song-list">
                     {% for song in top_songs %}
                         <div class="song-item">
@@ -52,7 +52,7 @@
 
             <!-- Últimas favoritas -->
             <div class="music-section">
-                <h3>Últimas Favoritas</h3>
+                <h3>Últimas Favoritas Agregadas</h3>
                 <div class="song-list">
                     {% for song in favorite_songs|slice:":10" %}
                         <div class="song-item">
