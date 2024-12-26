@@ -24,10 +24,10 @@
     </div>
     <nav class="header-nav">
         {% if request.path == '/bookshelf/' %}
-            <a href="/stats/"><strong>Estadísticas</strong></a>
+            <a href="/bookshelf/stats/"><strong>Estadísticas</strong></a>
             <a href="/about/"><strong>Información</strong></a>
             <a href="/"><strong>Volver</strong></a>
-        {% elif request.path == '/stats/' or request.path == '/about/' %}
+        {% elif request.path == '/bookshelf/stats/' or request.path == '/about/' %}
             <a href="/bookshelf/"><strong>Volver</strong></a>
         {% elif request.path != '/' %}
             <a href="/"><strong>Volver</strong></a>

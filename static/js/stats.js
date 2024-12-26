@@ -72,6 +72,12 @@ new Chart(document.getElementById('booksPerYearChart'), {
                 },
                 formatter: (value) => value
             }
+        },
+        animation: {
+            y: {
+                duration: 2000,
+                from: 500 
+            }
         }
     }
 });
@@ -138,6 +144,10 @@ new Chart(document.getElementById('starsChart'), {
                     return (value / total) < 0.1 ? 20 : 0;
                 }
             }
+        },
+        animation: {
+            animateRotate: true, 
+            animateScale: true 
         }
     }
 });
@@ -157,7 +167,7 @@ new Chart(document.getElementById('topAuthorsChart'), {
     },
     options: {
         ...commonOptions,
-        indexAxis: 'y',  // Hace que el gráfico sea horizontal
+        indexAxis: 'y',
         scales: {
             x: {
                 beginAtZero: true,
@@ -172,7 +182,7 @@ new Chart(document.getElementById('topAuthorsChart'), {
                 ticks: {
                     color: 'white',
                     font: {
-                        size: 12  // Ajusta el tamaño del texto para los nombres de autores
+                        size: 12
                     }
                 },
                 grid: {
@@ -182,13 +192,13 @@ new Chart(document.getElementById('topAuthorsChart'), {
         },
         plugins: {
             legend: {
-                display: false  // Oculta la leyenda ya que no es necesaria
+                display: false
             },
             datalabels: {
                 color: 'white',
-                anchor: 'end',
-                align: 'end',
-                offset: -5,
+                anchor: 'center',
+                align: 'center',
+                offset: 0,
                 font: {
                     weight: 'bold',
                     size: 14
@@ -197,7 +207,13 @@ new Chart(document.getElementById('topAuthorsChart'), {
             }
         },
         maintainAspectRatio: true,
-        aspectRatio: 1.5
+        aspectRatio: 1.5,
+        animation: {
+            x: {
+                duration: 2000,
+                from: 0 
+            }
+        }
     }
 });
 
