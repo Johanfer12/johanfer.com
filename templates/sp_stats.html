@@ -1,0 +1,45 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estadísticas de mi música</title>
+    <link rel="stylesheet" href="{% static 'css/stats.css' %}">
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+</head>
+<body>
+    {% include 'header.html' %}
+    <div class="statistics-container">
+        <div class="statistics-content">
+            <h2>Estadísticas de mi música</h2>
+            <div class="charts-row">
+                <div class="chart-container">
+                    <h3>Top 5 Géneros</h3>
+                    <canvas id="genresChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Top 5 Artistas</h3>
+                    <canvas id="artistsChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Canciones Añadidas por Mes</h3>
+                    <canvas id="monthlyChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const genresLabels = JSON.parse('{{ genres_labels|escapejs }}');
+        const genresValues = JSON.parse('{{ genres_values|escapejs }}');
+        const artistsLabels = JSON.parse('{{ artists_labels|escapejs }}');
+        const artistsValues = JSON.parse('{{ artists_values|escapejs }}');
+        const monthsLabels = JSON.parse('{{ months_labels|escapejs }}');
+        const monthsValues = JSON.parse('{{ months_values|escapejs }}');
+    </script>
+    <script src="{% static 'js/spotify_stats.js' %}"></script>
+</body>
+</html> 

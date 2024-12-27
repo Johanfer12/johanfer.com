@@ -41,6 +41,13 @@ def bookshelf(request):
         return render(request, 'bookshelf.html', {'page_obj': page_obj, 'total_books': total_books})
 
 def about(request):
+    # Guardar la página de origen si viene de bookshelf o spotify
+    referer = request.META.get('HTTP_REFERER', '')
+    if 'bookshelf' in referer:
+        request.session['about_source'] = 'bookshelf'
+    elif 'spotify' in referer:
+        request.session['about_source'] = 'spotify'
+    
     return render(request, 'about.html')
 
 def stats(request):

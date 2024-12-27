@@ -10,7 +10,7 @@
       <h1>
         {% if request.path == '/bookshelf/' %}
           Mis Libros
-        {% elif request.path == '/spotify/' %}
+        {% elif request.path == '/spotify/' or request.path == '/spotify/stats/' %}
           Mi Música
         {% else %}
           Mis Libros
@@ -27,8 +27,20 @@
             <a href="/bookshelf/stats/"><strong>Estadísticas</strong></a>
             <a href="/about/"><strong>Información</strong></a>
             <a href="/"><strong>Volver</strong></a>
-        {% elif request.path == '/bookshelf/stats/' or request.path == '/about/' %}
+        {% elif request.path == '/bookshelf/stats/' %}
             <a href="/bookshelf/"><strong>Volver</strong></a>
+        {% elif request.path == '/spotify/' %}
+            <a href="/spotify/stats/"><strong>Estadísticas</strong></a>
+            <a href="/about/"><strong>Información</strong></a>
+            <a href="/"><strong>Volver</strong></a>
+        {% elif request.path == '/spotify/stats/' %}
+            <a href="/spotify/"><strong>Volver</strong></a>
+        {% elif request.path == '/about/' %}
+            {% if request.session.about_source == 'spotify' %}
+                <a href="/spotify/"><strong>Volver</strong></a>
+            {% else %}
+                <a href="/bookshelf/"><strong>Volver</strong></a>
+            {% endif %}
         {% elif request.path != '/' %}
             <a href="/"><strong>Volver</strong></a>
         {% endif %}
