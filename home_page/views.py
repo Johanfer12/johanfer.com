@@ -33,7 +33,9 @@ def bookshelf(request):
                 'public_rating': book.public_rating,
                 'date_read': book.date_read.strftime('%Y-%m-%d'),
                 'book_link': book.book_link,
-                'cover_image': f"/static/Img/Covers/{book.id}.jpg"
+                'cover_image': f"/static/Img/Covers/{book.id}.webp",
+                'id': book.id,
+                'description': book.description
             })
         return JsonResponse({'books': book_data, 'has_next': page_obj.has_next()})
     else:

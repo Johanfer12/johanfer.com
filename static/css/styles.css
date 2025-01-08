@@ -107,13 +107,8 @@ a {
     text-overflow: ellipsis;
 }
 
-.book-info-container:hover .book-info {
-    transform: rotateY(0deg);
-    box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.3), 0 12px 30px 0 rgba(0, 0, 0, 0.25);
-}
-
-.book-info-container:hover .book-cover {
-    transform: rotateY(-180deg);
+.book-cover:hover {
+    cursor: pointer;
 }
 
 .floating-button {
@@ -155,6 +150,58 @@ a {
     border-radius: 20px;
   }
   
+
+/* 2) Estilos base del modal */
+.modal {
+    display: none; /* Oculto por defecto */
+    position: fixed; /* Para centrar y superponer */
+    z-index: 9999; /* Asegurarnos de que quede sobre otros elementos */
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto; /* Habilitar scroll si el contenido excede la pantalla */
+    background-color: rgba(0, 0, 0, 0.5); /* Fondo semi-transparente */
+    /* También podrías usar backdrop-filter si quieres difuminar el fondo */
+}
+
+/* 3) Contenedor interno del modal */
+.modal-content {
+    background-color: #000; /* O el color que prefieras */
+    color: #bca8f3;         /* Texto en el modal */
+    margin: 80px auto;      /* Centrado vertical/horizontal */
+    padding: 20px;
+    border-radius: 10px;
+    width: 50%;             /* Ancho en desktop */
+    max-width: 800px;       /* Ajusta según tu preferencia */
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5); 
+    position: relative;     /* Para posicionar la "X" fácilmente si lo deseas */
+    animation: zoomIn 0.3s ease-out;
+}
+
+/* 4) Botón de cierre (la "X") */
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: -10px;
+    margin-right: -10px;
+}
+
+.close:hover {
+    color: #fff;
+}
+
+/* 5) Responsivo para móviles (85% de ancho) */
+@media (max-width: 767px) {
+    .modal-content {
+        width: 85%;
+    }
+}
+
+
 @media (min-width: 1200px) {
     .book-container {
         grid-template-columns: repeat(6, 1fr);
@@ -261,6 +308,22 @@ a {
     .book-info p {
         font-size: 0.7em;
         margin: 2px 0;
+    }
+}
+
+/* Estilos para la descripción del libro */
+.book-description {
+    text-align: justify;
+}
+
+@keyframes zoomIn {
+    from {
+        transform: scale(0.7);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
     }
 }
 

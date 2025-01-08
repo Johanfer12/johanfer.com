@@ -22,7 +22,7 @@ function loadMoreBooks() {
             
             bookItem.innerHTML = `
                 <div class="book-info-container">
-                    <div class="book-cover">
+                    <div class="book-cover" onclick="openModal('${book.id}')">
                         <img src="${coverImage}" alt="${book.title}">
                     </div>
                     <div class="book-info">
@@ -34,7 +34,27 @@ function loadMoreBooks() {
                     </div>
                 </div>
             `;
+
+            // Crear el modal para este libro
+            const modal = document.createElement('div');
+            modal.id = `modal-${book.id}`;
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <span class="close" onclick="closeModal('${book.id}')">&times;</span>
+                    <h2>${book.title}</h2>
+                    <p><strong>Autor:</strong> ${book.author}</p>
+                    <p><strong>Mi Calificación</strong> ${'★'.repeat(book.my_rating)}</p>
+                    <p><strong>Calificación General:</strong> ${book.public_rating}</p>
+                    <p><strong>Lo leí el...</strong> ${book.date_read}</p>
+                    <div class="book-description">
+                        <strong>Descripción</strong><br><br>
+                        ${book.description || 'No hay descripción disponible'}
+                    </div>
+                </div>`;
+
             bookContainer.appendChild(bookItem);
+            bookContainer.appendChild(modal);
         });
 
         page++;

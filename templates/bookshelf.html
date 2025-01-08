@@ -8,6 +8,33 @@
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/header.css' %}">
+
+    <script>
+        // Abre el modal específico según el ID del libro
+        function openModal(bookId) {
+            var modal = document.getElementById("modal-" + bookId);
+            if (modal) {
+                modal.style.display = "block";
+            }
+        }
+    
+        // Cierra el modal específico
+        function closeModal(bookId) {
+            var modal = document.getElementById("modal-" + bookId);
+            if (modal) {
+                modal.style.display = "none";
+            }
+        }
+    
+        // Cerrar el modal al hacer clic fuera del contenido
+        window.onclick = function(event) {
+            // Si el usuario hace clic directamente en el .modal (fondo), se cierra
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = "none";
+            }
+        }
+    </script>
+    
 </head>
 <body>
     {% include 'header.html' %}
@@ -16,21 +43,55 @@
         {% for book in page_obj %}
         <div class="book-item">
             <div class="book-info-container">
-                <div class="book-cover">
+                <!-- Carátula con cursor "manito" y evento de apertura -->
+                <div class="book-cover" onclick="openModal('{{ book.id }}')">
                     <img src="{% static 'Img/Covers/' %}{{ book.id }}.webp" alt="{{ book.title }}">
                 </div>
+                
+                <!-- Info del libro que se ve al girar la carátula -->
                 <div class="book-info">
-                    <a href="https://www.goodreads.com{{ book.book_link }}" class="book-title" target="_blank">{{ book.title }}</a>
+                    <a href="https://www.goodreads.com{{ book.book_link }}" 
+                       class="book-title" 
+                       target="_blank">
+                       {{ book.title }}
+                    </a>
                     <p><strong>Autor</strong><br>{{ book.author }}</p>
                     <p><strong>Mi Calificación</strong><br>
-                        {% for _ in "x"|ljust:book.my_rating %}<span class="stars">★</span>{% endfor %}
+                        {% for _ in "x"|ljust:book.my_rating %}
+                            <span class="stars">★</span>
+                        {% endfor %}
                     </p>
                     <p><strong>Calificación General</strong><br>{{ book.public_rating }}</p>
                     <p><strong>Lo leí el...</strong><br>{{ book.date_read }}</p>
                 </div>
             </div>
         </div>
+        
+        <!-- Modal de la descripción (uno por cada libro) -->
+        <div id="modal-{{ book.id }}" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeModal('{{ book.id }}')">&times;</span>
+                
+                <!-- Aquí podrías repetir la info principal o solo lo que necesites -->
+                <h2>{{ book.title }}</h2>
+                <p><strong>Autor:</strong> {{ book.author }}</p>
+                <p><strong>Mi Calificación</strong> 
+                    {% for _ in "x"|ljust:book.my_rating %}
+                        <span class="stars">★</span>
+                    {% endfor %}
+                </p>
+                <p><strong>Calificación General:</strong> {{ book.public_rating }}</p>
+                <p><strong>Lo leí el...</strong> {{ book.date_read }}</p>
+                
+                <!-- Descripción debajo de "Lo leí el..." -->
+                <div class="book-description">
+                    <strong>Descripción</strong><br><br>
+                    {{ book.description }}
+                </div>
+            </div>
+        </div>
         {% endfor %}
+        
     </div>
 
     <div id="loading" style="display: none;">Loading more books...</div>
