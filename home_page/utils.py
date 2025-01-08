@@ -88,22 +88,36 @@ def refresh_books_data():
             print("No hay nuevos libros para actualizar")
             return
 
-        # Continuar con el proceso de actualización si hay diferencias
-        current_books = set()
-        book_counter = 0
+        # Obtener todos los book_links existentes
+        current_books = set(Book.objects.values_list('book_link', flat=True))
+        book_counter = 0  # Inicializar contador en 0 si empezamos de cero
 
-        for page_number in range(total_pages, 0, -1):
+        if total_libros_db == 0:
+            # Si la DB está vacía, procesar todas las páginas desde la última a la primera
+            page_range = range(total_pages, 0, -1)
+        else:
+            # Si ya hay libros, solo procesar la primera página
+            page_range = range(1, 2)
+            book_counter = total_libros_db  # Inicializar contador con total actual si ya hay libros
+
+        for page_number in page_range:
             page_url = f"{base_url}&page={page_number}"
             response = requests.get(page_url, headers=headers)
             soup = BeautifulSoup(response.text, 'html.parser')
             reviews = soup.find_all('tr', class_='bookalike review')
 
-            for review in reversed(reviews):
-                book_counter += 1
-                book_link = review.find('td', class_='field title').find('a')['href']
-                current_books.add(book_link)
+            # Si estamos procesando desde el inicio, invertir el orden de los reviews
+            if total_libros_db == 0:
+                reviews = reviews[::-1]
 
-                # Procesar datos del libro
+            for review in reviews:
+                book_link = review.find('td', class_='field title').find('a')['href']
+                
+                # Si el libro ya existe, saltamos al siguiente
+                if book_link in current_books:
+                    continue
+
+                # Procesar datos del libro nuevo
                 title = review.find('td', class_='field title').find('a').get_text(strip=True)
                 author = review.find('td', class_='field author').find('a').get_text(strip=True)
                 rating_element = review.find('td', class_='field rating')
@@ -113,59 +127,37 @@ def refresh_books_data():
                 date_read = process_date(date_read_str)
                 description = get_book_description(book_link, headers)
 
-                # Procesar portada
+                # Procesar portada antes de crear el libro
+                cover_link = None
                 cover_info = review.find('td', class_='field cover')
                 if cover_info:
                     cover_link = cover_info.find('img')['src']
-                    if cover_link.endswith('.jpg'):
-                        modified_cover_url = modify_cover_url(cover_link)
-                        file_name = f"{book_counter}.webp"
-                        file_path = os.path.join(folder_path, file_name)
-                        
-                        if not os.path.exists(file_path):
-                            temp_jpg_path = os.path.join(folder_path, f"temp_{book_counter}.jpg")
-                            try:
-                                with open(temp_jpg_path, 'wb') as f:
-                                    response = requests.get(modified_cover_url)
-                                    f.write(response.content)
-                                convert_to_webp(temp_jpg_path, file_path)
-                                os.remove(temp_jpg_path)
-                            except Exception as e:
-                                print(f"Error al procesar imagen: {e}")
 
-                # Actualizar o crear libro
-                book, created = Book.objects.get_or_create(
+                # Crear el libro con la URL de la portada
+                nuevo_libro = Book.objects.create(
+                    title=title,
+                    author=author,
+                    cover_link=cover_link,
+                    my_rating=my_rating,
+                    public_rating=public_rating,
+                    date_read=date_read,
                     book_link=book_link,
-                    defaults={
-                        'title': title,
-                        'author': author,
-                        'cover_link': cover_link,
-                        'my_rating': my_rating,
-                        'public_rating': public_rating,
-                        'date_read': date_read,
-                        'description': description
-                    }
+                    description=description
                 )
 
-                if not created:
-                    book.title = title
-                    book.author = author
-                    book.my_rating = my_rating
-                    book.public_rating = public_rating
-                    book.date_read = date_read
-                    book.description = description or book.description
-                    book.save()
-
-        # Mover libros eliminados
-        for book in Book.objects.exclude(book_link__in=current_books):
-            DeletedBook.objects.create(
-                title=book.title,
-                author=book.author,
-                cover_link=book.cover_link,
-                my_rating=book.my_rating,
-                public_rating=book.public_rating,
-                date_read=book.date_read,
-                book_link=book.book_link,
-                description=book.description
-            )
-            book.delete() 
+                # Procesar y guardar la imagen de la portada
+                if cover_link and cover_link.endswith('.jpg'):
+                    modified_cover_url = modify_cover_url(cover_link)
+                    file_name = f"{nuevo_libro.id}.webp"
+                    file_path = os.path.join(folder_path, file_name)
+                    
+                    if not os.path.exists(file_path):
+                        temp_jpg_path = os.path.join(folder_path, f"temp_{nuevo_libro.id}.jpg")
+                        try:
+                            with open(temp_jpg_path, 'wb') as f:
+                                response = requests.get(modified_cover_url)
+                                f.write(response.content)
+                            convert_to_webp(temp_jpg_path, file_path)
+                            os.remove(temp_jpg_path)
+                        except Exception as e:
+                            print(f"Error al procesar imagen: {e}")
