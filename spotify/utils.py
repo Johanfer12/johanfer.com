@@ -56,6 +56,11 @@ def refresh_spotify_data():
             added_at = datetime.strptime(item['added_at'], "%Y-%m-%dT%H:%M:%SZ")
             added_at = pytz.utc.localize(added_at)
 
+            # Obtener el género principal del artista (solo el primero)
+            artist_id = track['artists'][0]['id']
+            artist_info = sp.artist(artist_id)
+            genre = artist_info['genres'][0] if artist_info['genres'] else ''
+
             favorite, created = SpotifyFavorites.objects.get_or_create(
                 song_url=song_url,
                 defaults={
@@ -63,13 +68,15 @@ def refresh_spotify_data():
                     'artist_name': track['artists'][0]['name'],
                     'duration_ms': track['duration_ms'],
                     'added_at': added_at,
-                    'album_cover': album_cover
+                    'album_cover': album_cover,
+                    'genre': genre
                 }
             )
 
-            # Importante: actualizar la carátula incluso si la canción ya existe
+            # Actualizar carátula y género incluso si la canción ya existe
             if not created:
                 favorite.album_cover = album_cover
+                favorite.genre = genre
                 favorite.save()
 
         if results['next']:
