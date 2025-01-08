@@ -28,7 +28,7 @@ def get_book_description(book_url, headers):
             soup = BeautifulSoup(response.text, 'html.parser')
             description_span = soup.find('span', class_='Formatted')
             if description_span:
-                return description_span.get_text(strip=True)
+                return str(description_span)
     except Exception as e:
         print(f"Error al obtener descripción: {e}")
     return None
@@ -74,6 +74,21 @@ def refresh_books_data():
         last_page_link = pagination_div.find_all("a")[-2]
         total_pages = int(last_page_link.text)
 
+        # Calcular número total de libros en Goodreads
+        reviews = soup.find_all('tr', class_='bookalike review')
+        libros_por_pagina = len(reviews)
+        total_libros_goodreads = (total_pages - 1) * libros_por_pagina
+        ultima_pagina_reviews = BeautifulSoup(requests.get(f"{base_url}&page={total_pages}", headers=headers).text, 'html.parser')
+        total_libros_goodreads += len(ultima_pagina_reviews.find_all('tr', class_='bookalike review'))
+
+        # Comparar con libros en base de datos
+        total_libros_db = Book.objects.count()
+
+        if total_libros_db == total_libros_goodreads:
+            print("No hay nuevos libros para actualizar")
+            return
+
+        # Continuar con el proceso de actualización si hay diferencias
         current_books = set()
         book_counter = 0
 
