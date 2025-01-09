@@ -20,64 +20,58 @@ def refresh_spotify_data():
 
     sp = spotipy.Spotify(auth=token)
 
-    # Actualizar canciones top
+    # Optimización para canciones top
     top_tracks = sp.current_user_top_tracks(limit=5, time_range='short_term')
-    SpotifyTopSongs.objects.all().delete()
+    existing_top_songs = {song.song_url: song for song in SpotifyTopSongs.objects.all()}
     
     for track in top_tracks['items']:
-        # Obtener la URL de la carátula del álbum (usar la imagen más grande)
-        album_cover = None
-        if track['album']['images']:
-            album_cover = track['album']['images'][0]['url']
-
+        song_url = track['external_urls']['spotify']
+        album_cover = track['album']['images'][0]['url'] if track['album']['images'] else None
+        
+        if song_url in existing_top_songs:
+            continue
+            
         SpotifyTopSongs.objects.create(
             song_name=track['name'],
             artist_name=track['artists'][0]['name'],
-            song_url=track['external_urls']['spotify'],
+            song_url=song_url,
             album_cover=album_cover
         )
 
-    # Obtener y actualizar favoritos
+    # Optimización para favoritos
     results = sp.current_user_saved_tracks(limit=50)
+    existing_favorites = {fav.song_url: fav for fav in SpotifyFavorites.objects.all()}
     current_favorites = set()
+    artist_genres_cache = {}  # Cache para géneros de artistas
 
     while True:
         for item in results['items']:
             track = item['track']
             song_url = track['external_urls']['spotify']
             current_favorites.add(song_url)
+            
+            # Si la canción ya existe, solo verificamos si está en current_favorites
+            if song_url in existing_favorites:
+                continue
 
-            # Obtener la URL de la carátula del álbum (usar la imagen más grande)
-            album_cover = None
-            if track['album']['images']:
-                album_cover = track['album']['images'][0]['url']
+            album_cover = track['album']['images'][0]['url'] if track['album']['images'] else None
+            added_at = pytz.utc.localize(datetime.strptime(item['added_at'], "%Y-%m-%dT%H:%M:%SZ"))
 
-            # Convertir la fecha UTC string a datetime con timezone
-            added_at = datetime.strptime(item['added_at'], "%Y-%m-%dT%H:%M:%SZ")
-            added_at = pytz.utc.localize(added_at)
-
-            # Obtener el género principal del artista (solo el primero)
+            # Cache de géneros para evitar llamadas repetidas
             artist_id = track['artists'][0]['id']
-            artist_info = sp.artist(artist_id)
-            genre = artist_info['genres'][0] if artist_info['genres'] else ''
+            if artist_id not in artist_genres_cache:
+                artist_info = sp.artist(artist_id)
+                artist_genres_cache[artist_id] = artist_info['genres'][0] if artist_info['genres'] else ''
 
-            favorite, created = SpotifyFavorites.objects.get_or_create(
+            SpotifyFavorites.objects.create(
                 song_url=song_url,
-                defaults={
-                    'song_name': track['name'],
-                    'artist_name': track['artists'][0]['name'],
-                    'duration_ms': track['duration_ms'],
-                    'added_at': added_at,
-                    'album_cover': album_cover,
-                    'genre': genre
-                }
+                song_name=track['name'],
+                artist_name=track['artists'][0]['name'],
+                duration_ms=track['duration_ms'],
+                added_at=added_at,
+                album_cover=album_cover,
+                genre=artist_genres_cache[artist_id]
             )
-
-            # Actualizar carátula y género incluso si la canción ya existe
-            if not created:
-                favorite.album_cover = album_cover
-                favorite.genre = genre
-                favorite.save()
 
         if results['next']:
             results = sp.next(results)
