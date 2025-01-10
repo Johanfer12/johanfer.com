@@ -5,6 +5,10 @@ from config import CLIENT_ID, CLIENT_SECRET, USERNAME
 from .models import SpotifyFavorites, SpotifyTopSongs, DeletedSongs
 from django.utils import timezone
 import pytz
+import requests
+from bs4 import BeautifulSoup
+import json
+from jsonpath_ng import parse
 
 def refresh_spotify_data():
     # Obtener el token de acceso
@@ -27,6 +31,8 @@ def refresh_spotify_data():
     for track in top_tracks['items']:
         song_url = track['external_urls']['spotify']
         album_cover = track['album']['images'][0]['url'] if track['album']['images'] else None
+        track_id = extract_track_id(song_url)
+        preview_url = get_preview_url(track_id)
         
         if song_url in existing_top_songs:
             continue
@@ -35,7 +41,8 @@ def refresh_spotify_data():
             song_name=track['name'],
             artist_name=track['artists'][0]['name'],
             song_url=song_url,
-            album_cover=album_cover
+            album_cover=album_cover,
+            preview_url=preview_url
         )
 
     # Optimización para favoritos
@@ -50,10 +57,11 @@ def refresh_spotify_data():
             song_url = track['external_urls']['spotify']
             current_favorites.add(song_url)
             
-            # Si la canción ya existe, solo verificamos si está en current_favorites
             if song_url in existing_favorites:
                 continue
 
+            track_id = extract_track_id(song_url)
+            preview_url = get_preview_url(track_id)
             album_cover = track['album']['images'][0]['url'] if track['album']['images'] else None
             added_at = pytz.utc.localize(datetime.strptime(item['added_at'], "%Y-%m-%dT%H:%M:%SZ"))
 
@@ -70,7 +78,8 @@ def refresh_spotify_data():
                 duration_ms=track['duration_ms'],
                 added_at=added_at,
                 album_cover=album_cover,
-                genre=artist_genres_cache[artist_id]
+                genre=artist_genres_cache[artist_id],
+                preview_url=preview_url
             )
 
         if results['next']:
@@ -90,3 +99,33 @@ def refresh_spotify_data():
             deleted_at=timezone.now()
         )
         favorite.delete() 
+
+def get_preview_url(track_id):
+    try:
+        embed_url = f"https://open.spotify.com/embed/track/{track_id}"
+        response = requests.get(embed_url)
+        
+        if not response.ok:
+            return None
+            
+        soup = BeautifulSoup(response.text, 'html.parser')
+        scripts = soup.find_all('script')
+        
+        for script in scripts:
+            if script.string:
+                try:
+                    # Usar jsonpath para encontrar la URL de vista previa
+                    jsonpath_expr = parse('$..audioPreview.url')
+                    matches = [match.value for match in jsonpath_expr.find(json.loads(script.string))]
+                    if matches:
+                        return matches[0]
+                except:
+                    continue
+                    
+        return None
+    except Exception as e:
+        print(f"Error getting preview URL: {e}")
+        return None
+
+def extract_track_id(spotify_url):
+    return spotify_url.split('/')[-1].split('?')[0] 

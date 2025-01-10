@@ -8,6 +8,7 @@ class SpotifyFavorites(models.Model):
     duration_ms = models.IntegerField()
     added_at = models.DateTimeField()
     album_cover = models.URLField(max_length=300, null=True, blank=True)
+    preview_url = models.URLField(max_length=300, null=True, blank=True)
 
     class Meta:
         ordering = ['-added_at']
@@ -22,6 +23,7 @@ class SpotifyTopSongs(models.Model):
     artist_name = models.CharField(max_length=200)
     song_url = models.URLField()
     album_cover = models.URLField(max_length=300, null=True, blank=True)
+    preview_url = models.URLField(max_length=300, null=True, blank=True)
 
     class Meta:
         verbose_name = 'Canción Top'
@@ -39,6 +41,7 @@ class DeletedSongs(models.Model):
     added_at = models.DateTimeField()
     deleted_at = models.DateTimeField()
     album_cover = models.URLField(max_length=300, null=True, blank=True)
+    preview_url = models.URLField(max_length=300, null=True, blank=True)
 
     class Meta:
         ordering = ['-deleted_at']

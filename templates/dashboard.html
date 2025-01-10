@@ -35,6 +35,17 @@
                                     <span class="artist-name">{{ song.artist_name }}</span>
                                 </a>
                             </div>
+                            {% if song.preview_url %}
+                            <button class="play-button" data-preview-url="{{ song.preview_url }}">
+                                <svg class="play-icon" viewBox="0 0 24 24">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                                <svg class="pause-icon" viewBox="0 0 24 24">
+                                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                                </svg>
+                            </button>
+                            <audio class="audio-preview" src="{{ song.preview_url }}"></audio>
+                            {% endif %}
                         </div>
                     {% empty %}
                         <div class="empty-message">No hay canciones top</div>
@@ -55,6 +66,17 @@
                                     <span class="artist-name">{{ song.artist_name }}</span>
                                 </a>
                             </div>
+                            {% if song.preview_url %}
+                            <button class="play-button" data-preview-url="{{ song.preview_url }}">
+                                <svg class="play-icon" viewBox="0 0 24 24">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                                <svg class="pause-icon" viewBox="0 0 24 24">
+                                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                                </svg>
+                            </button>
+                            <audio class="audio-preview" src="{{ song.preview_url }}"></audio>
+                            {% endif %}
                         </div>
                     {% empty %}
                         <div class="empty-message">No hay canciones favoritas</div>
@@ -63,5 +85,6 @@
             </div>
         </div>
     </div>
+    <script src="{% static 'js/audio-player.js' %}"></script>
 </body>
 </html>
