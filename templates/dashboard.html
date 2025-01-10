@@ -28,7 +28,9 @@
                 <div class="song-list">
                     {% for song in top_songs %}
                         <div class="song-item">
-                            <img src="{{ song.album_cover }}" alt="{{ song.song_name }}" class="album-cover">
+                            <a href="{{ song.song_url }}" target="_blank" class="album-link">
+                                <img src="{{ song.album_cover }}" alt="{{ song.song_name }}" class="album-cover">
+                            </a>
                             <div class="song-details">
                                 <a href="{{ song.song_url }}" target="_blank">
                                     {{ song.song_name }}
@@ -59,7 +61,9 @@
                 <div class="song-list">
                     {% for song in favorite_songs|slice:":10" %}
                         <div class="song-item">
-                            <img src="{{ song.album_cover }}" alt="{{ song.song_name }}" class="album-cover">
+                            <a href="{{ song.song_url }}" target="_blank" class="album-link">
+                                <img src="{{ song.album_cover }}" alt="{{ song.song_name }}" class="album-cover">
+                            </a>
                             <div class="song-details">
                                 <a href="{{ song.song_url }}" target="_blank">
                                     {{ song.song_name }}

@@ -259,3 +259,27 @@ h1, h3 {
         height: 20px;
     }
 }
+
+.album-link {
+    display: block;
+    transition: transform 0.2s ease;
+}
+
+.album-link:hover {
+    transform: scale(1.05);
+}
+
+.album-cover {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 768px) {
+    .album-link .album-cover {
+        width: 45px;
+        height: 45px;
+    }
+}
