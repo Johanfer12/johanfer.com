@@ -12,14 +12,6 @@
     {% include 'header.html' %}
     
     <div class="content-container">
-        <!-- Botón de actualización -->
-        <form method="POST" class="update-form">
-            {% csrf_token %}
-            <button type="submit" name="update_spotify" class="update-button">
-                <img src="{% static 'Img/refresh.svg' %}" alt="Actualizar">
-            </button>
-        </form>
-
         <!-- Mensajes -->
         {% if messages %}
             {% for message in messages %}

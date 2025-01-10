@@ -8,33 +8,6 @@
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/header.css' %}">
-
-    <script>
-        // Abre el modal específico según el ID del libro
-        function openModal(bookId) {
-            var modal = document.getElementById("modal-" + bookId);
-            if (modal) {
-                modal.style.display = "block";
-            }
-        }
-    
-        // Cierra el modal específico
-        function closeModal(bookId) {
-            var modal = document.getElementById("modal-" + bookId);
-            if (modal) {
-                modal.style.display = "none";
-            }
-        }
-    
-        // Cerrar el modal al hacer clic fuera del contenido
-        window.onclick = function(event) {
-            // Si el usuario hace clic directamente en el .modal (fondo), se cierra
-            if (event.target.classList.contains('modal')) {
-                event.target.style.display = "none";
-            }
-        }
-    </script>
-    
 </head>
 <body>
     {% include 'header.html' %}
@@ -100,6 +73,7 @@
         <a href="#"><img src="{% static 'Img/circle.svg' %}" alt="Scroll to Top"></a>
     </div>
 
+    <script src="{% static 'js/modal.js' %}"></script>
     <script src="{% static 'js/infinite_scroll.js' %}"></script>
     <script src="{% static 'js/scroll_button.js' %}"></script>
 </body>
