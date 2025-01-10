@@ -42,7 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'home_page',
     'spotify',
-    'django_cron',
+    'django_crontab',
 ]
 
 MIDDLEWARE = [
@@ -55,8 +55,9 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CRON_CLASSES = [
-    'home_page.tasks.DailyScrapingJob',
+CRONJOBS = [
+    ('55 12 * * *', 'home_page.tasks.update_books_cron'),
+    ('0 */6 * * *', 'spotify.tasks.update_spotify_cron')
 ]
 
 ROOT_URLCONF = 'Bookshelf.urls'

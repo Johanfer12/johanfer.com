@@ -1,10 +1,8 @@
-from django_cron import CronJobBase, Schedule
-from .models import scrap_books
+from .utils import refresh_books_data
 
-class DailyScrapingJob(CronJobBase):
-    RUN_AT_TIMES = ['19:00']  # ejecutar a las 7 p.m. cada día
-    schedule = Schedule(run_at_times=RUN_AT_TIMES)
-    code = 'home_page.daily_scraping_job'  # un identificador único para la tarea
-
-    def do(self):
-        scrap_books()
+def update_books_cron():
+    try:
+        refresh_books_data()
+        print("Books data updated successfully")
+    except Exception as e:
+        print(f"Error updating books data: {str(e)}")
