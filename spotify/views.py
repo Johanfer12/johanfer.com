@@ -62,3 +62,11 @@ def spotify_stats(request):
     }
 
     return render(request, 'sp_stats.html', context)
+
+def spotify_deleted(request):
+    deleted_songs = DeletedSongs.objects.all().order_by('-deleted_at')
+    context = {
+        'deleted_songs': deleted_songs,
+        'total_deleted': deleted_songs.count()
+    }
+    return render(request, 'sp_deleted.html', context)

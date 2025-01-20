@@ -6,4 +6,5 @@ app_name = 'spotify'
 urlpatterns = [
     path('', views.spotify_dashboard, name='dashboard'),
     path('stats/', views.spotify_stats, name='stats'),
+    path('deleted/', views.spotify_deleted, name='deleted'),
 ] 

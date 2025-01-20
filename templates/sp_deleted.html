@@ -1,0 +1,55 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canciones Eliminadas</title>
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+</head>
+<body>
+    {% include 'header.html' %}
+    
+    <div class="content-container">
+        <div class="music-grid">
+            <!-- Canciones eliminadas -->
+            <div class="music-section full-width">
+                <h3>Canciones Eliminadas de Favoritos ({{ total_deleted }})</h3>
+                <div class="song-list">
+                    {% for song in deleted_songs %}
+                        <div class="song-item">
+                            <a href="{{ song.song_url }}" target="_blank" class="album-link">
+                                <img src="{{ song.album_cover }}" alt="{{ song.song_name }}" class="album-cover">
+                            </a>
+                            <div class="song-details">
+                                <a href="{{ song.song_url }}" target="_blank">
+                                    {{ song.song_name }}
+                                    <span class="artist-name">{{ song.artist_name }}</span>
+                                </a>
+                                <div class="deletion-info">
+                                    <small>Eliminada: {{ song.deleted_at|date:"d/m/Y H:i" }}</small>
+                                </div>
+                            </div>
+                            {% if song.preview_url %}
+                            <button class="play-button" data-preview-url="{{ song.preview_url }}">
+                                <svg class="play-icon" viewBox="0 0 24 24">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                                <svg class="pause-icon" viewBox="0 0 24 24">
+                                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                                </svg>
+                            </button>
+                            <audio class="audio-preview" src="{{ song.preview_url }}"></audio>
+                            {% endif %}
+                        </div>
+                    {% empty %}
+                        <div class="empty-message">No hay canciones eliminadas</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="{% static 'js/audio-player.js' %}"></script>
+</body>
+</html> 

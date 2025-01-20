@@ -35,13 +35,13 @@ class SpotifyTopSongs(models.Model):
 class DeletedSongs(models.Model):
     song_name = models.CharField(max_length=200)
     artist_name = models.CharField(max_length=200)
-    genre = models.CharField(max_length=100)
+    genre = models.CharField(max_length=100, blank=True)
     song_url = models.URLField()
     duration_ms = models.IntegerField()
     added_at = models.DateTimeField()
-    deleted_at = models.DateTimeField()
-    album_cover = models.URLField(max_length=300, null=True, blank=True)
-    preview_url = models.URLField(max_length=300, null=True, blank=True)
+    deleted_at = models.DateTimeField(auto_now_add=True)
+    album_cover = models.URLField(null=True, blank=True)
+    preview_url = models.URLField(null=True, blank=True)
 
     class Meta:
         ordering = ['-deleted_at']

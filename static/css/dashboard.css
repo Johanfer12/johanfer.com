@@ -78,6 +78,7 @@ h1, h3 {
     height: 60px;
     object-fit: cover;
     border-radius: 4px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.8);
 }
 
 .song-details {
@@ -179,6 +180,12 @@ h1, h3 {
         overflow: hidden;
         text-overflow: ellipsis;
     }
+
+    .album-link .album-cover {
+        width: 45px;
+        height: 45px;
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.8);
+    }
 }
 
 .song-preview {
@@ -269,17 +276,12 @@ h1, h3 {
     transform: scale(1.05);
 }
 
-.album-cover {
-    width: 60px;
-    height: 60px;
-    object-fit: cover;
-    border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+.full-width {
+    grid-column: 1 / -1;
 }
 
-@media (max-width: 768px) {
-    .album-link .album-cover {
-        width: 45px;
-        height: 45px;
-    }
+.deletion-info {
+    color: #666;
+    font-size: 0.8em;
+    margin-top: 4px;
 }
