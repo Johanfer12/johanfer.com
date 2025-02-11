@@ -26,17 +26,17 @@ def refresh_spotify_data():
 
     # Optimización para canciones top
     top_tracks = sp.current_user_top_tracks(limit=5, time_range='short_term')
-    existing_top_songs = {song.song_url: song for song in SpotifyTopSongs.objects.all()}
     
+    # Reiniciamos las canciones top existentes
+    SpotifyTopSongs.objects.all().delete()
+    
+    # Crear los nuevos registros para las 5 canciones top actuales
     for track in top_tracks['items']:
         song_url = track['external_urls']['spotify']
         album_cover = track['album']['images'][0]['url'] if track['album']['images'] else None
         track_id = extract_track_id(song_url)
         preview_url = get_preview_url(track_id)
         
-        if song_url in existing_top_songs:
-            continue
-            
         SpotifyTopSongs.objects.create(
             song_name=track['name'],
             artist_name=track['artists'][0]['name'],
