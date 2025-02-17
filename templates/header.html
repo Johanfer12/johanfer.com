@@ -14,6 +14,8 @@
           Mi Música
         {% elif request.path == '/about/' %}
           Acerca de
+        {% elif request.path|slice:":9" == '/noticias' %}
+          Mis Noticias
         {% else %}
           Mis Libros
         {% endif %}
@@ -22,6 +24,8 @@
         <p class="total">{{ total_books }} libros</p>
       {% elif request.path == '/spotify/' %}
         <p class="total">{{ total_songs }} canciones</p>
+      {% elif request.path == '/noticias/' %}
+        <p class="total">{{ total_news }} noticias</p>
       {% endif %}     
     </div>
     <nav class="header-nav">

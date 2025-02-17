@@ -1,0 +1,153 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noticias</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'css/news.css' %}">
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+</head>
+<body>
+    {% include 'header.html' %}
+    
+    <div class="main-content">
+        <div class="news-grid">
+            {% for article in news %}
+                {% include 'news_card.html' with article=article %}
+            {% endfor %}
+        </div>
+
+        {% if is_paginated %}
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}">Anterior</a>
+            {% endif %}
+            
+            <span class="active">
+                {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+            </span>
+
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}">Siguiente</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <button class="update-feed-btn" id="updateFeedBtn" title="Actualizar feed">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+    </button>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const newsGrid = document.querySelector('.news-grid');
+        const totalCounter = document.querySelector('.total');
+        
+        function attachDeleteListener(button) {
+            button.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const newsId = this.dataset.id;
+                const container = this.closest('.news-card-container');
+                const currentPage = new URLSearchParams(window.location.search).get('page') || 1;
+                
+                fetch(`/noticias/delete/${newsId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `current_page=${currentPage}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // Actualizar el contador en el header
+                        const currentTotal = parseInt(totalCounter.textContent);
+                        totalCounter.textContent = `${currentTotal - 1} noticias`;
+                        
+                        if (data.html) {
+                            const temp = document.createElement('div');
+                            temp.innerHTML = data.html;
+                            const newCard = temp.firstElementChild;
+                            
+                            const newDeleteBtn = newCard.querySelector('.delete-btn');
+                            attachDeleteListener(newDeleteBtn);
+                            
+                            container.style.transition = 'opacity 0.3s ease-out';
+                            container.style.opacity = '0';
+                            
+                            setTimeout(() => {
+                                container.remove();
+                                newCard.style.opacity = '0';
+                                newsGrid.appendChild(newCard);
+                                
+                                requestAnimationFrame(() => {
+                                    newCard.style.transition = 'opacity 0.3s ease-in';
+                                    newCard.style.opacity = '1';
+                                });
+                            }, 300);
+                        } else {
+                            container.remove();
+                        }
+                    }
+                });
+            });
+        }
+
+        document.querySelectorAll('.delete-btn').forEach(button => {
+            attachDeleteListener(button);
+        });
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Agregar el código para la actualización del feed
+        document.getElementById('updateFeedBtn').addEventListener('click', function() {
+            const button = this;
+            button.disabled = true;
+            button.classList.add('loading');
+
+            fetch('/noticias/update-feed/', {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Recargar la página para mostrar las nuevas noticias
+                    window.location.reload();
+                } else {
+                    alert(data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error al actualizar el feed');
+                console.error('Error:', error);
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.classList.remove('loading');
+            });
+        });
+    });
+    </script>
+</body>
+</html>

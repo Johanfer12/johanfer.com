@@ -1,0 +1,23 @@
+<div class="news-card-container" id="news-{{ article.pk }}">
+    <div class="news-card">
+        <div class="card-front">
+            {% if article.image_url %}
+            <img src="{{ article.image_url }}" alt="{{ article.title }}" class="news-image">
+            {% endif %}
+            <h2 class="news-title">{{ article.title }}</h2>
+            <div class="news-meta">
+                {{ article.source.name }} - {{ article.published_date|date:"d/m/Y H:i" }}
+            </div>
+        </div>
+        <div class="card-back">
+            <div class="news-description">
+                {{ article.description|safe }}
+            </div>
+            <div class="news-links">
+                <a href="{% url 'my_news:news_detail' article.pk %}" class="news-link">Leer más</a>
+                <a href="{{ article.link }}" target="_blank" class="news-link">Ver fuente</a>
+                <button class="news-link delete-btn" data-id="{{ article.pk }}">Borrar</button>
+            </div>
+        </div>
+    </div>
+</div> 

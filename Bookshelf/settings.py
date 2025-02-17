@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'home_page',
     'spotify',
     'django_crontab',
+    'my_news',
 ]
 
 MIDDLEWARE = [
@@ -57,7 +58,8 @@ MIDDLEWARE = [
 
 CRONJOBS = [
     ('55 12 * * *', 'home_page.tasks.update_books_cron'),
-    ('0 */6 * * *', 'spotify.tasks.update_spotify_cron')
+    ('0 */6 * * *', 'spotify.tasks.update_spotify_cron'),
+    ('*/30 * * * *', 'my_news.tasks.update_news_cron'),
 ]
 
 ROOT_URLCONF = 'Bookshelf.urls'
@@ -65,7 +67,9 @@ ROOT_URLCONF = 'Bookshelf.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'templates')],
+        'DIRS': [
+            BASE_DIR / 'templates',
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
