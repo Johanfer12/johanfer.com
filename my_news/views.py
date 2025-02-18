@@ -41,17 +41,13 @@ class NewsListView(ListView):
     paginate_by = 24
 
     def get_queryset(self):
-        return News.objects.filter(is_deleted=False)  # Filtrar noticias no borradas
+        return News.objects.filter(is_deleted=False)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['sources'] = FeedSource.objects.filter(active=True)
         context['total_news'] = News.objects.filter(is_deleted=False).count()
         return context
-
-class NewsDetailView(DetailView):
-    model = News
-    template_name = 'news_detail.html'
 
 def update_feed(request):
     try:
