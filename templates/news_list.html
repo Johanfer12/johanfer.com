@@ -15,7 +15,39 @@
     <div class="main-content">
         <div class="news-grid">
             {% for article in news %}
-                {% include 'news_card.html' with article=article %}
+                <div class="news-card-container">
+                    <div class="news-card" onclick="openNewsModal('{{ article.id }}')">
+                        {% include 'news_card.html' with article=article %}
+                    </div>
+                </div>
+                
+                <!-- Modal para cada noticia -->
+                <div id="modal-{{ article.id }}" class="modal">
+                    <div class="modal-content">
+                        <span class="close" onclick="closeNewsModal('{{ article.id }}')">&times;</span>
+                        
+                        {% if article.image_url %}
+                        <img src="{{ article.image_url }}" alt="{{ article.title }}" class="modal-image">
+                        {% endif %}
+                        
+                        <h2>{{ article.title }}</h2>
+                        
+                        <div class="modal-meta">
+                            Publicado por {{ article.source.name }} el {{ article.published_date|date:"d/m/Y H:i" }}
+                        </div>
+                        
+                        <div class="modal-description">
+                            {{ article.description|safe }}
+                        </div>
+                        
+                        <div class="modal-actions">
+                            <a href="{{ article.link }}" target="_blank" class="btn btn-primary">Ver en fuente original</a>
+                            {% if user.is_staff %}
+                            <button class="btn btn-danger delete-btn" data-id="{{ article.id }}">Eliminar</button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
             {% endfor %}
         </div>
 
@@ -42,112 +74,6 @@
         </svg>
     </button>
 
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const newsGrid = document.querySelector('.news-grid');
-        const totalCounter = document.querySelector('.total');
-        
-        function attachDeleteListener(button) {
-            button.addEventListener('click', function(e) {
-                e.stopPropagation();
-                const newsId = this.dataset.id;
-                const container = this.closest('.news-card-container');
-                const currentPage = new URLSearchParams(window.location.search).get('page') || 1;
-                
-                fetch(`/noticias/delete/${newsId}/`, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken'),
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `current_page=${currentPage}`
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        // Actualizar el contador en el header
-                        const currentTotal = parseInt(totalCounter.textContent);
-                        totalCounter.textContent = `${currentTotal - 1} noticias`;
-                        
-                        if (data.html) {
-                            const temp = document.createElement('div');
-                            temp.innerHTML = data.html;
-                            const newCard = temp.firstElementChild;
-                            
-                            const newDeleteBtn = newCard.querySelector('.delete-btn');
-                            attachDeleteListener(newDeleteBtn);
-                            
-                            container.style.transition = 'opacity 0.3s ease-out';
-                            container.style.opacity = '0';
-                            
-                            setTimeout(() => {
-                                container.remove();
-                                newCard.style.opacity = '0';
-                                newsGrid.appendChild(newCard);
-                                
-                                requestAnimationFrame(() => {
-                                    newCard.style.transition = 'opacity 0.3s ease-in';
-                                    newCard.style.opacity = '1';
-                                });
-                            }, 300);
-                        } else {
-                            container.remove();
-                        }
-                    }
-                });
-            });
-        }
-
-        document.querySelectorAll('.delete-btn').forEach(button => {
-            attachDeleteListener(button);
-        });
-
-        function getCookie(name) {
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
-                }
-            }
-            return cookieValue;
-        }
-
-        // Agregar el código para la actualización del feed
-        document.getElementById('updateFeedBtn').addEventListener('click', function() {
-            const button = this;
-            button.disabled = true;
-            button.classList.add('loading');
-
-            fetch('/noticias/update-feed/', {
-                method: 'GET',
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken'),
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    // Recargar la página para mostrar las nuevas noticias
-                    window.location.reload();
-                } else {
-                    alert(data.message);
-                }
-            })
-            .catch(error => {
-                alert('Error al actualizar el feed');
-                console.error('Error:', error);
-            })
-            .finally(() => {
-                button.disabled = false;
-                button.classList.remove('loading');
-            });
-        });
-    });
-    </script>
+    <script src="{% static 'js/news_script.js' %}"></script>
 </body>
 </html>

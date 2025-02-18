@@ -64,11 +64,12 @@ body {
     background: #2d2d2d;
     display: flex;
     flex-direction: column;
+    transform: rotateY(0deg);
 }
 
 .card-back {
     background: #2d2d2d;
-    transform: rotateY(180deg);
+    transform: rotateY(180deg) scaleX(-1);
     padding: 15px;
     display: flex;
     flex-direction: column;
@@ -105,14 +106,17 @@ body {
 .news-description {
     color: #ddd;
     font-size: 0.9em;
+    line-height: 1.5;
+    text-align: justify;
+    flex: 1;
+    margin: 10px 0;
     display: -webkit-box;
-    -webkit-line-clamp: 8;
-    line-clamp: 8;
+    -webkit-line-clamp: 7;
+    line-clamp: 7;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    line-height: 1.4;
-    flex: 1;
-    margin-bottom: 15px;
+    hyphens: auto;
+    word-break: break-word;
 }
 
 .news-description img {
@@ -235,5 +239,108 @@ body {
     .pagination a, .pagination .active {
         font-size: 14px;
         padding: 6px 12px;
+    }
+}
+
+/* Estilos del modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+.modal-content {
+    background-color: #2d2d2d;
+    margin: 80px auto;
+    padding: 20px;
+    border-radius: 10px;
+    width: 70%;
+    max-width: 800px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+    position: relative;
+    animation: zoomIn 0.3s ease-out;
+}
+
+.modal-image {
+    width: 100%;
+    max-height: 400px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.modal-meta {
+    color: #888;
+    font-size: 0.9em;
+    margin: 15px 0;
+}
+
+.modal-description {
+    color: #ddd;
+    line-height: 1.6;
+    margin: 20px 0;
+    text-align: justify;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.btn {
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.btn-primary {
+    background: #00a8ff;
+    color: white;
+}
+
+.btn-danger {
+    background: #ff4444;
+    color: white;
+}
+
+.close {
+    position: absolute;
+    right: 20px;
+    top: 15px;
+    color: #888;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    color: #fff;
+}
+
+@keyframes zoomIn {
+    from {
+        transform: scale(0.7);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@media (max-width: 767px) {
+    .modal-content {
+        width: 90%;
+        margin: 60px auto;
     }
 } 
