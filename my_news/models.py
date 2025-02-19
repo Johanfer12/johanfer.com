@@ -33,3 +33,23 @@ class News(models.Model):
     
     def __str__(self):
         return self.title
+
+class FilterWord(models.Model):
+    word = models.CharField(
+        max_length=100,
+        unique=True,
+        verbose_name="Palabra a filtrar"
+    )
+    active = models.BooleanField(
+        default=True,
+        verbose_name="Activo"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Palabra filtrada"
+        verbose_name_plural = "Palabras filtradas"
+        ordering = ['word']
+
+    def __str__(self):
+        return self.word

@@ -1,7 +1,7 @@
 import feedparser
 from datetime import datetime, timedelta
 from django.utils import timezone
-from .models import News, FeedSource
+from .models import News, FeedSource, FilterWord
 import re
 import google.generativeai as genai
 from config import GOOGLE_API_KEY
@@ -98,6 +98,16 @@ class FeedService:
             return {'text': None, 'image_url': None}
 
     @staticmethod
+    def should_filter_news(title, description):
+        filter_words = FilterWord.objects.filter(active=True).values_list('word', flat=True)
+        text_to_check = f"{title} {description}".lower()
+        
+        for word in filter_words:
+            if word.lower().strip() in text_to_check:
+                return True
+        return False
+
+    @staticmethod
     def fetch_and_save_news():
         print("Iniciando proceso de obtención de noticias...")
         start_time = time.time()
@@ -166,7 +176,22 @@ class FeedService:
                 if published < cutoff_date:
                     continue
                 
-                # Procesar la descripción con Gemini
+                # Verificar si la noticia debe ser filtrada
+                if FeedService.should_filter_news(entry.title, entry.get('description', '')):
+                    print(f"Noticia filtrada por palabras prohibidas: {entry.title}")
+                    News.objects.create(
+                        guid=guid,
+                        title=entry.title,
+                        description=entry.get('description', ''),
+                        link=entry.link,
+                        published_date=published,
+                        source=source,
+                        is_deleted=True  # Marcamos como eliminada
+                    )
+                    new_articles_count += 1
+                    continue
+                
+                # Si no fue filtrada, continuar con el procesamiento normal
                 original_description = entry.get('description', '')
                 image_url = None
                 

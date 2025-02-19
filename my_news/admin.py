@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import FeedSource, News
+from .models import FeedSource, News, FilterWord
 
 @admin.register(FeedSource)
 class FeedSourceAdmin(admin.ModelAdmin):
@@ -13,3 +13,9 @@ class NewsAdmin(admin.ModelAdmin):
     list_filter = ('source', 'published_date')
     search_fields = ('title', 'description')
     date_hierarchy = 'published_date'
+
+@admin.register(FilterWord)
+class FilterWordAdmin(admin.ModelAdmin):
+    list_display = ('word', 'active', 'created_at')
+    list_filter = ('active',)
+    search_fields = ('word',)
