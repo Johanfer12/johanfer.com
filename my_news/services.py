@@ -14,12 +14,13 @@ class FeedService:
     @staticmethod
     def initialize_gemini():
         genai.configure(api_key=GOOGLE_API_KEY)
-        return genai.GenerativeModel('gemini-2.0-flash-thinking-exp-01-21')
+        #return genai.GenerativeModel('gemini-2.0-flash-thinking-exp-01-21')
+        return genai.GenerativeModel('gemini-2.0-flash')
 
     @staticmethod
     def process_description_with_gemini(description, model, max_retries=4):
         prompt = """
-        Resume el siguiente texto de noticia, eliminando cualquier clickbait y manteniendo 
+        Resume el siguiente texto de noticia, eliminando cualquier clickbait y relleno, manteniendo 
         solo la información relevante. El resumen debe ser conciso y objetivo:
 
         {text}
@@ -64,23 +65,37 @@ class FeedService:
             
             # Buscar el contenido principal con diferentes selectores
             content = (
-                soup.find('div', {'itemprop': 'articleBody'}) or  # Nuevo selector específico
+                soup.find('div', {'itemprop': 'articleBody'}) or
                 soup.find('article') or 
                 soup.find(class_=['content', 'article-content', 'post-content', 'entry-content'])
             )
             
-            if content:
-                # Procesar imágenes para obtener URLs absolutas
-                for img in content.find_all('img'):
-                    if img.get('src'):
-                        img['src'] = urljoin(url, img['src'])
-                
-                return content.get_text(separator=' ', strip=True)
+            # Inicializar variables para el retorno
+            text_content = None
+            image_url = None
             
-            return None
+            if content:
+                # Buscar la primera imagen relevante
+                img_tag = content.find('img')
+                if img_tag and img_tag.get('src'):
+                    image_url = urljoin(url, img_tag['src'])
+                
+                # Si no encontramos imagen en el contenido principal, buscar en todo el artículo
+                if not image_url:
+                    img_tag = soup.find('img', {'class': ['featured-image', 'wp-post-image', 'article-image']})
+                    if img_tag and img_tag.get('src'):
+                        image_url = urljoin(url, img_tag['src'])
+                
+                # Obtener el texto del contenido
+                text_content = content.get_text(separator=' ', strip=True)
+            
+            return {
+                'text': text_content,
+                'image_url': image_url
+            }
         except Exception as e:
             print(f"Error obteniendo contenido completo: {str(e)}")
-            return None
+            return {'text': None, 'image_url': None}
 
     @staticmethod
     def fetch_and_save_news():
@@ -153,44 +168,46 @@ class FeedService:
                 
                 # Procesar la descripción con Gemini
                 original_description = entry.get('description', '')
+                image_url = None
                 
                 # Si deep_search está activado, intentar obtener el contenido completo
                 if source.deep_search:
                     full_content = FeedService.get_full_article_content(entry.link)
-                    if full_content:
-                        original_description = full_content
+                    if full_content['text']:
+                        original_description = full_content['text']
+                    if full_content['image_url']:
+                        image_url = full_content['image_url']
                 
                 processed_description = FeedService.process_description_with_gemini(
                     original_description, 
                     model
                 )
 
-                # Buscar imagen en diferentes lugares posibles del feed
-                image_url = None
-                
-                # 1. Buscar en media_content
-                if hasattr(entry, 'media_content') and entry.media_content:
-                    image_url = entry.media_content[0].get('url')
-                
-                # 2. Buscar en enclosures
-                if not image_url and hasattr(entry, 'enclosures') and entry.enclosures:
-                    for enclosure in entry.enclosures:
-                        if enclosure.get('type', '').startswith('image/'):
-                            image_url = enclosure.get('href')
-                            break
-
-                # 3. Buscar en la descripción
-                if not image_url and hasattr(entry, 'description'):
-                    image_url = FeedService.extract_image_from_description(entry.description)
-
-                # 4. Buscar en content
-                if not image_url and hasattr(entry, 'content'):
-                    for content in entry.content:
-                        if 'value' in content:
-                            found_image = FeedService.extract_image_from_description(content['value'])
-                            if found_image:
-                                image_url = found_image
+                # Solo buscar imagen en el feed si aún no tenemos una del contenido completo
+                if not image_url:
+                    # 1. Buscar en media_content
+                    if hasattr(entry, 'media_content') and entry.media_content:
+                        image_url = entry.media_content[0].get('url')
+                    
+                    # 2. Buscar en enclosures
+                    if not image_url and hasattr(entry, 'enclosures') and entry.enclosures:
+                        for enclosure in entry.enclosures:
+                            if enclosure.get('type', '').startswith('image/'):
+                                image_url = enclosure.get('href')
                                 break
+
+                    # 3. Buscar en la descripción
+                    if not image_url and hasattr(entry, 'description'):
+                        image_url = FeedService.extract_image_from_description(entry.description)
+
+                    # 4. Buscar en content
+                    if not image_url and hasattr(entry, 'content'):
+                        for content in entry.content:
+                            if 'value' in content:
+                                found_image = FeedService.extract_image_from_description(content['value'])
+                                if found_image:
+                                    image_url = found_image
+                                    break
 
                 # Crear la nueva noticia
                 News.objects.create(
