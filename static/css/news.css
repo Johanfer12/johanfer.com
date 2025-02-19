@@ -288,10 +288,18 @@ body {
     text-align: justify;
 }
 
+.modal-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 400px;  
+}
+
 .modal-actions {
     display: flex;
     gap: 10px;
-    margin-top: 20px;
+    margin-top: auto;  
+    justify-content: center;  
+    padding-top: 20px;
 }
 
 .btn {
@@ -301,6 +309,8 @@ body {
     cursor: pointer;
     font-weight: bold;
     text-decoration: none;
+    min-width: 100px;  /* Ancho mínimo para los botones */
+    text-align: center;
 }
 
 .btn-primary {

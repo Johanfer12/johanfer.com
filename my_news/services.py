@@ -218,16 +218,17 @@ class FeedService:
                                 image_url = found_image
                                 break
 
-                # Solo si no se encontró imagen en el feed y deep_search está activado,
-                # intentar obtener la imagen del contenido completo
-                if not image_url and source.deep_search:
+                # Obtener el contenido original para procesar
+                original_description = entry.get('description', '')
+                
+                # Si deep_search está activado, obtener el contenido completo independientemente de la imagen
+                if source.deep_search:
                     full_content = FeedService.get_full_article_content(entry.link)
                     if full_content['text']:
                         original_description = full_content['text']
-                    if full_content['image_url']:
+                    # Solo usar la imagen del contenido si no se encontró una en el feed
+                    if not image_url and full_content['image_url']:
                         image_url = full_content['image_url']
-                else:
-                    original_description = entry.get('description', '')
 
                 processed_description = FeedService.process_description_with_gemini(
                     original_description, 
