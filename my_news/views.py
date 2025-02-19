@@ -7,6 +7,9 @@ from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from .services import FeedService
 from django.contrib import messages
+from django.contrib.auth.decorators import user_passes_test
+from django.utils.decorators import method_decorator
+from django.shortcuts import redirect
 
 # Create your views here.
 
@@ -34,6 +37,11 @@ def delete_news(request, pk):
     
     return JsonResponse({'status': 'success', 'html': None})
 
+def superuser_required(view_func):
+    decorated_view = user_passes_test(lambda u: u.is_superuser, login_url='/')(view_func)
+    return decorated_view
+
+@method_decorator(superuser_required, name='dispatch')
 class NewsListView(ListView):
     model = News
     template_name = 'news_list.html'
