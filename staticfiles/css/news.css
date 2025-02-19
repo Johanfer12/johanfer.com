@@ -1,0 +1,346 @@
+/* Estilos globales */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body {
+    background: #1a1a1a;
+    color: #fff;
+    margin: 0;
+    padding: 0;
+}
+
+/* Contenedor principal */
+.main-content {
+    padding-top: 20px;
+}
+
+/* Grid de noticias */
+.news-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 15px;
+    padding: 15px;
+}
+
+/* Contenedor de tarjeta de noticia */
+.news-card-container {
+    perspective: 1000px;
+    height: 350px;
+    position: relative;
+    z-index: 1;
+}
+
+.news-card-container:hover {
+    z-index: 2;
+}
+
+/* Tarjeta de noticia */
+.news-card {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.6s;
+    transform-style: preserve-3d;
+    cursor: pointer;
+}
+
+.news-card-container:hover .news-card {
+    transform: rotateY(180deg);
+}
+
+/* Frente y reverso de la tarjeta */
+.card-front, .card-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 15px 30px rgba(0,0,0,0.6);
+}
+
+.card-front {
+    background: #2d2d2d;
+    display: flex;
+    flex-direction: column;
+    transform: rotateY(0deg);
+}
+
+.card-back {
+    background: #2d2d2d;
+    transform: rotateY(180deg) scaleX(-1);
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+/* Elementos de la tarjeta */
+.news-card .news-image {
+    width: 100%;
+    height: 140px !important;
+    object-fit: cover;
+}
+
+.news-title {
+    flex: 1;
+    font-size: 1.1em;
+    margin: 15px;
+    color: #fff;
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    line-clamp: 5;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.3;
+}
+
+.news-meta {
+    color: #888;
+    font-size: 0.85em;
+    padding: 10px 15px;
+    margin-top: auto;
+}
+
+.news-description {
+    color: #ddd;
+    font-size: 0.9em;
+    line-height: 1.5;
+    text-align: justify;
+    flex: 1;
+    margin: 10px 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 7;
+    line-clamp: 7;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    hyphens: auto;
+    word-break: break-word;
+}
+
+.news-description img {
+    max-width: 100%;
+    max-height: 15px;
+    object-fit: cover;
+    margin: 5px auto;
+    display: block;
+}
+
+/* Enlaces */
+.news-links {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: auto;
+}
+
+.news-link {
+    text-decoration: none;
+    color: #00a8ff;
+    font-size: 0.9em;
+    font-weight: bold;
+    padding: 6px 12px;
+    border: 1px solid #00a8ff;
+    border-radius: 15px;
+    transition: all 0.3s ease;
+}
+
+.news-link:hover {
+    background: #00a8ff;
+    color: #1a1a1a;
+}
+
+/* Paginación */
+.pagination {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin: 15px auto;
+    background-color: rgba(0, 0, 0, 0.8);
+    padding: 15px 30px;
+    border-radius: 5px;
+    box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.3), 0 12px 30px 0 rgba(0, 0, 0, 0.25);
+    max-width: 20%;
+}
+
+.pagination a, .pagination .active {
+    padding: 8px 16px;
+    text-decoration: none;
+    color: #fff;
+    font-size: 16px;
+    border: none;
+    transition: color 0.3s ease;
+}
+
+.pagination a:hover {
+    color: #00a8ff;
+}
+
+.pagination .active {
+    background: none;
+    color: #00a8ff;
+}
+
+/* Botón de actualización */
+.update-feed-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #00a8ff;
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    transition: all 0.3s ease;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.update-feed-btn:hover {
+    transform: scale(1.1);
+    background: #0096e0;
+}
+
+.update-feed-btn:disabled {
+    background: #666;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.update-feed-btn svg {
+    width: 24px;
+    height: 24px;
+    transition: transform 0.5s ease;
+}
+
+.update-feed-btn.loading svg {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Media Queries */
+@media (max-width: 1080px) {
+    .pagination {
+        max-width: 90%;
+        padding: 10px 15px;
+    }
+
+    .pagination a, .pagination .active {
+        font-size: 14px;
+        padding: 6px 12px;
+    }
+}
+
+/* Estilos del modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+.modal .modal-content {
+    background-color: #2d2d2d;
+    margin: 80px auto;
+    padding: 20px;
+    border-radius: 10px;
+    width: 60% !important;
+    max-width: 600px !important;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+    position: relative;
+    animation: zoomIn 0.3s ease-out;
+}
+
+.modal .modal-image {
+    width: 100%;
+    max-height: 300px !important;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.modal-meta {
+    color: #888;
+    font-size: 0.9em;
+    margin: 15px 0;
+}
+
+.modal-description {
+    color: #ddd;
+    line-height: 1.6;
+    margin: 20px 0;
+    text-align: justify;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.btn {
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.btn-primary {
+    background: #00a8ff;
+    color: white;
+}
+
+.btn-danger {
+    background: #ff4444;
+    color: white;
+}
+
+.close {
+    position: absolute;
+    right: 20px;
+    top: 15px;
+    color: #888;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    color: #fff;
+}
+
+@keyframes zoomIn {
+    from {
+        transform: scale(0.7);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@media (max-width: 767px) {
+    .modal .modal-content {
+        width: 85% !important;
+        margin: 60px auto;
+    }
+} 

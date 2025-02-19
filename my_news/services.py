@@ -191,48 +191,48 @@ class FeedService:
                     new_articles_count += 1
                     continue
                 
-                # Si no fue filtrada, continuar con el procesamiento normal
-                original_description = entry.get('description', '')
+                # Primero intentar obtener la imagen del feed
                 image_url = None
                 
-                # Si deep_search está activado, intentar obtener el contenido completo
-                if source.deep_search:
+                # 1. Buscar en media_content
+                if hasattr(entry, 'media_content') and entry.media_content:
+                    image_url = entry.media_content[0].get('url')
+                
+                # 2. Buscar en enclosures
+                if not image_url and hasattr(entry, 'enclosures') and entry.enclosures:
+                    for enclosure in entry.enclosures:
+                        if enclosure.get('type', '').startswith('image/'):
+                            image_url = enclosure.get('href')
+                            break
+
+                # 3. Buscar en la descripción
+                if not image_url and hasattr(entry, 'description'):
+                    image_url = FeedService.extract_image_from_description(entry.description)
+
+                # 4. Buscar en content
+                if not image_url and hasattr(entry, 'content'):
+                    for content in entry.content:
+                        if 'value' in content:
+                            found_image = FeedService.extract_image_from_description(content['value'])
+                            if found_image:
+                                image_url = found_image
+                                break
+
+                # Solo si no se encontró imagen en el feed y deep_search está activado,
+                # intentar obtener la imagen del contenido completo
+                if not image_url and source.deep_search:
                     full_content = FeedService.get_full_article_content(entry.link)
                     if full_content['text']:
                         original_description = full_content['text']
                     if full_content['image_url']:
                         image_url = full_content['image_url']
-                
+                else:
+                    original_description = entry.get('description', '')
+
                 processed_description = FeedService.process_description_with_gemini(
                     original_description, 
                     model
                 )
-
-                # Solo buscar imagen en el feed si aún no tenemos una del contenido completo
-                if not image_url:
-                    # 1. Buscar en media_content
-                    if hasattr(entry, 'media_content') and entry.media_content:
-                        image_url = entry.media_content[0].get('url')
-                    
-                    # 2. Buscar en enclosures
-                    if not image_url and hasattr(entry, 'enclosures') and entry.enclosures:
-                        for enclosure in entry.enclosures:
-                            if enclosure.get('type', '').startswith('image/'):
-                                image_url = enclosure.get('href')
-                                break
-
-                    # 3. Buscar en la descripción
-                    if not image_url and hasattr(entry, 'description'):
-                        image_url = FeedService.extract_image_from_description(entry.description)
-
-                    # 4. Buscar en content
-                    if not image_url and hasattr(entry, 'content'):
-                        for content in entry.content:
-                            if 'value' in content:
-                                found_image = FeedService.extract_image_from_description(content['value'])
-                                if found_image:
-                                    image_url = found_image
-                                    break
 
                 # Crear la nueva noticia
                 News.objects.create(

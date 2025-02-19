@@ -1,0 +1,91 @@
+.statistics-container {
+    width: 85%;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.statistics-content {
+    background-color: rgba(2, 0, 0, 0.8);
+    color: #ffffff;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.charts-row {
+    display: flex;
+    justify-content: space-between; 
+    flex-wrap: wrap;
+}
+
+.chart-container {
+    flex: 1 1 30%;
+    max-width: 95%;
+    margin: 20px;
+    height: 350px;
+    position: relative;
+    padding-bottom: 20px;
+}
+
+.chart-container canvas {
+    position: relative;
+    top: -20px;
+}
+
+.chart-container h3 {
+    font-size: 1.2em;
+}
+
+@media (max-width: 1368px) {
+    
+    .charts-row {
+        width: 95%; 
+        flex-direction: column;
+        align-items: center;
+        margin: 0 auto;
+    }
+
+    .chart-container {
+        width: 5%;
+        max-width: 100%;
+        margin: 10px 0;
+    }
+
+    .statistics-container {
+        width: 90%;
+        font-size: 16px;
+    }
+
+}
+
+@media (max-width: 1080px) {
+
+    .charts-row {
+        width: 95%; 
+        flex-direction: column;
+        align-items: center;
+        margin: 0 auto;
+    }
+
+    .chart-container {
+        width: 95%;
+        max-width: 100%;
+        margin: 10px 0;
+        height: 300px;
+    }
+
+    .statistics-container {
+        width: 90%;
+        font-size: 14px;
+    }
+
+    .chart-container h3 {
+        font-size: 1.1em;
+    }
+
+/*     #booksPerYearChart, #starsChart, #topAuthorsChart {
+        width: 900px !important;
+        height: 1400px !important; 
+    }
+ */
+}
