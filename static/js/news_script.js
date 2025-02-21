@@ -32,6 +32,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const modal = document.getElementById(`modal-${newsId}`);
             const currentPage = new URLSearchParams(window.location.search).get('page') || 1;
             
+            // Añadir clase para la animación de eliminación
+            container.classList.add('deleting');
+            
             fetch(`/noticias/delete/${newsId}/`, {
                 method: 'POST',
                 headers: {
@@ -52,28 +55,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.body.style.overflow = 'auto';
                     
                     if (data.html) {
-                        const temp = document.createElement('div');
-                        temp.innerHTML = data.html;
-                        const newCard = temp.firstElementChild;
-                        
-                        const newDeleteBtn = newCard.querySelector('.delete-btn');
-                        attachDeleteListener(newDeleteBtn);
-                        
-                        container.style.transition = 'opacity 0.3s ease-out';
-                        container.style.opacity = '0';
-                        
+                        // Esperar a que termine la animación de eliminación
                         setTimeout(() => {
                             container.remove();
-                            newCard.style.opacity = '0';
-                            newsGrid.appendChild(newCard);
                             
-                            requestAnimationFrame(() => {
-                                newCard.style.transition = 'opacity 0.3s ease-in';
-                                newCard.style.opacity = '1';
-                            });
-                        }, 300);
+                            const temp = document.createElement('div');
+                            temp.innerHTML = data.html;
+                            const newCard = temp.firstElementChild;
+                            
+                            // Añadir clase para la animación de inserción
+                            newCard.classList.add('inserting');
+                            
+                            const newDeleteBtn = newCard.querySelector('.delete-btn');
+                            attachDeleteListener(newDeleteBtn);
+                            
+                            newsGrid.appendChild(newCard);
+                        }, 500); // Coincidir con la duración de la animación
                     } else {
-                        container.remove();
+                        setTimeout(() => {
+                            container.remove();
+                        }, 500);
                     }
                 }
             });

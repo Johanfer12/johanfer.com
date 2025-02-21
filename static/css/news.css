@@ -17,16 +17,17 @@ body {
 
 .news-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(300px, 300px));
     gap: 15px;
     padding: 15px;
     max-width: 1800px;
     margin: 0 auto;
+    justify-content: center;
 }
 
 /* Contenedor de tarjeta de noticia */
 .news-card-container {
-    perspective: 1000px;
+    width: 300px;
     height: 350px;
     position: relative;
     z-index: 1;
@@ -60,23 +61,30 @@ body {
     backface-visibility: hidden;
     border-radius: 10px;
     overflow: hidden;
-    box-shadow: 0 15px 30px rgba(0,0,0,0.6);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3), 0 12px 30px rgba(0, 0, 0, 0.25);
 }
 
 .card-front {
-    background: #2d2d2d;
+    background: rgba(0, 0, 0, 0.8);
     display: flex;
     flex-direction: column;
     transform: rotateY(0deg);
 }
 
 .card-back {
-    background: #2d2d2d;
+    background: rgba(0, 0, 0, 0.8);
     transform: rotateY(180deg) scaleX(-1);
     padding: 15px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+}
+
+.card-back .news-description,
+.card-back .news-meta,
+.card-back .news-links,
+.news-link {
+    transform: none; 
 }
 
 /* Elementos de la tarjeta */
@@ -259,13 +267,13 @@ body {
 }
 
 .modal .modal-content {
-    background-color: #2d2d2d;
+    background-color: rgba(0, 0, 0, 0.8);
     margin: 80px auto;
     padding: 20px;
     border-radius: 10px;
     width: 60% !important;
     max-width: 600px !important;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3), 0 12px 30px rgba(0, 0, 0, 0.25);
     position: relative;
     animation: zoomIn 0.3s ease-out;
 }
@@ -356,4 +364,40 @@ body {
         width: 85% !important;
         margin: 60px auto;
     }
+}
+
+/* Animación de eliminación */
+@keyframes deleteCard {
+    0% {
+        transform: scale(1) rotate(0);
+        opacity: 1;
+    }
+    20% {
+        transform: scale(1.1) rotate(5deg);
+    }
+    100% {
+        transform: scale(0) rotate(-15deg);
+        opacity: 0;
+    }
+}
+
+.news-card-container.deleting {
+    animation: deleteCard 0.5s ease-in-out forwards;
+    pointer-events: none; /* Prevenir interacciones durante la animación */
+}
+
+/* Animación para la nueva tarjeta que entra */
+@keyframes insertCard {
+    0% {
+        transform: scale(0) translateY(-50px);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+
+.news-card-container.inserting {
+    animation: insertCard 0.5s ease-out forwards;
 } 
