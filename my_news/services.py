@@ -29,11 +29,13 @@ class FeedService:
         for attempt in range(max_retries):
             try:
                 response = model.generate_content(prompt)
-                return response.text.strip()
+                # Procesar el texto para convertir **texto** en <strong>texto</strong>
+                processed_text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', response.text.strip())
+                return processed_text
             except Exception as e:
                 if "429" in str(e):
                     print(f"Límite de peticiones alcanzado (intento {attempt + 1}/{max_retries}). Esperando 15 segundos...")
-                    time.sleep(15)  # Esperar 15 segundos antes de reintentar
+                    time.sleep(15)
                     continue
                 print(f"Error procesando con Gemini: {str(e)}")
                 return description

@@ -20,7 +20,7 @@ def delete_news(request, pk):
     news.save()
     
     # Obtener la siguiente noticia que no está en la página actual
-    page_size = 24
+    page_size = 25
     current_page = int(request.POST.get('current_page', 1))
     offset = (current_page - 1) * page_size + page_size  # Calculamos el offset basado en la página actual
     
@@ -46,7 +46,7 @@ class NewsListView(ListView):
     model = News
     template_name = 'news_list.html'
     context_object_name = 'news'
-    paginate_by = 24
+    paginate_by = 25
 
     def get_queryset(self):
         return News.objects.filter(is_deleted=False)
