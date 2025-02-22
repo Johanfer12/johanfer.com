@@ -82,6 +82,8 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
 }
 
 .card-back .news-description,
@@ -129,6 +131,7 @@ body {
     overflow-y: auto;
     hyphens: auto;
     word-break: break-word;
+    overscroll-behavior: contain;
 }
 
 .news-description br {
