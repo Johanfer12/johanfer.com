@@ -21,7 +21,7 @@ class FeedService:
     def process_description_with_gemini(description, model, max_retries=4):
         prompt = """
         Resume el siguiente texto de noticia, eliminando cualquier clickbait y relleno, manteniendo 
-        solo la información relevante. El resumen debe ser conciso y objetivo:
+        solo la información relevante. El resumen debe ser conciso y objetivo, manteniendo los puntos clave:
 
         {text}
         """.format(text=description)
@@ -29,9 +29,26 @@ class FeedService:
         for attempt in range(max_retries):
             try:
                 response = model.generate_content(prompt)
-                # Procesar el texto para convertir **texto** en <strong>texto</strong>
-                processed_text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', response.text.strip())
+                text = response.text.strip()
+                
+                # Procesar el texto para mantener formato
+                processed_text = text
+                
+                # 1. Convertir asteriscos en bulletpoints HTML con negrita
+                processed_text = re.sub(r'^\* (.+?)$', r'• <strong>\1</strong>', processed_text, flags=re.MULTILINE)
+                
+                # 2. Convertir otros **texto** en <strong>
+                processed_text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', processed_text)
+                
+                # 3. Convertir saltos de línea dobles en <br><br> y simples en <br>
+                processed_text = processed_text.replace('\n\n', '<br><br>')
+                processed_text = processed_text.replace('\n', '<br>')
+                
+                # 4. Asegurar que los bulletpoints tengan espacio
+                processed_text = processed_text.replace('•', '<br>•')
+                
                 return processed_text
+                
             except Exception as e:
                 if "429" in str(e):
                     print(f"Límite de peticiones alcanzado (intento {attempt + 1}/{max_retries}). Esperando 15 segundos...")
