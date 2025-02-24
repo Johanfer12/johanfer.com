@@ -27,6 +27,7 @@ body {
     margin: 0 auto;
     justify-content: center;
     min-height: 100%;
+    grid-auto-flow: dense;
 }
 
 /* Contenedor de tarjeta de noticia */
@@ -35,6 +36,8 @@ body {
     height: 350px;
     position: relative;
     z-index: 1;
+    transform-origin: top left;
+    will-change: transform;
 }
 
 .news-card-container:hover {
@@ -406,12 +409,16 @@ body {
     100% {
         transform: scale(0) rotate(-15deg);
         opacity: 0;
+        margin: 0;
+        padding: 0;
+        width: 0;
+        height: 0;
     }
 }
 
 .news-card-container.deleting {
     animation: deleteCard 0.5s ease-in-out forwards;
-    pointer-events: none; /* Prevenir interacciones durante la animación */
+    pointer-events: none;
 }
 
 /* Animación para la nueva tarjeta que entra */

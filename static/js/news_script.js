@@ -23,16 +23,53 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Función para capturar las posiciones actuales de cada tarjeta
+    function capturePositions() {
+        const positions = new Map();
+        document.querySelectorAll('.news-card-container').forEach(container => {
+            positions.set(container, container.getBoundingClientRect());
+        });
+        return positions;
+    }
+
+    // Función que aplica la técnica FLIP para animar el reordenamiento
+    function animateReposition(oldPositions) {
+        // Verificar si estamos en un dispositivo móvil
+        const isMobile = window.innerWidth <= 767;
+        
+        if (!isMobile) {
+            document.querySelectorAll('.news-card-container').forEach(container => {
+                const oldRect = oldPositions.get(container);
+                const newRect = container.getBoundingClientRect();
+                if (oldRect) {
+                    const deltaX = oldRect.left - newRect.left;
+                    const deltaY = oldRect.top - newRect.top;
+                    if (deltaX !== 0 || deltaY !== 0) {
+                        container.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                        container.getBoundingClientRect();
+                        container.style.transition = 'transform 0.5s ease';
+                        container.style.transform = '';
+                        container.addEventListener('transitionend', function handler() {
+                            container.style.transition = '';
+                            container.removeEventListener('transitionend', handler);
+                        });
+                    }
+                }
+            });
+        }
+    }
+
     // Función para manejar el borrado
     function attachDeleteListener(button) {
         button.addEventListener('click', function(e) {
             e.stopPropagation();
             const newsId = this.dataset.id;
+            const oldPositions = capturePositions();
+            
             const container = document.querySelector(`.news-card-container:has([data-id="${newsId}"])`);
             const modal = document.getElementById(`modal-${newsId}`);
             const currentPage = new URLSearchParams(window.location.search).get('page') || 1;
             
-            // Añadir clase para la animación de eliminación
             container.classList.add('deleting');
             
             fetch(`/noticias/delete/${newsId}/`, {
@@ -46,34 +83,37 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    // Actualizar el contador
                     const currentTotal = parseInt(totalCounter.textContent);
                     totalCounter.textContent = `${currentTotal - 1} noticias`;
                     
-                    // Cerrar el modal
                     modal.style.display = 'none';
                     document.body.style.overflow = 'auto';
                     
                     if (data.html) {
-                        // Esperar a que termine la animación de eliminación
                         setTimeout(() => {
                             container.remove();
                             
                             const temp = document.createElement('div');
                             temp.innerHTML = data.html;
                             const newCard = temp.firstElementChild;
-                            
-                            // Añadir clase para la animación de inserción
                             newCard.classList.add('inserting');
+                            
+                            // Corregir la orientación del reverso de la nueva tarjeta
+                            const cardBack = newCard.querySelector('.card-back');
+                            if (cardBack) {
+                                cardBack.style.transform = 'rotateY(180deg)';
+                            }
                             
                             const newDeleteBtn = newCard.querySelector('.delete-btn');
                             attachDeleteListener(newDeleteBtn);
                             
                             newsGrid.appendChild(newCard);
-                        }, 500); // Coincidir con la duración de la animación
+                            animateReposition(oldPositions);
+                        }, 500);
                     } else {
                         setTimeout(() => {
                             container.remove();
+                            animateReposition(oldPositions);
                         }, 500);
                     }
                 }
