@@ -38,6 +38,7 @@ body {
     z-index: 1;
     transform-origin: top left;
     will-change: transform;
+    perspective: 1000px; /* Mejora el efecto 3D */
 }
 
 .news-card-container:hover {
@@ -80,13 +81,18 @@ body {
 
 .card-back {
     background: rgba(0, 0, 0, 0.8);
-    transform: rotateY(180deg) scaleX(-1);
+    transform: rotateY(180deg);
     padding: 15px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+}
+
+/* Corregir orientación del texto en el reverso */
+.card-back * {
+    transform: scaleX(-1);
 }
 
 .card-back .news-description,
@@ -417,8 +423,9 @@ body {
 }
 
 .news-card-container.deleting {
-    animation: deleteCard 0.5s ease-in-out forwards;
-    pointer-events: none;
+    animation: deleteCard 0.5s ease-in-out forwards !important;
+    pointer-events: none !important;
+    z-index: 10 !important;
 }
 
 /* Animación para la nueva tarjeta que entra */
@@ -435,4 +442,93 @@ body {
 
 .news-card-container.inserting {
     animation: insertCard 0.5s ease-out forwards;
+}
+
+/* Notificación de nuevas noticias */
+.notification {
+    position: fixed;
+    top: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 168, 255, 0.9);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    z-index: 1001;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    transition: top 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.5s ease;
+    font-weight: bold;
+    font-size: 16px;
+    opacity: 0;
+}
+
+.notification.show {
+    top: 110px; 
+    opacity: 1;
+}
+
+.notification.hiding {
+    opacity: 0;
+}
+
+.close-notification {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0 0 10px;
+    margin-left: auto;
+}
+
+.close-notification:hover {
+    transform: scale(1.2);
+}
+
+/* Animación para nuevas noticias */
+@keyframes newNewsHighlight {
+    0% {
+        transform: scale(0.8);
+        opacity: 0;
+        box-shadow: 0 0 30px rgba(0, 168, 255, 0.8);
+    }
+    50% {
+        transform: scale(1.05);
+        opacity: 1;
+        box-shadow: 0 0 40px rgba(0, 168, 255, 0.9);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.news-card-container.new-news {
+    animation: newNewsHighlight 1.2s ease-out forwards;
+    z-index: 5;
+}
+
+/* Animación para el contador actualizado */
+@keyframes counterPulse {
+    0% {
+        transform: scale(1);
+        color: #fff;
+    }
+    50% {
+        transform: scale(1.3);
+        color: #00a8ff;
+    }
+    100% {
+        transform: scale(1);
+        color: #fff;
+    }
+}
+
+.header-counter.counter-updated {
+    animation: counterPulse 1s ease-in-out;
+    display: inline-block;
 } 

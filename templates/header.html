@@ -25,7 +25,7 @@
       {% elif request.path == '/spotify/' %}
         <p class="total">{{ total_songs }} canciones</p>
       {% elif request.path == '/noticias/' %}
-        <p class="total">{{ total_news }} noticias</p>
+        <p class="total"><span class="header-counter">{{ total_news }}</span> noticias</p>
       {% endif %}     
     </div>
     <nav class="header-nav">

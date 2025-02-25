@@ -10,6 +10,9 @@ from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
 from django.utils.decorators import method_decorator
 from django.shortcuts import redirect
+import json
+from django.utils import timezone
+from datetime import datetime
 
 # Create your views here.
 
@@ -70,3 +73,45 @@ def update_feed(request):
             'status': 'error',
             'message': f'Error al actualizar el feed: {str(e)}'
         }, status=500)
+
+def check_new_news(request):
+    """
+    Endpoint para verificar si hay noticias nuevas desde la última vez que el cliente verificó.
+    Devuelve las nuevas noticias formateadas para ser insertadas en la interfaz.
+    """
+    try:
+        # Obtener la fecha de la última noticia en la página actual
+        last_checked = request.GET.get('last_checked')
+        
+        if not last_checked:
+            return JsonResponse({'status': 'error', 'message': 'Falta el parámetro last_checked'})
+        
+        # Buscar noticias más recientes que la última revisada
+        new_news = News.objects.filter(
+            is_deleted=False,
+            created_at__gt=last_checked
+        ).order_by('-published_date')[:25]  # Límite de 25 para no sobrecargar
+        
+        if not new_news.exists():
+            return JsonResponse({'status': 'no_new_news'})
+        
+        # Renderizar las nuevas noticias
+        news_cards_html = []
+        for article in new_news:
+            html = render_to_string('news_card.html', {'article': article}, request=request)
+            modal_html = render_to_string('news_modal.html', {'article': article}, request=request)
+            news_cards_html.append({
+                'card': html, 
+                'modal': modal_html,
+                'id': article.id
+            })
+        
+        return JsonResponse({
+            'status': 'success',
+            'new_news_count': len(news_cards_html),
+            'news_cards': news_cards_html,
+            'current_time': str(timezone.now())
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+

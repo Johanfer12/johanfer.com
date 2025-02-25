@@ -15,39 +15,14 @@
     <div class="main-content">
         <div class="news-grid">
             {% for article in news %}
-                <div class="news-card-container">
-                    <div class="news-card" onclick="openNewsModal('{{ article.id }}')">
-                        {% include 'news_card.html' with article=article %}
-                    </div>
-                </div>
-                
-                <!-- Modal para cada noticia -->
-                <div id="modal-{{ article.id }}" class="modal">
-                    <div class="modal-content">
-                        <span class="close" onclick="closeNewsModal('{{ article.id }}')">&times;</span>
-                        
-                        {% if article.image_url %}
-                        <img src="{{ article.image_url }}" alt="{{ article.title }}" class="modal-image">
-                        {% endif %}
-                        
-                        <h2>{{ article.title }}</h2>
-                        
-                        <div class="modal-meta">
-                            Publicado por {{ article.source.name }} el {{ article.published_date|date:"d/m/Y H:i" }}
-                        </div>
-                        
-                        <div class="modal-description">
-                            {{ article.description|safe }}
-                        </div>
-                        
-                        <div class="modal-actions">
-                            <a href="{{ article.link }}" target="_blank" class="btn btn-primary">Fuente</a>
-                            {% if user.is_staff %}
-                            <button class="btn btn-danger delete-btn" data-id="{{ article.id }}">Eliminar</button>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
+                {% include 'news_card.html' with article=article %}
+            {% endfor %}
+        </div>
+
+        <!-- Contenedor para los modales -->
+        <div id="news-modals-container">
+            {% for article in news %}
+                {% include 'news_modal.html' with article=article %}
             {% endfor %}
         </div>
 
@@ -73,6 +48,12 @@
             <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
         </svg>
     </button>
+
+    <!-- Notificación de nuevas noticias -->
+    <div id="new-news-notification" class="notification">
+        <span id="new-news-count">0</span>
+        <button id="close-notification-btn" class="close-notification">&times;</button>
+    </div>
 
     <script src="{% static 'js/news_script.js' %}"></script>
 </body>
