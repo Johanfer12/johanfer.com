@@ -166,7 +166,8 @@ class FeedService:
                         published = timezone.make_aware(published)
                     sorted_entries.append((published, entry))
             
-            sorted_entries.sort(reverse=True)
+            # Corregir el método de ordenación usando una clave explícita
+            sorted_entries.sort(key=lambda x: x[0], reverse=True)
             
             # Procesar entradas ordenadas hasta encontrar una antigua
             for published, entry in sorted_entries:
