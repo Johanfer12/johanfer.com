@@ -388,15 +388,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Número máximo de noticias en la página (25)
         const MAX_NEWS = 25;
         
-        // Las noticias ya vienen ordenadas del servidor, ordenadas de más reciente a más antigua
-        // No necesitamos invertir el array porque queremos mantener el orden original
-        // pendingNews.reverse();
-        
-        // Variable para contar cuántas noticias realmente se añadieron (después del límite)
-        let actuallyAddedCount = 0;
-        
         // Actualizar inmediatamente el contador en el header
-        // Si ya hay una notificación visible, usar el conteo acumulado
         if (newNewsNotification.classList.contains('show') && !userInteracted) {
             // Ya hay una notificación visible, usar la cantidad acumulada para actualizar el header
             updateHeaderCounter(pendingNews.length);
@@ -405,8 +397,59 @@ document.addEventListener('DOMContentLoaded', function() {
             updateHeaderCounter(pendingNews.length);
         }
         
-        // Añadir las nuevas noticias al inicio del grid
-        pendingNews.forEach((newsItem, index) => {
+        // Variable para contar cuántas noticias realmente se añadieron (después del límite)
+        let actuallyAddedCount = 0;
+        
+        // IMPORTANTE: Asegurarnos que las noticias estén ordenadas por fecha (más reciente primero)
+        // Para esto, necesitamos extraer la fecha de publicación de cada noticia
+        pendingNews.forEach(item => {
+            // Extraer fecha de publicación del HTML
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = item.card;
+            const dateText = tempDiv.querySelector('.news-meta').textContent;
+            const dateParts = dateText.split(' - ')[1].trim().split(' ');
+            const datePart = dateParts[0]; // dd/mm/yyyy
+            const timePart = dateParts[1]; // hh:mm
+            
+            // Convertir a objeto Date de JavaScript
+            const [day, month, year] = datePart.split('/');
+            const [hours, minutes] = timePart.split(':');
+            item.publishedDate = new Date(year, month-1, day, hours, minutes);
+        });
+        
+        // Ordenar las noticias por fecha (más reciente primero)
+        pendingNews.sort((a, b) => b.publishedDate - a.publishedDate);
+        
+        // Ahora insertamos las noticias en el orden correcto
+        // Primero, eliminar las noticias actuales que exceden el límite cuando añadamos las nuevas
+        const currentCount = newsGrid.children.length;
+        const willExceedBy = Math.max(0, currentCount + pendingNews.length - MAX_NEWS);
+        
+        // Si hay que eliminar noticias antiguas, hacerlo antes de añadir las nuevas
+        if (willExceedBy > 0) {
+            // Obtener las últimas noticias que serán eliminadas
+            for (let i = 0; i < willExceedBy; i++) {
+                if (newsGrid.lastElementChild) {
+                    const lastChild = newsGrid.lastElementChild;
+                    const lastChildId = lastChild.id.replace('news-', '');
+                    
+                    // Eliminar también el modal correspondiente
+                    const lastModal = document.getElementById(`modal-${lastChildId}`);
+                    if (lastModal) {
+                        lastModal.remove();
+                    }
+                    
+                    lastChild.remove();
+                }
+            }
+        }
+        
+        // Crear un fragmento para todas las nuevas noticias
+        const fragment = document.createDocumentFragment();
+        const newCards = [];
+        
+        // Preparar todas las noticias nuevas
+        pendingNews.forEach((newsItem) => {
             // Crear elemento temporal para convertir el HTML en un nodo DOM
             const temp = document.createElement('div');
             temp.innerHTML = newsItem.card;
@@ -448,25 +491,79 @@ document.addEventListener('DOMContentLoaded', function() {
                 attachDeleteListener(modalDeleteBtn);
             }
             
-            // Añadir al principio del grid (las noticias más recientes van primero)
-            newsGrid.insertBefore(newsContainer, newsGrid.firstChild);
+            // Guardar la noticia para insertar después
+            newCards.push(newsContainer);
             actuallyAddedCount++;
-            
-            // Si superamos el límite, eliminar las más antiguas
-            if (newsGrid.children.length > MAX_NEWS) {
-                const lastChild = newsGrid.lastElementChild;
-                const lastChildId = lastChild.id.replace('news-', '');
-                
-                // Eliminar también el modal correspondiente
-                const lastModal = document.getElementById(`modal-${lastChildId}`);
-                if (lastModal) {
-                    lastModal.remove();
-                }
-                
-                lastChild.remove();
-                actuallyAddedCount--; // Restamos una noticia del contador porque es reemplazada, no añadida
-            }
         });
+        
+        // Ahora necesitamos encontrar dónde insertar cada noticia para mantener el orden correcto
+        if (newsGrid.children.length === 0) {
+            // Si no hay noticias, simplemente añadir todas
+            newCards.forEach(card => {
+                fragment.appendChild(card);
+            });
+            newsGrid.appendChild(fragment);
+        } else {
+            // Necesitamos insertar las nuevas noticias en el orden correcto
+            // Primero, recolectar todas las fechas de las noticias actuales
+            const existingCards = Array.from(newsGrid.children);
+            const existingDates = [];
+            
+            existingCards.forEach(card => {
+                const dateText = card.querySelector('.news-meta').textContent;
+                const dateParts = dateText.split(' - ')[1].trim().split(' ');
+                const datePart = dateParts[0]; // dd/mm/yyyy
+                const timePart = dateParts[1]; // hh:mm
+                
+                const [day, month, year] = datePart.split('/');
+                const [hours, minutes] = timePart.split(':');
+                const date = new Date(year, month-1, day, hours, minutes);
+                
+                existingDates.push({ card, date });
+            });
+            
+            // Ordenar las noticias existentes por fecha (más reciente primero)
+            existingDates.sort((a, b) => b.date - a.date);
+            
+            // Combinar las nuevas noticias con las existentes manteniendo el orden
+            let newGridChildren = [];
+            let newIdx = 0;
+            let existingIdx = 0;
+            
+            while (newIdx < newCards.length && existingIdx < existingDates.length) {
+                const newCardDate = pendingNews[newIdx].publishedDate;
+                const existingCardDate = existingDates[existingIdx].date;
+                
+                if (newCardDate >= existingCardDate) {
+                    newGridChildren.push(newCards[newIdx]);
+                    newIdx++;
+                } else {
+                    newGridChildren.push(existingDates[existingIdx].card);
+                    existingIdx++;
+                }
+            }
+            
+            // Añadir las noticias restantes
+            while (newIdx < newCards.length) {
+                newGridChildren.push(newCards[newIdx]);
+                newIdx++;
+            }
+            
+            while (existingIdx < existingDates.length) {
+                newGridChildren.push(existingDates[existingIdx].card);
+                existingIdx++;
+            }
+            
+            // Limpiar el grid actual
+            while (newsGrid.firstChild) {
+                newsGrid.removeChild(newsGrid.firstChild);
+            }
+            
+            // Añadir las noticias en el nuevo orden
+            newGridChildren.forEach(card => {
+                newsGrid.appendChild(card);
+            });
+        }
         
         // Animar reposicionamiento
         animateReposition(oldPositions);
@@ -477,8 +574,8 @@ document.addEventListener('DOMContentLoaded', function() {
             totalCounter.textContent = `${currentTotal + actuallyAddedCount} noticias`;
         }
         
-        // Actualizar la paginación si existe y ha cambiado el número de páginas
-        updatePagination(data.total_pages);
+        // Actualizar la paginación basada en el contador actual
+        updatePagination(); // Sin parámetro porque no tenemos totalPages en este contexto
         
         console.log(`Se añadieron ${actuallyAddedCount} noticias nuevas de ${pendingNews.length} totales`);
         
@@ -488,18 +585,77 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Función para actualizar la paginación
     function updatePagination(serverTotalPages) {
-        const pagination = document.querySelector('.pagination');
-        if (!pagination) return;
-        
         // Obtener el total de noticias y calcular el número de páginas
         const totalItems = parseInt(headerCounter?.textContent || "0");
         const itemsPerPage = 25; // Mismo valor que en el backend
         
         // Usar el total de páginas del servidor si está disponible, de lo contrario calcularlo
-        const totalPages = serverTotalPages || Math.ceil(totalItems / itemsPerPage);
+        const totalPages = serverTotalPages !== undefined ? serverTotalPages : Math.ceil(totalItems / itemsPerPage);
         
         // Obtener la página actual
         const currentPage = parseInt(new URLSearchParams(window.location.search).get('page') || "1");
+        
+        // Verificar si necesitamos paginación
+        const needsPagination = totalPages > 1;
+        
+        // Buscar el elemento de paginación existente
+        let pagination = document.querySelector('.pagination');
+        
+        // Si no hay paginación y no la necesitamos, no hacemos nada
+        if (!pagination && !needsPagination) {
+            return;
+        }
+        
+        // Si necesitamos paginación pero no existe el elemento, lo creamos
+        if (!pagination && needsPagination) {
+            // Crear el elemento de paginación
+            pagination = document.createElement('div');
+            pagination.className = 'pagination';
+            
+            // Crear enlace "Anterior"
+            const prevLink = document.createElement('a');
+            prevLink.href = '#';
+            prevLink.textContent = 'Anterior';
+            pagination.appendChild(prevLink);
+            
+            // Crear el span activo
+            const activeSpan = document.createElement('span');
+            activeSpan.className = 'active';
+            pagination.appendChild(activeSpan);
+            
+            // Crear enlace "Siguiente"
+            const nextLink = document.createElement('a');
+            nextLink.href = '#';
+            nextLink.textContent = 'Siguiente';
+            pagination.appendChild(nextLink);
+            
+            // Añadir funcionalidad a los enlaces
+            prevLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (currentPage > 1) {
+                    window.location.href = `?page=${currentPage - 1}`;
+                }
+            });
+            
+            nextLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (currentPage < totalPages) {
+                    window.location.href = `?page=${currentPage + 1}`;
+                }
+            });
+            
+            // Añadir la paginación después del grid de noticias
+            const newsGrid = document.querySelector('.news-grid');
+            if (newsGrid) {
+                newsGrid.parentNode.insertBefore(pagination, newsGrid.nextSibling);
+            }
+        }
+        
+        // Si ya no necesitamos paginación pero existe el elemento, lo eliminamos
+        if (pagination && !needsPagination) {
+            pagination.remove();
+            return;
+        }
         
         // Actualizar el texto de la página actual
         const activeSpan = pagination.querySelector('.active');
@@ -511,17 +667,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const prevLink = pagination.querySelector('a:first-child');
         const nextLink = pagination.querySelector('a:last-child');
         
-        if (prevLink && currentPage > 1) {
-            prevLink.style.display = '';
-        } else if (prevLink) {
-            prevLink.style.display = 'none';
+        if (prevLink) {
+            if (currentPage > 1) {
+                prevLink.style.display = '';
+                prevLink.href = `?page=${currentPage - 1}`;
+            } else {
+                prevLink.style.display = 'none';
+            }
         }
         
-        if (nextLink && currentPage < totalPages) {
-            nextLink.style.display = '';
-            nextLink.href = `?page=${currentPage + 1}`;
-        } else if (nextLink) {
-            nextLink.style.display = 'none';
+        if (nextLink) {
+            if (currentPage < totalPages) {
+                nextLink.style.display = '';
+                nextLink.href = `?page=${currentPage + 1}`;
+            } else {
+                nextLink.style.display = 'none';
+            }
         }
     }
     

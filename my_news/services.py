@@ -140,8 +140,12 @@ class FeedService:
         # Calcular la fecha límite (1 mes atrás)
         one_month_ago = timezone.now() - timedelta(days=30)
         
+        # Lista para almacenar todas las entradas de todas las fuentes
+        all_entries = []
+        
+        # Primero, recolectar todas las entradas de todas las fuentes
         for source in sources:
-            print(f"\nProcesando fuente: {source.name}")
+            print(f"\nRecolectando entradas de fuente: {source.name}")
             
             # Obtener la fecha de la última noticia para esta fuente
             latest_news = News.objects.filter(
@@ -157,33 +161,8 @@ class FeedService:
             feed = feedparser.parse(source.url)
             print(f"Encontradas {len(feed.entries)} entradas en el feed")
             
-            # Ordenar entradas por fecha más reciente primero
-            sorted_entries = []
+            # Recolectar entradas válidas
             for entry in feed.entries:
-                if hasattr(entry, 'published_parsed') and entry.published_parsed:
-                    published = datetime(*entry.published_parsed[:6])
-                    if timezone.is_naive(published):
-                        published = timezone.make_aware(published)
-                    sorted_entries.append((published, entry))
-            
-            # Corregir el método de ordenación usando una clave explícita
-            sorted_entries.sort(key=lambda x: x[0], reverse=True)
-            
-            # Procesar entradas ordenadas hasta encontrar una antigua
-            for published, entry in sorted_entries:
-                # Si la noticia es más antigua que el límite, saltamos el resto
-                if published < cutoff_date:
-                    print(f"Saltando {len(sorted_entries)} entradas restantes por ser más antiguas que {cutoff_date}")
-                    break
-                
-                print(f"\nProcesando entrada: {entry.title}")
-                
-                # Verificar si la noticia ya existe
-                guid = entry.get('id', entry.link)
-                if News.objects.filter(guid=guid).exists():
-                    print("Noticia ya existe, continuando con siguiente entrada")
-                    continue
-                
                 # Convertir la fecha de publicación
                 if hasattr(entry, 'published_parsed') and entry.published_parsed:
                     published = datetime(*entry.published_parsed[:6])
@@ -196,77 +175,109 @@ class FeedService:
                 if published < cutoff_date:
                     continue
                 
-                # Verificar si la noticia debe ser filtrada
-                if FeedService.should_filter_news(entry.title, entry.get('description', '')):
-                    print(f"Noticia filtrada por palabras prohibidas: {entry.title}")
-                    News.objects.create(
-                        guid=guid,
-                        title=entry.title,
-                        description=entry.get('description', ''),
-                        link=entry.link,
-                        published_date=published,
-                        source=source,
-                        is_deleted=True  # Marcamos como eliminada
-                    )
-                    new_articles_count += 1
+                # Verificar si la noticia ya existe
+                guid = entry.get('id', entry.link)
+                if News.objects.filter(guid=guid).exists():
                     continue
                 
-                # Primero intentar obtener la imagen del feed
-                image_url = None
-                
-                # 1. Buscar en media_content
-                if hasattr(entry, 'media_content') and entry.media_content:
-                    image_url = entry.media_content[0].get('url')
-                
-                # 2. Buscar en enclosures
-                if not image_url and hasattr(entry, 'enclosures') and entry.enclosures:
-                    for enclosure in entry.enclosures:
-                        if enclosure.get('type', '').startswith('image/'):
-                            image_url = enclosure.get('href')
-                            break
-
-                # 3. Buscar en la descripción
-                if not image_url and hasattr(entry, 'description'):
-                    image_url = FeedService.extract_image_from_description(entry.description)
-
-                # 4. Buscar en content
-                if not image_url and hasattr(entry, 'content'):
-                    for content in entry.content:
-                        if 'value' in content:
-                            found_image = FeedService.extract_image_from_description(content['value'])
-                            if found_image:
-                                image_url = found_image
-                                break
-
-                # Obtener el contenido original para procesar
-                original_description = entry.get('description', '')
-                
-                # Si deep_search está activado, obtener el contenido completo independientemente de la imagen
-                if source.deep_search:
-                    full_content = FeedService.get_full_article_content(entry.link)
-                    if full_content['text']:
-                        original_description = full_content['text']
-                    # Solo usar la imagen del contenido si no se encontró una en el feed
-                    if not image_url and full_content['image_url']:
-                        image_url = full_content['image_url']
-
-                processed_description = FeedService.process_description_with_gemini(
-                    original_description, 
-                    model
-                )
-
-                # Crear la nueva noticia
+                # Agregar la entrada a la lista con su fuente y fecha
+                all_entries.append({
+                    'entry': entry,
+                    'source': source,
+                    'published': published,
+                    'guid': guid
+                })
+        
+        # Ordenar todas las entradas por fecha de más reciente a más antigua
+        all_entries.sort(key=lambda x: x['published'], reverse=True)
+        print(f"\nSe recolectaron {len(all_entries)} nuevas entradas de todas las fuentes")
+        
+        # Ordenar todas las entradas por fecha de más antigua a más reciente para procesamiento
+        all_entries.sort(key=lambda x: x['published'], reverse=False)
+        print(f"\nSe recolectaron {len(all_entries)} nuevas entradas de todas las fuentes")
+        
+        # Procesar todas las entradas en orden (de más antigua a más reciente)
+        for item in all_entries:
+            entry = item['entry']
+            source = item['source']
+            published = item['published']
+            guid = item['guid']
+            
+            print(f"\nProcesando entrada: {entry.title} ({published})")
+            
+            # Verificar si la noticia debe ser filtrada
+            if FeedService.should_filter_news(entry.title, entry.get('description', '')):
+                print(f"Noticia filtrada por palabras prohibidas: {entry.title}")
                 News.objects.create(
                     guid=guid,
                     title=entry.title,
-                    description=processed_description,
+                    description=entry.get('description', ''),
                     link=entry.link,
                     published_date=published,
                     source=source,
-                    image_url=image_url
+                    is_deleted=True  # Marcamos como eliminada
                 )
                 new_articles_count += 1
+                continue
             
+            # Primero intentar obtener la imagen del feed
+            image_url = None
+            
+            # 1. Buscar en media_content
+            if hasattr(entry, 'media_content') and entry.media_content:
+                image_url = entry.media_content[0].get('url')
+            
+            # 2. Buscar en enclosures
+            if not image_url and hasattr(entry, 'enclosures') and entry.enclosures:
+                for enclosure in entry.enclosures:
+                    if enclosure.get('type', '').startswith('image/'):
+                        image_url = enclosure.get('href')
+                        break
+
+            # 3. Buscar en la descripción
+            if not image_url and hasattr(entry, 'description'):
+                image_url = FeedService.extract_image_from_description(entry.description)
+
+            # 4. Buscar en content
+            if not image_url and hasattr(entry, 'content'):
+                for content in entry.content:
+                    if 'value' in content:
+                        found_image = FeedService.extract_image_from_description(content['value'])
+                        if found_image:
+                            image_url = found_image
+                            break
+
+            # Obtener el contenido original para procesar
+            original_description = entry.get('description', '')
+            
+            # Si deep_search está activado, obtener el contenido completo independientemente de la imagen
+            if source.deep_search:
+                full_content = FeedService.get_full_article_content(entry.link)
+                if full_content['text']:
+                    original_description = full_content['text']
+                # Solo usar la imagen del contenido si no se encontró una en el feed
+                if not image_url and full_content['image_url']:
+                    image_url = full_content['image_url']
+
+            processed_description = FeedService.process_description_with_gemini(
+                original_description, 
+                model
+            )
+
+            # Crear la nueva noticia
+            News.objects.create(
+                guid=guid,
+                title=entry.title,
+                description=processed_description,
+                link=entry.link,
+                published_date=published,
+                source=source,
+                image_url=image_url
+            )
+            new_articles_count += 1
+        
+        # Actualizar la fecha de última obtención para todas las fuentes
+        for source in sources:
             source.last_fetch = timezone.now()
             source.save()
             print(f"Actualizada fecha de última obtención para {source.name}")
