@@ -98,6 +98,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Configurar correctamente todos los botones de cierre al cargar la página
+    document.querySelectorAll('.modal .close').forEach(closeBtn => {
+        const modalId = closeBtn.closest('.modal').id.replace('modal-', '');
+        closeBtn.setAttribute('onclick', `closeNewsModal('${modalId}')`);
+    });
+    
     // Función para mostrar la notificación con auto-cierre
     function showNotification(count) {
         // Acumular el conteo de noticias si no ha habido interacción
@@ -278,14 +284,14 @@ document.addEventListener('DOMContentLoaded', function() {
                                 // Configurar el botón de cierre
                                 const closeBtn = newModal.querySelector('.close');
                                 if (closeBtn) {
-                                    closeBtn.onclick = function() {
-                                        closeNewsModal(newCardId);
-                                    };
+                                    const newCardId = newCard.id.replace('news-', '');
+                                    closeBtn.setAttribute('onclick', `closeNewsModal('${newCardId}')`);
                                 }
                                 
                                 // Configurar botón de eliminación en el modal
                                 const modalDeleteBtn = newModal.querySelector('.btn-danger');
                                 if (modalDeleteBtn) {
+                                    const newCardId = newCard.id.replace('news-', '');
                                     modalDeleteBtn.setAttribute('data-id', newCardId);
                                     attachDeleteListener(modalDeleteBtn);
                                 }
