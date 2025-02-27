@@ -165,9 +165,13 @@ class FeedService:
             for entry in feed.entries:
                 # Convertir la fecha de publicación
                 if hasattr(entry, 'published_parsed') and entry.published_parsed:
-                    published = datetime(*entry.published_parsed[:6])
-                    if timezone.is_naive(published):
-                        published = timezone.make_aware(published)
+                    # Crear fecha en UTC (los feeds generalmente usan UTC como estándar)
+                    published_utc = datetime(*entry.published_parsed[:6])
+                    if timezone.is_naive(published_utc):
+                        published_utc = timezone.make_aware(published_utc, timezone=timezone.utc)
+                    
+                    # Convertir a la zona horaria del proyecto
+                    published = published_utc.astimezone(timezone.get_current_timezone())
                 else:
                     published = timezone.now()
                 
