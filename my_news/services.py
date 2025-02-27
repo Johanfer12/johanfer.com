@@ -1,6 +1,7 @@
 import feedparser
 from datetime import datetime, timedelta
 from django.utils import timezone
+import pytz
 from .models import News, FeedSource, FilterWord
 import re
 import google.generativeai as genai
@@ -168,7 +169,7 @@ class FeedService:
                     # Crear fecha en UTC (los feeds generalmente usan UTC como estándar)
                     published_utc = datetime(*entry.published_parsed[:6])
                     if timezone.is_naive(published_utc):
-                        published_utc = timezone.make_aware(published_utc, timezone=timezone.utc)
+                        published_utc = timezone.make_aware(published_utc, timezone=pytz.UTC)
                     
                     # Convertir a la zona horaria del proyecto
                     published = published_utc.astimezone(timezone.get_current_timezone())
