@@ -30,6 +30,9 @@ def delete_news(request, pk):
     # Calcular el total de noticias después de la eliminación
     total_news = News.objects.filter(is_deleted=False).count()
     
+    # Calcular el total de páginas
+    total_pages = (total_news + page_size - 1) // page_size  # Redondear hacia arriba
+    
     next_news = News.objects.filter(is_deleted=False).order_by('-published_date')[offset-1:offset].first()
     
     if next_news:
@@ -43,13 +46,15 @@ def delete_news(request, pk):
             'html': html,
             'modal': modal_html,
             'newsId': next_news.pk,
-            'total_news': total_news
+            'total_news': total_news,
+            'total_pages': total_pages
         })
     
     return JsonResponse({
         'status': 'success', 
         'html': None,
-        'total_news': total_news
+        'total_news': total_news,
+        'total_pages': total_pages
     })
 
 def superuser_required(view_func):
@@ -78,11 +83,16 @@ def update_feed(request):
         # Obtener el total actualizado de noticias
         total_news = News.objects.filter(is_deleted=False).count()
         
+        # Calcular el total de páginas
+        page_size = 25
+        total_pages = (total_news + page_size - 1) // page_size  # Redondear hacia arriba
+        
         message = f'Feed actualizado: {new_articles} nueva{"s" if new_articles != 1 else ""} noticia{"s" if new_articles != 1 else ""} encontrada{"s" if new_articles != 1 else ""}'
         return JsonResponse({
             'status': 'success',
             'message': message,
-            'total_news': total_news
+            'total_news': total_news,
+            'total_pages': total_pages
         })
     except Exception as e:
         return JsonResponse({
@@ -103,6 +113,7 @@ def check_new_news(request):
             return JsonResponse({'status': 'error', 'message': 'Falta el parámetro last_checked'})
         
         # Buscar noticias más recientes que la última revisada
+        # Ordenamos por fecha de publicación descendente para tener las más recientes primero
         new_news = News.objects.filter(
             is_deleted=False,
             created_at__gt=last_checked
@@ -114,7 +125,11 @@ def check_new_news(request):
         # Obtener el total de noticias
         total_news = News.objects.filter(is_deleted=False).count()
         
-        # Renderizar las nuevas noticias
+        # Calcular número total de páginas
+        page_size = 25
+        total_pages = (total_news + page_size - 1) // page_size  # Redondear hacia arriba
+        
+        # Renderizar las nuevas noticias (mantienen el orden del queryset)
         news_cards_html = []
         for article in new_news:
             html = render_to_string('news_card.html', {'article': article}, request=request)
@@ -130,7 +145,8 @@ def check_new_news(request):
             'new_news_count': len(news_cards_html),
             'news_cards': news_cards_html,
             'current_time': str(timezone.now()),
-            'total_news': total_news
+            'total_news': total_news,
+            'total_pages': total_pages
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

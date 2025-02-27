@@ -236,7 +236,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     
                     // Usar el total de noticias devuelto por el servidor para actualizar los contadores
-                    updateCountersFromServer(data.total_news);
+                    updateCountersFromServer(data.total_news, data.total_pages);
                     
                     if (data.html) {
                         setTimeout(() => {
@@ -346,86 +346,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Nueva función para actualizar todos los contadores desde el servidor
-    function updateCountersFromServer(totalCount) {
-        if (totalCount === undefined) return;
-        
-        // Actualizar contador en el header
-        if (headerCounter) {
-            const current = parseInt(headerCounter.textContent || "0");
-            headerCounter.textContent = totalCount;
-            
-            // Añadir animación sutil para destacar el cambio
-            headerCounter.classList.add('counter-updated');
-            setTimeout(() => {
-                headerCounter.classList.remove('counter-updated');
-            }, 1000);
-            
-            console.log(`Contador actualizado desde servidor: ${current} → ${totalCount}`);
-        }
-        
-        // Actualizar contador de "total" si existe
-        if (totalCounter) {
-            totalCounter.textContent = `${totalCount} noticias`;
-        }
-    }
-
-    // Inicializar los botones de borrado
-    document.querySelectorAll('.delete-btn').forEach(button => {
-        attachDeleteListener(button);
-    });
-
-    // Función para obtener el token CSRF
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
-    }
-
-    // Código para el botón de actualización del feed
-    document.getElementById('updateFeedBtn').addEventListener('click', function() {
-        const button = this;
-        button.disabled = true;
-        button.classList.add('loading');
-
-        fetch('/noticias/update-feed/', {
-            method: 'GET',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken'),
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                // Actualizar los contadores si se recibe el total de noticias
-                if (data.total_news !== undefined) {
-                    updateCountersFromServer(data.total_news);
-                }
-                
-                checkForNewNews(true);
-            } else {
-                alert(data.message);
-            }
-        })
-        .catch(error => {
-            alert('Error al actualizar el feed');
-            console.error('Error:', error);
-        })
-        .finally(() => {
-            button.disabled = false;
-            button.classList.remove('loading');
-        });
-    });
-    
     // Comprobar nuevas noticias
     function checkForNewNews(showImmediately = false) {
         fetch(`/noticias/check-new-news/?last_checked=${encodeURIComponent(lastChecked)}`)
@@ -446,7 +366,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         showNotification(pendingNews.length);
                         
                         // Actualizar el contador total si está disponible en la respuesta
-                        updateCountersFromServer(data.total_news);
+                        updateCountersFromServer(data.total_news, data.total_pages);
                         
                         // Cargar las noticias automáticamente
                         loadNewNews();
@@ -468,8 +388,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Número máximo de noticias en la página (25)
         const MAX_NEWS = 25;
         
-        // Invertir el array para que las noticias más recientes aparezcan primero
-        pendingNews.reverse();
+        // Las noticias ya vienen ordenadas del servidor, ordenadas de más reciente a más antigua
+        // No necesitamos invertir el array porque queremos mantener el orden original
+        // pendingNews.reverse();
         
         // Variable para contar cuántas noticias realmente se añadieron (después del límite)
         let actuallyAddedCount = 0;
@@ -527,7 +448,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 attachDeleteListener(modalDeleteBtn);
             }
             
-            // Añadir al principio del grid
+            // Añadir al principio del grid (las noticias más recientes van primero)
             newsGrid.insertBefore(newsContainer, newsGrid.firstChild);
             actuallyAddedCount++;
             
@@ -556,11 +477,136 @@ document.addEventListener('DOMContentLoaded', function() {
             totalCounter.textContent = `${currentTotal + actuallyAddedCount} noticias`;
         }
         
+        // Actualizar la paginación si existe y ha cambiado el número de páginas
+        updatePagination(data.total_pages);
+        
         console.log(`Se añadieron ${actuallyAddedCount} noticias nuevas de ${pendingNews.length} totales`);
         
         // Limpiar las noticias pendientes
         pendingNews = [];
     }
+    
+    // Función para actualizar la paginación
+    function updatePagination(serverTotalPages) {
+        const pagination = document.querySelector('.pagination');
+        if (!pagination) return;
+        
+        // Obtener el total de noticias y calcular el número de páginas
+        const totalItems = parseInt(headerCounter?.textContent || "0");
+        const itemsPerPage = 25; // Mismo valor que en el backend
+        
+        // Usar el total de páginas del servidor si está disponible, de lo contrario calcularlo
+        const totalPages = serverTotalPages || Math.ceil(totalItems / itemsPerPage);
+        
+        // Obtener la página actual
+        const currentPage = parseInt(new URLSearchParams(window.location.search).get('page') || "1");
+        
+        // Actualizar el texto de la página actual
+        const activeSpan = pagination.querySelector('.active');
+        if (activeSpan) {
+            activeSpan.textContent = `${currentPage} / ${totalPages}`;
+        }
+        
+        // Actualizar enlaces de navegación
+        const prevLink = pagination.querySelector('a:first-child');
+        const nextLink = pagination.querySelector('a:last-child');
+        
+        if (prevLink && currentPage > 1) {
+            prevLink.style.display = '';
+        } else if (prevLink) {
+            prevLink.style.display = 'none';
+        }
+        
+        if (nextLink && currentPage < totalPages) {
+            nextLink.style.display = '';
+            nextLink.href = `?page=${currentPage + 1}`;
+        } else if (nextLink) {
+            nextLink.style.display = 'none';
+        }
+    }
+    
+    // Nueva función para actualizar todos los contadores desde el servidor
+    function updateCountersFromServer(totalCount, totalPages) {
+        if (totalCount === undefined) return;
+        
+        // Actualizar contador en el header
+        if (headerCounter) {
+            const current = parseInt(headerCounter.textContent || "0");
+            headerCounter.textContent = totalCount;
+            
+            // Añadir animación sutil para destacar el cambio
+            headerCounter.classList.add('counter-updated');
+            setTimeout(() => {
+                headerCounter.classList.remove('counter-updated');
+            }, 1000);
+            
+            console.log(`Contador actualizado desde servidor: ${current} → ${totalCount}`);
+        }
+        
+        // Actualizar contador de "total" si existe
+        if (totalCounter) {
+            totalCounter.textContent = `${totalCount} noticias`;
+        }
+        
+        // Actualizar la paginación si el total ha cambiado
+        updatePagination(totalPages);
+    }
+
+    // Inicializar los botones de borrado
+    document.querySelectorAll('.delete-btn').forEach(button => {
+        attachDeleteListener(button);
+    });
+
+    // Función para obtener el token CSRF
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Código para el botón de actualización del feed
+    document.getElementById('updateFeedBtn').addEventListener('click', function() {
+        const button = this;
+        button.disabled = true;
+        button.classList.add('loading');
+
+        fetch('/noticias/update-feed/', {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // Actualizar los contadores si se recibe el total de noticias
+                if (data.total_news !== undefined) {
+                    updateCountersFromServer(data.total_news, data.total_pages);
+                }
+                
+                checkForNewNews(true);
+            } else {
+                alert(data.message);
+            }
+        })
+        .catch(error => {
+            alert('Error al actualizar el feed');
+            console.error('Error:', error);
+        })
+        .finally(() => {
+            button.disabled = false;
+            button.classList.remove('loading');
+        });
+    });
     
     // Iniciar comprobación periódica
     setInterval(checkForNewNews, CHECK_INTERVAL);
