@@ -27,18 +27,30 @@ def delete_news(request, pk):
     current_page = int(request.POST.get('current_page', 1))
     offset = (current_page - 1) * page_size + page_size  # Calculamos el offset basado en la página actual
     
+    # Calcular el total de noticias después de la eliminación
+    total_news = News.objects.filter(is_deleted=False).count()
+    
     next_news = News.objects.filter(is_deleted=False).order_by('-published_date')[offset-1:offset].first()
     
     if next_news:
         # Renderizar la nueva tarjeta de noticia
         html = render_to_string('news_card.html', {'article': next_news}, request=request)
+        # Renderizar el modal de la nueva noticia
+        modal_html = render_to_string('news_modal.html', {'article': next_news}, request=request)
+        
         return JsonResponse({
             'status': 'success',
             'html': html,
-            'newsId': next_news.pk
+            'modal': modal_html,
+            'newsId': next_news.pk,
+            'total_news': total_news
         })
     
-    return JsonResponse({'status': 'success', 'html': None})
+    return JsonResponse({
+        'status': 'success', 
+        'html': None,
+        'total_news': total_news
+    })
 
 def superuser_required(view_func):
     decorated_view = user_passes_test(lambda u: u.is_superuser, login_url='/')(view_func)
@@ -63,10 +75,14 @@ class NewsListView(ListView):
 def update_feed(request):
     try:
         new_articles = FeedService.fetch_and_save_news()
+        # Obtener el total actualizado de noticias
+        total_news = News.objects.filter(is_deleted=False).count()
+        
         message = f'Feed actualizado: {new_articles} nueva{"s" if new_articles != 1 else ""} noticia{"s" if new_articles != 1 else ""} encontrada{"s" if new_articles != 1 else ""}'
         return JsonResponse({
             'status': 'success',
-            'message': message
+            'message': message,
+            'total_news': total_news
         })
     except Exception as e:
         return JsonResponse({
@@ -95,6 +111,9 @@ def check_new_news(request):
         if not new_news.exists():
             return JsonResponse({'status': 'no_new_news'})
         
+        # Obtener el total de noticias
+        total_news = News.objects.filter(is_deleted=False).count()
+        
         # Renderizar las nuevas noticias
         news_cards_html = []
         for article in new_news:
@@ -110,7 +129,8 @@ def check_new_news(request):
             'status': 'success',
             'new_news_count': len(news_cards_html),
             'news_cards': news_cards_html,
-            'current_time': str(timezone.now())
+            'current_time': str(timezone.now()),
+            'total_news': total_news
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

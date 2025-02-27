@@ -229,24 +229,22 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    // Actualizar contador en el header inmediatamente
-                    updateHeaderCounter(-1);
-                    
-                    // Actualizar contador de "total" si existe
-                    const currentTotal = parseInt(totalCounter?.textContent || "0");
-                    if (totalCounter) {
-                        totalCounter.textContent = `${currentTotal - 1} noticias`;
-                    }
-                    
                     // Cerrar el modal si está abierto
                     if (modal) {
                         modal.style.display = 'none';
                         document.body.style.overflow = 'auto';
                     }
                     
+                    // Usar el total de noticias devuelto por el servidor para actualizar los contadores
+                    updateCountersFromServer(data.total_news);
+                    
                     if (data.html) {
                         setTimeout(() => {
                             container.remove();
+                            // También eliminamos el modal asociado a la noticia eliminada
+                            if (modal) {
+                                modal.remove();
+                            }
                             
                             const temp = document.createElement('div');
                             temp.innerHTML = data.html;
@@ -265,12 +263,43 @@ document.addEventListener('DOMContentLoaded', function() {
                                 card.setAttribute('onclick', `openNewsModal('${newCardId}')`);
                             }
                             
+                            // Añadir la nueva tarjeta
                             newsGrid.appendChild(newCard);
+                            
+                            // Añadir el modal para la nueva noticia
+                            if (data.modal) {
+                                const modalTemp = document.createElement('div');
+                                modalTemp.innerHTML = data.modal;
+                                const newModal = modalTemp.firstElementChild;
+                                
+                                // Añadir al contenedor de modales
+                                newsModalsContainer.appendChild(newModal);
+                                
+                                // Configurar el botón de cierre
+                                const closeBtn = newModal.querySelector('.close');
+                                if (closeBtn) {
+                                    closeBtn.onclick = function() {
+                                        closeNewsModal(newCardId);
+                                    };
+                                }
+                                
+                                // Configurar botón de eliminación en el modal
+                                const modalDeleteBtn = newModal.querySelector('.btn-danger');
+                                if (modalDeleteBtn) {
+                                    modalDeleteBtn.setAttribute('data-id', newCardId);
+                                    attachDeleteListener(modalDeleteBtn);
+                                }
+                            }
+                            
                             animateReposition(oldPositions);
                         }, 500); // Esperar 500ms para que la animación de eliminación termine
                     } else {
                         setTimeout(() => {
                             container.remove();
+                            // También eliminamos el modal asociado a la noticia eliminada
+                            if (modal) {
+                                modal.remove();
+                            }
                             animateReposition(oldPositions);
                         }, 500); // Esperar 500ms para que la animación de eliminación termine
                     }
@@ -301,7 +330,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateHeaderCounter(change) {
         if (headerCounter) {
             const current = parseInt(headerCounter.textContent || "0");
-            const newValue = current + change;
+            // Asegurarnos de que el nuevo valor no sea negativo
+            const newValue = Math.max(0, current + change);
             headerCounter.textContent = newValue;
             
             // Añadir animación sutil para destacar el cambio
@@ -313,6 +343,30 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log(`Contador actualizado: ${current} → ${newValue}`);
         } else {
             console.warn('No se encontró el elemento del contador en el header');
+        }
+    }
+
+    // Nueva función para actualizar todos los contadores desde el servidor
+    function updateCountersFromServer(totalCount) {
+        if (totalCount === undefined) return;
+        
+        // Actualizar contador en el header
+        if (headerCounter) {
+            const current = parseInt(headerCounter.textContent || "0");
+            headerCounter.textContent = totalCount;
+            
+            // Añadir animación sutil para destacar el cambio
+            headerCounter.classList.add('counter-updated');
+            setTimeout(() => {
+                headerCounter.classList.remove('counter-updated');
+            }, 1000);
+            
+            console.log(`Contador actualizado desde servidor: ${current} → ${totalCount}`);
+        }
+        
+        // Actualizar contador de "total" si existe
+        if (totalCounter) {
+            totalCounter.textContent = `${totalCount} noticias`;
         }
     }
 
@@ -352,6 +406,11 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
+                // Actualizar los contadores si se recibe el total de noticias
+                if (data.total_news !== undefined) {
+                    updateCountersFromServer(data.total_news);
+                }
+                
                 checkForNewNews(true);
             } else {
                 alert(data.message);
@@ -385,6 +444,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Mostrar notificación de nuevas noticias (solo informativa)
                         showNotification(pendingNews.length);
+                        
+                        // Actualizar el contador total si está disponible en la respuesta
+                        updateCountersFromServer(data.total_news);
                         
                         // Cargar las noticias automáticamente
                         loadNewNews();
