@@ -151,3 +151,14 @@ def check_new_news(request):
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
+def get_news_count(request):
+    """Obtiene el conteo actualizado de noticias"""
+    total_news = News.objects.filter(is_deleted=False).count()
+    total_pages = (total_news + 24) // 25  # Cálculo del número total de páginas (25 noticias por página)
+    
+    return JsonResponse({
+        'status': 'success',
+        'total_news': total_news,
+        'total_pages': total_pages
+    })
+

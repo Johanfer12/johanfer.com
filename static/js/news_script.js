@@ -388,15 +388,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Número máximo de noticias en la página (25)
         const MAX_NEWS = 25;
         
-        // Actualizar inmediatamente el contador en el header
-        if (newNewsNotification.classList.contains('show') && !userInteracted) {
-            // Ya hay una notificación visible, usar la cantidad acumulada para actualizar el header
-            updateHeaderCounter(pendingNews.length);
-        } else {
-            // Primera actualización o después de interacción del usuario
-            updateHeaderCounter(pendingNews.length);
-        }
-        
         // Variable para contar cuántas noticias realmente se añadieron (después del límite)
         let actuallyAddedCount = 0;
         
@@ -568,14 +559,24 @@ document.addEventListener('DOMContentLoaded', function() {
         // Animar reposicionamiento
         animateReposition(oldPositions);
         
-        // Actualizar el contador total si existe
-        if (totalCounter) {
-            const currentTotal = parseInt(totalCounter.textContent.split(' ')[0] || "0");
-            totalCounter.textContent = `${currentTotal + actuallyAddedCount} noticias`;
-        }
-        
-        // Actualizar la paginación basada en el contador actual
-        updatePagination(); // Sin parámetro porque no tenemos totalPages en este contexto
+        // Aquí ya no actualizamos directamente los contadores, usamos el valor del servidor
+        // Hacemos una solicitud para obtener el conteo actualizado
+        fetch('/noticias/get-news-count/')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    updateCountersFromServer(data.total_news, data.total_pages);
+                }
+            })
+            .catch(error => {
+                console.error('Error al obtener el conteo actualizado:', error);
+                // En caso de error, actualizamos con un valor estimado
+                if (headerCounter && totalCounter) {
+                    const currentTotal = parseInt(headerCounter.textContent || "0");
+                    const newTotal = currentTotal + actuallyAddedCount;
+                    updateCountersFromServer(newTotal);
+                }
+            });
         
         console.log(`Se añadieron ${actuallyAddedCount} noticias nuevas de ${pendingNews.length} totales`);
         
@@ -693,15 +694,19 @@ document.addEventListener('DOMContentLoaded', function() {
         // Actualizar contador en el header
         if (headerCounter) {
             const current = parseInt(headerCounter.textContent || "0");
-            headerCounter.textContent = totalCount;
             
-            // Añadir animación sutil para destacar el cambio
-            headerCounter.classList.add('counter-updated');
-            setTimeout(() => {
-                headerCounter.classList.remove('counter-updated');
-            }, 1000);
-            
-            console.log(`Contador actualizado desde servidor: ${current} → ${totalCount}`);
+            // Verificar si realmente hay un cambio para evitar animaciones innecesarias
+            if (current !== totalCount) {
+                headerCounter.textContent = totalCount;
+                
+                // Añadir animación sutil para destacar el cambio
+                headerCounter.classList.add('counter-updated');
+                setTimeout(() => {
+                    headerCounter.classList.remove('counter-updated');
+                }, 1000);
+                
+                console.log(`Contador actualizado desde servidor: ${current} → ${totalCount}`);
+            }
         }
         
         // Actualizar contador de "total" si existe
