@@ -9,8 +9,8 @@ class FeedSourceAdmin(admin.ModelAdmin):
 
 @admin.register(News)
 class NewsAdmin(admin.ModelAdmin):
-    list_display = ('title', 'source', 'published_date', 'created_at')
-    list_filter = ('source', 'published_date')
+    list_display = ('title', 'source', 'published_date', 'created_at', 'is_deleted')
+    list_filter = ('source', 'published_date', 'is_deleted')
     search_fields = ('title', 'description')
     date_hierarchy = 'published_date'
 
