@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', function() {
     let userInteracted = false; // Indica si el usuario ha interactuado con la página
     const NOTIFICATION_DURATION = 10000; // 10 segundos
     
+    // Detectar si estamos en un dispositivo móvil
+    const isMobile = () => window.innerWidth <= 767;
+    
     // Detectar cuando la página cambia de visibilidad
     document.addEventListener('visibilitychange', function() {
         if (document.hidden) {
@@ -71,11 +74,78 @@ document.addEventListener('DOMContentLoaded', function() {
     const CHECK_INTERVAL = 30000; // 30 segundos
     let pendingNews = [];
     
-    // Añadir onclick a todas las tarjetas al cargar la página
-    document.querySelectorAll('.news-card').forEach(card => {
-        const newsId = card.closest('.news-card-container').id.replace('news-', '');
-        card.setAttribute('onclick', `openNewsModal('${newsId}')`);
-    });
+    // Actualizar el comportamiento de las tarjetas según el dispositivo
+    function updateCardBehavior() {
+        document.querySelectorAll('.news-card').forEach(card => {
+            const newsId = card.closest('.news-card-container').id.replace('news-', '');
+            const container = card.closest('.news-card-container');
+            
+            if (isMobile()) {
+                // En móvil: quitar onclick para evitar que abra el modal
+                card.removeAttribute('onclick');
+                
+                // Añadir botón de eliminación móvil al frente de la tarjeta si no existe ya
+                const cardFront = card.querySelector('.card-front');
+                if (cardFront && !cardFront.querySelector('.mobile-delete-btn') && container.querySelector('.delete-btn')) {
+                    // Eliminar cualquier botón anterior si existe
+                    const oldBtn = cardFront.querySelector('.mobile-delete-btn');
+                    if (oldBtn) {
+                        oldBtn.remove();
+                    }
+                    
+                    // Usar un botón real en lugar de un div
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'mobile-delete-btn';
+                    deleteBtn.setAttribute('type', 'button');
+                    deleteBtn.setAttribute('data-id', newsId);
+                    
+                    // Asignar directamente la función
+                    deleteBtn.onclick = function() {
+                        deleteNews(newsId);
+                        return false;
+                    };
+                    
+                    cardFront.appendChild(deleteBtn);
+                }
+                
+                // Añadir botón "Ver más" al reverso de la tarjeta solo si no existe ya
+                const cardBack = card.querySelector('.card-back');
+                if (cardBack && !cardBack.querySelector('.news-link.modal-opener')) {
+                    const linksContainer = cardBack.querySelector('.news-links');
+                    if (linksContainer) {
+                        const modalLink = document.createElement('a');
+                        modalLink.href = 'javascript:void(0)';
+                        modalLink.className = 'news-link modal-opener';
+                        modalLink.textContent = 'Más';
+                        modalLink.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            openNewsModal(newsId);
+                        });
+                        linksContainer.prepend(modalLink);
+                    }
+                }
+            } else {
+                // En escritorio: configurar onclick para abrir el modal
+                card.setAttribute('onclick', `openNewsModal('${newsId}')`);
+                
+                // Eliminar botón "Ver más" si existe
+                const modalOpener = card.querySelector('.news-link.modal-opener');
+                if (modalOpener) {
+                    modalOpener.remove();
+                }
+                
+                // Eliminar botón de eliminación móvil si existe
+                const mobileDeleteBtn = card.querySelector('.mobile-delete-btn');
+                if (mobileDeleteBtn) {
+                    mobileDeleteBtn.remove();
+                }
+            }
+        });
+    }
+
+    // Actualizar comportamiento al cargar y al cambiar tamaño de ventana
+    updateCardBehavior();
+    window.addEventListener('resize', updateCardBehavior);
 
     // Funciones para el modal
     window.openNewsModal = function(id) {
@@ -208,130 +278,170 @@ document.addEventListener('DOMContentLoaded', function() {
         button.addEventListener('click', function(e) {
             e.stopPropagation();
             const newsId = this.dataset.id;
-            const oldPositions = capturePositions();
-            
-            // Encontrar el contenedor y el modal
-            const container = document.getElementById(`news-${newsId}`);
-            const modal = document.getElementById(`modal-${newsId}`);
-            const currentPage = new URLSearchParams(window.location.search).get('page') || 1;
-            
-            // Asegurarse de que se encontró el contenedor antes de continuar
-            if (!container) {
-                console.error(`No se encontró el contenedor para el ID: ${newsId}`);
-                return;
-            }
-            
-            // Aplicar clase para animación de eliminación
-            container.classList.add('deleting');
-            
-            fetch(`/noticias/delete/${newsId}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken'),
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `current_page=${currentPage}`
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    // Cerrar el modal si está abierto
-                    if (modal) {
-                        modal.style.display = 'none';
-                        document.body.style.overflow = 'auto';
-                    }
-                    
-                    // Usar el total de noticias devuelto por el servidor para actualizar los contadores
-                    updateCountersFromServer(data.total_news, data.total_pages);
-                    
-                    if (data.html) {
-                        setTimeout(() => {
-                            container.remove();
-                            // También eliminamos el modal asociado a la noticia eliminada
-                            if (modal) {
-                                modal.remove();
-                            }
-                            
-                            const temp = document.createElement('div');
-                            temp.innerHTML = data.html;
-                            const newCard = temp.firstElementChild;
-                            newCard.classList.add('inserting');
-                            
-                            const newDeleteBtn = newCard.querySelector('.delete-btn');
-                            if (newDeleteBtn) {
-                                attachDeleteListener(newDeleteBtn);
-                            }
-                            
-                            // Asegurar que el evento onclick esté configurado
-                            const card = newCard.querySelector('.news-card');
-                            if (card) {
-                                const newCardId = newCard.id.replace('news-', '');
-                                card.setAttribute('onclick', `openNewsModal('${newCardId}')`);
-                            }
-                            
-                            // Añadir la nueva tarjeta
-                            newsGrid.appendChild(newCard);
-                            
-                            // Añadir el modal para la nueva noticia
-                            if (data.modal) {
-                                const modalTemp = document.createElement('div');
-                                modalTemp.innerHTML = data.modal;
-                                const newModal = modalTemp.firstElementChild;
-                                
-                                // Añadir al contenedor de modales
-                                newsModalsContainer.appendChild(newModal);
-                                
-                                // Configurar el botón de cierre
-                                const closeBtn = newModal.querySelector('.close');
-                                if (closeBtn) {
-                                    const newCardId = newCard.id.replace('news-', '');
-                                    closeBtn.setAttribute('onclick', `closeNewsModal('${newCardId}')`);
-                                }
-                                
-                                // Configurar botón de eliminación en el modal
-                                const modalDeleteBtn = newModal.querySelector('.btn-danger');
-                                if (modalDeleteBtn) {
-                                    const newCardId = newCard.id.replace('news-', '');
-                                    modalDeleteBtn.setAttribute('data-id', newCardId);
-                                    attachDeleteListener(modalDeleteBtn);
-                                }
-                            }
-                            
-                            animateReposition(oldPositions);
-                        }, 500); // Esperar 500ms para que la animación de eliminación termine
-                    } else {
-                        setTimeout(() => {
-                            container.remove();
-                            // También eliminamos el modal asociado a la noticia eliminada
-                            if (modal) {
-                                modal.remove();
-                            }
-                            animateReposition(oldPositions);
-                        }, 500); // Esperar 500ms para que la animación de eliminación termine
-                    }
+            deleteNews(newsId);
+        });
+    }
+    
+    // Función central para eliminar noticias
+    function deleteNews(newsId) {
+        const oldPositions = capturePositions();
+        
+        // Encontrar el contenedor y el modal
+        const container = document.getElementById(`news-${newsId}`);
+        const modal = document.getElementById(`modal-${newsId}`);
+        const currentPage = new URLSearchParams(window.location.search).get('page') || 1;
+        
+        // Asegurarse de que se encontró el contenedor antes de continuar
+        if (!container) {
+            console.error(`No se encontró el contenedor para el ID: ${newsId}`);
+            return;
+        }
+        
+        // Asegurarse de que todas las animaciones previas hayan terminado
+        container.classList.remove('new-news', 'inserting');
+        
+        // Forzar un reflow para asegurar que el navegador procese los cambios de clase
+        void container.offsetWidth;
+        
+        // Aplicar clase para animación de eliminación
+        container.classList.add('deleting');
+        
+        fetch(`/noticias/delete/${newsId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `current_page=${currentPage}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // Cerrar el modal si está abierto
+                if (modal) {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
                 }
-            });
+                
+                // Usar el total de noticias devuelto por el servidor para actualizar los contadores
+                updateCountersFromServer(data.total_news, data.total_pages);
+                
+                if (data.html) {
+                    setTimeout(() => {
+                        container.remove();
+                        // También eliminamos el modal asociado a la noticia eliminada
+                        if (modal) {
+                            modal.remove();
+                        }
+                        
+                        const temp = document.createElement('div');
+                        temp.innerHTML = data.html;
+                        const newCard = temp.firstElementChild;
+                        
+                        // Forzar reflow antes de añadir la clase
+                        void newCard.offsetWidth;
+                        
+                        newCard.classList.add('inserting');
+                        
+                        const newDeleteBtn = newCard.querySelector('.delete-btn');
+                        if (newDeleteBtn) {
+                            attachDeleteListener(newDeleteBtn);
+                        }
+                        
+                        // Asegurar que el evento onclick esté configurado
+                        const card = newCard.querySelector('.news-card');
+                        if (card) {
+                            const newCardId = newCard.id.replace('news-', '');
+                            if (!isMobile()) {
+                                card.setAttribute('onclick', `openNewsModal('${newCardId}')`);
+                            } else {
+                                // Para móvil, añadir el botón de eliminación móvil
+                                const cardFront = card.querySelector('.card-front');
+                                if (cardFront && newCard.querySelector('.delete-btn')) {
+                                    // Eliminar cualquier botón anterior si existe
+                                    const oldBtn = cardFront.querySelector('.mobile-delete-btn');
+                                    if (oldBtn) {
+                                        oldBtn.remove();
+                                    }
+                                    
+                                    // Usar un botón real en lugar de un div
+                                    const mobileDeleteBtn = document.createElement('button');
+                                    mobileDeleteBtn.className = 'mobile-delete-btn';
+                                    mobileDeleteBtn.setAttribute('type', 'button');
+                                    mobileDeleteBtn.setAttribute('data-id', newCardId);
+                                    
+                                    // Asignar directamente la función
+                                    mobileDeleteBtn.onclick = function() {
+                                        deleteNews(newCardId);
+                                        return false;
+                                    };
+                                    
+                                    cardFront.appendChild(mobileDeleteBtn);
+                                }
+                                
+                                // Para móvil, añadir el botón "Ver más" en el reverso
+                                const cardBack = card.querySelector('.card-back');
+                                if (cardBack) {
+                                    const linksContainer = cardBack.querySelector('.news-links');
+                                    if (linksContainer) {
+                                        const modalLink = document.createElement('a');
+                                        modalLink.href = 'javascript:void(0)';
+                                        modalLink.className = 'news-link modal-opener';
+                                        modalLink.textContent = 'Más';
+                                        modalLink.addEventListener('click', function(e) {
+                                            e.stopPropagation();
+                                            openNewsModal(newCardId);
+                                        });
+                                        linksContainer.prepend(modalLink);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Añadir la nueva tarjeta
+                        newsGrid.appendChild(newCard);
+                        
+                        // Añadir el modal para la nueva noticia
+                        if (data.modal) {
+                            const modalTemp = document.createElement('div');
+                            modalTemp.innerHTML = data.modal;
+                            const newModal = modalTemp.firstElementChild;
+                            
+                            // Añadir al contenedor de modales
+                            newsModalsContainer.appendChild(newModal);
+                            
+                            // Configurar el botón de cierre
+                            const closeBtn = newModal.querySelector('.close');
+                            if (closeBtn) {
+                                const newCardId = newCard.id.replace('news-', '');
+                                closeBtn.setAttribute('onclick', `closeNewsModal('${newCardId}')`);
+                            }
+                            
+                            // Configurar botón de eliminación en el modal
+                            const modalDeleteBtn = newModal.querySelector('.btn-danger');
+                            if (modalDeleteBtn) {
+                                const newCardId = newCard.id.replace('news-', '');
+                                modalDeleteBtn.setAttribute('data-id', newCardId);
+                                attachDeleteListener(modalDeleteBtn);
+                            }
+                        }
+                        
+                        animateReposition(oldPositions);
+                    }, 500); // Esperar 500ms para que la animación de eliminación termine
+                } else {
+                    setTimeout(() => {
+                        container.remove();
+                        // También eliminamos el modal asociado a la noticia eliminada
+                        if (modal) {
+                            modal.remove();
+                        }
+                        animateReposition(oldPositions);
+                    }, 500); // Esperar 500ms para que la animación de eliminación termine
+                }
+            }
         });
     }
 
-    // Función auxiliar para encontrar el contenedor por el ID del botón (ya no la usamos)
-    function findContainerByButtonId(buttonId) {
-        // Buscar primero en los botones de la tarjeta
-        const button = document.querySelector(`.delete-btn[data-id="${buttonId}"]`);
-        if (button && button.closest('.news-card-container')) {
-            return button.closest('.news-card-container');
-        }
-        
-        // Si no se encuentra, buscar en los botones del modal y relacionarlo con el contenedor correspondiente
-        const modalButton = document.querySelector(`.btn-danger[data-id="${buttonId}"]`);
-        if (modalButton) {
-            // Buscar el contenedor por ID
-            return document.getElementById(`news-${buttonId}`);
-        }
-        
-        return null;
-    }
-    
     // Función para actualizar el contador en el header
     function updateHeaderCounter(change) {
         if (headerCounter) {
@@ -453,6 +563,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Obtener el contenedor de la noticia
             const newsContainer = temp.firstElementChild;
+            
+            // Forzar reflow antes de añadir la clase
+            void newsContainer.offsetWidth;
             newsContainer.classList.add('new-news');
             
             // Añadir el modal al contenedor de modales
@@ -461,18 +574,59 @@ document.addEventListener('DOMContentLoaded', function() {
             const modal = modalTemp.firstElementChild;
             newsModalsContainer.appendChild(modal);
             
-            // Añadir evento onclick al contenedor de la tarjeta para abrir el modal
+            // Añadir evento onclick al contenedor de la tarjeta para abrir el modal (solo en escritorio)
             const card = newsContainer.querySelector('.news-card');
             if (card) {
-                card.setAttribute('onclick', `openNewsModal('${newsItem.id}')`);
+                if (!isMobile()) {
+                    card.setAttribute('onclick', `openNewsModal('${newsItem.id}')`);
+                } else {
+                    // Para móvil, añadir el botón de eliminación en el frente
+                    const cardFront = card.querySelector('.card-front');
+                    if (cardFront && newsContainer.querySelector('.delete-btn')) {
+                        // Eliminar cualquier botón anterior si existe
+                        const oldBtn = cardFront.querySelector('.mobile-delete-btn');
+                        if (oldBtn) {
+                            oldBtn.remove();
+                        }
+                        
+                        // Usar un botón real en lugar de un div
+                        const mobileDeleteBtn = document.createElement('button');
+                        mobileDeleteBtn.className = 'mobile-delete-btn';
+                        mobileDeleteBtn.setAttribute('type', 'button');
+                        mobileDeleteBtn.setAttribute('data-id', newsItem.id);
+                        
+                        // Asignar directamente la función
+                        mobileDeleteBtn.onclick = function() {
+                            deleteNews(newsItem.id);
+                            return false;
+                        };
+                        
+                        cardFront.appendChild(mobileDeleteBtn);
+                    }
+                    
+                    // Para móvil, añadir el botón "Ver más" en el reverso
+                    const cardBack = card.querySelector('.card-back');
+                    if (cardBack) {
+                        const linksContainer = cardBack.querySelector('.news-links');
+                        if (linksContainer) {
+                            const modalLink = document.createElement('a');
+                            modalLink.href = 'javascript:void(0)';
+                            modalLink.className = 'news-link modal-opener';
+                            modalLink.textContent = 'Más';
+                            modalLink.addEventListener('click', function(e) {
+                                e.stopPropagation();
+                                openNewsModal(newsItem.id);
+                            });
+                            linksContainer.prepend(modalLink);
+                        }
+                    }
+                }
             }
             
             // Configurar el botón de cierre del modal
             const closeBtn = modal.querySelector('.close');
             if (closeBtn) {
-                closeBtn.onclick = function() {
-                    closeNewsModal(newsItem.id);
-                };
+                closeBtn.setAttribute('onclick', `closeNewsModal('${newsItem.id}')`);
             }
             
             // Añadir listener para botones de eliminación en la tarjeta

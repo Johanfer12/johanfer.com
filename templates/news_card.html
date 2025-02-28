@@ -14,7 +14,7 @@
                 {{ article.description|safe }}
             </div>
             <div class="news-links">
-                <a href="{{ article.link }}" target="_blank" class="news-link">Ver fuente</a>
+                <a href="{{ article.link }}" target="_blank" class="news-link">Fuente</a>
                 {% if user.is_staff %}
                 <button class="news-link delete-btn" data-id="{{ article.id }}">Eliminar</button>
                 {% endif %}

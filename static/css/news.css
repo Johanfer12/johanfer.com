@@ -195,6 +195,18 @@ body {
     color: #1a1a1a;
 }
 
+/* Estilo específico para el botón eliminar */
+.news-link.delete-btn {
+    border: 1px solid #ff4444;
+    color: #ff4444;
+    background-color: rgba(40, 40, 40, 0.8);
+}
+
+.news-link.delete-btn:hover {
+    background-color: #ff4444;
+    color: #1a1a1a;
+}
+
 /* Paginación */
 .pagination {
     display: flex;
@@ -367,6 +379,10 @@ body {
     color: white;
 }
 
+.btn-danger:hover {
+    background: #cc0000;
+}
+
 .close {
     position: absolute;
     right: 20px;
@@ -531,4 +547,81 @@ body {
 .header-counter.counter-updated {
     animation: counterPulse 1s ease-in-out;
     display: inline-block;
+}
+
+/* Botón de eliminación para móvil */
+.mobile-delete-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    cursor: pointer;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    transition: all 0.2s ease;
+    opacity: 0.9;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    padding: 0;
+    margin: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    outline: none;
+}
+
+.mobile-delete-btn::before,
+.mobile-delete-btn::after {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 2px;
+    background-color: #fff;
+    border-radius: 1px;
+}
+
+.mobile-delete-btn::before {
+    transform: rotate(45deg);
+}
+
+.mobile-delete-btn::after {
+    transform: rotate(-45deg);
+}
+
+.mobile-delete-btn:hover,
+.mobile-delete-btn:active {
+    background-color: rgba(255, 68, 68, 0.8);
+    transform: scale(1.1);
+}
+
+.mobile-delete-btn:active {
+    transform: scale(0.95);
+}
+
+/* Ocultar el botón en escritorio */
+@media (min-width: 768px) {
+    .mobile-delete-btn {
+        display: none;
+    }
+}
+
+/* Animación de pulsación para el botón móvil */
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.mobile-delete-btn.pulse {
+    animation: pulse 0.3s ease-in-out;
 } 
