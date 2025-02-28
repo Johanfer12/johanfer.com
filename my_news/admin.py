@@ -9,10 +9,11 @@ class FeedSourceAdmin(admin.ModelAdmin):
 
 @admin.register(News)
 class NewsAdmin(admin.ModelAdmin):
-    list_display = ('title', 'source', 'published_date', 'created_at', 'is_deleted')
-    list_filter = ('source', 'published_date', 'is_deleted')
+    list_display = ('title', 'source', 'published_date', 'created_at', 'is_deleted', 'is_redundant', 'similarity_score')
+    list_filter = ('source', 'published_date', 'is_deleted', 'is_redundant')
     search_fields = ('title', 'description')
     date_hierarchy = 'published_date'
+    readonly_fields = ('embedding', 'similar_to', 'similarity_score', 'is_redundant')
 
 @admin.register(FilterWord)
 class FilterWordAdmin(admin.ModelAdmin):

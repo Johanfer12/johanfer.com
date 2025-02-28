@@ -1,0 +1,285 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba de Redundancia</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'css/news.css' %}">
+    <style>
+        .redundancy-container {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        
+        .redundancy-header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #00a8ff;
+            font-size: 1.5em;
+        }
+        
+        .redundancy-stats {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 1.2em;
+            color: #fff;
+            padding: 15px;
+            background: rgba(20, 20, 20, 0.5);
+            border-radius: 8px;
+        }
+        
+        .redundancy-pair {
+            display: flex;
+            margin-bottom: 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 30px;
+            position: relative;
+        }
+        
+        .redundancy-pair:last-child {
+            border-bottom: none;
+        }
+        
+        .news-item {
+            flex: 1;
+            padding: 15px;
+            background: rgba(30, 30, 30, 0.5);
+            border-radius: 8px;
+            margin: 0 10px;
+        }
+        
+        .similarity-score {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #00a8ff;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .news-title {
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            color: #fff;
+        }
+        
+        .news-description {
+            font-size: 0.9em;
+            color: #ddd;
+            margin-bottom: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+        
+        .news-meta {
+            font-size: 0.8em;
+            color: #888;
+        }
+        
+        .news-source {
+            font-weight: bold;
+            color: #00a8ff;
+        }
+        
+        .action-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 30px 0;
+        }
+        
+        .action-btn {
+            padding: 10px 20px;
+            border-radius: 5px;
+            background: #00a8ff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .action-btn:hover {
+            background: #0096e0;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .original {
+            border-left: 4px solid #00a8ff;
+        }
+        
+        .redundant {
+            border-left: 4px solid #ff4444;
+        }
+        
+        .no-redundancy {
+            text-align: center;
+            padding: 50px 0;
+            color: #888;
+            font-size: 1.2em;
+        }
+        
+        @media (max-width: 768px) {
+            .redundancy-pair {
+                flex-direction: column;
+            }
+            
+            .news-item {
+                margin: 10px 0;
+            }
+            
+            .similarity-score {
+                top: 10px;
+                left: auto;
+                right: 10px;
+                transform: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    {% include 'header.html' %}
+    
+    <div class="main-content">
+        <div class="redundancy-container">
+            <h1 class="redundancy-header">Prueba de Detección de Noticias Redundantes</h1>
+            
+            <div class="redundancy-stats">
+                Total de noticias redundantes detectadas: <strong>{{ total_redundant }}</strong>
+            </div>
+            
+            <div class="action-buttons">
+                <button class="action-btn" id="generateEmbeddings">Generar Embeddings Faltantes</button>
+                <button class="action-btn" id="checkRedundancy">Verificar Redundancia</button>
+            </div>
+            
+            {% if redundant_news %}
+                {% for news in redundant_news %}
+                <div class="redundancy-pair">
+                    <div class="similarity-score">{{ news.similarity_score|floatformat:4 }}</div>
+                    
+                    <div class="news-item original">
+                        <h3 class="news-title">{{ news.similar_to.title }}</h3>
+                        <div class="news-description">{{ news.similar_to.description|safe }}</div>
+                        <div class="news-meta">
+                            <span class="news-source">{{ news.similar_to.source.name }}</span> - 
+                            {{ news.similar_to.published_date|date:"d/m/Y H:i" }}
+                        </div>
+                    </div>
+                    
+                    <div class="news-item redundant">
+                        <h3 class="news-title">{{ news.title }}</h3>
+                        <div class="news-description">{{ news.description|safe }}</div>
+                        <div class="news-meta">
+                            <span class="news-source">{{ news.source.name }}</span> - 
+                            {{ news.published_date|date:"d/m/Y H:i" }}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="no-redundancy">
+                    No se han detectado noticias redundantes aún
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Función para mostrar mensajes de estado
+        function showMessage(message, isError = false) {
+            alert(message); // Por simplicidad usamos alert, pero podría ser algo más sofisticado
+        }
+        
+        // Obtener token CSRF
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Generar embeddings faltantes
+        document.getElementById('generateEmbeddings').addEventListener('click', function() {
+            this.disabled = true;
+            this.textContent = 'Procesando...';
+            
+            fetch('/noticias/generate-embeddings/', {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showMessage(`Se generaron embeddings para ${data.processed_count} noticias. Quedan ${data.remaining} por procesar.`);
+                } else {
+                    showMessage('Error: ' + data.message, true);
+                }
+            })
+            .catch(error => {
+                showMessage('Error en la solicitud: ' + error, true);
+            })
+            .finally(() => {
+                this.disabled = false;
+                this.textContent = 'Generar Embeddings Faltantes';
+            });
+        });
+
+        // Verificar redundancia
+        document.getElementById('checkRedundancy').addEventListener('click', function() {
+            this.disabled = true;
+            this.textContent = 'Verificando...';
+            
+            fetch('/noticias/check-redundancy/', {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showMessage(`Se verificaron ${data.total_checked} noticias. Se encontraron ${data.redundant_count} redundancias.`);
+                    if (data.redundant_count > 0) {
+                        // Recargar la página para mostrar las nuevas redundancias
+                        location.reload();
+                    }
+                } else {
+                    showMessage('Error: ' + data.message, true);
+                }
+            })
+            .catch(error => {
+                showMessage('Error en la solicitud: ' + error, true);
+            })
+            .finally(() => {
+                this.disabled = false;
+                this.textContent = 'Verificar Redundancia';
+            });
+        });
+    });
+    </script>
+</body>
+</html> 

@@ -10,6 +10,127 @@ import time
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+import numpy as np
+
+class EmbeddingService:
+    @staticmethod
+    def initialize_embedding_model():
+        """Inicializa la configuración de la API de Gemini para embeddings"""
+        genai.configure(api_key=GOOGLE_API_KEY)
+        return "models/text-embedding-004"  # Retorna el nombre del modelo en lugar de una instancia
+
+    @staticmethod
+    def generate_embedding(text, model_name=None, max_retries=3):
+        """Genera embeddings para un texto usando la API de Gemini"""
+        if model_name is None:
+            model_name = EmbeddingService.initialize_embedding_model()
+        
+        # Preprocesar el texto para tener un contenido más limpio
+        clean_text = re.sub(r'<.*?>', ' ', text)  # Eliminar etiquetas HTML
+        clean_text = re.sub(r'\s+', ' ', clean_text).strip()  # Normalizar espacios
+        
+        # Asegurar que el texto no sea demasiado largo
+        if len(clean_text) > 8000:
+            clean_text = clean_text[:8000]
+        
+        for attempt in range(max_retries):
+            try:
+                # Usar directamente genai.embed_content en lugar de model.embed_content
+                result = genai.embed_content(
+                    model=model_name,
+                    content=clean_text,
+                    task_type="retrieval_document",
+                )
+                
+                # Acceder al embedding según la estructura retornada por la API
+                return result['embedding']
+            except Exception as e:
+                if "429" in str(e) and attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 5  # Backoff exponencial
+                    print(f"Límite de peticiones alcanzado. Esperando {wait_time} segundos...")
+                    time.sleep(wait_time)
+                    continue
+                print(f"Error generando embedding: {str(e)}")
+                return None
+        
+        print("Se agotaron los reintentos para generar embedding.")
+        return None
+
+    @staticmethod
+    def cosine_similarity(embedding1, embedding2):
+        """Calcula la similitud del coseno entre dos embeddings"""
+        if not embedding1 or not embedding2:
+            return 0.0
+            
+        # Convertir a numpy arrays para cálculos eficientes
+        vec1 = np.array(embedding1)
+        vec2 = np.array(embedding2)
+        
+        # Normalizar los vectores
+        norm_vec1 = vec1 / np.linalg.norm(vec1)
+        norm_vec2 = vec2 / np.linalg.norm(vec2)
+        
+        # Calcular similitud del coseno
+        similarity = np.dot(norm_vec1, norm_vec2)
+        
+        return float(similarity)
+    
+    @staticmethod
+    def check_redundancy(news_item, model_name=None, threshold=0.92):
+        """
+        Verifica si una noticia es redundante comparando con las existentes
+        
+        Args:
+            news_item: Objeto News que se quiere verificar
+            model_name: Nombre del modelo de embeddings (opcional)
+            threshold: Umbral de similitud para considerar redundante (0-1)
+            
+        Returns:
+            tuple: (es_redundante, noticia_similar, puntuación_similitud)
+        """
+        # Inicializar el modelo si no se proporciona
+        if model_name is None:
+            model_name = EmbeddingService.initialize_embedding_model()
+        
+        # Generar embedding para la noticia actual
+        if not news_item.embedding:
+            # Combinar título y descripción para un mejor embedding
+            content_for_embedding = f"{news_item.title} {news_item.description}"
+            news_item.embedding = EmbeddingService.generate_embedding(content_for_embedding, model_name)
+            news_item.save(update_fields=['embedding'])
+        
+        # No continuar si no se pudo generar el embedding
+        if not news_item.embedding:
+            return False, None, 0.0
+        
+        # Buscar noticias recientes no eliminadas y no redundantes para comparar
+        # Limitamos a noticias creadas en las últimas 48 horas para eficiencia
+        time_threshold = timezone.now() - timedelta(hours=48)
+        recent_news = News.objects.filter(
+            created_at__gte=time_threshold,
+            is_deleted=False,
+            is_redundant=False,
+            embedding__isnull=False
+        ).exclude(id=news_item.id)
+        
+        highest_similarity = 0.0
+        most_similar_news = None
+        
+        # Comparar con cada noticia reciente
+        for existing_news in recent_news:
+            similarity = EmbeddingService.cosine_similarity(
+                news_item.embedding, existing_news.embedding
+            )
+            
+            if similarity > highest_similarity:
+                highest_similarity = similarity
+                most_similar_news = existing_news
+        
+        # Determinar si es redundante basándose en el umbral
+        is_redundant = highest_similarity >= threshold
+        
+        return is_redundant, most_similar_news, highest_similarity
+
 
 class FeedService:
     @staticmethod
@@ -132,8 +253,10 @@ class FeedService:
         print("Iniciando proceso de obtención de noticias...")
         start_time = time.time()
         
-        print("Inicializando modelo Gemini...")
-        model = FeedService.initialize_gemini()
+        print("Inicializando modelos...")
+        gemini_model = FeedService.initialize_gemini()
+        embedding_model_name = EmbeddingService.initialize_embedding_model()
+        
         sources = FeedSource.objects.filter(active=True)
         print(f"Procesando {sources.count()} fuentes activas")
         new_articles_count = 0
@@ -201,6 +324,9 @@ class FeedService:
         all_entries.sort(key=lambda x: x['published'], reverse=False)
         print(f"\nSe recolectaron {len(all_entries)} nuevas entradas de todas las fuentes")
         
+        # Contador para noticias redundantes
+        redundant_count = 0
+        
         # Procesar todas las entradas en orden (de más antigua a más reciente)
         for item in all_entries:
             entry = item['entry']
@@ -266,11 +392,11 @@ class FeedService:
 
             processed_description = FeedService.process_description_with_gemini(
                 original_description, 
-                model
+                gemini_model
             )
 
             # Crear la nueva noticia
-            News.objects.create(
+            news_item = News.objects.create(
                 guid=guid,
                 title=entry.title,
                 description=processed_description,
@@ -280,6 +406,31 @@ class FeedService:
                 image_url=image_url
             )
             new_articles_count += 1
+            
+            # Generar embedding para la noticia
+            content_for_embedding = f"{entry.title} {processed_description}"
+            embedding = EmbeddingService.generate_embedding(content_for_embedding, embedding_model_name)
+            if embedding:
+                news_item.embedding = embedding
+                news_item.save(update_fields=['embedding'])
+                
+                # Verificar redundancia
+                is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
+                    news_item, embedding_model_name
+                )
+                
+                if is_redundant and similar_news:
+                    print(f"¡Noticia redundante detectada! Similar a: {similar_news.title}")
+                    print(f"Puntuación de similitud: {similarity_score:.4f}")
+                    
+                    # Marcar como redundante y eliminar
+                    news_item.is_redundant = True
+                    news_item.is_deleted = True
+                    news_item.similar_to = similar_news
+                    news_item.similarity_score = similarity_score
+                    news_item.save()
+                    
+                    redundant_count += 1
         
         # Actualizar la fecha de última obtención para todas las fuentes
         for source in sources:
@@ -290,5 +441,6 @@ class FeedService:
         total_time = time.time() - start_time
         print(f"\nProceso completado en {total_time:.2f} segundos")
         print(f"Total de nuevas noticias: {new_articles_count}")
+        print(f"Noticias redundantes eliminadas: {redundant_count}")
         
         return new_articles_count 

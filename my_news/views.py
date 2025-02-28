@@ -2,10 +2,10 @@ from django.shortcuts import render
 from django.views.generic import ListView, DetailView
 from .models import News, FeedSource
 from django.http import JsonResponse
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_GET
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
-from .services import FeedService
+from .services import FeedService, EmbeddingService
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
 from django.utils.decorators import method_decorator
@@ -13,49 +13,47 @@ from django.shortcuts import redirect
 import json
 from django.utils import timezone
 from datetime import datetime
+from django.core.paginator import Paginator
+from django.db.models import Q
 
 # Create your views here.
 
 @require_POST
 def delete_news(request, pk):
-    news = get_object_or_404(News, pk=pk)
-    news.is_deleted = True
-    news.save()
-    
-    # Obtener la siguiente noticia que no está en la página actual
-    page_size = 25
-    current_page = int(request.POST.get('current_page', 1))
-    offset = (current_page - 1) * page_size + page_size  # Calculamos el offset basado en la página actual
-    
-    # Calcular el total de noticias después de la eliminación
-    total_news = News.objects.filter(is_deleted=False).count()
-    
-    # Calcular el total de páginas
-    total_pages = (total_news + page_size - 1) // page_size  # Redondear hacia arriba
-    
-    next_news = News.objects.filter(is_deleted=False).order_by('-published_date')[offset-1:offset].first()
-    
-    if next_news:
-        # Renderizar la nueva tarjeta de noticia
-        html = render_to_string('news_card.html', {'article': next_news}, request=request)
-        # Renderizar el modal de la nueva noticia
-        modal_html = render_to_string('news_modal.html', {'article': next_news}, request=request)
+    try:
+        current_page = int(request.POST.get('current_page', 1))
+        news = News.objects.get(pk=pk)
+        news.is_deleted = True
+        news.save()
         
-        return JsonResponse({
+        # Obtener la siguiente noticia para reemplazar la eliminada
+        next_news = None
+        total_news = News.objects.filter(is_deleted=False).count()
+        total_pages = (total_news + 24) // 25  # Calcular el total de páginas
+        
+        # Calcular el offset para obtener la noticia que está justo fuera de la página actual
+        offset = current_page * 25
+        if offset < total_news:
+            next_news = News.objects.filter(is_deleted=False).order_by('-published_date')[offset:offset+1].first()
+        
+        response_data = {
             'status': 'success',
-            'html': html,
-            'modal': modal_html,
-            'newsId': next_news.pk,
             'total_news': total_news,
             'total_pages': total_pages
-        })
-    
-    return JsonResponse({
-        'status': 'success', 
-        'html': None,
-        'total_news': total_news,
-        'total_pages': total_pages
-    })
+        }
+        
+        # Si hay una noticia para reemplazar, incluirla en la respuesta
+        if next_news:
+            card_html = render_to_string('news_card.html', {'article': next_news, 'user': request.user})
+            modal_html = render_to_string('news_modal.html', {'article': next_news, 'user': request.user})
+            response_data['html'] = card_html
+            response_data['modal'] = modal_html
+        
+        return JsonResponse(response_data)
+    except News.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Noticia no encontrada'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
 
 def superuser_required(view_func):
     decorated_view = user_passes_test(lambda u: u.is_superuser, login_url='/')(view_func)
@@ -69,96 +67,166 @@ class NewsListView(ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        return News.objects.filter(is_deleted=False)
-
+        return News.objects.filter(is_deleted=False).order_by('-published_date')
+    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['sources'] = FeedSource.objects.filter(active=True)
-        context['total_news'] = News.objects.filter(is_deleted=False).count()
+        total_news = News.objects.filter(is_deleted=False).count()
+        context['total_news'] = total_news
         return context
 
+@require_GET
 def update_feed(request):
     try:
         new_articles = FeedService.fetch_and_save_news()
-        # Obtener el total actualizado de noticias
         total_news = News.objects.filter(is_deleted=False).count()
+        total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
-        # Calcular el total de páginas
-        page_size = 25
-        total_pages = (total_news + page_size - 1) // page_size  # Redondear hacia arriba
-        
-        message = f'Feed actualizado: {new_articles} nueva{"s" if new_articles != 1 else ""} noticia{"s" if new_articles != 1 else ""} encontrada{"s" if new_articles != 1 else ""}'
         return JsonResponse({
             'status': 'success',
-            'message': message,
+            'message': f'Feed actualizado. {new_articles} nuevos artículos obtenidos.',
             'total_news': total_news,
             'total_pages': total_pages
         })
     except Exception as e:
-        return JsonResponse({
-            'status': 'error',
-            'message': f'Error al actualizar el feed: {str(e)}'
-        }, status=500)
+        return JsonResponse({'status': 'error', 'message': str(e)})
 
+@require_GET
 def check_new_news(request):
-    """
-    Endpoint para verificar si hay noticias nuevas desde la última vez que el cliente verificó.
-    Devuelve las nuevas noticias formateadas para ser insertadas en la interfaz.
-    """
     try:
-        # Obtener la fecha de la última noticia en la página actual
         last_checked = request.GET.get('last_checked')
+        current_time = timezone.now().isoformat()
         
-        if not last_checked:
-            return JsonResponse({'status': 'error', 'message': 'Falta el parámetro last_checked'})
-        
-        # Buscar noticias más recientes que la última revisada
-        # Ordenamos por fecha de publicación descendente para tener las más recientes primero
+        # Obtener noticias nuevas desde la última comprobación
         new_news = News.objects.filter(
-            is_deleted=False,
-            created_at__gt=last_checked
-        ).order_by('-published_date')[:25]  # Límite de 25 para no sobrecargar
+            created_at__gte=last_checked,
+            is_deleted=False
+        ).order_by('-published_date')
         
-        if not new_news.exists():
-            return JsonResponse({'status': 'no_new_news'})
-        
-        # Obtener el total de noticias
-        total_news = News.objects.filter(is_deleted=False).count()
-        
-        # Calcular número total de páginas
-        page_size = 25
-        total_pages = (total_news + page_size - 1) // page_size  # Redondear hacia arriba
-        
-        # Renderizar las nuevas noticias (mantienen el orden del queryset)
-        news_cards_html = []
+        # Preparar los datos de las tarjetas
+        news_cards = []
         for article in new_news:
-            html = render_to_string('news_card.html', {'article': article}, request=request)
-            modal_html = render_to_string('news_modal.html', {'article': article}, request=request)
-            news_cards_html.append({
-                'card': html, 
-                'modal': modal_html,
-                'id': article.id
+            card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
+            modal_html = render_to_string('news_modal.html', {'article': article, 'user': request.user})
+            news_cards.append({
+                'id': article.id,
+                'card': card_html,
+                'modal': modal_html
             })
         
+        # Obtener el total actualizado de noticias
+        total_news = News.objects.filter(is_deleted=False).count()
+        total_pages = (total_news + 24) // 25  # Calcular el total de páginas
+        
         return JsonResponse({
             'status': 'success',
-            'new_news_count': len(news_cards_html),
-            'news_cards': news_cards_html,
-            'current_time': str(timezone.now()),
+            'current_time': current_time,
+            'news_cards': news_cards,
             'total_news': total_news,
             'total_pages': total_pages
         })
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': str(e)})
 
+@require_GET
 def get_news_count(request):
-    """Obtiene el conteo actualizado de noticias"""
-    total_news = News.objects.filter(is_deleted=False).count()
-    total_pages = (total_news + 24) // 25  # Cálculo del número total de páginas (25 noticias por página)
-    
-    return JsonResponse({
-        'status': 'success',
-        'total_news': total_news,
-        'total_pages': total_pages
-    })
+    try:
+        total_news = News.objects.filter(is_deleted=False).count()
+        total_pages = (total_news + 24) // 25  # Calcular el total de páginas
+        
+        return JsonResponse({
+            'status': 'success',
+            'total_news': total_news,
+            'total_pages': total_pages
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+@require_GET
+def test_redundancy(request):
+    """Vista para probar la detección de redundancia en noticias"""
+    try:
+        # Obtener noticias redundantes
+        redundant_news = News.objects.filter(
+            is_redundant=True, 
+            similar_to__isnull=False
+        ).select_related('similar_to', 'source').order_by('-created_at')[:20]
+        
+        # Preparar el contexto
+        context = {
+            'redundant_news': redundant_news,
+            'total_redundant': News.objects.filter(is_redundant=True).count()
+        }
+        
+        return render(request, 'redundancy_test.html', context)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+@require_GET
+def generate_embeddings(request):
+    """Vista para generar embeddings para noticias existentes"""
+    try:
+        # Inicializar modelo
+        embedding_model_name = EmbeddingService.initialize_embedding_model()
+        
+        # Obtener noticias sin embedding
+        news_without_embedding = News.objects.filter(
+            embedding__isnull=True,
+            is_deleted=False
+        ).order_by('-published_date')[:50]  # Limitar a 50 para evitar sobrecarga
+        
+        processed_count = 0
+        for news in news_without_embedding:
+            # Combinar título y descripción para el embedding
+            content = f"{news.title} {news.description}"
+            embedding = EmbeddingService.generate_embedding(content, embedding_model_name)
+            
+            if embedding:
+                news.embedding = embedding
+                news.save(update_fields=['embedding'])
+                processed_count += 1
+        
+        return JsonResponse({
+            'status': 'success',
+            'processed_count': processed_count,
+            'remaining': News.objects.filter(embedding__isnull=True, is_deleted=False).count()
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+@require_GET
+def check_all_redundancy(request):
+    """Vista para verificar redundancia en todas las noticias con embeddings"""
+    try:
+        # Inicializar modelo
+        embedding_model_name = EmbeddingService.initialize_embedding_model()
+        
+        # Obtener noticias no marcadas como redundantes
+        news_to_check = News.objects.filter(
+            is_redundant=False,
+            embedding__isnull=False,
+            is_deleted=False
+        ).order_by('-published_date')[:100]  # Limitar a 100 para evitar sobrecarga
+        
+        redundant_count = 0
+        for news in news_to_check:
+            is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
+                news, embedding_model_name
+            )
+            
+            if is_redundant and similar_news:
+                news.is_redundant = True
+                news.is_deleted = True
+                news.similar_to = similar_news
+                news.similarity_score = similarity_score
+                news.save()
+                redundant_count += 1
+        
+        return JsonResponse({
+            'status': 'success',
+            'redundant_count': redundant_count,
+            'total_checked': len(news_to_check)
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
 

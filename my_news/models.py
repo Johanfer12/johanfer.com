@@ -26,6 +26,13 @@ class News(models.Model):
     image_url = models.URLField(null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
     
+    # Nuevos campos para embeddings y detección de redundancia
+    embedding = models.JSONField(null=True, blank=True, verbose_name="Embedding del contenido")
+    similar_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, 
+                                  verbose_name="Noticia similar", related_name="similar_news")
+    similarity_score = models.FloatField(null=True, blank=True, verbose_name="Puntuación de similitud")
+    is_redundant = models.BooleanField(default=False, verbose_name="Es redundante")
+    
     class Meta:
         verbose_name = "Noticia"
         verbose_name_plural = "Noticias"
