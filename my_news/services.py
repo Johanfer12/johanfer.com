@@ -11,6 +11,7 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import numpy as np
+from django.db.models import Q
 
 class EmbeddingService:
     @staticmethod
@@ -103,13 +104,13 @@ class EmbeddingService:
         if not news_item.embedding:
             return False, None, 0.0
         
-        # Buscar noticias recientes no eliminadas y no redundantes para comparar
-        # Limitamos a noticias creadas en las últimas 48 horas para eficiencia
-        time_threshold = timezone.now() - timedelta(hours=48)
+        # Buscar noticias de los últimos 7 días
+        time_threshold = timezone.now() - timedelta(days=7)
+        
+        # Buscar todas las noticias recientes, eliminadas o no, pero excluyendo las redundantes
         recent_news = News.objects.filter(
             created_at__gte=time_threshold,
-            is_deleted=False,
-            is_redundant=False,
+            is_redundant=False,  # No comparamos con noticias redundantes
             embedding__isnull=False
         ).exclude(id=news_item.id)
         
