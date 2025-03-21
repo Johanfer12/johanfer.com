@@ -157,7 +157,8 @@
             <h1 class="redundancy-header">Prueba de Detección de Noticias Redundantes</h1>
             
             <div class="redundancy-stats">
-                Total de noticias redundantes detectadas: <strong>{{ total_redundant }}</strong>
+                Total de noticias redundantes detectadas: <strong>{{ total_redundant }}</strong><br>
+                Noticias redundantes de hoy ({{ current_date|date:"d/m/Y" }}): <strong>{{ redundant_today }}</strong>
             </div>
             
             <div class="action-buttons">

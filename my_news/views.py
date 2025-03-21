@@ -1,20 +1,14 @@
 from django.shortcuts import render
-from django.views.generic import ListView, DetailView
-from .models import News, FeedSource
+from django.views.generic import ListView
+from .models import News
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
-from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from .services import FeedService, EmbeddingService
-from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
 from django.utils.decorators import method_decorator
-from django.shortcuts import redirect
-import json
 from django.utils import timezone
-from datetime import datetime
-from django.core.paginator import Paginator
-from django.db.models import Q
+import pytz
 
 # Create your views here.
 
@@ -146,16 +140,35 @@ def get_news_count(request):
 def test_redundancy(request):
     """Vista para probar la detección de redundancia en noticias"""
     try:
+        # Obtener fecha de hoy en GMT-5
+        bogota_tz = pytz.timezone('America/Bogota')  # Bogotá es GMT-5
+        today = timezone.now().astimezone(bogota_tz).date()
+        
         # Obtener noticias redundantes
         redundant_news = News.objects.filter(
             is_redundant=True, 
             similar_to__isnull=False
         ).select_related('similar_to', 'source').order_by('-created_at')[:20]
         
+        # Contar noticias redundantes de hoy
+        # Necesitamos comparar en la zona horaria correcta
+        today_start = timezone.datetime.combine(today, timezone.datetime.min.time())
+        today_start = bogota_tz.localize(today_start)
+        today_end = timezone.datetime.combine(today, timezone.datetime.max.time())
+        today_end = bogota_tz.localize(today_end)
+        
+        redundant_today = News.objects.filter(
+            is_redundant=True,
+            published_date__gte=today_start,
+            published_date__lte=today_end
+        ).count()
+        
         # Preparar el contexto
         context = {
             'redundant_news': redundant_news,
-            'total_redundant': News.objects.filter(is_redundant=True).count()
+            'total_redundant': News.objects.filter(is_redundant=True).count(),
+            'redundant_today': redundant_today,
+            'current_date': today
         }
         
         return render(request, 'redundancy_test.html', context)
