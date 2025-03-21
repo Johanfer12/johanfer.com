@@ -9,11 +9,20 @@ class FeedSourceAdmin(admin.ModelAdmin):
 
 @admin.register(News)
 class NewsAdmin(admin.ModelAdmin):
-    list_display = ('title', 'source', 'published_date', 'created_at', 'is_deleted', 'is_redundant', 'similarity_score')
-    list_filter = ('source', 'published_date', 'is_deleted', 'is_redundant')
+    list_display = ('title', 'source', 'published_date', 'created_at', 'is_deleted', 'is_filtered', 'is_redundant', 'similarity_score')
+    list_filter = ('source', 'published_date', 'is_deleted', 'is_filtered', 'is_redundant')
     search_fields = ('title', 'description')
     date_hierarchy = 'published_date'
     readonly_fields = ('embedding', 'similar_to', 'similarity_score', 'is_redundant')
+    actions = ['mark_as_deleted_by_user', 'restore_news']
+
+    def mark_as_deleted_by_user(self, request, queryset):
+        queryset.update(is_deleted=True, is_filtered=False)  # Aseguramos que no esté marcada como filtrada
+    mark_as_deleted_by_user.short_description = "Marcar como eliminadas por usuario"
+
+    def restore_news(self, request, queryset):
+        queryset.update(is_deleted=False, is_filtered=False)  # Restauramos quitando ambas marcas
+    restore_news.short_description = "Restaurar noticias"
 
 @admin.register(FilterWord)
 class FilterWordAdmin(admin.ModelAdmin):

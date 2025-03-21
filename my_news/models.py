@@ -24,7 +24,8 @@ class News(models.Model):
     guid = models.CharField(max_length=500, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     image_url = models.URLField(null=True, blank=True)
-    is_deleted = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False, verbose_name="Eliminada por usuario")
+    is_filtered = models.BooleanField(default=False, verbose_name="Filtrada automáticamente")
     
     # Nuevos campos para embeddings y detección de redundancia
     embedding = models.JSONField(null=True, blank=True, verbose_name="Embedding del contenido")

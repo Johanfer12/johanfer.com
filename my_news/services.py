@@ -107,10 +107,11 @@ class EmbeddingService:
         # Buscar noticias de los últimos 7 días
         time_threshold = timezone.now() - timedelta(days=7)
         
-        # Buscar todas las noticias recientes, eliminadas o no, pero excluyendo las redundantes
+        # Buscar todas las noticias recientes, eliminadas o no, pero excluyendo las redundantes y filtradas
         recent_news = News.objects.filter(
             created_at__gte=time_threshold,
             is_redundant=False,  # No comparamos con noticias redundantes
+            is_filtered=False,  # No comparamos con noticias filtradas
             embedding__isnull=False
         ).exclude(id=news_item.id)
         
@@ -275,7 +276,8 @@ class FeedService:
             # Obtener la fecha de la última noticia para esta fuente
             latest_news = News.objects.filter(
                 source=source,
-                is_deleted=False
+                is_deleted=False,
+                is_filtered=False
             ).order_by('-published_date').first()
             
             latest_date = latest_news.published_date if latest_news else one_month_ago
@@ -347,7 +349,7 @@ class FeedService:
                     link=entry.link,
                     published_date=published,
                     source=source,
-                    is_deleted=True  # Marcamos como eliminada
+                    is_filtered=True  # Marcamos como filtrada en lugar de eliminada
                 )
                 new_articles_count += 1
                 continue
@@ -424,9 +426,9 @@ class FeedService:
                     print(f"¡Noticia redundante detectada! Similar a: {similar_news.title}")
                     print(f"Puntuación de similitud: {similarity_score:.4f}")
                     
-                    # Marcar como redundante y eliminar
+                    # Marcar como redundante y filtrada
                     news_item.is_redundant = True
-                    news_item.is_deleted = True
+                    news_item.is_filtered = True  # Usamos is_filtered en lugar de is_deleted
                     news_item.similar_to = similar_news
                     news_item.similarity_score = similarity_score
                     news_item.save()
