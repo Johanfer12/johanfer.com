@@ -22,13 +22,13 @@ def delete_news(request, pk):
         
         # Obtener la siguiente noticia para reemplazar la eliminada
         next_news = None
-        total_news = News.objects.filter(is_deleted=False).count()
+        total_news = News.objects.filter(is_deleted=False, is_filtered=False).count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
         # Calcular el offset para obtener la noticia que está justo fuera de la página actual
         offset = current_page * 25
         if offset < total_news:
-            next_news = News.objects.filter(is_deleted=False).order_by('-published_date')[offset:offset+1].first()
+            next_news = News.objects.filter(is_deleted=False, is_filtered=False).order_by('-published_date')[offset:offset+1].first()
         
         response_data = {
             'status': 'success',
@@ -61,11 +61,11 @@ class NewsListView(ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        return News.objects.filter(is_deleted=False).order_by('-published_date')
+        return News.objects.filter(is_deleted=False, is_filtered=False).order_by('-published_date')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        total_news = News.objects.filter(is_deleted=False).count()
+        total_news = News.objects.filter(is_deleted=False, is_filtered=False).count()
         context['total_news'] = total_news
         return context
 
@@ -73,7 +73,7 @@ class NewsListView(ListView):
 def update_feed(request):
     try:
         new_articles = FeedService.fetch_and_save_news()
-        total_news = News.objects.filter(is_deleted=False).count()
+        total_news = News.objects.filter(is_deleted=False, is_filtered=False).count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
         return JsonResponse({
@@ -94,7 +94,8 @@ def check_new_news(request):
         # Obtener noticias nuevas desde la última comprobación
         new_news = News.objects.filter(
             created_at__gte=last_checked,
-            is_deleted=False
+            is_deleted=False,
+            is_filtered=False
         ).order_by('-published_date')
         
         # Preparar los datos de las tarjetas
@@ -109,7 +110,7 @@ def check_new_news(request):
             })
         
         # Obtener el total actualizado de noticias
-        total_news = News.objects.filter(is_deleted=False).count()
+        total_news = News.objects.filter(is_deleted=False, is_filtered=False).count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
         return JsonResponse({
@@ -125,7 +126,7 @@ def check_new_news(request):
 @require_GET
 def get_news_count(request):
     try:
-        total_news = News.objects.filter(is_deleted=False).count()
+        total_news = News.objects.filter(is_deleted=False, is_filtered=False).count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
         return JsonResponse({
@@ -185,7 +186,8 @@ def generate_embeddings(request):
         # Obtener noticias sin embedding
         news_without_embedding = News.objects.filter(
             embedding__isnull=True,
-            is_deleted=False
+            is_deleted=False,
+            is_filtered=False
         ).order_by('-published_date')[:50]  # Limitar a 50 para evitar sobrecarga
         
         processed_count = 0
@@ -202,7 +204,7 @@ def generate_embeddings(request):
         return JsonResponse({
             'status': 'success',
             'processed_count': processed_count,
-            'remaining': News.objects.filter(embedding__isnull=True, is_deleted=False).count()
+            'remaining': News.objects.filter(embedding__isnull=True, is_deleted=False, is_filtered=False).count()
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
@@ -218,7 +220,8 @@ def check_all_redundancy(request):
         news_to_check = News.objects.filter(
             is_redundant=False,
             embedding__isnull=False,
-            is_deleted=False
+            is_deleted=False,
+            is_filtered=False
         ).order_by('-published_date')[:100]  # Limitar a 100 para evitar sobrecarga
         
         redundant_count = 0
@@ -229,7 +232,7 @@ def check_all_redundancy(request):
             
             if is_redundant and similar_news:
                 news.is_redundant = True
-                news.is_deleted = True
+                news.is_filtered = True  # Usamos is_filtered en lugar de is_deleted
                 news.similar_to = similar_news
                 news.similarity_score = similarity_score
                 news.save()
