@@ -322,16 +322,26 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Aplicar animación según el dispositivo
             if (isDeviceMobile) {
-                // En móviles, animar la opacidad para un efecto fade-out
-                container.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                // En móviles, animar la opacidad para un efecto fade-out más rápido
+                container.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
                 container.style.opacity = '0';
-                container.style.transform = 'scale(0.9)';
+                container.style.transform = 'scale(0.95)';
             } else {
                 // En escritorio, usar la animación definida en CSS
                 container.classList.add('deleting');
             }
             
-            const animationDuration = isDeviceMobile ? 300 : 500; // 300ms en móviles, 500ms en escritorio
+            // Reducir la duración de la animación para móviles
+            const animationDuration = isDeviceMobile ? 150 : 500; // 150ms en móviles (mitad del tiempo anterior), 500ms en escritorio
+            
+            // Primero eliminamos el elemento del DOM para mejorar la experiencia del usuario
+            // especialmente en conexiones lentas
+            if (isDeviceMobile) {
+                setTimeout(() => {
+                    container.remove();
+                    if (modal) modal.remove();
+                }, animationDuration);
+            }
             
             fetch(`/noticias/delete/${newsId}/`, {
                 method: 'POST',
@@ -347,141 +357,147 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Usar el total de noticias devuelto por el servidor para actualizar los contadores
                     updateCountersFromServer(data.total_news, data.total_pages);
                     
-                    if (data.html) {
+                    // Para dispositivos de escritorio, o si la tarjeta aún no se ha eliminado
+                    if (!isDeviceMobile || document.getElementById(`news-${newsId}`)) {
                         setTimeout(() => {
-                            container.remove();
+                            if (document.getElementById(`news-${newsId}`)) {
+                                container.remove();
+                            }
                             // También eliminamos el modal asociado a la noticia eliminada
                             if (modal) {
                                 modal.remove();
                             }
                             
-                            const temp = document.createElement('div');
-                            temp.innerHTML = data.html;
-                            const newCard = temp.firstElementChild;
+                            // Solo animar reposicionamiento en escritorio
+                            if (!isDeviceMobile) {
+                                animateReposition(oldPositions);
+                            }
+                        }, animationDuration);
+                    }
+                    
+                    if (data.html) {
+                        const temp = document.createElement('div');
+                        temp.innerHTML = data.html;
+                        const newCard = temp.firstElementChild;
+                        
+                        // Preparar la nueva tarjeta
+                        if (isDeviceMobile) {
+                            // En móvil, iniciar con opacidad 0 para hacer fade-in
+                            newCard.style.opacity = '0';
+                            newCard.style.transition = 'opacity 0.2s ease';
                             
-                            // Preparar la nueva tarjeta
-                            if (isDeviceMobile) {
-                                // En móvil, iniciar con opacidad 0 para hacer fade-in
-                                newCard.style.opacity = '0';
-                                newCard.style.transition = 'opacity 0.3s ease';
-                                
-                                // Forzar reflow
-                                void newCard.offsetWidth;
+                            // Forzar reflow
+                            void newCard.offsetWidth;
+                        } else {
+                            // En escritorio, usar la animación de CSS
+                            newCard.classList.add('inserting');
+                        }
+                        
+                        const newDeleteBtn = newCard.querySelector('.delete-btn');
+                        if (newDeleteBtn) {
+                            attachDeleteListener(newDeleteBtn);
+                        }
+                        
+                        // Asegurar que el evento onclick esté configurado
+                        const card = newCard.querySelector('.news-card');
+                        if (card) {
+                            const newCardId = newCard.id.replace('news-', '');
+                            if (!isDeviceMobile) {
+                                card.setAttribute('onclick', `openNewsModal('${newCardId}')`);
                             } else {
-                                // En escritorio, usar la animación de CSS
-                                newCard.classList.add('inserting');
-                            }
-                            
-                            const newDeleteBtn = newCard.querySelector('.delete-btn');
-                            if (newDeleteBtn) {
-                                attachDeleteListener(newDeleteBtn);
-                            }
-                            
-                            // Asegurar que el evento onclick esté configurado
-                            const card = newCard.querySelector('.news-card');
-                            if (card) {
-                                const newCardId = newCard.id.replace('news-', '');
-                                if (!isDeviceMobile) {
-                                    card.setAttribute('onclick', `openNewsModal('${newCardId}')`);
-                                } else {
-                                    // Para móvil, añadir el botón de eliminación móvil
-                                    const cardFront = card.querySelector('.card-front');
-                                    if (cardFront && newCard.querySelector('.delete-btn')) {
-                                        // Eliminar cualquier botón anterior si existe
-                                        const oldBtn = cardFront.querySelector('.mobile-delete-btn');
-                                        if (oldBtn) {
-                                            oldBtn.remove();
-                                        }
-                                        
-                                        // Usar un botón real en lugar de un div
-                                        const mobileDeleteBtn = document.createElement('button');
-                                        mobileDeleteBtn.className = 'mobile-delete-btn';
-                                        mobileDeleteBtn.setAttribute('type', 'button');
-                                        mobileDeleteBtn.setAttribute('data-id', newCardId);
-                                        
-                                        // Asignar directamente la función
-                                        mobileDeleteBtn.onclick = function(e) {
-                                            e.stopPropagation();
-                                            deleteNews(newCardId);
-                                            return false;
-                                        };
-                                        
-                                        cardFront.appendChild(mobileDeleteBtn);
+                                // Para móvil, añadir el botón de eliminación móvil
+                                const cardFront = card.querySelector('.card-front');
+                                if (cardFront && newCard.querySelector('.delete-btn')) {
+                                    // Eliminar cualquier botón anterior si existe
+                                    const oldBtn = cardFront.querySelector('.mobile-delete-btn');
+                                    if (oldBtn) {
+                                        oldBtn.remove();
                                     }
                                     
-                                    // Para móvil, añadir el botón "Ver más" en el reverso
-                                    const cardBack = card.querySelector('.card-back');
-                                    if (cardBack) {
-                                        const linksContainer = cardBack.querySelector('.news-links');
-                                        if (linksContainer) {
-                                            const modalLink = document.createElement('a');
-                                            modalLink.href = 'javascript:void(0)';
-                                            modalLink.className = 'news-link modal-opener';
-                                            modalLink.textContent = 'Más';
-                                            modalLink.addEventListener('click', function(e) {
-                                                e.stopPropagation();
-                                                openNewsModal(newCardId);
-                                            });
-                                            linksContainer.prepend(modalLink);
-                                        }
+                                    // Usar un botón real en lugar de un div
+                                    const mobileDeleteBtn = document.createElement('button');
+                                    mobileDeleteBtn.className = 'mobile-delete-btn';
+                                    mobileDeleteBtn.setAttribute('type', 'button');
+                                    mobileDeleteBtn.setAttribute('data-id', newCardId);
+                                    
+                                    // Asignar directamente la función
+                                    mobileDeleteBtn.onclick = function(e) {
+                                        e.stopPropagation();
+                                        deleteNews(newCardId);
+                                        return false;
+                                    };
+                                    
+                                    cardFront.appendChild(mobileDeleteBtn);
+                                }
+                                
+                                // Para móvil, añadir el botón "Ver más" en el reverso
+                                const cardBack = card.querySelector('.card-back');
+                                if (cardBack) {
+                                    const linksContainer = cardBack.querySelector('.news-links');
+                                    if (linksContainer) {
+                                        const modalLink = document.createElement('a');
+                                        modalLink.href = 'javascript:void(0)';
+                                        modalLink.className = 'news-link modal-opener';
+                                        modalLink.textContent = 'Más';
+                                        modalLink.addEventListener('click', function(e) {
+                                            e.stopPropagation();
+                                            openNewsModal(newCardId);
+                                        });
+                                        linksContainer.prepend(modalLink);
                                     }
                                 }
                             }
+                        }
+                        
+                        // Añadir la nueva tarjeta
+                        newsGrid.appendChild(newCard);
+                        
+                        // Para móvil, aplicar el fade-in después de añadir al DOM
+                        if (isDeviceMobile) {
+                            // Aplicar fade-in inmediatamente para evitar retrasos
+                            requestAnimationFrame(() => {
+                                newCard.style.opacity = '1';
+                            });
+                        }
+                        
+                        // Añadir el modal para la nueva noticia
+                        if (data.modal) {
+                            const modalTemp = document.createElement('div');
+                            modalTemp.innerHTML = data.modal;
+                            const newModal = modalTemp.firstElementChild;
                             
-                            // Añadir la nueva tarjeta
-                            newsGrid.appendChild(newCard);
+                            // Añadir al contenedor de modales
+                            newsModalsContainer.appendChild(newModal);
                             
-                            // Para móvil, aplicar el fade-in después de añadir al DOM
-                            if (isDeviceMobile) {
-                                // Aplicar fade-in
-                                setTimeout(() => {
-                                    newCard.style.opacity = '1';
-                                }, 10);
-                            }
-                            
-                            // Añadir el modal para la nueva noticia
-                            if (data.modal) {
-                                const modalTemp = document.createElement('div');
-                                modalTemp.innerHTML = data.modal;
-                                const newModal = modalTemp.firstElementChild;
-                                
-                                // Añadir al contenedor de modales
-                                newsModalsContainer.appendChild(newModal);
-                                
-                                // Configurar el botón de cierre
-                                const closeBtn = newModal.querySelector('.close');
-                                if (closeBtn) {
-                                    const newCardId = newCard.id.replace('news-', '');
-                                    closeBtn.setAttribute('onclick', `closeNewsModal('${newCardId}')`);
-                                }
-                                
-                                // Configurar botón de eliminación en el modal
-                                const modalDeleteBtn = newModal.querySelector('.btn-danger');
-                                if (modalDeleteBtn) {
-                                    const newCardId = newCard.id.replace('news-', '');
-                                    modalDeleteBtn.setAttribute('data-id', newCardId);
-                                    attachDeleteListener(modalDeleteBtn);
-                                }
+                            // Configurar el botón de cierre
+                            const closeBtn = newModal.querySelector('.close');
+                            if (closeBtn) {
+                                const newCardId = newCard.id.replace('news-', '');
+                                closeBtn.setAttribute('onclick', `closeNewsModal('${newCardId}')`);
                             }
                             
-                            // Solo animar reposicionamiento en escritorio
-                            if (!isDeviceMobile) {
-                                animateReposition(oldPositions);
+                            // Configurar botón de eliminación en el modal
+                            const modalDeleteBtn = newModal.querySelector('.btn-danger');
+                            if (modalDeleteBtn) {
+                                const newCardId = newCard.id.replace('news-', '');
+                                modalDeleteBtn.setAttribute('data-id', newCardId);
+                                attachDeleteListener(modalDeleteBtn);
                             }
-                        }, animationDuration); // Usar el tiempo de animación según el dispositivo
-                    } else {
-                        setTimeout(() => {
-                            container.remove();
-                            // También eliminamos el modal asociado a la noticia eliminada
-                            if (modal) {
-                                modal.remove();
-                            }
-                            // Solo animar reposicionamiento en escritorio
-                            if (!isDeviceMobile) {
-                                animateReposition(oldPositions);
-                            }
-                        }, animationDuration); // Usar el tiempo de animación según el dispositivo
-                    }
+                        }
+                        
+                        // Solo animar reposicionamiento en escritorio
+                        if (!isDeviceMobile) {
+                            animateReposition(oldPositions);
+                        }
+                    } 
+                }
+            })
+            .catch(error => {
+                console.error('Error al eliminar la noticia:', error);
+                // En caso de error, restaurar la opacidad
+                if (container && document.body.contains(container)) {
+                    container.style.opacity = '1';
+                    container.style.transform = 'scale(1)';
                 }
             });
         }
@@ -590,7 +606,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Eliminar con fade-out en móvil
                     if (isDeviceMobile) {
-                        lastChild.style.transition = 'opacity 0.2s ease';
+                        lastChild.style.transition = 'opacity 0.15s ease';
                         lastChild.style.opacity = '0';
                     }
                     
@@ -604,7 +620,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (isDeviceMobile) {
                         setTimeout(() => {
                             lastChild.remove();
-                        }, 200);
+                        }, 150);
                     } else {
                         lastChild.remove();
                     }
@@ -629,7 +645,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isDeviceMobile) {
                 // En móvil, preparar para fade-in
                 newsContainer.style.opacity = '0';
-                newsContainer.style.transition = 'opacity 0.3s ease';
+                newsContainer.style.transition = 'opacity 0.2s ease';
                 void newsContainer.offsetWidth;
             } else {
                 // En escritorio, usar la animación CSS existente
@@ -727,11 +743,11 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Aplicar fade-in para todas las tarjetas en móvil
             if (isDeviceMobile) {
-                setTimeout(() => {
+                requestAnimationFrame(() => {
                     newCards.forEach(card => {
                         card.style.opacity = '1';
                     });
-                }, 10);
+                });
             }
         } else {
             // Necesitamos insertar las nuevas noticias en el orden correcto
@@ -784,23 +800,45 @@ document.addEventListener('DOMContentLoaded', function() {
                 existingIdx++;
             }
             
-            // Limpiar el grid actual
-            while (newsGrid.firstChild) {
-                newsGrid.removeChild(newsGrid.firstChild);
-            }
-            
-            // Añadir las noticias en el nuevo orden
-            newGridChildren.forEach(card => {
-                newsGrid.appendChild(card);
-            });
-            
-            // Aplicar fade-in para las nuevas tarjetas en móvil
+            // Para móviles, hacer la transición más suave
             if (isDeviceMobile) {
+                // Eliminar tarjetas existentes con opacidad 0.5
+                existingCards.forEach(card => {
+                    card.style.transition = 'opacity 0.1s ease';
+                    card.style.opacity = '0.5';
+                });
+                
+                // Limpiar el grid con un pequeño retraso
                 setTimeout(() => {
-                    newCards.forEach(card => {
-                        card.style.opacity = '1';
+                    // Limpiar el grid actual
+                    while (newsGrid.firstChild) {
+                        newsGrid.removeChild(newsGrid.firstChild);
+                    }
+                    
+                    // Añadir las noticias en el nuevo orden
+                    newGridChildren.forEach(card => {
+                        newsGrid.appendChild(card);
                     });
-                }, 10);
+                    
+                    // Restaurar opacidad para todas las tarjetas
+                    requestAnimationFrame(() => {
+                        Array.from(newsGrid.children).forEach(card => {
+                            card.style.transition = 'opacity 0.2s ease';
+                            card.style.opacity = '1';
+                        });
+                    });
+                }, 100);
+            } else {
+                // En escritorio, simplemente reemplazar
+                // Limpiar el grid actual
+                while (newsGrid.firstChild) {
+                    newsGrid.removeChild(newsGrid.firstChild);
+                }
+                
+                // Añadir las noticias en el nuevo orden
+                newGridChildren.forEach(card => {
+                    newsGrid.appendChild(card);
+                });
             }
         }
         

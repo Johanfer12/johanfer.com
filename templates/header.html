@@ -47,6 +47,13 @@
             {% else %}
                 <a href="/bookshelf/"><strong>Volver</strong></a>
             {% endif %}
+        {% elif request.path == '/noticias/redundancy-test/' %}
+            <a href="/j_admin/my_news/filterword/"><strong>Filtro</strong></a>
+            <a href="/noticias/"><strong>Volver</strong></a>
+        {% elif request.path|slice:":9" == '/noticias' %}
+            <a href="/j_admin/my_news/filterword/"><strong>Filtro</strong></a>
+            <a href="/noticias/redundancy-test/"><strong>Redundancia</strong></a>
+            <a href="/"><strong>Volver</strong></a>
         {% elif request.path != '/' %}
             <a href="/"><strong>Volver</strong></a>
         {% endif %}
