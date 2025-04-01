@@ -26,6 +26,8 @@ class News(models.Model):
     image_url = models.URLField(null=True, blank=True)
     is_deleted = models.BooleanField(default=False, verbose_name="Eliminada por usuario")
     is_filtered = models.BooleanField(default=False, verbose_name="Filtrada automáticamente")
+    filtered_by = models.ForeignKey('FilterWord', null=True, blank=True, on_delete=models.SET_NULL,
+                                  verbose_name="Filtrada por palabra", related_name="filtered_news")
     
     # Nuevos campos para embeddings y detección de redundancia
     embedding = models.JSONField(null=True, blank=True, verbose_name="Embedding del contenido")
@@ -51,6 +53,11 @@ class FilterWord(models.Model):
     active = models.BooleanField(
         default=True,
         verbose_name="Activo"
+    )
+    title_only = models.BooleanField(
+        default=False,
+        verbose_name="Solo en título",
+        help_text="Si está activado, solo filtra noticias donde la palabra aparezca en el título"
     )
     created_at = models.DateTimeField(auto_now_add=True)
 

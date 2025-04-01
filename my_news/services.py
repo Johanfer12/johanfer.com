@@ -242,13 +242,25 @@ class FeedService:
 
     @staticmethod
     def should_filter_news(title, description):
-        filter_words = FilterWord.objects.filter(active=True).values_list('word', flat=True)
-        text_to_check = f"{title} {description}".lower()
+        # Modificamos la función para que devuelva (bool, FilterWord)
+        filter_words = FilterWord.objects.filter(active=True)
         
-        for word in filter_words:
-            if word.lower().strip() in text_to_check:
-                return True
-        return False
+        for filter_word in filter_words:
+            word = filter_word.word.lower().strip()
+            
+            # Comprobar según configuración si buscar solo en título o en todo el contenido
+            if filter_word.title_only:
+                # Buscar solo en el título
+                if word in title.lower():
+                    return True, filter_word
+            else:
+                # Buscar en título y descripción
+                text_to_check = f"{title} {description}".lower()
+                if word in text_to_check:
+                    return True, filter_word
+                    
+        # Si no hay coincidencias, devolver (False, None)
+        return False, None
 
     @staticmethod
     def fetch_and_save_news():
@@ -340,8 +352,9 @@ class FeedService:
             print(f"\nProcesando entrada: {entry.title} ({published})")
             
             # Verificar si la noticia debe ser filtrada
-            if FeedService.should_filter_news(entry.title, entry.get('description', '')):
-                print(f"Noticia filtrada por palabras prohibidas: {entry.title}")
+            should_filter, filter_word = FeedService.should_filter_news(entry.title, entry.get('description', ''))
+            if should_filter:
+                print(f"Noticia filtrada por palabra prohibida: {filter_word.word}")
                 News.objects.create(
                     guid=guid,
                     title=entry.title,
@@ -349,7 +362,8 @@ class FeedService:
                     link=entry.link,
                     published_date=published,
                     source=source,
-                    is_filtered=True  # Marcamos como filtrada en lugar de eliminada
+                    is_filtered=True,  # Marcamos como filtrada en lugar de eliminada
+                    filtered_by=filter_word  # Guardamos qué palabra la filtró
                 )
                 new_articles_count += 1
                 continue

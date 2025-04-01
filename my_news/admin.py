@@ -9,11 +9,11 @@ class FeedSourceAdmin(admin.ModelAdmin):
 
 @admin.register(News)
 class NewsAdmin(admin.ModelAdmin):
-    list_display = ('title', 'source', 'published_date', 'created_at', 'is_deleted', 'is_filtered', 'is_redundant', 'similarity_score')
-    list_filter = ('source', 'published_date', 'is_deleted', 'is_filtered', 'is_redundant')
+    list_display = ('title', 'source', 'published_date', 'created_at', 'is_deleted', 'is_filtered', 'is_redundant', 'filtered_by', 'similarity_score')
+    list_filter = ('source', 'published_date', 'is_deleted', 'is_filtered', 'is_redundant', 'filtered_by')
     search_fields = ('title', 'description')
     date_hierarchy = 'published_date'
-    readonly_fields = ('embedding', 'similar_to', 'similarity_score', 'is_redundant')
+    readonly_fields = ('embedding', 'similar_to', 'similarity_score', 'is_redundant', 'filtered_by')
     actions = ['mark_as_deleted_by_user', 'restore_news']
 
     def mark_as_deleted_by_user(self, request, queryset):
@@ -26,6 +26,6 @@ class NewsAdmin(admin.ModelAdmin):
 
 @admin.register(FilterWord)
 class FilterWordAdmin(admin.ModelAdmin):
-    list_display = ('word', 'active', 'created_at')
-    list_filter = ('active',)
+    list_display = ('word', 'active', 'title_only', 'created_at')
+    list_filter = ('active', 'title_only')
     search_fields = ('word',)

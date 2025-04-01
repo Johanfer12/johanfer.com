@@ -39,6 +39,7 @@ body {
     transform-origin: top left;
     will-change: transform;
     perspective: 1000px; /* Mejora el efecto 3D */
+    transition: transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .news-card-container:hover {
@@ -57,8 +58,14 @@ body {
     -webkit-font-smoothing: subpixel-antialiased;
 }
 
-.news-card-container:hover .news-card {
+/* Modificamos este selector para excluir cuando el hover es sobre la imagen o el botón de eliminar */
+.news-card-container:hover .news-card:not(.image-hover):not(.delete-hover) {
     transform: rotateY(180deg);
+}
+
+/* Agregamos clase para cuando el hover es sobre la imagen o el botón eliminar */
+.news-card.image-hover, .news-card.delete-hover {
+    transform: rotateY(0deg) !important;
 }
 
 /* Frente y reverso de la tarjeta */
@@ -449,7 +456,7 @@ body {
 /* Animación para la nueva tarjeta que entra */
 @keyframes insertCard {
     0% {
-        transform: scale(0) translateY(-50px);
+        transform: scale(0.8) translateY(20px);
         opacity: 0;
     }
     100% {
@@ -459,7 +466,8 @@ body {
 }
 
 .news-card-container.inserting {
-    animation: insertCard 0.5s ease-out forwards;
+    animation: insertCard 0.6s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+    z-index: 5;
 }
 
 /* Notificación de nuevas noticias */
@@ -604,10 +612,17 @@ body {
     transform: scale(0.95);
 }
 
-/* Ocultar el botón en escritorio */
+/* Modificar la media query para mostrar el botón en escritorio durante hover */
 @media (min-width: 768px) {
     .mobile-delete-btn {
         display: none;
+        opacity: 0;
+        transition: opacity 0.3s ease, transform 0.2s ease;
+    }
+    
+    .news-card-container:hover .mobile-delete-btn {
+        display: flex;
+        opacity: 0.9;
     }
 }
 

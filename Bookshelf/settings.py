@@ -84,6 +84,14 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'Bookshelf.wsgi.application'
 
+#Solo en servidor de producción mientras se usa sqlite3 independiente.
+try:
+    __import__('pysqlite3')
+    import sys
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+except ImportError:
+    pass
+
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
