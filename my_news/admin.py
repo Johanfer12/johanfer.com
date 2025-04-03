@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django import forms
+from import_export.admin import ImportExportModelAdmin
 from .models import FeedSource, News, FilterWord
 
 class FeedSourceAdminForm(forms.ModelForm):
@@ -11,7 +12,7 @@ class FeedSourceAdminForm(forms.ModelForm):
         }
 
 @admin.register(FeedSource)
-class FeedSourceAdmin(admin.ModelAdmin):
+class FeedSourceAdmin(ImportExportModelAdmin):
     form = FeedSourceAdminForm
     list_display = ('name', 'url', 'active', 'last_fetch', 'deep_search', 'similarity_threshold')
     list_filter = ('active', 'deep_search')
@@ -36,7 +37,7 @@ class NewsAdmin(admin.ModelAdmin):
     restore_news.short_description = "Restaurar noticias"
 
 @admin.register(FilterWord)
-class FilterWordAdmin(admin.ModelAdmin):
+class FilterWordAdmin(ImportExportModelAdmin):
     list_display = ('word', 'active', 'title_only', 'created_at')
     list_filter = ('active', 'title_only')
     search_fields = ('word',)
