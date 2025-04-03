@@ -248,17 +248,25 @@ class FeedService:
         filter_words = FilterWord.objects.filter(active=True)
         
         for filter_word in filter_words:
-            word = filter_word.word.lower().strip()
+            # Escapar la palabra para usarla de forma segura en regex
+            # No convertimos a minúsculas aquí, usamos re.IGNORECASE
+            word_to_find = filter_word.word.strip()
+            if not word_to_find: # Saltar si la palabra está vacía después de strip
+                continue
+                
+            escaped_word = re.escape(word_to_find)
+            # Crear el patrón regex para palabra completa, ignorando mayúsculas/minúsculas
+            pattern = r'\b' + escaped_word + r'\b'
             
             # Comprobar según configuración si buscar solo en título o en todo el contenido
             if filter_word.title_only:
-                # Buscar solo en el título
-                if word in title.lower():
+                # Buscar solo en el título usando regex
+                if re.search(pattern, title, re.IGNORECASE):
                     return True, filter_word
             else:
-                # Buscar en título y descripción
-                text_to_check = f"{title} {description}".lower()
-                if word in text_to_check:
+                # Buscar en título y descripción usando regex
+                text_to_check = f"{title} {description}"
+                if re.search(pattern, text_to_check, re.IGNORECASE):
                     return True, filter_word
                     
         # Si no hay coincidencias, devolver (False, None)
