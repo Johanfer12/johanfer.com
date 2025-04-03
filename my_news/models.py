@@ -40,6 +40,7 @@ class News(models.Model):
                                   verbose_name="Noticia similar", related_name="similar_news")
     similarity_score = models.FloatField(null=True, blank=True, verbose_name="% Similitud")
     is_redundant = models.BooleanField(default=False, verbose_name="Redundante")
+    short_answer = models.TextField(null=True, blank=True, verbose_name="Respuesta corta")
     
     class Meta:
         verbose_name = "Noticia"

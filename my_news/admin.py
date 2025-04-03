@@ -1,7 +1,32 @@
 from django.contrib import admin
 from django import forms
 from import_export.admin import ImportExportModelAdmin
+from import_export import resources
 from .models import FeedSource, News, FilterWord
+
+# --- Resource para FeedSource ---
+class FeedSourceResource(resources.ModelResource):
+    class Meta:
+        model = FeedSource
+        import_id_fields = ('url',)
+        skip_unchanged = True
+        report_skipped = False
+        # Campos a incluir (excluyendo id y campos auto-gestionados)
+        fields = ('name', 'url', 'active', 'deep_search', 'similarity_threshold')
+        # Campos a excluir explícitamente
+        exclude = ('id', 'last_fetch',)
+
+# --- Resource para FilterWord ---
+class FilterWordResource(resources.ModelResource):
+    class Meta:
+        model = FilterWord
+        import_id_fields = ('word',)
+        skip_unchanged = True
+        report_skipped = False
+        # Campos a incluir (excluyendo id y campos auto-gestionados)
+        fields = ('word', 'active', 'title_only')
+        # Campos a excluir explícitamente
+        exclude = ('id', 'created_at',)
 
 class FeedSourceAdminForm(forms.ModelForm):
     class Meta:
@@ -13,6 +38,7 @@ class FeedSourceAdminForm(forms.ModelForm):
 
 @admin.register(FeedSource)
 class FeedSourceAdmin(ImportExportModelAdmin):
+    resource_class = FeedSourceResource  # Asociar el resource personalizado
     form = FeedSourceAdminForm
     list_display = ('name', 'url', 'active', 'last_fetch', 'deep_search', 'similarity_threshold')
     list_filter = ('active', 'deep_search')
@@ -38,6 +64,7 @@ class NewsAdmin(admin.ModelAdmin):
 
 @admin.register(FilterWord)
 class FilterWordAdmin(ImportExportModelAdmin):
+    resource_class = FilterWordResource  # Asociar el resource personalizado
     list_display = ('word', 'active', 'title_only', 'created_at')
     list_filter = ('active', 'title_only')
     search_fields = ('word',)

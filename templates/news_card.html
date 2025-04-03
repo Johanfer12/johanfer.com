@@ -5,6 +5,9 @@
             <img src="{{ article.image_url }}" alt="{{ article.title }}" class="news-image">
             {% endif %}
             <h3 class="news-title">{{ article.title }}</h3>
+            {% if article.short_answer %}
+            <div class="short-answer">{{ article.short_answer }}</div>
+            {% endif %}
             <div class="news-meta">
                 <span class="meta-info">{{ article.source.name }} - {{ article.published_date|date:"d/m/Y H:i" }}</span>
                 {% if article.similarity_score %}

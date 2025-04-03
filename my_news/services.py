@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import numpy as np
 from django.db.models import Q
+import json
 
 class EmbeddingService:
     @staticmethod
@@ -140,51 +141,90 @@ class FeedService:
     @staticmethod
     def initialize_gemini():
         genai.configure(api_key=GOOGLE_API_KEY)
-        #return genai.GenerativeModel('gemini-2.0-flash-thinking-exp-01-21')
-        return genai.GenerativeModel('gemini-2.0-flash')
+        # Configuración específica para pedir JSON
+        generation_config = genai.types.GenerationConfig(response_mime_type="application/json")
+        return genai.GenerativeModel('gemini-2.0-flash', generation_config=generation_config)
 
     @staticmethod
-    def process_description_with_gemini(description, model, max_retries=4):
-        prompt = """
-        Resume el siguiente texto de noticia, eliminando cualquier clickbait y relleno, manteniendo 
-        solo la información relevante. El resumen debe ser conciso y objetivo, manteniendo los puntos clave:
+    def process_content_with_gemini(title, original_content, model, max_retries=3):
+        """Genera el resumen principal y la respuesta corta en una sola llamada, esperando JSON."""
 
-        {text}
-        """.format(text=description)
+        # Limitar longitud del contenido para el prompt
+        content_limit = 4000
+        content_for_prompt = original_content[:content_limit]
+
+        prompt = f"""
+        Analiza el siguiente titular y contenido de noticia:
+        Titular: '{title}'
+        Contenido: '{content_for_prompt}...'
+
+        Realiza las siguientes tareas y devuelve el resultado EXACTAMENTE en formato JSON:
+        1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, eliminando clickbait y relleno, manteniendo los puntos clave. NO apliques formato HTML aquí, solo texto plano.
+        2.  **short_answer**: SOLO si el titular es una pregunta directa o claro clickbait (ej: 'El secreto de...', 'Lo que no sabías...', '¿Por qué...?'), extrae o resume la respuesta/punto clave del contenido original de forma EXTREMADAMENTE CONCISA (máximo 15 palabras) y DIRECTA. No uses introducciones ni parafrasees. Si el titular NO es pregunta/clickbait, el valor de 'short_answer' debe ser null (JSON null).
+
+        Ejemplo de JSON de salida esperado:
+        {{
+          "summary": "Texto del resumen principal aquí. Punto uno. Punto dos.",
+          "short_answer": "Respuesta directa y concisa."
+        }}
+        O si no hay respuesta corta:
+        {{
+          "summary": "Resumen del artículo informativo.",
+          "short_answer": null
+        }}
+
+        IMPORTANTE: Responde únicamente con el objeto JSON válido, sin texto adicional antes o después.
+        """
 
         for attempt in range(max_retries):
             try:
                 response = model.generate_content(prompt)
-                text = response.text.strip()
-                
-                # Procesar el texto para mantener formato
-                processed_text = text
-                
-                # 1. Convertir asteriscos en bulletpoints HTML con negrita
-                processed_text = re.sub(r'^\* (.+?)$', r'• <strong>\1</strong>', processed_text, flags=re.MULTILINE)
-                
-                # 2. Convertir otros **texto** en <strong>
-                processed_text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', processed_text)
-                
-                # 3. Convertir saltos de línea dobles en <br><br> y simples en <br>
-                processed_text = processed_text.replace('\n\n', '<br><br>')
-                processed_text = processed_text.replace('\n', '<br>')
-                
-                # 4. Asegurar que los bulletpoints tengan espacio
-                processed_text = processed_text.replace('•', '<br>•')
-                
-                return processed_text
+                # Intentar parsear la respuesta como JSON
+                try:
+                    result_json = json.loads(response.text)
+                    summary_text = result_json.get('summary')
+                    short_answer = result_json.get('short_answer') # Puede ser None o null
+
+                    # Validar que obtuvimos al menos el resumen
+                    if not summary_text:
+                        print("Error: JSON recibido no contiene 'summary' o está vacío.")
+                        continue # Reintentar si el formato no es correcto
+                        
+                    # Aplicar formato HTML al resumen recuperado
+                    processed_summary = summary_text
+                    processed_summary = re.sub(r'^\* (.+?)$', r'• <strong>\1</strong>', processed_summary, flags=re.MULTILINE)
+                    processed_summary = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', processed_summary)
+                    processed_summary = processed_summary.replace('\n\n', '<br><br>').replace('\n', '<br>')
+                    processed_summary = processed_summary.replace('•', '<br>•')
+                    
+                    # Devolver ambos resultados
+                    return processed_summary, short_answer
+                    
+                except json.JSONDecodeError as json_e:
+                    print(f"Error decodificando JSON de Gemini (intento {attempt + 1}): {json_e}")
+                    print(f"Texto recibido: {response.text[:200]}...") # Loguear inicio de respuesta
+                    # Si falla el JSON, intentar al menos obtener un resumen simple (último recurso)
+                    if attempt == max_retries - 1:
+                        print("Fallo de JSON en último intento, usando texto como resumen simple.")
+                        # Usar el texto plano como resumen y sin respuesta corta
+                        fallback_summary = response.text.strip().replace('\n\n', '<br><br>').replace('\n', '<br>')
+                        return fallback_summary, None 
+                    time.sleep(5) # Esperar antes de reintentar
+                    continue # Reintentar
                 
             except Exception as e:
-                if "429" in str(e):
-                    print(f"Límite de peticiones alcanzado (intento {attempt + 1}/{max_retries}). Esperando 15 segundos...")
-                    time.sleep(15)
+                # Capturar errores de la API (ej. 429 Too Many Requests)
+                if ("429" in str(e) or "Resource has been exhausted" in str(e)) and attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 10 # Backoff exponencial más largo
+                    print(f"Límite de peticiones/Recurso agotado (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
+                    time.sleep(wait_time)
                     continue
-                print(f"Error procesando con Gemini: {str(e)}")
-                return description
+                # Otros errores de API o inesperados
+                print(f"Error procesando contenido con Gemini: {str(e)}")
+                return original_content, None # Fallback: devolver contenido original sin procesar
         
-        print("Se agotaron los reintentos. Usando descripción original.")
-        return description
+        print("Se agotaron los reintentos para procesar contenido.")
+        return original_content, None # Fallback: devolver contenido original sin procesar
 
     @staticmethod
     def extract_image_from_description(description):
@@ -361,23 +401,6 @@ class FeedService:
             
             print(f"\nProcesando entrada: {entry.title} ({published})")
             
-            # Verificar si la noticia debe ser filtrada
-            should_filter, filter_word = FeedService.should_filter_news(entry.title, entry.get('description', ''))
-            if should_filter:
-                print(f"Noticia filtrada por palabra prohibida: {filter_word.word}")
-                News.objects.create(
-                    guid=guid,
-                    title=entry.title,
-                    description=entry.get('description', ''),
-                    link=entry.link,
-                    published_date=published,
-                    source=source,
-                    is_filtered=True,  # Marcamos como filtrada en lugar de eliminada
-                    filtered_by=filter_word  # Guardamos qué palabra la filtró
-                )
-                new_articles_count += 1
-                continue
-            
             # Primero intentar obtener la imagen del feed
             image_url = None
             
@@ -417,15 +440,36 @@ class FeedService:
                 if not image_url and full_content['image_url']:
                     image_url = full_content['image_url']
 
-            processed_description = FeedService.process_description_with_gemini(
+            # Procesar contenido: obtener resumen principal y respuesta corta en una llamada
+            processed_description, short_answer = FeedService.process_content_with_gemini(
+                entry.title,
                 original_description, 
                 gemini_model
             )
 
+            # Verificar si la noticia debe ser filtrada
+            should_filter, filter_word = FeedService.should_filter_news(entry.title, entry.get('description', ''))
+            if should_filter:
+                print(f"Noticia filtrada por palabra prohibida: {filter_word.word}")
+                News.objects.create(
+                    guid=guid,
+                    title=entry.title,
+                    short_answer=short_answer,
+                    description=entry.get('description', ''),
+                    link=entry.link,
+                    published_date=published,
+                    source=source,
+                    is_filtered=True,  # Marcamos como filtrada en lugar de eliminada
+                    filtered_by=filter_word  # Guardamos qué palabra la filtró
+                )
+                new_articles_count += 1
+                continue
+            
             # Crear la nueva noticia
             news_item = News.objects.create(
                 guid=guid,
                 title=entry.title,
+                short_answer=short_answer,
                 description=processed_description,
                 link=entry.link,
                 published_date=published,
@@ -460,8 +504,8 @@ class FeedService:
                     # Marcar como redundante y filtrada (ya hemos guardado similar_to y score)
                     news_item.is_redundant = True
                     news_item.is_filtered = True  # Usamos is_filtered en lugar de is_deleted
-                    # Quitamos los campos que ya guardamos antes
-                    news_item.save(update_fields=['is_redundant', 'is_filtered']) 
+                    # Guardamos todos los campos relevantes al marcar como redundante
+                    news_item.save(update_fields=['is_redundant', 'is_filtered', 'similar_to', 'similarity_score', 'short_answer'])
                     
                     redundant_count += 1
         

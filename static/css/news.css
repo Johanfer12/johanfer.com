@@ -663,4 +663,12 @@ body {
 
 .mobile-delete-btn.pulse {
     animation: pulse 0.3s ease-in-out;
+}
+
+.short-answer {
+    font-size: 0.85em;
+    color: #999;
+    margin: 5px 15px 10px 15px;
+    line-height: 1.4;
+    font-style: italic;
 } 
