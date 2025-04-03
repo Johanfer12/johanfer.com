@@ -11,6 +11,11 @@ class FeedSource(models.Model):
         verbose_name="Búsqueda profunda",
         help_text="Obtener el contenido completo del artículo desde la URL original"
     )
+    similarity_threshold = models.FloatField(
+        default=0.92,
+        verbose_name="Umbral de Similitud",
+        help_text="Valor entre 0 y 1 (e.g., 0.92). Noticias con similitud mayor o igual serán marcadas como redundantes."
+    )
     
     def __str__(self):
         return self.name
@@ -24,17 +29,17 @@ class News(models.Model):
     guid = models.CharField(max_length=500, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     image_url = models.URLField(null=True, blank=True)
-    is_deleted = models.BooleanField(default=False, verbose_name="Eliminada por usuario")
-    is_filtered = models.BooleanField(default=False, verbose_name="Filtrada automáticamente")
+    is_deleted = models.BooleanField(default=False, verbose_name="Eliminada")
+    is_filtered = models.BooleanField(default=False, verbose_name="Filtro Aut.")
     filtered_by = models.ForeignKey('FilterWord', null=True, blank=True, on_delete=models.SET_NULL,
-                                  verbose_name="Filtrada por palabra", related_name="filtered_news")
+                                  verbose_name="Palabra Filtro", related_name="filtered_news")
     
     # Nuevos campos para embeddings y detección de redundancia
     embedding = models.JSONField(null=True, blank=True, verbose_name="Embedding del contenido")
     similar_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, 
                                   verbose_name="Noticia similar", related_name="similar_news")
-    similarity_score = models.FloatField(null=True, blank=True, verbose_name="Puntuación de similitud")
-    is_redundant = models.BooleanField(default=False, verbose_name="Es redundante")
+    similarity_score = models.FloatField(null=True, blank=True, verbose_name="% Similitud")
+    is_redundant = models.BooleanField(default=False, verbose_name="Redundante")
     
     class Meta:
         verbose_name = "Noticia"
@@ -62,8 +67,8 @@ class FilterWord(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = "Palabra filtrada"
-        verbose_name_plural = "Palabras filtradas"
+        verbose_name = "Palabra Filtro"
+        verbose_name_plural = "Palabras Filtro"
         ordering = ['word']
 
     def __str__(self):

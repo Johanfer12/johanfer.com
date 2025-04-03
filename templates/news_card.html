@@ -6,7 +6,10 @@
             {% endif %}
             <h3 class="news-title">{{ article.title }}</h3>
             <div class="news-meta">
-                {{ article.source.name }} - {{ article.published_date|date:"d/m/Y H:i" }}
+                <span class="meta-info">{{ article.source.name }} - {{ article.published_date|date:"d/m/Y H:i" }}</span>
+                {% if article.similarity_score %}
+                    <span class="similarity-score">{{ article.similarity_score|floatformat:2 }}</span>
+                {% endif %}
             </div>
         </div>
         <div class="card-back">

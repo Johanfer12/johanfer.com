@@ -1,11 +1,22 @@
 from django.contrib import admin
+from django import forms
 from .models import FeedSource, News, FilterWord
+
+class FeedSourceAdminForm(forms.ModelForm):
+    class Meta:
+        model = FeedSource
+        fields = '__all__'
+        widgets = {
+            'similarity_threshold': forms.NumberInput(attrs={'step': '0.01'})
+        }
 
 @admin.register(FeedSource)
 class FeedSourceAdmin(admin.ModelAdmin):
-    list_display = ('name', 'url', 'active', 'last_fetch', 'deep_search')
+    form = FeedSourceAdminForm
+    list_display = ('name', 'url', 'active', 'last_fetch', 'deep_search', 'similarity_threshold')
     list_filter = ('active', 'deep_search')
     search_fields = ('name', 'url')
+    list_editable = ('active', 'deep_search')
 
 @admin.register(News)
 class NewsAdmin(admin.ModelAdmin):

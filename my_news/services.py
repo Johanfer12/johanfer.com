@@ -77,18 +77,20 @@ class EmbeddingService:
         return float(similarity)
     
     @staticmethod
-    def check_redundancy(news_item, model_name=None, threshold=0.92):
+    def check_redundancy(news_item, model_name=None):
         """
         Verifica si una noticia es redundante comparando con las existentes
         
         Args:
             news_item: Objeto News que se quiere verificar
             model_name: Nombre del modelo de embeddings (opcional)
-            threshold: Umbral de similitud para considerar redundante (0-1)
             
         Returns:
             tuple: (es_redundante, noticia_similar, puntuación_similitud)
         """
+        # Obtener el umbral de la fuente de la noticia
+        threshold = news_item.source.similarity_threshold
+
         # Inicializar el modelo si no se proporciona
         if model_name is None:
             model_name = EmbeddingService.initialize_embedding_model()
@@ -128,7 +130,7 @@ class EmbeddingService:
                 highest_similarity = similarity
                 most_similar_news = existing_news
         
-        # Determinar si es redundante basándose en el umbral
+        # Determinar si es redundante basándose en el umbral de la fuente
         is_redundant = highest_similarity >= threshold
         
         return is_redundant, most_similar_news, highest_similarity
@@ -436,16 +438,22 @@ class FeedService:
                     news_item, embedding_model_name
                 )
                 
-                if is_redundant and similar_news:
-                    print(f"¡Noticia redundante detectada! Similar a: {similar_news.title}")
-                    print(f"Puntuación de similitud: {similarity_score:.4f}")
-                    
-                    # Marcar como redundante y filtrada
-                    news_item.is_redundant = True
-                    news_item.is_filtered = True  # Usamos is_filtered en lugar de is_deleted
+                # Siempre guardar la información de similitud si se encontró una noticia similar
+                if similar_news:
                     news_item.similar_to = similar_news
                     news_item.similarity_score = similarity_score
-                    news_item.save()
+                    # Guardamos estos campos ahora, por si no resulta redundante pero queremos la info
+                    news_item.save(update_fields=['similar_to', 'similarity_score']) 
+
+                if is_redundant and similar_news:
+                    print(f"¡Noticia redundante detectada! Similar a: {similar_news.title}")
+                    print(f"Puntuación de similitud: {similarity_score:.4f} (Umbral: {news_item.source.similarity_threshold})")
+                    
+                    # Marcar como redundante y filtrada (ya hemos guardado similar_to y score)
+                    news_item.is_redundant = True
+                    news_item.is_filtered = True  # Usamos is_filtered en lugar de is_deleted
+                    # Quitamos los campos que ya guardamos antes
+                    news_item.save(update_fields=['is_redundant', 'is_filtered']) 
                     
                     redundant_count += 1
         
