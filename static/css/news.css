@@ -439,6 +439,15 @@ body {
     .main-content {
         min-height: calc(100vh - 100px);
     }
+
+    /* Deshabilitar resaltado azul al tocar en móviles */
+    .news-card-container {
+        -webkit-tap-highlight-color: transparent; /* iOS/Safari */
+        -webkit-user-select: none; /* Safari */
+        -moz-user-select: none; /* Firefox */
+        -ms-user-select: none; /* Internet Explorer/Edge */
+        user-select: none; /* Standard */
+    }
 }
 
 /* Animación de eliminación */
