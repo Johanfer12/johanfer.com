@@ -163,7 +163,7 @@ class FeedService:
         Contenido: '{content_for_prompt}...' 
 
         Realiza las siguientes tareas y devuelve el resultado EXACTAMENTE en formato JSON:
-        1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, de aproximadamente 70 a 90 palabras, eliminando clickbait y relleno, manteniendo los puntos clave. NO apliques formato HTML aquí, solo texto plano.
+        1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, de aproximadamente 60 a 80 palabras, eliminando clickbait y relleno, manteniendo los puntos clave. NO apliques formato HTML aquí, solo texto plano.
         2.  **short_answer**: SOLO si el titular es una pregunta directa o claro clickbait (ej: 'El secreto de...', 'Lo que no sabías...', '¿Por qué...?'), extrae o resume la respuesta/punto clave del contenido original de forma EXTREMADAMENTE CONCISA (máximo 15 palabras) y DIRECTA. No uses introducciones ni parafrasees. Si el titular NO es pregunta/clickbait, el valor de 'short_answer' debe ser null (JSON null).
         3.  **ai_filter**: Basándote en las siguientes instrucciones de filtrado, determina si esta noticia DEBE SER ELIMINADA. Si coincide con ALGUNA instrucción, el valor debe ser EXACTAMENTE EL TEXTO LITERAL de la instrucción que coincidió (solo una, la primera que coincida si hay varias). Si NO coincide con ninguna, el valor debe ser null (JSON null).
             Instrucciones de Filtrado:
