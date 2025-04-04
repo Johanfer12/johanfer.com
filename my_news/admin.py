@@ -28,6 +28,18 @@ class FilterWordResource(resources.ModelResource):
         # Campos a excluir explícitamente
         exclude = ('id', 'created_at',)
 
+# --- Resource para AIFilterInstruction ---
+class AIFilterInstructionResource(resources.ModelResource):
+    class Meta:
+        model = AIFilterInstruction
+        import_id_fields = ('instruction',)
+        skip_unchanged = True
+        report_skipped = False
+        # Campos a incluir
+        fields = ('instruction', 'active')
+        # Campos a excluir
+        exclude = ('id', 'created_at')
+
 class FeedSourceAdminForm(forms.ModelForm):
     class Meta:
         model = FeedSource
@@ -71,7 +83,8 @@ class FilterWordAdmin(ImportExportModelAdmin):
     search_fields = ('word',)
 
 @admin.register(AIFilterInstruction)
-class AIFilterInstructionAdmin(admin.ModelAdmin):
+class AIFilterInstructionAdmin(ImportExportModelAdmin):
+    resource_class = AIFilterInstructionResource
     list_display = ('instruction', 'active', 'created_at')
     list_filter = ('active',)
     search_fields = ('instruction',)
