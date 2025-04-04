@@ -3,14 +3,6 @@
     box-sizing: border-box;
 }
 
-body {
-    background: #1a1a1a;
-    color: #fff;
-    min-height: 100vh;
-    margin: 0;
-    padding: 0;
-}
-
 /* Contenedor principal */
 .main-content {
     min-height: calc(100vh - 150px);

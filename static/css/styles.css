@@ -17,6 +17,7 @@ body {
     background-image: url('../Img/bg.svg');
     background-repeat: repeat;
     background-size: auto;
+    min-height: 100vh; /* Asegura que el body ocupe al menos toda la altura */
 }
 
 /* Añade espacio superior para páginas con header */
