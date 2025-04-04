@@ -6,6 +6,7 @@ from django.views.decorators.http import require_POST, require_GET
 from django.template.loader import render_to_string
 from .services import FeedService, EmbeddingService
 from django.contrib.auth.decorators import user_passes_test
+from django.contrib.auth.views import LoginView
 from django.utils.decorators import method_decorator
 from django.utils import timezone
 import pytz
@@ -54,7 +55,7 @@ def delete_news(request, pk):
         return JsonResponse({'status': 'error', 'message': str(e)})
 
 def superuser_required(view_func):
-    decorated_view = user_passes_test(lambda u: u.is_superuser, login_url='/')(view_func)
+    decorated_view = user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')(view_func)
     return decorated_view
 
 @method_decorator(superuser_required, name='dispatch')
@@ -275,4 +276,9 @@ def check_all_redundancy(request):
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
+
+# Vista de Login Personalizada
+class NewsLoginView(LoginView):
+    template_name = 'news_login.html' # Apuntar al archivo creado por el usuario
+    redirect_authenticated_user = True # Redirigir si ya está autenticado
 

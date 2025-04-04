@@ -1,0 +1,89 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - Noticias</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #1a1a1a; /* Fondo oscuro similar */
+            color: #e0e0e0;
+        }
+        .login-container {
+            background-color: #2a2a2a;
+            padding: 30px 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+        .login-container h2 {
+            margin-bottom: 25px;
+            color: #ffffff;
+        }
+        .login-container form p {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        .login-container label {
+            display: block;
+            margin-bottom: 5px;
+            color: #b0b0b0;
+            font-size: 0.9em;
+        }
+        .login-container input[type="text"],
+        .login-container input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #444;
+            background-color: #333;
+            color: #e0e0e0;
+            border-radius: 4px;
+            box-sizing: border-box; /* Para incluir padding en el width */
+        }
+        .login-container button {
+            padding: 10px 25px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.3s ease;
+            margin-top: 10px;
+        }
+        .login-container button:hover {
+            background-color: #0056b3;
+        }
+        .errorlist {
+            color: #ff4d4d;
+            list-style: none;
+            padding: 0;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h2>Iniciar Sesión</h2>
+
+        {% if form.errors %}
+            <p style="color: #ff4d4d;">Tu usuario y contraseña no coinciden. Inténtalo de nuevo.</p>
+        {% endif %}
+
+        <form method="post" action="{% url 'my_news:news_login' %}">
+            {% csrf_token %}
+            {{ form.as_p }} {# Renderiza los campos del formulario (username, password) como párrafos #}
+            <button type="submit">Entrar</button>
+            <input type="hidden" name="next" value="{{ next }}"> {# Importante para la redirección #}
+        </form>
+    </div>
+</body>
+</html>
