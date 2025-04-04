@@ -172,40 +172,101 @@ def get_news_count(request):
 def test_redundancy(request):
     """Vista para probar la detección de redundancia en noticias"""
     try:
-        # Obtener fecha de hoy en GMT-5
-        bogota_tz = pytz.timezone('America/Bogota')  # Bogotá es GMT-5
-        today = timezone.now().astimezone(bogota_tz).date()
-        
-        # Obtener noticias redundantes
-        redundant_news = News.objects.filter(
-            is_redundant=True, 
-            similar_to__isnull=False
-        ).select_related('similar_to', 'source').order_by('-created_at')[:20]
-        
-        # Contar noticias redundantes de hoy
-        # Necesitamos comparar en la zona horaria correcta
-        today_start = timezone.datetime.combine(today, timezone.datetime.min.time())
-        today_start = bogota_tz.localize(today_start)
-        today_end = timezone.datetime.combine(today, timezone.datetime.max.time())
-        today_end = bogota_tz.localize(today_end)
-        
-        redundant_today = News.objects.filter(
+        # Obtener fecha de hoy en la zona horaria correcta (America/Bogota)
+        bogota_tz = pytz.timezone('America/Bogota')
+        today_local = timezone.now().astimezone(bogota_tz).date()
+        today_start_utc = bogota_tz.localize(timezone.datetime.combine(today_local, timezone.datetime.min.time())).astimezone(pytz.utc)
+        today_end_utc = bogota_tz.localize(timezone.datetime.combine(today_local, timezone.datetime.max.time())).astimezone(pytz.utc)
+
+        # Queryset base para noticias creadas hoy
+        news_today_qs = News.objects.filter(
+            created_at__gte=today_start_utc,
+            created_at__lte=today_end_utc
+        )
+        total_today = news_today_qs.count()
+
+        # Obtener noticias redundantes del día (para mostrar la lista)
+        redundant_news_today_list = News.objects.filter(
             is_redundant=True,
-            published_date__gte=today_start,
-            published_date__lte=today_end
-        ).count()
-        
+            similar_to__isnull=False,
+            created_at__gte=today_start_utc,
+            created_at__lte=today_end_utc
+        ).select_related('similar_to', 'source', 'similar_to__source').order_by('-created_at')
+
+        # Calcular estadísticas para la barra (lógica revisada para exclusividad)
+        if total_today > 0:
+            # 1. Redundantes (máxima prioridad)
+            redundant_today_count = news_today_qs.filter(is_redundant=True).count()
+
+            # 2. Filtradas IA (pero NO redundantes)
+            filtered_ai_today_count = news_today_qs.filter(
+                is_ai_filtered=True,
+                is_redundant=False
+            ).count()
+
+            # 3. Filtradas Keyword (pero NO redundantes NI IA)
+            filtered_keyword_today_count = news_today_qs.filter(
+                filtered_by__isnull=False,
+                is_redundant=False,
+                is_ai_filtered=False
+            ).count()
+
+            # 4. Visibles (las restantes: no redundantes, no IA, no keyword)
+            # Simplificado: Total - Redundantes - Filtradas IA - Filtradas Keyword
+            visible_today_count = total_today - redundant_today_count - filtered_ai_today_count - filtered_keyword_today_count
+            # Asegurar que no sea negativo por algún caso extraño
+            visible_today_count = max(0, visible_today_count)
+
+            # Verificación (opcional, pero útil para depurar)
+            calculated_total = visible_today_count + filtered_keyword_today_count + filtered_ai_today_count + redundant_today_count
+            if calculated_total != total_today:
+                 # Si esto sigue ocurriendo, hay un estado de noticia no contemplado
+                 print(f"Advertencia [LOGICA EXCLUSIVA]: Suma ({calculated_total}) no coincide con total ({total_today}).")
+                 # Como fallback, ajustamos visibles para cuadrar, aunque indica un problema subyacente
+                 visible_today_count = total_today - filtered_keyword_today_count - filtered_ai_today_count - redundant_today_count
+                 visible_today_count = max(0, visible_today_count)
+
+            # Calcular porcentajes
+            visible_perc = (visible_today_count / total_today) * 100 if total_today > 0 else 0
+            keyword_perc = (filtered_keyword_today_count / total_today) * 100 if total_today > 0 else 0
+            ai_perc = (filtered_ai_today_count / total_today) * 100 if total_today > 0 else 0
+            redundant_perc = (redundant_today_count / total_today) * 100 if total_today > 0 else 0
+        else:
+            visible_today_count = 0
+            filtered_keyword_today_count = 0
+            filtered_ai_today_count = 0
+            redundant_today_count = 0
+            visible_perc = 0
+            keyword_perc = 0
+            ai_perc = 0
+            redundant_perc = 0
+
+        # Total general de redundantes histórico
+        total_redundant_all_time = News.objects.filter(is_redundant=True).count()
+
         # Preparar el contexto
         context = {
-            'redundant_news': redundant_news,
-            'total_redundant': News.objects.filter(is_redundant=True).count(),
-            'redundant_today': redundant_today,
-            'current_date': today
+            'redundant_news': redundant_news_today_list, # Lista para mostrar abajo
+            'total_redundant': total_redundant_all_time,
+            'current_date': today_local,
+            'total_today': total_today,
+            'visible_today_count': visible_today_count, # Contiene el recuento recalculado
+            'filtered_keyword_today_count': filtered_keyword_today_count, # Contiene el recuento exclusivo
+            'filtered_ai_today_count': filtered_ai_today_count,       # Contiene el recuento exclusivo
+            'redundant_today_count': redundant_today_count,          # Contiene el recuento total redundante
+            'visible_perc': visible_perc,
+            'keyword_perc': keyword_perc,
+            'ai_perc': ai_perc,
+            'redundant_perc': redundant_perc,
         }
-        
+
         return render(request, 'redundancy_test.html', context)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)})
+        # Considera loguear el error aquí para depuración
+        print(f"Error en test_redundancy: {str(e)}") # Log simple
+        # Podrías devolver una página de error o un JsonResponse
+        # Para mantener la consistencia con la plantilla, podrías renderizarla con un mensaje de error
+        return render(request, 'redundancy_test.html', {'error_message': f'Ocurrió un error: {str(e)}'})
 
 @require_GET
 def generate_embeddings(request):

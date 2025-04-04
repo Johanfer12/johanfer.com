@@ -120,7 +120,7 @@
             border-left: 4px solid #00a8ff;
         }
         
-        .redundant {
+        .redundant-item {
             border-left: 4px solid #ff4444;
         }
         
@@ -147,6 +147,69 @@
                 transform: none;
             }
         }
+
+        /* Estilos para la barra de estadísticas */
+        .stats-bar-container {
+            width: 80%;
+            margin: 20px auto;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            overflow: hidden;
+            height: 30px;
+            display: flex;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .stats-bar-segment {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.8em;
+            font-weight: bold;
+            overflow: hidden;
+            white-space: nowrap;
+            transition: width 0.5s ease-in-out;
+        }
+        .visible {
+            background-color: #00a8ff;
+            width: var(--visible-perc, 0%); /* Usa la variable CSS, con fallback 0% */
+        }
+        .keyword {
+            background-color: #ffbb33;
+            width: var(--keyword-perc, 0%);
+        }
+        .ai {
+            background-color: #aa66cc;
+            width: var(--ai-perc, 0%);
+        }
+        .redundant {
+            background-color: #ff4444;
+            width: var(--redundant-perc, 0%);
+        }
+
+        .stats-legend {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #ccc;
+        }
+        .legend-item {
+            display: inline-block;
+            margin: 0 10px;
+            position: relative;
+            padding-left: 20px;
+        }
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 3px;
+            display: inline-block;
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+        }
     </style>
 </head>
 <body class="has-header">
@@ -156,9 +219,40 @@
         <div class="redundancy-container">
             <h1 class="redundancy-header">Prueba de Detección de Noticias Redundantes</h1>
             
+            {% if error_message %}
+                <div class="error-message" style="color: red; text-align: center; margin-bottom: 20px;">{{ error_message }}</div>
+            {% endif %}
+
             <div class="redundancy-stats">
-                Total de noticias redundantes detectadas: <strong>{{ total_redundant }}</strong><br>
-                Noticias redundantes de hoy ({{ current_date|date:"d/m/Y" }}): <strong>{{ redundant_today }}</strong>
+                <strong>Estadísticas de Hoy ({{ current_date|date:"d/m/Y" }}): Total {{ total_today }}</strong>
+
+                {% if total_today > 0 %}
+                <div class="stats-bar-container"
+                     style="--visible-perc: {{ visible_perc }}%; --keyword-perc: {{ keyword_perc }}%; --ai-perc: {{ ai_perc }}%; --redundant-perc: {{ redundant_perc }}%;">
+                    <div class="stats-bar-segment visible" title="Visibles: {{ visible_today_count }}">
+                        {% if visible_perc >= 5 %}{{ visible_perc|floatformat:0 }}%{% endif %}
+                    </div>
+                    <div class="stats-bar-segment keyword" title="Filtro Keyword: {{ filtered_keyword_today_count }}">
+                        {% if keyword_perc >= 5 %}{{ keyword_perc|floatformat:0 }}%{% endif %}
+                    </div>
+                    <div class="stats-bar-segment ai" title="Filtro IA: {{ filtered_ai_today_count }}">
+                        {% if ai_perc >= 5 %}{{ ai_perc|floatformat:0 }}%{% endif %}
+                    </div>
+                    <div class="stats-bar-segment redundant" title="Redundantes: {{ redundant_today_count }}">
+                        {% if redundant_perc >= 5 %}{{ redundant_perc|floatformat:0 }}%{% endif %}
+                    </div>
+                </div>
+                <div class="stats-legend">
+                    <span class="legend-item"><span class="legend-color" style="background-color: #00a8ff;"></span>Visibles ({{ visible_today_count }})</span>
+                    <span class="legend-item"><span class="legend-color" style="background-color: #ffbb33;"></span>F. Keyword ({{ filtered_keyword_today_count }})</span>
+                    <span class="legend-item"><span class="legend-color" style="background-color: #aa66cc;"></span>F. IA ({{ filtered_ai_today_count }})</span>
+                    <span class="legend-item"><span class="legend-color" style="background-color: #ff4444;"></span>Redundantes ({{ redundant_today_count }})</span>
+                </div>
+                {% else %}
+                    <p style="margin-top: 15px; color: #888;">No hay noticias registradas hoy.</p>
+                {% endif %}
+                <hr style="border-color: rgba(255, 255, 255, 0.1); margin: 15px auto 5px auto; width: 80%;">
+                Total Histórico de Noticias Redundantes: <strong>{{ total_redundant|default:0 }}</strong>
             </div>
             
             <div class="action-buttons">
@@ -180,7 +274,7 @@
                         </div>
                     </div>
                     
-                    <div class="news-item redundant">
+                    <div class="news-item redundant-item">
                         <h3 class="news-title">{{ news.title }}</h3>
                         <div class="news-description">{{ news.description|safe }}</div>
                         <div class="news-meta">
