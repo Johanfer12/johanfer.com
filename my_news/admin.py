@@ -2,7 +2,7 @@ from django.contrib import admin
 from django import forms
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources
-from .models import FeedSource, News, FilterWord
+from .models import FeedSource, News, FilterWord, AIFilterInstruction
 
 # --- Resource para FeedSource ---
 class FeedSourceResource(resources.ModelResource):
@@ -47,11 +47,11 @@ class FeedSourceAdmin(ImportExportModelAdmin):
 
 @admin.register(News)
 class NewsAdmin(admin.ModelAdmin):
-    list_display = ('title', 'source', 'published_date', 'created_at', 'is_deleted', 'is_filtered', 'is_redundant', 'filtered_by', 'similarity_score')
-    list_filter = ('source', 'published_date', 'is_deleted', 'is_filtered', 'is_redundant', 'filtered_by')
+    list_display = ('title', 'source', 'published_date', 'created_at', 'is_deleted', 'is_filtered', 'is_ai_filtered', 'is_redundant', 'filtered_by', 'similarity_score', 'ai_filter_reason')
+    list_filter = ('source', 'published_date', 'is_deleted', 'is_filtered', 'is_ai_filtered', 'is_redundant', 'filtered_by')
     search_fields = ('title', 'description')
     date_hierarchy = 'published_date'
-    readonly_fields = ('embedding', 'similar_to', 'similarity_score', 'is_redundant', 'filtered_by')
+    readonly_fields = ('embedding', 'similar_to', 'similarity_score', 'is_redundant', 'filtered_by', 'ai_filter_reason', 'is_ai_filtered')
     actions = ['mark_as_deleted_by_user', 'restore_news']
 
     def mark_as_deleted_by_user(self, request, queryset):
@@ -59,7 +59,8 @@ class NewsAdmin(admin.ModelAdmin):
     mark_as_deleted_by_user.short_description = "Marcar como eliminadas por usuario"
 
     def restore_news(self, request, queryset):
-        queryset.update(is_deleted=False, is_filtered=False)  # Restauramos quitando ambas marcas
+        # Restauramos quitando todas las marcas de filtro/eliminación
+        queryset.update(is_deleted=False, is_filtered=False, is_ai_filtered=False, is_redundant=False)
     restore_news.short_description = "Restaurar noticias"
 
 @admin.register(FilterWord)
@@ -68,3 +69,10 @@ class FilterWordAdmin(ImportExportModelAdmin):
     list_display = ('word', 'active', 'title_only', 'created_at')
     list_filter = ('active', 'title_only')
     search_fields = ('word',)
+
+@admin.register(AIFilterInstruction)
+class AIFilterInstructionAdmin(admin.ModelAdmin):
+    list_display = ('instruction', 'active', 'created_at')
+    list_filter = ('active',)
+    search_fields = ('instruction',)
+    list_editable = ('active',)

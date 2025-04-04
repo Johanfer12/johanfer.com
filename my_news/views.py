@@ -9,6 +9,7 @@ from django.contrib.auth.decorators import user_passes_test
 from django.utils.decorators import method_decorator
 from django.utils import timezone
 import pytz
+from django.db.models import Q
 
 # Create your views here.
 
@@ -20,15 +21,18 @@ def delete_news(request, pk):
         news.is_deleted = True
         news.save()
         
+        # Definir el filtro base para noticias visibles
+        visible_news_filter = Q(is_deleted=False) & Q(is_filtered=False) & Q(is_ai_filtered=False) & Q(is_redundant=False)
+        
         # Obtener la siguiente noticia para reemplazar la eliminada
         next_news = None
-        total_news = News.objects.filter(is_deleted=False, is_filtered=False).count()
+        total_news = News.objects.filter(visible_news_filter).count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
         # Calcular el offset para obtener la noticia que está justo fuera de la página actual
         offset = current_page * 25
         if offset < total_news:
-            next_news = News.objects.filter(is_deleted=False, is_filtered=False).order_by('-published_date')[offset:offset+1].first()
+            next_news = News.objects.filter(visible_news_filter).order_by('-published_date')[offset:offset+1].first()
         
         response_data = {
             'status': 'success',
@@ -61,11 +65,23 @@ class NewsListView(ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        return News.objects.filter(is_deleted=False, is_filtered=False).order_by('-published_date')
+        # Aplicar todos los filtros para noticias visibles
+        return News.objects.filter(
+            is_deleted=False,
+            is_filtered=False,
+            is_ai_filtered=False,
+            is_redundant=False
+        ).order_by('-published_date')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        total_news = News.objects.filter(is_deleted=False, is_filtered=False).count()
+        # Usar el mismo filtro para el conteo total
+        total_news = News.objects.filter(
+            is_deleted=False,
+            is_filtered=False,
+            is_ai_filtered=False,
+            is_redundant=False
+        ).count()
         context['total_news'] = total_news
         return context
 
@@ -73,7 +89,13 @@ class NewsListView(ListView):
 def update_feed(request):
     try:
         new_articles = FeedService.fetch_and_save_news()
-        total_news = News.objects.filter(is_deleted=False, is_filtered=False).count()
+        # Usar el filtro completo para el conteo
+        total_news = News.objects.filter(
+            is_deleted=False,
+            is_filtered=False,
+            is_ai_filtered=False,
+            is_redundant=False
+        ).count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
         return JsonResponse({
@@ -91,11 +113,13 @@ def check_new_news(request):
         last_checked = request.GET.get('last_checked')
         current_time = timezone.now().isoformat()
         
-        # Obtener noticias nuevas desde la última comprobación
+        # Definir el filtro base para noticias visibles
+        visible_news_filter = Q(is_deleted=False) & Q(is_filtered=False) & Q(is_ai_filtered=False) & Q(is_redundant=False)
+
+        # Obtener noticias nuevas desde la última comprobación, aplicando el filtro completo
         new_news = News.objects.filter(
-            created_at__gte=last_checked,
-            is_deleted=False,
-            is_filtered=False
+            visible_news_filter, 
+            created_at__gte=last_checked
         ).order_by('-published_date')
         
         # Preparar los datos de las tarjetas
@@ -109,8 +133,8 @@ def check_new_news(request):
                 'modal': modal_html
             })
         
-        # Obtener el total actualizado de noticias
-        total_news = News.objects.filter(is_deleted=False, is_filtered=False).count()
+        # Obtener el total actualizado de noticias visibles
+        total_news = News.objects.filter(visible_news_filter).count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
         return JsonResponse({
@@ -126,7 +150,13 @@ def check_new_news(request):
 @require_GET
 def get_news_count(request):
     try:
-        total_news = News.objects.filter(is_deleted=False, is_filtered=False).count()
+        # Usar el filtro completo para el conteo
+        total_news = News.objects.filter(
+            is_deleted=False,
+            is_filtered=False,
+            is_ai_filtered=False,
+            is_redundant=False
+        ).count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
         return JsonResponse({

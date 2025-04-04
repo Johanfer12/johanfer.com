@@ -2,7 +2,7 @@ import feedparser
 from datetime import datetime, timedelta
 from django.utils import timezone
 import pytz
-from .models import News, FeedSource, FilterWord
+from .models import News, FeedSource, FilterWord, AIFilterInstruction
 import re
 import google.generativeai as genai
 from config import GOOGLE_API_KEY
@@ -147,7 +147,11 @@ class FeedService:
 
     @staticmethod
     def process_content_with_gemini(title, original_content, model, max_retries=3):
-        """Genera el resumen principal y la respuesta corta en una sola llamada, esperando JSON."""
+        """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
+
+        # Obtener instrucciones de filtro IA activas
+        ai_filter_instructions = AIFilterInstruction.objects.filter(active=True)
+        filter_instructions_text = "\n".join([f"- {inst.instruction}" for inst in ai_filter_instructions])
 
         # Limitar longitud del contenido para el prompt
         content_limit = 4000
@@ -156,21 +160,26 @@ class FeedService:
         prompt = f"""
         Analiza el siguiente titular y contenido de noticia:
         Titular: '{title}'
-        Contenido: '{content_for_prompt}...'
+        Contenido: '{content_for_prompt}...' 
 
         Realiza las siguientes tareas y devuelve el resultado EXACTAMENTE en formato JSON:
         1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, eliminando clickbait y relleno, manteniendo los puntos clave. NO apliques formato HTML aquí, solo texto plano.
         2.  **short_answer**: SOLO si el titular es una pregunta directa o claro clickbait (ej: 'El secreto de...', 'Lo que no sabías...', '¿Por qué...?'), extrae o resume la respuesta/punto clave del contenido original de forma EXTREMADAMENTE CONCISA (máximo 15 palabras) y DIRECTA. No uses introducciones ni parafrasees. Si el titular NO es pregunta/clickbait, el valor de 'short_answer' debe ser null (JSON null).
+        3.  **ai_filter**: Basándote en las siguientes instrucciones de filtrado, determina si esta noticia DEBE SER ELIMINADA. Si coincide con ALGUNA instrucción, el valor debe ser EXACTAMENTE EL TEXTO LITERAL de la instrucción que coincidió (solo una, la primera que coincida si hay varias). Si NO coincide con ninguna, el valor debe ser null (JSON null).
+            Instrucciones de Filtrado:
+            {filter_instructions_text if filter_instructions_text else "(No hay instrucciones de filtro IA activas)"}
 
-        Ejemplo de JSON de salida esperado:
+        Ejemplo de JSON de salida esperado (sin filtro IA):
         {{
-          "summary": "Texto del resumen principal aquí. Punto uno. Punto dos.",
-          "short_answer": "Respuesta directa y concisa."
+          "summary": "Texto del resumen principal aquí.",
+          "short_answer": null,
+          "ai_filter": null
         }}
-        O si no hay respuesta corta:
+        Ejemplo de JSON de salida esperado (con filtro IA):
         {{
-          "summary": "Resumen del artículo informativo.",
-          "short_answer": null
+          "summary": "Resumen de la noticia sobre horóscopos.",
+          "short_answer": null,
+          "ai_filter": "Noticias sobre horóscopos"
         }}
 
         IMPORTANTE: Responde únicamente con el objeto JSON válido, sin texto adicional antes o después.
@@ -179,52 +188,48 @@ class FeedService:
         for attempt in range(max_retries):
             try:
                 response = model.generate_content(prompt)
-                # Intentar parsear la respuesta como JSON
                 try:
                     result_json = json.loads(response.text)
                     summary_text = result_json.get('summary')
                     short_answer = result_json.get('short_answer') # Puede ser None o null
+                    ai_filter_reason = result_json.get('ai_filter') # Puede ser string o null
 
                     # Validar que obtuvimos al menos el resumen
                     if not summary_text:
                         print("Error: JSON recibido no contiene 'summary' o está vacío.")
                         continue # Reintentar si el formato no es correcto
-                        
+
                     # Aplicar formato HTML al resumen recuperado
                     processed_summary = summary_text
                     processed_summary = re.sub(r'^\* (.+?)$', r'• <strong>\1</strong>', processed_summary, flags=re.MULTILINE)
                     processed_summary = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', processed_summary)
                     processed_summary = processed_summary.replace('\n\n', '<br><br>').replace('\n', '<br>')
                     processed_summary = processed_summary.replace('•', '<br>•')
-                    
-                    # Devolver ambos resultados
-                    return processed_summary, short_answer
-                    
+
+                    # Devolver los tres resultados
+                    return processed_summary, short_answer, ai_filter_reason
+
                 except json.JSONDecodeError as json_e:
                     print(f"Error decodificando JSON de Gemini (intento {attempt + 1}): {json_e}")
                     print(f"Texto recibido: {response.text[:200]}...") # Loguear inicio de respuesta
-                    # Si falla el JSON, intentar al menos obtener un resumen simple (último recurso)
                     if attempt == max_retries - 1:
                         print("Fallo de JSON en último intento, usando texto como resumen simple.")
-                        # Usar el texto plano como resumen y sin respuesta corta
                         fallback_summary = response.text.strip().replace('\n\n', '<br><br>').replace('\n', '<br>')
-                        return fallback_summary, None 
-                    time.sleep(5) # Esperar antes de reintentar
-                    continue # Reintentar
-                
+                        return fallback_summary, None, None # Sin filtro IA en caso de fallback
+                    time.sleep(5)
+                    continue
+
             except Exception as e:
-                # Capturar errores de la API (ej. 429 Too Many Requests)
                 if ("429" in str(e) or "Resource has been exhausted" in str(e)) and attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 10 # Backoff exponencial más largo
+                    wait_time = (attempt + 1) * 10
                     print(f"Límite de peticiones/Recurso agotado (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
                     time.sleep(wait_time)
                     continue
-                # Otros errores de API o inesperados
                 print(f"Error procesando contenido con Gemini: {str(e)}")
-                return original_content, None # Fallback: devolver contenido original sin procesar
-        
+                return original_content, None, None # Fallback
+
         print("Se agotaron los reintentos para procesar contenido.")
-        return original_content, None # Fallback: devolver contenido original sin procesar
+        return original_content, None, None # Fallback
 
     @staticmethod
     def extract_image_from_description(description):
@@ -440,32 +445,57 @@ class FeedService:
                 if not image_url and full_content['image_url']:
                     image_url = full_content['image_url']
 
-            # Procesar contenido: obtener resumen principal y respuesta corta en una llamada
-            processed_description, short_answer = FeedService.process_content_with_gemini(
-                entry.title,
-                original_description, 
-                gemini_model
-            )
-
-            # Verificar si la noticia debe ser filtrada
-            should_filter, filter_word = FeedService.should_filter_news(entry.title, entry.get('description', ''))
+            # >>>>> ORDEN CAMBIADO: Primero filtro por PALABRA CLAVE <<<<<
+            should_filter, filter_word = FeedService.should_filter_news(entry.title, original_description)
             if should_filter:
-                print(f"Noticia filtrada por palabra prohibida: {filter_word.word}")
+                print(f"Noticia FILTRADA por palabra clave: {filter_word.word}")
                 News.objects.create(
                     guid=guid,
                     title=entry.title,
-                    short_answer=short_answer,
-                    description=entry.get('description', ''),
+                    # No hay short_answer ni processed_description porque no llamamos a IA
+                    short_answer=None,
+                    description=original_description, # Guardamos la descripción original
                     link=entry.link,
                     published_date=published,
                     source=source,
-                    is_filtered=True,  # Marcamos como filtrada en lugar de eliminada
-                    filtered_by=filter_word  # Guardamos qué palabra la filtró
+                    is_filtered=True,  # Marcamos como filtrada (no eliminada)
+                    filtered_by=filter_word, # Guardamos qué palabra la filtró
+                    image_url=image_url # Guardamos la imagen
                 )
                 new_articles_count += 1
-                continue
-            
-            # Crear la nueva noticia
+                continue # Pasar a la siguiente noticia
+            # <<<<< FIN FILTRO PALABRA CLAVE >>>>>
+
+            # Si no se filtró por palabra clave, procesar con IA
+            processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_gemini(
+                entry.title,
+                original_description,
+                gemini_model
+            )
+
+            # >>>>> LÓGICA DE FILTRADO IA (después de palabra clave) <<<<<
+            # Asegurarnos que ai_filter_reason es un string no vacío antes de usarlo
+            if ai_filter_reason and isinstance(ai_filter_reason, str) and ai_filter_reason.strip():
+                print(f"Noticia marcada para FILTRAR por IA. Razón: {ai_filter_reason}")
+                News.objects.create(
+                    guid=guid,
+                    title=entry.title,
+                    short_answer=short_answer, # Guardamos la respuesta corta aunque se filtre
+                    description=processed_description, # Guardamos el resumen aunque se filtre
+                    link=entry.link,
+                    published_date=published,
+                    source=source,
+                    image_url=image_url,
+                    is_ai_filtered=True, # MARCADA COMO FILTRADA POR IA
+                    ai_filter_reason=ai_filter_reason.strip() # Guardamos la razón limpia
+                )
+                new_articles_count += 1
+                continue # Pasar a la siguiente noticia
+            elif ai_filter_reason: # Si Gemini devolvió algo pero no es un string válido
+                print(f"Advertencia: Gemini devolvió un valor para ai_filter ({ai_filter_reason}) pero no es la instrucción esperada. No se filtrará.")
+            # <<<<< FIN LÓGICA FILTRADO IA >>>>>
+
+            # Crear la nueva noticia (si no fue filtrada por IA ni por palabra)
             news_item = News.objects.create(
                 guid=guid,
                 title=entry.title,

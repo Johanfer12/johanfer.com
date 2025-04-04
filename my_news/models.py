@@ -41,6 +41,8 @@ class News(models.Model):
     similarity_score = models.FloatField(null=True, blank=True, verbose_name="% Similitud")
     is_redundant = models.BooleanField(default=False, verbose_name="Redundante")
     short_answer = models.TextField(null=True, blank=True, verbose_name="Respuesta corta")
+    ai_filter_reason = models.TextField(null=True, blank=True, verbose_name="Razón Filtro IA")
+    is_ai_filtered = models.BooleanField(default=False, verbose_name="Filtro IA")
     
     class Meta:
         verbose_name = "Noticia"
@@ -74,3 +76,23 @@ class FilterWord(models.Model):
 
     def __str__(self):
         return self.word
+
+class AIFilterInstruction(models.Model):
+    instruction = models.TextField(
+        unique=True,
+        verbose_name="Instrucción para IA",
+        help_text="Describe el tipo de contenido a filtrar (ej: 'Noticias sobre horóscopos', 'Artículos de opinión política muy sesgados')"
+    )
+    active = models.BooleanField(
+        default=True,
+        verbose_name="Activo"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Instrucción Filtro IA"
+        verbose_name_plural = "Instrucciones Filtro IA"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.instruction

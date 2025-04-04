@@ -113,8 +113,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Almacenar la última vez que se comprobaron las noticias
     let lastChecked = new Date().toISOString();
     
-    // Comprobación periódica de nuevas noticias (cada 30 segundos)
-    const CHECK_INTERVAL = 30000; // 30 segundos
+    // Comprobación periódica de nuevas noticias (cada 3 minutos)
+    const CHECK_INTERVAL = 180000; // 3 minutos (3 * 60 * 1000 ms)
     let pendingNews = [];
     
     // Actualizar el comportamiento de las tarjetas según el dispositivo
