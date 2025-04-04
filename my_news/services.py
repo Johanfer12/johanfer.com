@@ -163,7 +163,7 @@ class FeedService:
         Contenido: '{content_for_prompt}...' 
 
         Realiza las siguientes tareas y devuelve el resultado EXACTAMENTE en formato JSON:
-        1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, eliminando clickbait y relleno, manteniendo los puntos clave. NO apliques formato HTML aquí, solo texto plano.
+        1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, de aproximadamente 70 a 90 palabras, eliminando clickbait y relleno, manteniendo los puntos clave. NO apliques formato HTML aquí, solo texto plano.
         2.  **short_answer**: SOLO si el titular es una pregunta directa o claro clickbait (ej: 'El secreto de...', 'Lo que no sabías...', '¿Por qué...?'), extrae o resume la respuesta/punto clave del contenido original de forma EXTREMADAMENTE CONCISA (máximo 15 palabras) y DIRECTA. No uses introducciones ni parafrasees. Si el titular NO es pregunta/clickbait, el valor de 'short_answer' debe ser null (JSON null).
         3.  **ai_filter**: Basándote en las siguientes instrucciones de filtrado, determina si esta noticia DEBE SER ELIMINADA. Si coincide con ALGUNA instrucción, el valor debe ser EXACTAMENTE EL TEXTO LITERAL de la instrucción que coincidió (solo una, la primera que coincida si hay varias). Si NO coincide con ninguna, el valor debe ser null (JSON null).
             Instrucciones de Filtrado:
@@ -247,7 +247,14 @@ class FeedService:
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
             
-            soup = BeautifulSoup(response.text, 'html.parser')
+            # Intentar decodificar explícitamente como UTF-8
+            try:
+                content_text = response.content.decode('utf-8')
+            except UnicodeDecodeError:
+                # Si UTF-8 falla, intentar con la codificación detectada por requests
+                content_text = response.text 
+
+            soup = BeautifulSoup(content_text, 'html.parser')
             
             # Eliminar elementos no deseados
             for element in soup.find_all(['script', 'style', 'nav', 'header', 'footer', 'iframe']):
@@ -434,7 +441,14 @@ class FeedService:
                             break
 
             # Obtener el contenido original para procesar
+            # Intentar obtener descripción del feed, asegurando UTF-8 si es posible
             original_description = entry.get('description', '')
+            if isinstance(original_description, bytes):
+                try:
+                    original_description = original_description.decode('utf-8')
+                except UnicodeDecodeError:
+                     # Si falla, usar una decodificación con reemplazo
+                    original_description = original_description.decode('utf-8', 'replace')
             
             # Si deep_search está activado, obtener el contenido completo independientemente de la imagen
             if source.deep_search:
@@ -486,6 +500,7 @@ class FeedService:
                     published_date=published,
                     source=source,
                     image_url=image_url,
+                    is_filtered=True, # MARCADA COMO FILTRADA (automáticamente)
                     is_ai_filtered=True, # MARCADA COMO FILTRADA POR IA
                     ai_filter_reason=ai_filter_reason.strip() # Guardamos la razón limpia
                 )
