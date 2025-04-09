@@ -164,7 +164,7 @@ class FeedService:
 
         Realiza las siguientes tareas y devuelve el resultado EXACTAMENTE en formato JSON:
         1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, de aproximadamente 60 a 80 palabras, eliminando clickbait y relleno, manteniendo los puntos clave. NO apliques formato HTML aquí, solo texto plano.
-        2.  **short_answer**: SOLO si el titular es una pregunta directa o claro clickbait (ej: 'El secreto de...', 'Lo que no sabías...', '¿Por qué...?'), extrae o resume la respuesta/punto clave del contenido original de forma EXTREMADAMENTE CONCISA (máximo 15 palabras) y DIRECTA. No uses introducciones ni parafrasees. Si el titular NO es pregunta/clickbait, el valor de 'short_answer' debe ser null (JSON null).
+        2.  **short_answer**: SOLO si el titular (a) es una pregunta directa (ej: '¿Por qué deberías...?', '¿Cuál es...?') O (b) es claro clickbait que crea intriga, sugiere un secreto, una lista, una explicación o una revelación que se encuentra en el contenido (ej: 'El secreto de...', 'Lo que no sabías...', 'Cómo un pequeño gesto cambió todo...', 'El país que no tiene ejército...', 'X razones por las que...', 'El truco para...', 'Descubre cómo...'). En ese caso, extrae o resume la respuesta/punto clave del contenido original de forma EXTREMADAMENTE CONCISA (máximo 15 palabras) y DIRECTA. No uses introducciones ni parafrasees. Si el titular NO cumple estas condiciones, el valor de 'short_answer' debe ser null (JSON null).
         3.  **ai_filter**: Basándote en las siguientes instrucciones de filtrado, determina si esta noticia DEBE SER ELIMINADA. Si coincide con ALGUNA instrucción, el valor debe ser EXACTAMENTE EL TEXTO LITERAL de la instrucción que coincidió (solo una, la primera que coincida si hay varias). Si NO coincide con ninguna, el valor debe ser null (JSON null).
             Instrucciones de Filtrado:
             {filter_instructions_text if filter_instructions_text else "(No hay instrucciones de filtro IA activas)"}
@@ -180,6 +180,12 @@ class FeedService:
           "summary": "Resumen de la noticia sobre horóscopos.",
           "short_answer": null,
           "ai_filter": "Noticias sobre horóscopos"
+        }}
+        Ejemplo de JSON de salida esperado (clickbait):
+        {{
+          "summary": "Resumen conciso del artículo aquí.",
+          "short_answer": "La clave fue [respuesta directa].",
+          "ai_filter": null
         }}
 
         IMPORTANTE: Responde únicamente con el objeto JSON válido, sin texto adicional antes o después.
