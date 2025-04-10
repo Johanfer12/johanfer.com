@@ -9,20 +9,69 @@ import requests
 from bs4 import BeautifulSoup
 import json
 from jsonpath_ng import parse
+import time
 
 def refresh_spotify_data():
     # Obtener el token de acceso
-    scope = "user-library-read user-top-read"
+    scope = "user-library-read user-top-read playlist-modify-public playlist-modify-private playlist-read-private"
     redirect_uri = "http://localhost:8888/callback"
-    token = util.prompt_for_user_token(
-        USERNAME, 
-        scope, 
-        client_id=CLIENT_ID, 
-        client_secret=CLIENT_SECRET, 
-        redirect_uri=redirect_uri
-    )
+    try:
+        token = util.prompt_for_user_token(
+            USERNAME,
+            scope,
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            redirect_uri=redirect_uri
+        )
+        if not token:
+             print("Error: No se pudo obtener el token de Spotify. Abortando refresh.")
+             return
+    except Exception as e:
+        print(f"Error durante la obtención del token: {e}")
+        return
 
     sp = spotipy.Spotify(auth=token)
+
+    # --- Inicio: Buscar o Crear Playlist "Olvidadas" ---
+    olvidadas_playlist_id = None
+    playlist_name = "Olvidadas"
+    user_id = USERNAME
+    try:
+        print(f"Buscando playlist '{playlist_name}' para el usuario {user_id}...")
+        offset = 0
+        limit = 50
+        while True:
+            current_playlists = sp.user_playlists(user_id, limit=limit, offset=offset)
+            if not current_playlists or not current_playlists['items']:
+                break
+
+            for playlist in current_playlists['items']:
+                if playlist['name'] == playlist_name and playlist['owner']['id'] == user_id:
+                    olvidadas_playlist_id = playlist['id']
+                    print(f"Playlist '{playlist_name}' encontrada con ID: {olvidadas_playlist_id}")
+                    break
+            
+            if olvidadas_playlist_id:
+                break
+
+            offset += limit
+            if len(current_playlists['items']) < limit:
+                 break
+            time.sleep(0.2)
+
+        if not olvidadas_playlist_id:
+            print(f"Playlist '{playlist_name}' no encontrada para {user_id}. Creando...")
+            new_playlist = sp.user_playlist_create(user_id, playlist_name, public=False, description="Canciones eliminadas de favoritos automáticamente.")
+            olvidadas_playlist_id = new_playlist['id']
+            print(f"Playlist '{playlist_name}' creada con ID: {olvidadas_playlist_id}")
+
+    except spotipy.exceptions.SpotifyException as e:
+        print(f"Error de API Spotify al buscar/crear playlist: {e}")
+        print("Continuando sin añadir a playlist 'Olvidadas' debido a error.")
+    except Exception as e:
+        print(f"Error inesperado al buscar/crear playlist: {e}")
+        print("Continuando sin añadir a playlist 'Olvidadas' debido a error.")
+    # --- Fin: Buscar o Crear Playlist "Olvidadas" ---
 
     # Optimización para canciones top
     top_tracks = sp.current_user_top_tracks(limit=5, time_range='short_term')
@@ -89,6 +138,24 @@ def refresh_spotify_data():
 
     # Mover canciones eliminadas
     for favorite in SpotifyFavorites.objects.exclude(song_url__in=current_favorites):
+        # --- Inicio: Añadir a Playlist "Olvidadas" ---
+        if olvidadas_playlist_id:
+            try:
+                track_id = extract_track_id(favorite.song_url)
+                if track_id:
+                    track_uri = f"spotify:track:{track_id}"
+                    print(f"Añadiendo '{favorite.song_name}' a playlist '{playlist_name}'...")
+                    sp.playlist_add_items(olvidadas_playlist_id, [track_uri])
+                    print(f"  -> Añadido '{favorite.song_name}' exitosamente.")
+                else:
+                    print(f"  -> No se pudo extraer track_id para {favorite.song_name}, no se añade a playlist.")
+            except spotipy.exceptions.SpotifyException as e:
+                 print(f"  -> Error de API Spotify al añadir track {favorite.song_name} (URI: {track_uri}): {e.http_status} - {e.msg}")
+            except Exception as e:
+                 print(f"  -> Error inesperado al añadir track {favorite.song_name}: {e}")
+        # --- Fin: Añadir a Playlist "Olvidadas" ---
+
+        # Crear registro local en DeletedSongs
         DeletedSongs.objects.create(
             song_name=favorite.song_name,
             artist_name=favorite.artist_name,
@@ -96,6 +163,8 @@ def refresh_spotify_data():
             song_url=favorite.song_url,
             duration_ms=favorite.duration_ms,
             added_at=favorite.added_at,
+            album_cover=favorite.album_cover,
+            preview_url=favorite.preview_url,
             deleted_at=timezone.now()
         )
         favorite.delete() 

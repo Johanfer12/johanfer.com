@@ -277,3 +277,10 @@ h1, h3 {
     font-size: 0.8em;
     margin-top: 4px;
 }
+
+/* Estilo para la lista de canciones eliminadas con 3 columnas */
+.deleted-song-list {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem; /* Ajusta el espacio entre canciones si es necesario */
+}

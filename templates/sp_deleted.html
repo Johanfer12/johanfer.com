@@ -6,9 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Canciones Eliminadas</title>
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 </head>
-<body>
+<body class="has-header">
     {% include 'header.html' %}
     
     <div class="content-container">
@@ -16,7 +17,7 @@
             <!-- Canciones eliminadas -->
             <div class="music-section full-width">
                 <h3>Canciones Eliminadas de Favoritos ({{ total_deleted }})</h3>
-                <div class="song-list">
+                <div class="song-list deleted-song-list">
                     {% for song in deleted_songs %}
                         <div class="song-item">
                             <a href="{{ song.song_url }}" target="_blank" class="album-link">
