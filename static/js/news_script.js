@@ -122,82 +122,84 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.news-card').forEach(card => {
             const newsId = card.closest('.news-card-container').id.replace('news-', '');
             const container = card.closest('.news-card-container');
-            
+            const cardBack = card.querySelector('.card-back');
+            const linksContainer = cardBack?.querySelector('.news-links');
+            const cardFront = card.querySelector('.card-front');
+
+            // Eliminar el onclick de la tarjeta principal SIEMPRE primero
+            card.removeAttribute('onclick');
+
+            // Limpiar botones específicos de vista (modal opener y delete móvil en front)
+            const existingModalOpener = cardBack?.querySelector('.news-link.modal-opener');
+            if (existingModalOpener) existingModalOpener.remove();
+            const existingMobileDeleteBtn = cardFront?.querySelector('.mobile-delete-btn');
+            if (existingMobileDeleteBtn) existingMobileDeleteBtn.remove();
+
+
             if (isMobile()) {
-                // En móvil: quitar onclick para evitar que abra el modal
-                card.removeAttribute('onclick');
-                
-                // Añadir botón de eliminación móvil al frente de la tarjeta si no existe ya
-                const cardFront = card.querySelector('.card-front');
-                if (cardFront && !cardFront.querySelector('.mobile-delete-btn') && container.querySelector('.delete-btn')) {
-                    // Eliminar cualquier botón anterior si existe
-                    const oldBtn = cardFront.querySelector('.mobile-delete-btn');
-                    if (oldBtn) {
-                        oldBtn.remove();
-                    }
-                    
-                    // Usar un botón real en lugar de un div
+                // --- Comportamiento Móvil ---
+
+                // Añadir botón de eliminación móvil al frente de la tarjeta
+                if (cardFront && container.querySelector('.delete-btn')) {
                     const deleteBtn = document.createElement('button');
                     deleteBtn.className = 'mobile-delete-btn';
                     deleteBtn.setAttribute('type', 'button');
                     deleteBtn.setAttribute('data-id', newsId);
-                    
-                    // Asignar directamente la función
                     deleteBtn.onclick = function(e) {
                         e.stopPropagation();
                         deleteNews(newsId);
                         return false;
                     };
-                    
                     cardFront.appendChild(deleteBtn);
                 }
-                
-                // Añadir botón "Ver más" al reverso de la tarjeta solo si no existe ya
-                const cardBack = card.querySelector('.card-back');
-                if (cardBack && !cardBack.querySelector('.news-link.modal-opener')) {
-                    const linksContainer = cardBack.querySelector('.news-links');
-                    if (linksContainer) {
-                        const modalLink = document.createElement('a');
-                        modalLink.href = 'javascript:void(0)';
-                        modalLink.className = 'news-link modal-opener';
-                        modalLink.textContent = 'Más';
-                        modalLink.addEventListener('click', function(e) {
-                            e.stopPropagation();
-                            openNewsModal(newsId);
-                        });
-                        linksContainer.prepend(modalLink);
-                    }
+
+                // Añadir botón "Ver más" al reverso de la tarjeta
+                if (linksContainer) {
+                    const modalLink = document.createElement('a');
+                    modalLink.href = 'javascript:void(0)';
+                    modalLink.className = 'news-link modal-opener';
+                    modalLink.textContent = 'Más';
+                    modalLink.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        openNewsModal(newsId);
+                    });
+                    // Insertar "Más" antes que otros links (Fuente, Eliminar)
+                    linksContainer.insertBefore(modalLink, linksContainer.firstChild);
                 }
+
             } else {
-                // En escritorio: configurar onclick para abrir el modal
-                card.setAttribute('onclick', `openNewsModal('${newsId}')`);
-                
-                // Eliminar botón "Ver más" si existe
-                const modalOpener = card.querySelector('.news-link.modal-opener');
-                if (modalOpener) {
-                    modalOpener.remove();
-                }
-                
-                // Añadir botón de eliminación en escritorio si no existe y hay botón de eliminar
-                const cardFront = card.querySelector('.card-front');
-                if (cardFront && !cardFront.querySelector('.mobile-delete-btn') && container.querySelector('.delete-btn')) {
+                // --- Comportamiento Escritorio ---
+
+                // Añadir botón de eliminación (estilo móvil) al frente
+                if (cardFront && container.querySelector('.delete-btn')) {
                     const deleteBtn = document.createElement('button');
-                    deleteBtn.className = 'mobile-delete-btn';
+                    deleteBtn.className = 'mobile-delete-btn'; // Reutilizamos estilo
                     deleteBtn.setAttribute('type', 'button');
                     deleteBtn.setAttribute('data-id', newsId);
-                    
-                    // Asignar directamente la función
                     deleteBtn.onclick = function(e) {
                         e.stopPropagation();
                         deleteNews(newsId);
                         return false;
                     };
-                    
                     cardFront.appendChild(deleteBtn);
+                }
+
+                // Añadir botón "Ver más" al reverso de la tarjeta (igual que en móvil)
+                if (linksContainer) {
+                    const modalLink = document.createElement('a');
+                    modalLink.href = 'javascript:void(0)';
+                    modalLink.className = 'news-link modal-opener';
+                    modalLink.textContent = 'Más';
+                    modalLink.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        openNewsModal(newsId);
+                    });
+                     // Insertar "Más" antes que otros links (Fuente, Eliminar)
+                    linksContainer.insertBefore(modalLink, linksContainer.firstChild);
                 }
             }
         });
-        
+
         // Configurar los manejadores de hover para las imágenes
         setupImageHoverHandlers();
     }
@@ -627,90 +629,54 @@ document.addEventListener('DOMContentLoaded', function() {
             const modal = modalTemp.firstElementChild;
             newsModalsContainer.appendChild(modal);
             
-            // Añadir evento onclick al contenedor de la tarjeta para abrir el modal (solo en escritorio)
+            // Obtener la tarjeta y sus partes
             const card = newsContainer.querySelector('.news-card');
-            if (card) {
-                if (!isDeviceMobile) {
-                    card.setAttribute('onclick', `openNewsModal('${newsItem.id}')`);
-                    
-                    // Añadir botón de eliminación en escritorio
-                    const cardFront = card.querySelector('.card-front');
-                    if (cardFront && newsContainer.querySelector('.delete-btn')) {
-                        const deleteBtn = document.createElement('button');
-                        deleteBtn.className = 'mobile-delete-btn';
-                        deleteBtn.setAttribute('type', 'button');
-                        deleteBtn.setAttribute('data-id', newsItem.id);
-                        
-                        // Asignar directamente la función
-                        deleteBtn.onclick = function(e) {
-                            e.stopPropagation();
-                            deleteNews(newsItem.id);
-                            return false;
-                        };
-                        
-                        cardFront.appendChild(deleteBtn);
-                    }
-                } else {
-                    // Para móvil, añadir el botón de eliminación en el frente
-                    const cardFront = card.querySelector('.card-front');
-                    if (cardFront && newsContainer.querySelector('.delete-btn')) {
-                        // Eliminar cualquier botón anterior si existe
-                        const oldBtn = cardFront.querySelector('.mobile-delete-btn');
-                        if (oldBtn) {
-                            oldBtn.remove();
-                        }
-                        
-                        // Usar un botón real en lugar de un div
-                        const mobileDeleteBtn = document.createElement('button');
-                        mobileDeleteBtn.className = 'mobile-delete-btn';
-                        mobileDeleteBtn.setAttribute('type', 'button');
-                        mobileDeleteBtn.setAttribute('data-id', newsItem.id);
-                        
-                        // Asignar directamente la función
-                        mobileDeleteBtn.onclick = function(e) {
-                            e.stopPropagation();
-                            deleteNews(newsItem.id);
-                            return false;
-                        };
-                        
-                        cardFront.appendChild(mobileDeleteBtn);
-                    }
-                    
-                    // Para móvil, añadir el botón "Ver más" en el reverso
-                    const cardBack = card.querySelector('.card-back');
-                    if (cardBack) {
-                        const linksContainer = cardBack.querySelector('.news-links');
-                        if (linksContainer) {
-                            const modalLink = document.createElement('a');
-                            modalLink.href = 'javascript:void(0)';
-                            modalLink.className = 'news-link modal-opener';
-                            modalLink.textContent = 'Más';
-                            modalLink.addEventListener('click', function(e) {
-                                e.stopPropagation();
-                                openNewsModal(newsItem.id);
-                            });
-                            linksContainer.prepend(modalLink);
-                        }
-                    }
-                }
+            const cardFront = newsContainer.querySelector('.card-front');
+            const cardBack = newsContainer.querySelector('.card-back');
+            const linksContainer = cardBack?.querySelector('.news-links');
+
+            // Configuración común para móvil y escritorio
+            if (cardFront && newsContainer.querySelector('.delete-btn')) {
+                 // Eliminar cualquier botón anterior si existe (importante para evitar duplicados)
+                const oldBtn = cardFront.querySelector('.mobile-delete-btn');
+                if (oldBtn) oldBtn.remove();
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'mobile-delete-btn';
+                deleteBtn.setAttribute('type', 'button');
+                deleteBtn.setAttribute('data-id', newsItem.id);
+                deleteBtn.onclick = function(e) {
+                    e.stopPropagation();
+                    deleteNews(newsItem.id);
+                    return false;
+                };
+                cardFront.appendChild(deleteBtn);
             }
-            
-            // Configurar el botón de cierre del modal
-            const closeBtn = modal.querySelector('.close');
-            if (closeBtn) {
-                closeBtn.setAttribute('onclick', `closeNewsModal('${newsItem.id}')`);
+
+            if (linksContainer) {
+                 // Eliminar cualquier botón anterior si existe
+                const oldModalOpener = linksContainer.querySelector('.news-link.modal-opener');
+                if (oldModalOpener) oldModalOpener.remove();
+
+                const modalLink = document.createElement('a');
+                modalLink.href = 'javascript:void(0)';
+                modalLink.className = 'news-link modal-opener';
+                modalLink.textContent = 'Más';
+                modalLink.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    openNewsModal(newsItem.id);
+                });
+                linksContainer.insertBefore(modalLink, linksContainer.firstChild);
             }
-            
-            // Añadir listener para botones de eliminación en la tarjeta
-            const deleteBtn = newsContainer.querySelector('.delete-btn');
-            if (deleteBtn) {
-                attachDeleteListener(deleteBtn);
-            }
+
+            // Limpiar onclick de la tarjeta principal por si acaso
+            if(card) card.removeAttribute('onclick');
             
             // Añadir listener para botones de eliminación en el modal
             const modalDeleteBtn = modal.querySelector('.btn-danger');
             if (modalDeleteBtn) {
-                modalDeleteBtn.setAttribute('data-id', newsItem.id);
+                const newCardId = newsItem.id.replace('news-', '');
+                modalDeleteBtn.setAttribute('data-id', newCardId);
                 attachDeleteListener(modalDeleteBtn);
             }
             
@@ -1083,73 +1049,48 @@ document.addEventListener('DOMContentLoaded', function() {
             attachDeleteListener(newDeleteBtn);
         }
         
-        // Asegurar que el evento onclick esté configurado
+        // Asegurar que el evento onclick esté configurado correctamente
         const card = newCard.querySelector('.news-card');
-        if (card) {
-            const newCardId = newCard.id.replace('news-', '');
-            if (!isMobile()) {
-                card.setAttribute('onclick', `openNewsModal('${newCardId}')`);
-                
-                // Añadir botón de eliminación para escritorio
-                const cardFront = card.querySelector('.card-front');
-                if (cardFront && newCard.querySelector('.delete-btn')) {
-                    const deleteBtn = document.createElement('button');
-                    deleteBtn.className = 'mobile-delete-btn';
-                    deleteBtn.setAttribute('type', 'button');
-                    deleteBtn.setAttribute('data-id', newCardId);
-                    
-                    // Asignar directamente la función
-                    deleteBtn.onclick = function(e) {
-                        e.stopPropagation();
-                        deleteNews(newCardId);
-                        return false;
-                    };
-                    
-                    cardFront.appendChild(deleteBtn);
-                }
-            } else {
-                // Para móvil, añadir el botón de eliminación móvil
-                const cardFront = card.querySelector('.card-front');
-                if (cardFront && newCard.querySelector('.delete-btn')) {
-                    // Eliminar cualquier botón anterior si existe
-                    const oldBtn = cardFront.querySelector('.mobile-delete-btn');
-                    if (oldBtn) {
-                        oldBtn.remove();
-                    }
-                    
-                    // Usar un botón real en lugar de un div
-                    const mobileDeleteBtn = document.createElement('button');
-                    mobileDeleteBtn.className = 'mobile-delete-btn';
-                    mobileDeleteBtn.setAttribute('type', 'button');
-                    mobileDeleteBtn.setAttribute('data-id', newCardId);
-                    
-                    // Asignar directamente la función
-                    mobileDeleteBtn.onclick = function(e) {
-                        e.stopPropagation();
-                        deleteNews(newCardId);
-                        return false;
-                    };
-                    
-                    cardFront.appendChild(mobileDeleteBtn);
-                }
-                
-                // Para móvil, añadir el botón "Ver más" en el reverso
-                const cardBack = card.querySelector('.card-back');
-                if (cardBack) {
-                    const linksContainer = cardBack.querySelector('.news-links');
-                    if (linksContainer) {
-                        const modalLink = document.createElement('a');
-                        modalLink.href = 'javascript:void(0)';
-                        modalLink.className = 'news-link modal-opener';
-                        modalLink.textContent = 'Más';
-                        modalLink.addEventListener('click', function(e) {
-                            e.stopPropagation();
-                            openNewsModal(newCardId);
-                        });
-                        linksContainer.prepend(modalLink);
-                    }
-                }
-            }
+        const cardFront = newCard.querySelector('.card-front');
+        const cardBack = newCard.querySelector('.card-back');
+        const linksContainer = cardBack?.querySelector('.news-links');
+        const newCardId = newCard.id.replace('news-', '');
+
+        // Limpiar onclick de la tarjeta principal
+        if(card) card.removeAttribute('onclick');
+
+        // Configuración común para móvil y escritorio
+        if (cardFront && newCard.querySelector('.delete-btn')) {
+             // Eliminar cualquier botón anterior si existe
+            const oldBtn = cardFront.querySelector('.mobile-delete-btn');
+            if (oldBtn) oldBtn.remove();
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'mobile-delete-btn';
+            deleteBtn.setAttribute('type', 'button');
+            deleteBtn.setAttribute('data-id', newCardId);
+            deleteBtn.onclick = function(e) {
+                e.stopPropagation();
+                deleteNews(newCardId);
+                return false;
+            };
+            cardFront.appendChild(deleteBtn);
+        }
+
+        if (linksContainer) {
+             // Eliminar cualquier botón anterior si existe
+            const oldModalOpener = linksContainer.querySelector('.news-link.modal-opener');
+            if (oldModalOpener) oldModalOpener.remove();
+
+            const modalLink = document.createElement('a');
+            modalLink.href = 'javascript:void(0)';
+            modalLink.className = 'news-link modal-opener';
+            modalLink.textContent = 'Más';
+            modalLink.addEventListener('click', function(e) {
+                e.stopPropagation();
+                openNewsModal(newCardId);
+            });
+            linksContainer.insertBefore(modalLink, linksContainer.firstChild);
         }
         
         // Añadir la nueva tarjeta
