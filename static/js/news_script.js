@@ -314,40 +314,62 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Función que aplica la técnica FLIP para animar el reordenamiento
-    function animateReposition(oldPositionsMap) {
+    // oldPositionsMap: Mapa con las posiciones antes del cambio
+    // excludedIds: Array de IDs de elementos que fueron eliminados y no deben ser animados
+    function animateReposition(oldPositionsMap, excludedIds = []) {
         const isDeviceMobile = isMobile();
-        if (isDeviceMobile || !oldPositionsMap || oldPositionsMap.size === 0) return; // Skip on mobile or if no map/empty map
+        // No animar en móvil o si no hay posiciones válidas
+        if (isDeviceMobile || !oldPositionsMap || oldPositionsMap.size === 0) return;
 
-        // Small delay to ensure DOM is ready after insertions/removals
-        setTimeout(() => {
-            // Iterate over the keys (DOM elements) in the map
+        // Usamos requestAnimationFrame para asegurar que el navegador esté listo
+        requestAnimationFrame(() => {
+            const elementsToAnimate = new Map();
+
+            // 1. Calcular deltas para elementos que aún existen y no están excluidos
             oldPositionsMap.forEach((oldRect, container) => {
-                 // Ensure the container is still in the DOM before getting its new position
-                 if (!document.body.contains(container)) return;
+                // Comprobar si el contenedor sigue en el DOM y no está en la lista de excluidos
+                const containerId = container.id;
+                if (!document.body.contains(container) || excludedIds.includes(containerId)) {
+                    return; // Saltar si no existe o fue explícitamente excluido (eliminado)
+                }
 
                 const newRect = container.getBoundingClientRect();
                 const deltaX = oldRect.left - newRect.left;
                 const deltaY = oldRect.top - newRect.top;
 
-                // Only animate if the position actually changed
-                if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
-                    container.style.transition = 'none'; // Disable transitions during setup
+                // Solo preparar animación si la posición cambió significativamente
+                if (Math.abs(deltaX) > 0.5 || Math.abs(deltaY) > 0.5) {
+                    elementsToAnimate.set(container, { deltaX, deltaY });
+                    // Aplicar transformación inversa INMEDIATAMENTE sin transición
+                    container.style.transition = 'none';
                     container.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-                    void container.offsetWidth; // Force reflow
-
-                    // Re-enable transitions and animate back to (0,0) transform
-                    container.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1)';
-                    container.style.transform = ''; // Animate back to original spot
-
-                    // Clean up inline styles after the transition ends
-                    container.addEventListener('transitionend', function handler() {
-                        container.style.transition = '';
-                        container.style.transform = ''; // Ensure transform is explicitly cleared
-                        container.removeEventListener('transitionend', handler);
-                    }, { once: true }); // Use 'once' to auto-remove the listener
+                } else {
+                    // Si no hay cambio, asegurarse de que no tenga transformaciones pendientes
+                    container.style.transform = '';
+                    container.style.transition = '';
                 }
             });
-        }, 50); // Adjust delay if needed (50ms seems reasonable)
+
+            // Si no hay nada que animar, salir
+            if (elementsToAnimate.size === 0) return;
+
+            // 2. Forzar reflow para que el navegador registre las transformaciones inversas
+            void newsGrid.offsetWidth; // Forzar reflow en un elemento padre común
+
+            // 3. Aplicar transición y animar de vuelta a la posición final (transform = '')
+            elementsToAnimate.forEach(({ deltaX, deltaY }, container) => {
+                 // Re-enable transitions and animate back to (0,0) transform
+                 container.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1)';
+                 container.style.transform = ''; // Animate back to original spot
+
+                 // Clean up inline styles after the transition ends
+                 container.addEventListener('transitionend', function handler() {
+                     container.style.transition = '';
+                     // No quitar transform aquí, ya está en ''
+                     container.removeEventListener('transitionend', handler);
+                 }, { once: true });
+            });
+        });
     }
 
     // Función para manejar el borrado
@@ -361,110 +383,141 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Función central para eliminar noticias
     function deleteNews(newsId) {
-        // Capturar las posiciones ANTES de cualquier cambio
-        const oldPositions = capturePositions();
-        
-        // Encontrar el contenedor y el modal
         const container = document.getElementById(`news-${newsId}`);
         const modal = document.getElementById(`modal-${newsId}`);
         const currentPage = new URLSearchParams(window.location.search).get('page') || 1;
         const isDeviceMobile = isMobile();
-        
-        // Asegurarse de que se encontró el contenedor antes de continuar
+
         if (!container) {
             console.error(`No se encontró el contenedor para el ID: ${newsId}`);
             return;
         }
 
-        // Si el modal está abierto, cerrarlo con animación
+        // 1. Capturar posiciones ANTES de cualquier cambio
+        const oldPositions = isDeviceMobile ? null : capturePositions();
+        const containerId = container.id; // Guardar ID para exclusión en FLIP
+
+        // Cerrar modal si está abierto
         if (modal && modal.classList.contains('show')) {
             closeNewsModal(newsId);
-            // Esperar a que termine la animación del modal
-            setTimeout(() => processDeletion(), 300);
-        } else {
-            processDeletion();
         }
-        
-        function processDeletion() {
-            // Asegurarse de que todas las animaciones previas hayan terminado
-            container.classList.remove('new-news', 'inserting');
-            
-            // Forzar un reflow para asegurar que el navegador procese los cambios
-            void container.offsetWidth;
-            
-            // Aplicar animación según el dispositivo
+
+        // 2. Aplicar animación de salida
+        // Usar una promesa para saber cuándo termina la animación
+        const animationPromise = new Promise(resolve => {
+            const animationDuration = isDeviceMobile ? 150 : 300; // Duración más corta en móvil
+
             if (isDeviceMobile) {
-                // En móviles, animar la opacidad para un efecto fade-out más rápido
-                container.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
+                container.style.transition = `opacity ${animationDuration}ms ease, transform ${animationDuration}ms ease`;
                 container.style.opacity = '0';
                 container.style.transform = 'scale(0.95)';
             } else {
-                // En escritorio, usar la animación definida en CSS
-                container.classList.add('deleting');
+                // Usar clase para animación de escritorio
+                container.classList.add('deleting'); // Asegúrate que 'deleting' tenga una animación de ~300ms
             }
-            
-            // Reducir la duración de la animación para móviles
-            const animationDuration = isDeviceMobile ? 150 : 500; // 150ms en móviles, 500ms en escritorio
-            
-            // Esperar a que termine la animación antes de realizar la solicitud al servidor
-            setTimeout(() => {
-                // Para móviles, eliminar inmediatamente del DOM
-                if (isDeviceMobile) {
+
+            // Esperar que termine la animación
+            setTimeout(resolve, animationDuration);
+        });
+
+        // 3. Después de la animación de salida -> Realizar fetch y actualizar DOM/FLIP
+        animationPromise.then(() => {
+            // Realizar la solicitud al servidor
+            fetch(`/noticias/delete/${newsId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `current_page=${currentPage}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // 4. Eliminar elemento del DOM (AHORA, después de animar salida y ANTES de FLIP)
                     container.remove();
                     if (modal) modal.remove();
+
+                    // Actualizar contadores con datos del servidor
+                    updateCountersFromServer(data.total_news, data.total_pages);
+
+                    let newCardElement = null;
+                    let newModalElement = null;
+
+                    // 5. Si hay un nuevo elemento para agregar, prepararlo pero NO añadirlo aún
+                    if (data.html && data.modal) {
+                        const tempCard = document.createElement('div');
+                        tempCard.innerHTML = data.html;
+                        newCardElement = tempCard.firstElementChild;
+
+                        const tempModal = document.createElement('div');
+                        tempModal.innerHTML = data.modal;
+                        newModalElement = tempModal.firstElementChild;
+
+                         // Configurar la nueva tarjeta y modal (botones, listeners)
+                        configureNewCard(newCardElement, newModalElement, newCardElement.id.replace('news-', ''));
+
+                         // Preparar para animación de entrada
+                        newCardElement.style.opacity = '0';
+                        newCardElement.style.transform = 'scale(0.9)';
+                        newCardElement.style.transition = 'none'; // Sin transición inicial
+                    }
+
+                    // 6. Aplicar FLIP a las tarjetas restantes
+                    // Pasar el ID de la tarjeta eliminada para excluirla explícitamente
+                    if (oldPositions) {
+                        animateReposition(oldPositions, [containerId]);
+                    }
+
+                    // 7. Añadir la nueva tarjeta (si existe) y animar su entrada DESPUÉS de iniciar FLIP
+                    if (newCardElement) {
+                        // Añadir al final del grid (o donde corresponda según tu lógica, aquí se asume al final)
+                        newsGrid.appendChild(newCardElement);
+                        if (newModalElement) newsModalsContainer.appendChild(newModalElement);
+
+                        // Forzar reflow antes de animar entrada
+                        void newCardElement.offsetWidth;
+
+                        // Iniciar animación de entrada
+                        requestAnimationFrame(() => {
+                            newCardElement.style.transition = 'opacity 0.4s ease, transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)';
+                            newCardElement.style.opacity = '1';
+                            newCardElement.style.transform = 'scale(1)';
+
+                            // Limpiar estilos inline después de la animación
+                            newCardElement.addEventListener('transitionend', function handler() {
+                                newCardElement.style.transition = '';
+                                newCardElement.style.opacity = '';
+                                newCardElement.style.transform = '';
+                                newCardElement.removeEventListener('transitionend', handler);
+                            }, { once: true });
+                        });
+                    }
+
+                } else {
+                     // Si falla el fetch, revertir animación de salida (opcional)
+                     if (document.body.contains(container)) {
+                         container.classList.remove('deleting');
+                         container.style.opacity = '1';
+                         container.style.transform = 'scale(1)';
+                         container.style.transition = ''; // Limpiar transición inline si se usó
+                     }
+                     console.error('Error en la respuesta del servidor al eliminar:', data.message);
+                     // Podrías mostrar un mensaje al usuario aquí
                 }
-                
-                // Realizar la solicitud al servidor
-                fetch(`/noticias/delete/${newsId}/`, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken'),
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `current_page=${currentPage}`
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        // Usar el total de noticias devuelto por el servidor para actualizar los contadores
-                        updateCountersFromServer(data.total_news, data.total_pages);
-                        
-                        // Para dispositivos de escritorio, eliminar el elemento si aún no se ha eliminado
-                        if (!isDeviceMobile && document.getElementById(`news-${newsId}`)) {
-                            container.remove();
-                            // También eliminamos el modal asociado a la noticia eliminada
-                            if (modal) {
-                                modal.remove();
-                            }
-                        }
-                        
-                        // Animar las tarjetas actuales y luego añadir la nueva si existe
-                        if (!isDeviceMobile) {
-                            // Animar reposicionamiento con las posiciones capturadas al inicio
-                            animateReposition(oldPositions);
-                            
-                            // Si hay un nuevo elemento para agregar, lo hacemos después
-                            if (data.html) {
-                                setTimeout(() => {
-                                    addNewCard(data);
-                                }, 300); // Agregar después de que termine la animación de reposicionamiento
-                            }
-                        } else if (data.html) {
-                            // En móvil simplemente añadimos la nueva tarjeta
-                            addNewCard(data);
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Error al eliminar la noticia:', error);
-                    // En caso de error, restaurar la opacidad
-                    if (container && document.body.contains(container)) {
-                        container.style.opacity = '1';
-                        container.style.transform = 'scale(1)';
-                    }
-                });
-            }, animationDuration);
-        }
+            })
+            .catch(error => {
+                console.error('Error en fetch al eliminar la noticia:', error);
+                 // Revertir animación si falla el fetch
+                 if (document.body.contains(container)) {
+                     container.classList.remove('deleting');
+                     container.style.opacity = '1';
+                     container.style.transform = 'scale(1)';
+                     container.style.transition = '';
+                 }
+                // Mostrar mensaje de error al usuario
+            });
+        });
     }
 
     // Función para actualizar el contador en el header
@@ -489,27 +542,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Comprobar nuevas noticias
     function checkForNewNews(showImmediately = false) {
+        // showImmediately no se usa actualmente, pero se mantiene por si acaso
         fetch(`/noticias/check-new-news/?last_checked=${encodeURIComponent(lastChecked)}`)
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    // Actualizar la última vez que se comprobaron las noticias
                     lastChecked = data.current_time;
-                    
-                    // Si hay nuevas noticias
                     if (data.news_cards && data.news_cards.length > 0) {
                         console.log(`Se encontraron ${data.news_cards.length} noticias nuevas`);
-                        
-                        // Almacenar las nuevas noticias
-                        pendingNews = data.news_cards;
-                        
-                        // Mostrar notificación de nuevas noticias (solo informativa)
-                        showNotification(pendingNews.length);
-                        
-                        // Actualizar el contador total si está disponible en la respuesta
+                        pendingNews = data.news_cards; // Almacenar para loadNewNews
+
+                        // Actualizar contadores ANTES de mostrar notificación/cargar
                         updateCountersFromServer(data.total_news, data.total_pages);
-                        
-                        // Cargar las noticias automáticamente
+
+                        showNotification(pendingNews.length); // Mostrar notificación informativa
+
+                        // Cargar las noticias automáticamente (esta función manejará las animaciones)
                         loadNewNews();
                     }
                 }
@@ -519,128 +567,131 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
-    // Cargar nuevas noticias
+    // Cargar nuevas noticias (llamado por checkForNewNews o manualmente)
     function loadNewNews() {
         if (pendingNews.length === 0) return;
 
         const isDeviceMobile = isMobile();
-        const MAX_NEWS = 25;
-        const newsToAddCount = pendingNews.length;
+        const MAX_NEWS = 25; // Límite de tarjetas a mostrar
+        const newsToAdd = pendingNews; // Usar las noticias pendientes
+        pendingNews = []; // Limpiar la lista de pendientes
 
-        // 1. Capture initial positions (for FLIP) - Only if not mobile
+        // 1. Capturar posiciones ANTES de cualquier cambio (solo escritorio)
         const oldPositions = isDeviceMobile ? null : capturePositions();
 
-        // 2. Determine cards to remove
+        // 2. Determinar tarjetas a eliminar
         const currentCards = Array.from(newsGrid.children);
         const currentCount = currentCards.length;
+        const newsToAddCount = newsToAdd.length;
         const cardsToRemoveCount = Math.max(0, currentCount + newsToAddCount - MAX_NEWS);
-        const cardsToRemoveElements = currentCards.slice(currentCount - cardsToRemoveCount); // Get the last 'n' cards
+        const cardsToRemoveElements = currentCards.slice(-cardsToRemoveCount); // Últimas 'n' tarjetas
+        const cardsToRemoveIds = cardsToRemoveElements.map(el => el.id); // IDs para exclusión en FLIP
 
-        // 3. Animate removal of old cards and collect promises
+        // 3. Animar salida de tarjetas antiguas y obtener promesas
         const removalPromises = cardsToRemoveElements.map(cardElement => {
             return new Promise(resolve => {
                 const cardId = cardElement.id.replace('news-', '');
                 const modal = document.getElementById(`modal-${cardId}`);
+                const animationDuration = 300; // Duración de la animación de salida
 
-                // Add removal animation class/style
-                cardElement.style.transition = 'opacity 0.3s ease, transform 0.3s ease, height 0.3s ease, margin 0.3s ease, padding 0.3s ease'; // Smooth transition out
-                 cardElement.style.opacity = '0';
-                 cardElement.style.transform = 'scale(0.8)';
-                 cardElement.style.height = '0'; // Collapse height
-                 cardElement.style.margin = '0';
-                 cardElement.style.padding = '0';
-                 cardElement.style.border = 'none'; // Hide border during animation
-
-
-                const animationDuration = 300; // Consistent duration
+                // Aplicar animación de salida (similar a deleteNews pero sin clase 'deleting')
+                cardElement.style.transition = `opacity ${animationDuration}ms ease, transform ${animationDuration}ms ease, height ${animationDuration}ms ease, margin ${animationDuration}ms ease, padding ${animationDuration}ms ease, border ${animationDuration}ms ease`;
+                cardElement.style.opacity = '0';
+                cardElement.style.transform = 'scale(0.8)';
+                cardElement.style.height = '0';
+                cardElement.style.margin = '0';
+                cardElement.style.padding = '0';
+                cardElement.style.borderWidth = '0'; // Ocultar borde
 
                 setTimeout(() => {
+                    // Eliminar del DOM DESPUÉS de la animación
                     cardElement.remove();
                     if (modal) modal.remove();
-                    resolve();
+                    resolve(); // Resolver la promesa
                 }, animationDuration);
             });
         });
 
-        // Wait for all removal animations to finish before proceeding
+        // 4. Esperar a que todas las animaciones de eliminación terminen
         Promise.all(removalPromises).then(() => {
-            // 4. Prepare and insert new cards at the beginning
-            const newCardElements = [];
-            const fragment = document.createDocumentFragment();
+            // 5. Preparar nuevas tarjetas (sin añadirlas al DOM aún)
+            const newElementsData = []; // { container: Element, modal: Element, id: string }
+            const fragment = document.createDocumentFragment(); // Para inserción eficiente
 
-            // Sort pendingNews newest first
-            pendingNews.sort((a, b) => new Date(b.published) - new Date(a.published));
-
-            pendingNews.forEach((newsItem) => {
-                // Create card element
-                const temp = document.createElement('div');
-                temp.innerHTML = newsItem.card;
-                const newsContainer = temp.firstElementChild;
-
-                // Prepare entry animation (set initial state)
-                 newsContainer.style.opacity = '0';
-                 newsContainer.style.transform = 'scale(0.9)';
-                 newsContainer.style.transition = 'opacity 0.4s ease, transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)';
+             // Ordenar noticias nuevas por fecha (más reciente primero) si es necesario
+             newsToAdd.sort((a, b) => new Date(b.published) - new Date(a.published));
 
 
-                // Add modal
-                const modalTemp = document.createElement('div');
-                modalTemp.innerHTML = newsItem.modal;
-                const modal = modalTemp.firstElementChild;
-                newsModalsContainer.appendChild(modal);
+            newsToAdd.forEach((newsItem) => {
+                // Crear elementos de tarjeta y modal
+                const tempCard = document.createElement('div');
+                tempCard.innerHTML = newsItem.card;
+                const newsContainer = tempCard.firstElementChild;
+                const newsId = newsContainer.id.replace('news-', ''); // Obtener ID real
 
-                // Configure buttons, listeners etc. for the new card and its modal
-                configureNewCard(newsContainer, modal, newsItem.id);
+                const tempModal = document.createElement('div');
+                tempModal.innerHTML = newsItem.modal;
+                const modalElement = tempModal.firstElementChild;
 
-                fragment.appendChild(newsContainer); // Add to fragment
-                newCardElements.push(newsContainer); // Keep track of new elements
+                // Configurar tarjeta y modal (botones, listeners, etc.)
+                configureNewCard(newsContainer, modalElement, newsId);
+
+                // Preparar para animación de entrada (oculto inicialmente)
+                newsContainer.style.opacity = '0';
+                newsContainer.style.transform = 'scale(0.9)';
+                 newsContainer.style.transition = 'none'; // Asegurar que no haya transición inicial
+
+                // Añadir al fragmento y guardar referencia
+                fragment.appendChild(newsContainer);
+                newElementsData.push({ container: newsContainer, modal: modalElement, id: newsId });
             });
 
-            // Add the fragment with new cards to the grid's beginning
+            // 6. Aplicar FLIP a las tarjetas existentes (las que no se eliminaron)
+            // Pasar los IDs de las tarjetas eliminadas para excluirlas
+            if (oldPositions) {
+                animateReposition(oldPositions, cardsToRemoveIds);
+            }
+
+            // 7. Añadir las nuevas tarjetas al DOM (al principio del grid) y sus modales
+            // Se hace DESPUÉS de iniciar FLIP para que no interfieran en el cálculo de posiciones
             newsGrid.insertBefore(fragment, newsGrid.firstChild);
-
-            // Trigger entry animation for new cards
-            requestAnimationFrame(() => {
-                 newCardElements.forEach(card => {
-                     card.style.opacity = '1';
-                     card.style.transform = 'scale(1)';
-                     // Clean up inline styles after animation
-                     card.addEventListener('transitionend', function handler() {
-                         card.style.transition = '';
-                         card.style.transform = '';
-                         card.style.opacity = '';
-                         card.removeEventListener('transitionend', handler);
-                     }, { once: true });
-                 });
+            newElementsData.forEach(item => {
+                if (item.modal) newsModalsContainer.appendChild(item.modal);
             });
 
-            // 5. Animate repositioning of existing cards (FLIP) - Only if not mobile
-            if (!isDeviceMobile && oldPositions) {
-                 // We need to update oldPositions map to exclude the cards that were removed
-                 const remainingOldPositions = new Map();
-                 oldPositions.forEach((rect, card) => {
-                    // Check if the card still exists in the DOM and was not marked for removal
-                     if (document.body.contains(card) && !cardsToRemoveElements.includes(card)) {
-                         remainingOldPositions.set(card, rect);
-                     }
-                 });
-                 // Pass the filtered map to animateReposition
-                 animateReposition(remainingOldPositions);
-             }
 
-            // 6. Update counters and clean up
-            fetch('/noticias/get-news-count/')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        updateCountersFromServer(data.total_news, data.total_pages);
-                    }
-                })
-                .catch(error => console.error('Error al obtener el conteo actualizado:', error));
+            // 8. Animar la entrada de las nuevas tarjetas
+            // Usar requestAnimationFrame para asegurar que se aplica después de la inserción y FLIP
+            requestAnimationFrame(() => {
+                newElementsData.forEach(({ container }) => {
+                    // Forzar reflow individual antes de la animación (más seguro)
+                    void container.offsetWidth;
 
-            pendingNews = [];
-            // setupImageHoverHandlers(); // No longer needed here as configureNewCard handles it per card
-        });
+                    container.style.transition = 'opacity 0.4s ease, transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)';
+                    container.style.opacity = '1';
+                    container.style.transform = 'scale(1)';
+
+                    // Limpiar estilos inline después de la animación
+                    container.addEventListener('transitionend', function handler() {
+                        container.style.transition = '';
+                        container.style.opacity = '';
+                        container.style.transform = '';
+                        container.removeEventListener('transitionend', handler);
+                    }, { once: true });
+                });
+            });
+
+            // 9. Actualizar contadores (ya se hizo en checkForNewNews, pero podemos verificar de nuevo si es necesario)
+            // fetch('/noticias/get-news-count/')
+            //     .then(response => response.json())
+            //     .then(data => {
+            //         if (data.status === 'success') {
+            //             updateCountersFromServer(data.total_news, data.total_pages);
+            //         }
+            //     })
+            //     .catch(error => console.error('Error al obtener el conteo actualizado post-load:', error));
+
+        }); // Fin de Promise.all(removalPromises).then()
     }
     
     // Función para actualizar la paginación
@@ -836,232 +887,110 @@ document.addEventListener('DOMContentLoaded', function() {
     // Iniciar comprobación periódica
     setInterval(checkForNewNews, CHECK_INTERVAL);
 
-    // Función para añadir la nueva tarjeta
-    function addNewCard(data) {
-        if (!data.html) return;
-        
-        const temp = document.createElement('div');
-        temp.innerHTML = data.html;
-        const newCard = temp.firstElementChild;
-        
-        // Antes de añadir la nueva tarjeta, capturar posiciones actuales
-        const positionsBeforeInsert = capturePositions();
-        
-        // Preparar la nueva tarjeta
-        if (isMobile()) {
-            // En móvil, iniciar con opacidad 0 para hacer fade-in
-            newCard.style.opacity = '0';
-            newCard.style.transition = 'opacity 0.2s ease';
-            
-            // Forzar reflow
-            void newCard.offsetWidth;
-        } else {
-            // En escritorio, usar la animación de CSS
-            newCard.classList.add('inserting');
-        }
-        
-        const newDeleteBtn = newCard.querySelector('.delete-btn');
-        if (newDeleteBtn) {
-            attachDeleteListener(newDeleteBtn);
-        }
-        
-        // Asegurar que el evento onclick esté configurado correctamente
-        const card = newCard.querySelector('.news-card');
-        const cardFront = newCard.querySelector('.card-front');
-        const cardBack = newCard.querySelector('.card-back');
-        const linksContainer = cardBack?.querySelector('.news-links');
-        const newCardId = newCard.id.replace('news-', '');
+    // Función para añadir la nueva tarjeta (usada por deleteNews cuando reemplaza)
+    // Esta función ahora es manejada dentro de deleteNews y loadNewNews directamente
+    // function addNewCard(data) { ... } // <- Eliminar o comentar esta función si ya no se usa externamente
 
-        // Limpiar onclick de la tarjeta principal
-        if(card) card.removeAttribute('onclick');
+    // Helper function to configure a new card (centralizada)
+    function configureNewCard(newsContainer, modal, newsId) {
+        if (!newsContainer) return;
 
-        // Configuración común para móvil y escritorio
-        if (cardFront && newCard.querySelector('.delete-btn')) {
-             // Eliminar cualquier botón anterior si existe
-            const oldBtn = cardFront.querySelector('.mobile-delete-btn');
-            if (oldBtn) oldBtn.remove();
-
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'mobile-delete-btn';
-            deleteBtn.setAttribute('type', 'button');
-            deleteBtn.setAttribute('data-id', newCardId);
-            deleteBtn.onclick = function(e) {
-                e.stopPropagation();
-                deleteNews(newCardId);
-                return false;
-            };
-            cardFront.appendChild(deleteBtn);
-        }
-
-        if (linksContainer) {
-             // Eliminar cualquier botón anterior si existe
-            const oldModalOpener = linksContainer.querySelector('.news-link.modal-opener');
-            if (oldModalOpener) oldModalOpener.remove();
-
-            const modalLink = document.createElement('a');
-            modalLink.href = 'javascript:void(0)';
-            modalLink.className = 'news-link modal-opener';
-            modalLink.textContent = 'Más';
-            modalLink.addEventListener('click', function(e) {
-                e.stopPropagation();
-                openNewsModal(newCardId);
-            });
-            linksContainer.insertBefore(modalLink, linksContainer.firstChild);
-        }
-        
-        // Añadir la nueva tarjeta
-        newsGrid.appendChild(newCard);
-        
-        // Para móvil, aplicar el fade-in después de añadir al DOM
-        if (isMobile()) {
-            // Aplicar fade-in inmediatamente para evitar retrasos
-            requestAnimationFrame(() => {
-                newCard.style.opacity = '1';
-            });
-        } else {
-            // Animamos el reposicionamiento de todas las tarjetas
-            // después de añadir la nueva
-            setTimeout(() => {
-                // Capturar las nuevas posiciones después de insertar
-                const newPositions = capturePositions();
-                
-                // Animar todas las tarjetas excepto la recién insertada
-                document.querySelectorAll('.news-card-container:not(.inserting)').forEach(container => {
-                    const oldRect = positionsBeforeInsert.get(container);
-                    if (!oldRect) return;
-                    
-                    const newRect = newPositions.get(container);
-                    if (!newRect) return;
-                    
-                    const deltaX = oldRect.left - newRect.left;
-                    const deltaY = oldRect.top - newRect.top;
-                    
-                    // Solo animar si hay un cambio significativo
-                    if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
-                        container.style.transition = 'none';
-                        container.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-                        
-                        // Forzar reflow
-                        void container.offsetWidth;
-                        
-                        // Usar la misma curva de aceleración que en CSS
-                        container.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1)';
-                        container.style.transform = '';
-                        
-                        container.addEventListener('transitionend', function handler() {
-                            container.style.transition = '';
-                            container.removeEventListener('transitionend', handler);
-                        });
-                    }
-                });
-            }, 50);
-        }
-        
-        // Añadir el modal para la nueva noticia
-        if (data.modal) {
-            const modalTemp = document.createElement('div');
-            modalTemp.innerHTML = data.modal;
-            const newModal = modalTemp.firstElementChild;
-            
-            // Añadir al contenedor de modales
-            newsModalsContainer.appendChild(newModal);
-            
-            // Configurar el botón de cierre
-            const closeBtn = newModal.querySelector('.close');
-            if (closeBtn) {
-                const newCardId = newCard.id.replace('news-', '');
-                closeBtn.setAttribute('onclick', `closeNewsModal('${newCardId}')`);
-            }
-            
-            // Configurar botón de eliminación en el modal
-            const modalDeleteBtn = newModal.querySelector('.btn-danger');
-            if (modalDeleteBtn) {
-                const newCardId = newCard.id.replace('news-', '');
-                modalDeleteBtn.setAttribute('data-id', newCardId);
-                attachDeleteListener(modalDeleteBtn);
-            }
-        }
-        
-        // Aplicar los manejadores de hover para imágenes a la nueva tarjeta
-        setupImageHoverHandlers();
-        
-        // Eliminar la clase de inserción después de completar la animación
-        setTimeout(() => {
-            newCard.classList.remove('inserting');
-        }, 700);
-    }
-
-    // Helper function to configure a new card (refactored from existing code)
-    function configureNewCard(newsContainer, modal, newsItemId) {
         const card = newsContainer.querySelector('.news-card');
         const cardFront = newsContainer.querySelector('.card-front');
         const cardBack = newsContainer.querySelector('.card-back');
         const linksContainer = cardBack?.querySelector('.news-links');
-        const newsId = newsItemId; // Already have the ID
+
+        // Limpiar handlers previos si existieran (importante si se reconfigura)
+        // (Considerar clonar y reemplazar el nodo si los listeners se vuelven complejos)
 
         // Limpiar onclick de la tarjeta principal por si acaso
         if (card) card.removeAttribute('onclick');
 
-        // Botón de eliminación móvil/escritorio en el frente
-        // Revisa si el botón .delete-btn existe en el template original para decidir si añadir el botón flotante
-        const canDelete = newsContainer.querySelector('.delete-btn'); // Busca el botón original del backend
-        if (cardFront && canDelete) {
-            const oldBtn = cardFront.querySelector('.mobile-delete-btn');
-            if (oldBtn) oldBtn.remove();
+        // Botón de eliminación flotante (móvil/escritorio) en el frente
+        // Revisa si el botón .delete-btn (del template original) existe para decidir si añadir el botón flotante
+        const canDelete = newsContainer.querySelector('.delete-btn'); // Botón original del backend
+        const existingMobileDeleteBtn = cardFront?.querySelector('.mobile-delete-btn');
+        if (existingMobileDeleteBtn) existingMobileDeleteBtn.remove(); // Limpiar anterior
 
+        if (cardFront && canDelete) {
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'mobile-delete-btn';
             deleteBtn.setAttribute('type', 'button');
             deleteBtn.setAttribute('data-id', newsId);
+             // Limpiar onclick anterior si existe
+             deleteBtn.onclick = null;
             deleteBtn.onclick = function(e) {
                 e.stopPropagation();
                 // Add pulse animation on click for feedback
                 this.classList.add('pulse');
                 setTimeout(() => this.classList.remove('pulse'), 300);
-                deleteNews(newsId);
+                deleteNews(newsId); // Llamar a la función de eliminación principal
                 return false;
             };
             cardFront.appendChild(deleteBtn);
+
+             // Añadir listeners de hover para la clase 'delete-hover' en la tarjeta
+             deleteBtn.addEventListener('mouseenter', function(e) {
+                e.stopPropagation();
+                const cardElement = this.closest('.news-card');
+                if (cardElement) cardElement.classList.add('delete-hover');
+            });
+            deleteBtn.addEventListener('mouseleave', function(e) {
+                e.stopPropagation();
+                const cardElement = this.closest('.news-card');
+                if (cardElement) cardElement.classList.remove('delete-hover');
+            });
         }
 
-        // Botón "Ver más" en el reverso
+        // Botón "Ver más" (abre modal) en el reverso
         if (linksContainer) {
-            const oldModalOpener = linksContainer.querySelector('.news-link.modal-opener');
-            if (oldModalOpener) oldModalOpener.remove();
+            const existingModalOpener = linksContainer.querySelector('.news-link.modal-opener');
+            if (existingModalOpener) existingModalOpener.remove(); // Limpiar anterior
 
             const modalLink = document.createElement('a');
             modalLink.href = 'javascript:void(0)';
             modalLink.className = 'news-link modal-opener';
             modalLink.textContent = 'Más';
-            modalLink.addEventListener('click', function(e) {
-                e.stopPropagation();
-                openNewsModal(newsId);
-            });
+             // Limpiar listener anterior
+             // modalLink.removeEventListener('click', ...); // Más complejo, mejor limpiar onclick
+             modalLink.onclick = null;
+             modalLink.onclick = function(e) {
+                 e.stopPropagation();
+                 openNewsModal(newsId);
+             };
+            // Insertar "Más" antes que otros links (Fuente, Eliminar original)
             linksContainer.insertBefore(modalLink, linksContainer.firstChild);
         }
 
-        // Listener para botón de eliminación en el modal
-        const modalDeleteBtn = modal?.querySelector('.btn-danger');
+        // Listener para botón de eliminación DENTRO del modal
+        const modalDeleteBtn = modal?.querySelector('.delete-btn'); // Buscar botón de eliminar en el modal
         if (modalDeleteBtn) {
             modalDeleteBtn.setAttribute('data-id', newsId);
-            // Ensure listener is attached (attachDeleteListener might need adjustment or just call deleteNews directly)
-            if (!modalDeleteBtn.onclick) { // Avoid attaching multiple listeners
-                 modalDeleteBtn.onclick = function(e) {
-                     e.stopPropagation();
-                     deleteNews(this.dataset.id);
-                 };
-             }
+             // Asegurar que solo haya un listener onclick
+             modalDeleteBtn.onclick = null;
+             modalDeleteBtn.onclick = function(e) {
+                 e.stopPropagation();
+                 // Podríamos añadir feedback aquí también si queremos
+                 deleteNews(this.dataset.id);
+             };
         }
 
-         // Configurar botón de cierre del modal
-         const closeBtn = modal?.querySelector('.close');
-         if (closeBtn && !closeBtn.onclick) {
-             closeBtn.onclick = () => closeNewsModal(newsId);
-         }
+        // Configurar botón de cierre del modal
+        const closeBtn = modal?.querySelector('.close');
+        if (closeBtn) {
+            // Limpiar onclick anterior
+            closeBtn.onclick = null;
+            closeBtn.onclick = () => closeNewsModal(newsId);
+        }
 
-         // Volver a aplicar manejadores de hover de imagen específicamente para esta tarjeta
-         const image = newsContainer.querySelector('.news-image');
-         if (image) {
+        // Configurar hover de imagen para la clase 'image-hover' en la tarjeta
+        const image = newsContainer.querySelector('.news-image');
+        if (image) {
+             // Limpiar listeners anteriores antes de añadir nuevos
+             // image.removeEventListener('mouseenter', ...); // Complejo, quizás clonar sea mejor a largo plazo
+            image.onmouseenter = null;
+            image.onmouseleave = null;
+
             image.addEventListener('mouseenter', function() {
                 const cardElement = this.closest('.news-card');
                 if (cardElement) cardElement.classList.add('image-hover');
@@ -1070,19 +999,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 const cardElement = this.closest('.news-card');
                 if (cardElement) cardElement.classList.remove('image-hover');
             });
-         }
-         const mobileDeleteButton = newsContainer.querySelector('.mobile-delete-btn');
-         if (mobileDeleteButton) {
-            mobileDeleteButton.addEventListener('mouseenter', function(e) {
-                e.stopPropagation();
-                const cardElement = this.closest('.news-card');
-                if (cardElement) cardElement.classList.add('delete-hover');
-            });
-            mobileDeleteButton.addEventListener('mouseleave', function(e) {
-                e.stopPropagation();
-                const cardElement = this.closest('.news-card');
-                if (cardElement) cardElement.classList.remove('delete-hover');
-            });
-         }
+        }
     }
+
+    // Eliminar o comentar la función updateCardBehavior si ya no es necesaria
+    // updateCardBehavior(); // Comentar o eliminar llamada inicial
+    // window.removeEventListener('resize', updateCardBehavior); // Comentar o eliminar listener
+
+    // Inicializar configuración para tarjetas existentes al cargar la página
+    document.querySelectorAll('.news-card-container').forEach(container => {
+        const newsId = container.id.replace('news-', '');
+        const modal = document.getElementById(`modal-${newsId}`);
+        configureNewCard(container, modal, newsId);
+    });
+
+
 }); 
