@@ -962,6 +962,18 @@ document.addEventListener('DOMContentLoaded', function() {
             linksContainer.insertBefore(modalLink, linksContainer.firstChild);
         }
 
+        // Listener para botón de eliminación original EN EL REVERSO de la tarjeta
+        const cardBackDeleteBtn = newsContainer.querySelector('.card-back .delete-btn');
+        if (cardBackDeleteBtn) {
+            cardBackDeleteBtn.setAttribute('data-id', newsId);
+            // Limpiar onclick anterior
+            cardBackDeleteBtn.onclick = null;
+            cardBackDeleteBtn.onclick = function(e) {
+                e.stopPropagation();
+                deleteNews(this.dataset.id);
+            };
+        }
+
         // Listener para botón de eliminación DENTRO del modal
         const modalDeleteBtn = modal?.querySelector('.delete-btn'); // Buscar botón de eliminar en el modal
         if (modalDeleteBtn) {
