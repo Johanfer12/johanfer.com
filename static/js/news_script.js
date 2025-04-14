@@ -393,58 +393,50 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // 1. Capturar posiciones ANTES de cualquier cambio
-        const oldPositions = isDeviceMobile ? null : capturePositions();
-        const containerId = container.id; // Guardar ID para exclusión en FLIP
-
-        // Cerrar modal si está abierto
+        // Cerrar modal si está abierto (hacer esto primero)
         if (modal && modal.classList.contains('show')) {
             closeNewsModal(newsId);
         }
 
-        // 2. Aplicar animación de salida
-        // Usar una promesa para saber cuándo termina la animación
-        const animationPromise = new Promise(resolve => {
-            const animationDuration = isDeviceMobile ? 150 : 300; // Duración más corta en móvil
+        if (isDeviceMobile) {
+            // --- Lógica Optimizada para Móvil ---
 
-            if (isDeviceMobile) {
-                container.style.transition = `opacity ${animationDuration}ms ease, transform ${animationDuration}ms ease`;
-                container.style.opacity = '0';
-                container.style.transform = 'scale(0.95)';
-            } else {
-                // Usar clase para animación de escritorio
-                container.classList.add('deleting'); // Asegúrate que 'deleting' tenga una animación de ~300ms
-            }
-
-            // Esperar que termine la animación
-            setTimeout(resolve, animationDuration);
-        });
-
-        // 3. Después de la animación de salida -> Realizar fetch y actualizar DOM/FLIP
-        animationPromise.then(() => {
-            // Realizar la solicitud al servidor
-            fetch(`/noticias/delete/${newsId}/`, {
+            // 1. Iniciar fetch inmediatamente
+            const fetchPromise = fetch(`/noticias/delete/${newsId}/`, {
                 method: 'POST',
                 headers: {
                     'X-CSRFToken': getCookie('csrftoken'),
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 body: `current_page=${currentPage}`
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    // 4. Eliminar elemento del DOM (AHORA, después de animar salida y ANTES de FLIP)
-                    container.remove();
-                    if (modal) modal.remove();
+            }).then(response => response.json()); // Convertir a JSON aquí para simplificar
 
+            // 2. Iniciar animación de salida
+            const animationDuration = 150; // Duración corta para móvil
+            container.style.transition = `opacity ${animationDuration}ms ease, transform ${animationDuration}ms ease`;
+            container.style.opacity = '0';
+            container.style.transform = 'scale(0.95)';
+
+            // 3. Eliminar del DOM después de la animación de salida (sin esperar fetch)
+            setTimeout(() => {
+                if (document.body.contains(container)) {
+                    container.remove();
+                }
+                if (modal && document.body.contains(modal)) { // Asegurarse que el modal existe antes de intentar quitarlo
+                     modal.remove();
+                 }
+            }, animationDuration);
+
+            // 4. Procesar resultado del fetch cuando llegue
+            fetchPromise.then(data => {
+                if (data.status === 'success') {
                     // Actualizar contadores con datos del servidor
                     updateCountersFromServer(data.total_news, data.total_pages);
 
                     let newCardElement = null;
                     let newModalElement = null;
 
-                    // 5. Si hay un nuevo elemento para agregar, prepararlo pero NO añadirlo aún
+                    // Si hay un nuevo elemento para agregar, prepararlo
                     if (data.html && data.modal) {
                         const tempCard = document.createElement('div');
                         tempCard.innerHTML = data.html;
@@ -454,70 +446,182 @@ document.addEventListener('DOMContentLoaded', function() {
                         tempModal.innerHTML = data.modal;
                         newModalElement = tempModal.firstElementChild;
 
-                         // Configurar la nueva tarjeta y modal (botones, listeners)
+                        // Configurar la nueva tarjeta y modal (botones, listeners)
                         configureNewCard(newCardElement, newModalElement, newCardElement.id.replace('news-', ''));
 
-                         // Preparar para animación de entrada
+                        // Preparar para animación de entrada
                         newCardElement.style.opacity = '0';
                         newCardElement.style.transform = 'scale(0.9)';
                         newCardElement.style.transition = 'none'; // Sin transición inicial
                     }
 
-                    // 6. Aplicar FLIP a las tarjetas restantes
-                    // Pasar el ID de la tarjeta eliminada para excluirla explícitamente
-                    if (oldPositions) {
-                        animateReposition(oldPositions, [containerId]);
-                    }
-
-                    // 7. Añadir la nueva tarjeta (si existe) y animar su entrada DESPUÉS de iniciar FLIP
+                    // Añadir la nueva tarjeta (si existe y no es duplicada) y animar su entrada
                     if (newCardElement) {
-                        // Añadir al final del grid (o donde corresponda según tu lógica, aquí se asume al final)
-                        newsGrid.appendChild(newCardElement);
-                        if (newModalElement) newsModalsContainer.appendChild(newModalElement);
+                        const existingCard = newsGrid.querySelector(`#${newCardElement.id}`);
+                        if (!existingCard) {
+                            newsGrid.appendChild(newCardElement);
+                            if (newModalElement) newsModalsContainer.appendChild(newModalElement);
 
-                        // Forzar reflow antes de animar entrada
-                        void newCardElement.offsetWidth;
+                            void newCardElement.offsetWidth; // Forzar reflow
 
-                        // Iniciar animación de entrada
-                        requestAnimationFrame(() => {
-                            newCardElement.style.transition = 'opacity 0.4s ease, transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)';
-                            newCardElement.style.opacity = '1';
-                            newCardElement.style.transform = 'scale(1)';
+                            requestAnimationFrame(() => {
+                                newCardElement.style.transition = 'opacity 0.4s ease, transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)';
+                                newCardElement.style.opacity = '1';
+                                newCardElement.style.transform = 'scale(1)';
 
-                            // Limpiar estilos inline después de la animación
-                            newCardElement.addEventListener('transitionend', function handler() {
-                                newCardElement.style.transition = '';
-                                newCardElement.style.opacity = '';
-                                newCardElement.style.transform = '';
-                                newCardElement.removeEventListener('transitionend', handler);
-                            }, { once: true });
-                        });
+                                newCardElement.addEventListener('transitionend', function handler() {
+                                    newCardElement.style.transition = '';
+                                    newCardElement.style.opacity = '';
+                                    newCardElement.style.transform = '';
+                                    newCardElement.removeEventListener('transitionend', handler);
+                                }, { once: true });
+                            });
+                        } else {
+                            console.warn(`Intento de añadir tarjeta duplicada (${newCardElement.id}) después de eliminar [Móvil]. Se omitió.`);
+                            updatePagination(data.total_pages); // Asegurar paginación correcta
+                        }
+                    } else {
+                         // Si no vino tarjeta nueva, solo actualizar paginación
+                         updatePagination(data.total_pages);
                     }
 
                 } else {
-                     // Si falla el fetch, revertir animación de salida (opcional)
-                     if (document.body.contains(container)) {
-                         container.classList.remove('deleting');
-                         container.style.opacity = '1';
-                         container.style.transform = 'scale(1)';
-                         container.style.transition = ''; // Limpiar transición inline si se usó
-                     }
-                     console.error('Error en la respuesta del servidor al eliminar:', data.message);
-                     // Podrías mostrar un mensaje al usuario aquí
+                    console.error('Error en la respuesta del servidor al eliminar [Móvil]:', data.message);
+                    // No se revierte la eliminación visual ya que el elemento ya se quitó del DOM.
+                    // Se podría mostrar un mensaje al usuario o intentar recargar.
+                    // Simplemente actualizamos contadores por si el servidor los envió a pesar del error.
+                    if (data.total_news !== undefined) {
+                         updateCountersFromServer(data.total_news, data.total_pages);
+                    }
                 }
             })
             .catch(error => {
-                console.error('Error en fetch al eliminar la noticia:', error);
-                 // Revertir animación si falla el fetch
-                 if (document.body.contains(container)) {
-                     container.classList.remove('deleting');
-                     container.style.opacity = '1';
-                     container.style.transform = 'scale(1)';
-                     container.style.transition = '';
-                 }
-                // Mostrar mensaje de error al usuario
+                console.error('Error en fetch al eliminar la noticia [Móvil]:', error);
+                // Tampoco se puede revertir fácilmente. Mostrar error o intentar recargar.
             });
-        });
+
+        } else {
+            // --- Lógica Original para Escritorio (con FLIP) ---
+            const oldPositions = capturePositions();
+            const containerId = container.id; // Guardar ID para exclusión en FLIP
+
+            // Aplicar animación de salida con clase CSS
+            const animationPromise = new Promise(resolve => {
+                const animationDuration = 500; // Duración de la animación .deleting
+                container.classList.add('deleting'); // Usar clase para animación de escritorio
+                setTimeout(resolve, animationDuration);
+            });
+
+            // Después de la animación de salida -> Realizar fetch y actualizar DOM/FLIP
+            animationPromise.then(() => {
+                // Realizar la solicitud al servidor
+                fetch(`/noticias/delete/${newsId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `current_page=${currentPage}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // Eliminar elemento del DOM (AHORA, después de animar salida y ANTES de FLIP)
+                        container.remove();
+                        if (modal) modal.remove();
+
+                        // Actualizar contadores con datos del servidor
+                        updateCountersFromServer(data.total_news, data.total_pages);
+
+                        let newCardElement = null;
+                        let newModalElement = null;
+
+                        // Si hay un nuevo elemento para agregar, prepararlo pero NO añadirlo aún
+                        if (data.html && data.modal) {
+                            const tempCard = document.createElement('div');
+                            tempCard.innerHTML = data.html;
+                            newCardElement = tempCard.firstElementChild;
+
+                            const tempModal = document.createElement('div');
+                            tempModal.innerHTML = data.modal;
+                            newModalElement = tempModal.firstElementChild;
+
+                            // Configurar la nueva tarjeta y modal (botones, listeners)
+                            configureNewCard(newCardElement, newModalElement, newCardElement.id.replace('news-', ''));
+
+                            // Preparar para animación de entrada
+                            newCardElement.style.opacity = '0';
+                            newCardElement.style.transform = 'scale(0.9)';
+                            newCardElement.style.transition = 'none'; // Sin transición inicial
+                        }
+
+                        // Aplicar FLIP a las tarjetas restantes
+                        // Pasar el ID de la tarjeta eliminada para excluirla explícitamente
+                        if (oldPositions) {
+                            animateReposition(oldPositions, [containerId]);
+                        }
+
+                        // Añadir la nueva tarjeta (si existe y no es duplicada) y animar su entrada DESPUÉS de iniciar FLIP
+                        if (newCardElement) {
+                            const existingCard = newsGrid.querySelector(`#${newCardElement.id}`);
+                            if (!existingCard) {
+                                // Solo añadir si NO existe ya
+                                newsGrid.appendChild(newCardElement);
+                                if (newModalElement) newsModalsContainer.appendChild(newModalElement);
+
+                                // Forzar reflow antes de animar entrada
+                                void newCardElement.offsetWidth;
+
+                                // Iniciar animación de entrada
+                                requestAnimationFrame(() => {
+                                    newCardElement.style.transition = 'opacity 0.4s ease, transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)';
+                                    newCardElement.style.opacity = '1';
+                                    newCardElement.style.transform = 'scale(1)';
+
+                                    // Limpiar estilos inline después de la animación
+                                    newCardElement.addEventListener('transitionend', function handler() {
+                                        newCardElement.style.transition = '';
+                                        newCardElement.style.opacity = '';
+                                        newCardElement.style.transform = '';
+                                        newCardElement.removeEventListener('transitionend', handler);
+                                    }, { once: true });
+                                });
+                            } else {
+                                console.warn(`Intento de añadir tarjeta duplicada (${newCardElement.id}) después de eliminar [Escritorio]. Se omitió.`);
+                                updatePagination(data.total_pages); // Asegurar paginación correcta
+                            }
+                        } else {
+                            // Si no vino tarjeta nueva, solo actualizar paginación
+                            updatePagination(data.total_pages);
+                        }
+
+                    } else {
+                        // Si falla el fetch, revertir animación de salida (opcional)
+                        if (document.body.contains(container)) {
+                            container.classList.remove('deleting');
+                            container.style.opacity = '1'; // Restaurar si se usaron estilos inline (aunque no debería en escritorio)
+                            container.style.transform = 'scale(1)';
+                            container.style.transition = ''; // Limpiar transición inline si se usó
+                        }
+                        console.error('Error en la respuesta del servidor al eliminar [Escritorio]:', data.message);
+                        if (data.total_news !== undefined) {
+                             updateCountersFromServer(data.total_news, data.total_pages);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error en fetch al eliminar la noticia [Escritorio]:', error);
+                    // Revertir animación si falla el fetch
+                    if (document.body.contains(container)) {
+                        container.classList.remove('deleting');
+                        container.style.opacity = '1';
+                        container.style.transform = 'scale(1)';
+                        container.style.transition = '';
+                    }
+                    // Mostrar mensaje de error al usuario
+                });
+            });
+        }
     }
 
     // Función para actualizar el contador en el header
