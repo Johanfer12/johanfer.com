@@ -30,48 +30,12 @@ def refresh_spotify_data():
         print(f"Error durante la obtención del token: {e}")
         return
 
-    sp = spotipy.Spotify(auth=token)
+    # Aumentar el timeout para las solicitudes
+    sp = spotipy.Spotify(auth=token, requests_timeout=15)
 
-    # --- Inicio: Buscar o Crear Playlist "Olvidadas" ---
-    olvidadas_playlist_id = None
-    playlist_name = "Olvidadas"
-    user_id = USERNAME
-    try:
-        print(f"Buscando playlist '{playlist_name}' para el usuario {user_id}...")
-        offset = 0
-        limit = 50
-        while True:
-            current_playlists = sp.user_playlists(user_id, limit=limit, offset=offset)
-            if not current_playlists or not current_playlists['items']:
-                break
-
-            for playlist in current_playlists['items']:
-                if playlist['name'] == playlist_name and playlist['owner']['id'] == user_id:
-                    olvidadas_playlist_id = playlist['id']
-                    print(f"Playlist '{playlist_name}' encontrada con ID: {olvidadas_playlist_id}")
-                    break
-            
-            if olvidadas_playlist_id:
-                break
-
-            offset += limit
-            if len(current_playlists['items']) < limit:
-                 break
-            time.sleep(0.2)
-
-        if not olvidadas_playlist_id:
-            print(f"Playlist '{playlist_name}' no encontrada para {user_id}. Creando...")
-            new_playlist = sp.user_playlist_create(user_id, playlist_name, public=False, description="Canciones eliminadas de favoritos automáticamente.")
-            olvidadas_playlist_id = new_playlist['id']
-            print(f"Playlist '{playlist_name}' creada con ID: {olvidadas_playlist_id}")
-
-    except spotipy.exceptions.SpotifyException as e:
-        print(f"Error de API Spotify al buscar/crear playlist: {e}")
-        print("Continuando sin añadir a playlist 'Olvidadas' debido a error.")
-    except Exception as e:
-        print(f"Error inesperado al buscar/crear playlist: {e}")
-        print("Continuando sin añadir a playlist 'Olvidadas' debido a error.")
-    # --- Fin: Buscar o Crear Playlist "Olvidadas" ---
+    # Usar directamente el ID de la playlist "Olvidadas"
+    olvidadas_playlist_id = "1ktjWnNpAeK5N7s6UEdRif" 
+    print(f"Usando ID de playlist 'Olvidadas' hardcodeado: {olvidadas_playlist_id}")
 
     # Optimización para canciones top
     top_tracks = sp.current_user_top_tracks(limit=5, time_range='short_term')
@@ -144,7 +108,7 @@ def refresh_spotify_data():
                 track_id = extract_track_id(favorite.song_url)
                 if track_id:
                     track_uri = f"spotify:track:{track_id}"
-                    print(f"Añadiendo '{favorite.song_name}' a playlist '{playlist_name}'...")
+                    print(f"Añadiendo '{favorite.song_name}' a playlist '{olvidadas_playlist_id}'...")
                     sp.playlist_add_items(olvidadas_playlist_id, [track_uri])
                     print(f"  -> Añadido '{favorite.song_name}' exitosamente.")
                 else:
