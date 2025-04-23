@@ -4,8 +4,8 @@ from django.utils import timezone
 import pytz
 from .models import News, FeedSource, FilterWord, AIFilterInstruction
 import re
-import google.generativeai as genai
-from config import GOOGLE_API_KEY
+from google import genai
+from google.genai import types
 import time
 import requests
 from bs4 import BeautifulSoup
@@ -17,15 +17,16 @@ import json
 class EmbeddingService:
     @staticmethod
     def initialize_embedding_model():
-        """Inicializa la configuración de la API de Gemini para embeddings"""
-        genai.configure(api_key=GOOGLE_API_KEY)
-        return "models/text-embedding-004"  # Retorna el nombre del modelo en lugar de una instancia
+        """Crea un cliente genai para usar en embeddings."""
+        # Cambiado: Devolver un cliente en lugar del nombre del modelo
+        return genai.Client()
 
     @staticmethod
-    def generate_embedding(text, model_name=None, max_retries=3):
-        """Genera embeddings para un texto usando la API de Gemini"""
-        if model_name is None:
-            model_name = EmbeddingService.initialize_embedding_model()
+    # Cambiado: Aceptar client en lugar de model_name
+    def generate_embedding(text, client, max_retries=3):
+        """Genera embeddings para un texto usando la API de Gemini a través del cliente."""
+        # Eliminado: ya no inicializamos el modelo aquí, usamos el cliente
+        # model_name = "models/text-embedding-004" # <- Nos aseguramos que el nombre es el correcto
         
         # Preprocesar el texto para tener un contenido más limpio
         clean_text = re.sub(r'<.*?>', ' ', text)  # Eliminar etiquetas HTML
@@ -37,15 +38,32 @@ class EmbeddingService:
         
         for attempt in range(max_retries):
             try:
-                # Usar directamente genai.embed_content en lugar de model.embed_content
-                result = genai.embed_content(
-                    model=model_name,
-                    content=clean_text,
-                    task_type="retrieval_document",
+                # Cambiado: Usar client.models.embed_content y pasar task_type en config
+                result = client.models.embed_content(
+                    model="models/text-embedding-004",
+                    contents=clean_text,
+                    # Corregido: Mover task_type a un objeto EmbedContentConfig
+                    config=types.EmbedContentConfig(task_type="retrieval_document") 
                 )
                 
                 # Acceder al embedding según la estructura retornada por la API
-                return result['embedding']
+                try:
+                    # Ahora que conocemos la estructura exacta
+                    # result.embeddings es una lista de ContentEmbedding
+                    # Tomamos el primer elemento (ya que solo enviamos un texto) y extraemos sus valores
+                    if hasattr(result, 'embeddings') and result.embeddings:
+                        first_embedding = result.embeddings[0]
+                        if hasattr(first_embedding, 'values'):
+                            # Convertir a lista Python estándar para asegurar la serialización JSON
+                            return list(map(float, first_embedding.values))
+                    
+                    # Código de respaldo por si la estructura cambia
+                    print(f"ADVERTENCIA: No se encontró la estructura esperada. Tipo de resultado: {type(result)}")
+                    # Devolver lista vacía como fallback seguro
+                    return []
+                except Exception as e:
+                    print(f"Error al extraer valores del embedding: {str(e)}")
+                    return []  # Lista vacía como fallback
             except Exception as e:
                 if "429" in str(e) and attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 5  # Backoff exponencial
@@ -78,13 +96,14 @@ class EmbeddingService:
         return float(similarity)
     
     @staticmethod
-    def check_redundancy(news_item, model_name=None):
+    # Cambiado: Aceptar client
+    def check_redundancy(news_item, client):
         """
         Verifica si una noticia es redundante comparando con las existentes
         
         Args:
             news_item: Objeto News que se quiere verificar
-            model_name: Nombre del modelo de embeddings (opcional)
+            client: Cliente genai para generar embeddings
             
         Returns:
             tuple: (es_redundante, noticia_similar, puntuación_similitud)
@@ -92,15 +111,14 @@ class EmbeddingService:
         # Obtener el umbral de la fuente de la noticia
         threshold = news_item.source.similarity_threshold
 
-        # Inicializar el modelo si no se proporciona
-        if model_name is None:
-            model_name = EmbeddingService.initialize_embedding_model()
+        # Eliminado: No necesitamos inicializar el modelo aquí
         
         # Generar embedding para la noticia actual
         if not news_item.embedding:
             # Combinar título y descripción para un mejor embedding
             content_for_embedding = f"{news_item.title} {news_item.description}"
-            news_item.embedding = EmbeddingService.generate_embedding(content_for_embedding, model_name)
+            # Cambiado: Pasar client a generate_embedding
+            news_item.embedding = EmbeddingService.generate_embedding(content_for_embedding, client)
             news_item.save(update_fields=['embedding'])
         
         # No continuar si no se pudo generar el embedding
@@ -140,13 +158,11 @@ class EmbeddingService:
 class FeedService:
     @staticmethod
     def initialize_gemini():
-        genai.configure(api_key=GOOGLE_API_KEY)
-        # Configuración específica para pedir JSON
-        generation_config = genai.types.GenerationConfig(response_mime_type="application/json")
-        return genai.GenerativeModel('gemini-2.0-flash', generation_config=generation_config)
+        # Cambiado: Crear y devolver un cliente genai
+        return genai.Client()
 
     @staticmethod
-    def process_content_with_gemini(title, original_content, model, max_retries=3):
+    def process_content_with_gemini(title, original_content, client, max_retries=3):
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
         # Obtener instrucciones de filtro IA activas
@@ -163,7 +179,7 @@ class FeedService:
         Contenido: '{content_for_prompt}...' 
 
         Realiza las siguientes tareas y devuelve el resultado EXACTAMENTE en formato JSON:
-        1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, de aproximadamente 60 a 80 palabras, eliminando clickbait y relleno, manteniendo los puntos clave. NO apliques formato HTML aquí, solo texto plano.
+        1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, de aproximadamente 65 a 80 palabras, eliminando clickbait y relleno, manteniendo los puntos clave. NO apliques formato HTML aquí, solo texto plano.
         2.  **short_answer**: SOLO si el titular (a) es una pregunta directa (ej: '¿Por qué deberías...?', '¿Cuál es...?') O (b) es claro clickbait que crea intriga, sugiere un secreto, una lista, una explicación o una revelación que se encuentra en el contenido (ej: 'El secreto de...', 'Lo que no sabías...', 'Cómo un pequeño gesto cambió todo...', 'El país que no tiene ejército...', 'X razones por las que...', 'El truco para...', 'Descubre cómo...'). En ese caso, extrae o resume la respuesta/punto clave del contenido original de forma EXTREMADAMENTE CONCISA (máximo 15 palabras) y DIRECTA. No uses introducciones ni parafrasees. Si el titular NO cumple estas condiciones, el valor de 'short_answer' debe ser null (JSON null).
         3.  **ai_filter**: Basándote en las siguientes instrucciones de filtrado, determina si esta noticia DEBE SER ELIMINADA. Si coincide con ALGUNA instrucción, el valor debe ser EXACTAMENTE EL TEXTO LITERAL de la instrucción que coincidió (solo una, la primera que coincida si hay varias). Si NO coincide con ninguna, el valor debe ser null (JSON null).
             Instrucciones de Filtrado:
@@ -191,9 +207,18 @@ class FeedService:
         IMPORTANTE: Responde únicamente con el objeto JSON válido, sin texto adicional antes o después.
         """
 
+        # Definir generation_config aquí
+        generation_config = types.GenerationConfig(response_mime_type="application/json")
+
         for attempt in range(max_retries):
             try:
-                response = model.generate_content(prompt)
+                # Cambiado: Usar client.models.generate_content y pasar config
+                response = client.models.generate_content(
+                    model='gemini-2.0-flash',
+                    contents=prompt,
+                    # Corregido: Pasar generation_config dentro de config
+                    config=types.GenerateContentConfig(response_mime_type="application/json")
+                )
                 try:
                     result_json = json.loads(response.text)
                     summary_text = result_json.get('summary')
@@ -336,8 +361,10 @@ class FeedService:
         start_time = time.time()
         
         print("Inicializando modelos...")
-        gemini_model = FeedService.initialize_gemini()
-        embedding_model_name = EmbeddingService.initialize_embedding_model()
+        # Cambiado: obtener el cliente
+        gemini_client = FeedService.initialize_gemini()
+        # Eliminado: Reutilizamos gemini_client para embeddings
+        # embedding_model_name = EmbeddingService.initialize_embedding_model()
         
         sources = FeedSource.objects.filter(active=True)
         print(f"Procesando {sources.count()} fuentes activas")
@@ -490,7 +517,7 @@ class FeedService:
             processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_gemini(
                 entry.title,
                 original_description,
-                gemini_model
+                gemini_client
             )
 
             # >>>>> LÓGICA DE FILTRADO IA (después de palabra clave) <<<<<
@@ -531,14 +558,16 @@ class FeedService:
             
             # Generar embedding para la noticia
             content_for_embedding = f"{entry.title} {processed_description}"
-            embedding = EmbeddingService.generate_embedding(content_for_embedding, embedding_model_name)
+            # Cambiado: Usar gemini_client para generar embedding
+            embedding = EmbeddingService.generate_embedding(content_for_embedding, gemini_client)
             if embedding:
                 news_item.embedding = embedding
                 news_item.save(update_fields=['embedding'])
                 
                 # Verificar redundancia
+                # Cambiado: Pasar gemini_client a check_redundancy
                 is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
-                    news_item, embedding_model_name
+                    news_item, gemini_client
                 )
                 
                 # Siempre guardar la información de similitud si se encontró una noticia similar
