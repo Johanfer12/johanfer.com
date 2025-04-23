@@ -25,8 +25,6 @@ class EmbeddingService:
     # Cambiado: Aceptar client en lugar de model_name
     def generate_embedding(text, client, max_retries=3):
         """Genera embeddings para un texto usando la API de Gemini a través del cliente."""
-        # Eliminado: ya no inicializamos el modelo aquí, usamos el cliente
-        # model_name = "models/text-embedding-004" # <- Nos aseguramos que el nombre es el correcto
         
         # Preprocesar el texto para tener un contenido más limpio
         clean_text = re.sub(r'<.*?>', ' ', text)  # Eliminar etiquetas HTML
@@ -46,24 +44,18 @@ class EmbeddingService:
                     config=types.EmbedContentConfig(task_type="retrieval_document") 
                 )
                 
-                # Acceder al embedding según la estructura retornada por la API
+                # Extraer los valores del embedding
                 try:
-                    # Ahora que conocemos la estructura exacta
-                    # result.embeddings es una lista de ContentEmbedding
-                    # Tomamos el primer elemento (ya que solo enviamos un texto) y extraemos sus valores
                     if hasattr(result, 'embeddings') and result.embeddings:
                         first_embedding = result.embeddings[0]
                         if hasattr(first_embedding, 'values'):
-                            # Convertir a lista Python estándar para asegurar la serialización JSON
                             return list(map(float, first_embedding.values))
                     
-                    # Código de respaldo por si la estructura cambia
-                    print(f"ADVERTENCIA: No se encontró la estructura esperada. Tipo de resultado: {type(result)}")
-                    # Devolver lista vacía como fallback seguro
+                    # Fallback seguro
                     return []
                 except Exception as e:
                     print(f"Error al extraer valores del embedding: {str(e)}")
-                    return []  # Lista vacía como fallback
+                    return []
             except Exception as e:
                 if "429" in str(e) and attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 5  # Backoff exponencial
@@ -96,7 +88,6 @@ class EmbeddingService:
         return float(similarity)
     
     @staticmethod
-    # Cambiado: Aceptar client
     def check_redundancy(news_item, client):
         """
         Verifica si una noticia es redundante comparando con las existentes
@@ -110,9 +101,7 @@ class EmbeddingService:
         """
         # Obtener el umbral de la fuente de la noticia
         threshold = news_item.source.similarity_threshold
-
-        # Eliminado: No necesitamos inicializar el modelo aquí
-        
+ 
         # Generar embedding para la noticia actual
         if not news_item.embedding:
             # Combinar título y descripción para un mejor embedding
@@ -179,7 +168,7 @@ class FeedService:
         Contenido: '{content_for_prompt}...' 
 
         Realiza las siguientes tareas y devuelve el resultado EXACTAMENTE en formato JSON:
-        1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, de aproximadamente 65 a 80 palabras, eliminando clickbait y relleno, manteniendo los puntos clave. NO apliques formato HTML aquí, solo texto plano.
+        1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, de aproximadamente 60 a 70 palabras, eliminando clickbait y relleno, manteniendo los puntos clave. NO apliques formato HTML aquí, solo texto plano.
         2.  **short_answer**: SOLO si el titular (a) es una pregunta directa (ej: '¿Por qué deberías...?', '¿Cuál es...?') O (b) es claro clickbait que crea intriga, sugiere un secreto, una lista, una explicación o una revelación que se encuentra en el contenido (ej: 'El secreto de...', 'Lo que no sabías...', 'Cómo un pequeño gesto cambió todo...', 'El país que no tiene ejército...', 'X razones por las que...', 'El truco para...', 'Descubre cómo...'). En ese caso, extrae o resume la respuesta/punto clave del contenido original de forma EXTREMADAMENTE CONCISA (máximo 15 palabras) y DIRECTA. No uses introducciones ni parafrasees. Si el titular NO cumple estas condiciones, el valor de 'short_answer' debe ser null (JSON null).
         3.  **ai_filter**: Basándote en las siguientes instrucciones de filtrado, determina si esta noticia DEBE SER ELIMINADA. Si coincide con ALGUNA instrucción, el valor debe ser EXACTAMENTE EL TEXTO LITERAL de la instrucción que coincidió (solo una, la primera que coincida si hay varias). Si NO coincide con ninguna, el valor debe ser null (JSON null).
             Instrucciones de Filtrado:
@@ -214,10 +203,15 @@ class FeedService:
             try:
                 # Cambiado: Usar client.models.generate_content y pasar config
                 response = client.models.generate_content(
-                    model='gemini-2.0-flash',
+                    # Cambiado: Actualizar al nuevo modelo
+                    model='gemini-2.5-flash-preview-04-17', 
                     contents=prompt,
                     # Corregido: Pasar generation_config dentro de config
-                    config=types.GenerateContentConfig(response_mime_type="application/json")
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        # Añadido: Configuración de pensamiento
+                        thinking_config=types.ThinkingConfig(thinking_budget=1024) 
+                    )
                 )
                 try:
                     result_json = json.loads(response.text)

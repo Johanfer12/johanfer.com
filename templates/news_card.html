@@ -1,8 +1,11 @@
+{% load static %}
 <div class="news-card-container" id="news-{{ article.id }}">
     <div class="news-card">
         <div class="card-front">
             {% if article.image_url %}
             <img src="{{ article.image_url }}" alt="{{ article.title }}" class="news-image">
+            {% else %}
+            <img src="{% static 'Img/News_Default.png' %}" alt="Imagen no disponible" class="news-image">
             {% endif %}
             <h3 class="news-title">{{ article.title }}</h3>
             {% if article.short_answer %}
