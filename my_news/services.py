@@ -168,8 +168,11 @@ class FeedService:
         Contenido: '{content_for_prompt}...' 
 
         Realiza las siguientes tareas y devuelve el resultado EXACTAMENTE en formato JSON:
-        1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, de aproximadamente 60 a 70 palabras, eliminando clickbait y relleno, manteniendo los puntos clave. NO apliques formato HTML aquí, solo texto plano.
-        2.  **short_answer**: SOLO si el titular (a) es una pregunta directa (ej: '¿Por qué deberías...?', '¿Cuál es...?') O (b) es claro clickbait que crea intriga, sugiere un secreto, una lista, una explicación o una revelación que se encuentra en el contenido (ej: 'El secreto de...', 'Lo que no sabías...', 'Cómo un pequeño gesto cambió todo...', 'El país que no tiene ejército...', 'X razones por las que...', 'El truco para...', 'Descubre cómo...'). En ese caso, extrae o resume la respuesta/punto clave del contenido original de forma EXTREMADAMENTE CONCISA (máximo 15 palabras) y DIRECTA. No uses introducciones ni parafrasees. Si el titular NO cumple estas condiciones, el valor de 'short_answer' debe ser null (JSON null).
+        1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, en español, de aproximadamente 60 a 70 palabras, eliminando clickbait y relleno, manteniendo los puntos clave. NO apliques formato HTML aquí, solo texto plano.
+        2.  **short_answer**: Analiza el titular. Si el titular:
+            (a) Es una pregunta directa (ej: '¿Por qué deberías...?', '¿Cuál es...?').
+            O (b) NO es una pregunta directa PERO crea una fuerte expectativa de una respuesta concreta, revelación, explicación, lista, o 'secreto' que se encuentra en el contenido (ej: 'El truco definitivo para...', 'Así es como funciona X cosa...', 'La razón por la que Y sucede...', 'Descubren el motivo de Z...', 'Cinco claves para entender...', 'Lo que nadie te contó sobre...').
+            Si se cumple (a) o (b), extrae o resume la respuesta/punto clave del contenido original de forma EXTREMADAMENTE CONCISA (máximo 15 palabras) y DIRECTA. No uses introducciones ni parafrasees. Si el titular NO cumple estas condiciones (es decir, es un titular informativo estándar que no genera esa expectativa específica), el valor de 'short_answer' debe ser null (JSON null).
         3.  **ai_filter**: Basándote en las siguientes instrucciones de filtrado, determina si esta noticia DEBE SER ELIMINADA. Si coincide con ALGUNA instrucción, el valor debe ser EXACTAMENTE EL TEXTO LITERAL de la instrucción que coincidió (solo una, la primera que coincida si hay varias). Si NO coincide con ninguna, el valor debe ser null (JSON null).
             Instrucciones de Filtrado:
             {filter_instructions_text if filter_instructions_text else "(No hay instrucciones de filtro IA activas)"}
@@ -186,10 +189,16 @@ class FeedService:
           "short_answer": null,
           "ai_filter": "Noticias sobre horóscopos"
         }}
-        Ejemplo de JSON de salida esperado (clickbait):
+        Ejemplo de JSON de salida esperado (clickbait pregunta directa):
         {{
           "summary": "Resumen conciso del artículo aquí.",
           "short_answer": "La clave fue [respuesta directa].",
+          "ai_filter": null
+        }}
+        Ejemplo de JSON de salida esperado (clickbait implícito):
+        {{
+          "summary": "Resumen del artículo sobre productividad.",
+          "short_answer": "El truco es usar la técnica Pomodoro.",
           "ai_filter": null
         }}
 
@@ -210,7 +219,7 @@ class FeedService:
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
                         # Añadido: Configuración de pensamiento
-                        thinking_config=types.ThinkingConfig(thinking_budget=1024) 
+                        thinking_config=types.ThinkingConfig(thinking_budget=4096) 
                     )
                 )
                 try:
