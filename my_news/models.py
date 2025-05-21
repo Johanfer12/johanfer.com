@@ -96,3 +96,19 @@ class AIFilterInstruction(models.Model):
 
     def __str__(self):
         return self.instruction
+
+class GeminiGlobalSetting(models.Model):
+    model_name = models.CharField(
+        max_length=100,
+        default='gemini-2.0-flash',
+        verbose_name="Modelo Gemini Global",
+        help_text="Nombre del modelo de Gemini a utilizar globalmente (ej: 'gemini-1.5-flash', 'gemini-pro')."
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Configuración Global Gemini ({self.model_name})"
+
+    class Meta:
+        verbose_name = "Configuración Global Gemini"
+        verbose_name_plural = "Configuraciones Globales Gemini"

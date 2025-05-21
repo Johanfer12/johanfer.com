@@ -2,7 +2,7 @@ import feedparser
 from datetime import datetime, timedelta
 from django.utils import timezone
 import pytz
-from .models import News, FeedSource, FilterWord, AIFilterInstruction
+from .models import News, FeedSource, FilterWord, AIFilterInstruction, GeminiGlobalSetting
 import re
 from google import genai
 from google.genai import types
@@ -151,7 +151,7 @@ class FeedService:
         return genai.Client()
 
     @staticmethod
-    def process_content_with_gemini(title, original_content, client, max_retries=3):
+    def process_content_with_gemini(title, original_content, client, global_gemini_model_name, max_retries=3):
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
         # Obtener instrucciones de filtro IA activas
@@ -212,8 +212,8 @@ class FeedService:
             try:
                 # Cambiado: Usar client.models.generate_content y pasar config
                 response = client.models.generate_content(
-                    # Cambiado: Actualizar al nuevo modelo
-                    model='gemini-2.5-flash-preview-04-17', 
+                    # Cambiado: Usar el modelo global de Gemini
+                    model=global_gemini_model_name,
                     contents=prompt,
                     # Corregido: Pasar generation_config dentro de config
                     config=types.GenerateContentConfig(
@@ -257,6 +257,12 @@ class FeedService:
                 if ("429" in str(e) or "Resource has been exhausted" in str(e)) and attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 10
                     print(f"Límite de peticiones/Recurso agotado (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
+                    time.sleep(wait_time)
+                    continue
+                # Nuevo: Manejo específico para errores 500 INTERNAL con reintentos
+                elif "500 INTERNAL" in str(e) and attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 5  # Backoff exponencial, podrías ajustar el factor
+                    print(f"Error interno de Gemini (500) (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos para reintentar...")
                     time.sleep(wait_time)
                     continue
                 print(f"Error procesando contenido con Gemini: {str(e)}")
@@ -369,8 +375,20 @@ class FeedService:
         # Eliminado: Reutilizamos gemini_client para embeddings
         # embedding_model_name = EmbeddingService.initialize_embedding_model()
         
+        # Obtener la configuración global del modelo Gemini
+        try:
+            global_gemini_setting = GeminiGlobalSetting.objects.first()
+            if not global_gemini_setting:
+                # Si no hay configuración, usar un valor predeterminado y crear uno
+                print("Advertencia: No se encontró configuración global de Gemini. Creando una con el modelo predeterminado 'gemini-2.0-flash'.")
+                global_gemini_setting = GeminiGlobalSetting.objects.create(model_name='gemini-2.0-flash')
+            global_model_name = global_gemini_setting.model_name
+        except Exception as e:
+            print(f"Error al obtener la configuración global de Gemini: {e}. Usando 'gemini-2.0-flash' como fallback.")
+            global_model_name = 'gemini-2.0-flash'
+        
         sources = FeedSource.objects.filter(active=True)
-        print(f"Procesando {sources.count()} fuentes activas")
+        print(f"Procesando {sources.count()} fuentes activas con el modelo Gemini: {global_model_name}")
         new_articles_count = 0
         
         # Calcular la fecha límite (1 mes atrás)
@@ -520,7 +538,8 @@ class FeedService:
             processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_gemini(
                 entry.title,
                 original_description,
-                gemini_client
+                gemini_client,
+                global_model_name # Pasar el nombre del modelo global
             )
 
             # >>>>> LÓGICA DE FILTRADO IA (después de palabra clave) <<<<<

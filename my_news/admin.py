@@ -2,7 +2,7 @@ from django.contrib import admin
 from django import forms
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources
-from .models import FeedSource, News, FilterWord, AIFilterInstruction
+from .models import FeedSource, News, FilterWord, AIFilterInstruction, GeminiGlobalSetting
 
 # --- Resource para FeedSource ---
 class FeedSourceResource(resources.ModelResource):
@@ -89,3 +89,16 @@ class AIFilterInstructionAdmin(ImportExportModelAdmin):
     list_filter = ('active',)
     search_fields = ('instruction',)
     list_editable = ('active',)
+
+@admin.register(GeminiGlobalSetting)
+class GeminiGlobalSettingAdmin(admin.ModelAdmin):
+    list_display = ('model_name', 'updated_at')
+    # Para evitar que se puedan añadir múltiples configuraciones globales,
+    # limitamos la creación si ya existe una.
+    def has_add_permission(self, request):
+        return not GeminiGlobalSetting.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        # Opcional: Podrías querer evitar la eliminación si eso rompe la lógica
+        # Por ahora, permitimos la eliminación, pero ten cuidado.
+        return True
