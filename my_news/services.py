@@ -467,6 +467,16 @@ class FeedService:
             
             print(f"\nProcesando entrada: {entry.title} ({published})")
             
+            # Validación: Saltar noticias con títulos anormalmente largos
+            if len(entry.title) > 200:
+                print(f"SALTANDO noticia con título muy largo ({len(entry.title)} caracteres): {entry.title[:100]}...")
+                continue
+                
+            # Validación: Saltar noticias con GUID muy largo
+            if len(guid) > 400:
+                print(f"SALTANDO noticia con GUID muy largo ({len(guid)} caracteres)")
+                continue
+            
             # Primero intentar obtener la imagen del feed
             image_url = None
             
