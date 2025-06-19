@@ -527,20 +527,37 @@ class FeedService:
             should_filter, filter_word = FeedService.should_filter_news(entry.title, original_description)
             if should_filter:
                 print(f"Noticia FILTRADA por palabra clave: {filter_word.word}")
-                News.objects.create(
-                    guid=guid,
-                    title=entry.title,
-                    # No hay short_answer ni processed_description porque no llamamos a IA
-                    short_answer=None,
-                    description=original_description, # Guardamos la descripción original
-                    link=entry.link,
-                    published_date=published,
-                    source=source,
-                    is_filtered=True,  # Marcamos como filtrada (no eliminada)
-                    filtered_by=filter_word, # Guardamos qué palabra la filtró
-                    image_url=image_url # Guardamos la imagen
-                )
-                new_articles_count += 1
+                
+                # Validaciones adicionales para campos que podrían ser muy largos
+                print(f"DEBUG - Longitudes: título={len(entry.title)}, guid={len(guid)}, link={len(entry.link)}")
+                if hasattr(entry, 'description') and entry.description:
+                    print(f"DEBUG - descripción original: {len(entry.description)} caracteres")
+                print(f"DEBUG - descripción procesada: {len(original_description)} caracteres")
+                
+                try:
+                    News.objects.create(
+                        guid=guid,
+                        title=entry.title,
+                        short_answer=None,
+                        description=original_description,
+                        link=entry.link,
+                        published_date=published,
+                        source=source,
+                        is_filtered=True,
+                        filtered_by=filter_word,
+                        image_url=image_url
+                    )
+                    new_articles_count += 1
+                except Exception as e:
+                    print(f"ERROR al guardar noticia filtrada por keyword: {str(e)}")
+                    print(f"Datos problemáticos:")
+                    print(f"  - GUID: {guid[:100]}... (longitud: {len(guid)})")
+                    print(f"  - Título: {entry.title[:100]}... (longitud: {len(entry.title)})")
+                    print(f"  - Link: {entry.link[:100]}... (longitud: {len(entry.link)})")
+                    print(f"  - Descripción: {original_description[:100] if original_description else 'None'}... (longitud: {len(original_description) if original_description else 0})")
+                    print("SALTANDO esta noticia problemática...")
+                    continue
+                    
                 continue # Pasar a la siguiente noticia
             # <<<<< FIN FILTRO PALABRA CLAVE >>>>>
 
@@ -556,37 +573,58 @@ class FeedService:
             # Asegurarnos que ai_filter_reason es un string no vacío antes de usarlo
             if ai_filter_reason and isinstance(ai_filter_reason, str) and ai_filter_reason.strip():
                 print(f"Noticia marcada para FILTRAR por IA. Razón: {ai_filter_reason}")
-                News.objects.create(
-                    guid=guid,
-                    title=entry.title,
-                    short_answer=short_answer, # Guardamos la respuesta corta aunque se filtre
-                    description=processed_description, # Guardamos el resumen aunque se filtre
-                    link=entry.link,
-                    published_date=published,
-                    source=source,
-                    image_url=image_url,
-                    is_filtered=True, # MARCADA COMO FILTRADA (automáticamente)
-                    is_ai_filtered=True, # MARCADA COMO FILTRADA POR IA
-                    ai_filter_reason=ai_filter_reason.strip() # Guardamos la razón limpia
-                )
-                new_articles_count += 1
+                
+                try:
+                    News.objects.create(
+                        guid=guid,
+                        title=entry.title,
+                        short_answer=short_answer,
+                        description=processed_description,
+                        link=entry.link,
+                        published_date=published,
+                        source=source,
+                        image_url=image_url,
+                        is_filtered=True,
+                        is_ai_filtered=True,
+                        ai_filter_reason=ai_filter_reason.strip()
+                    )
+                    new_articles_count += 1
+                except Exception as e:
+                    print(f"ERROR al guardar noticia filtrada por IA: {str(e)}")
+                    print(f"Datos problemáticos:")
+                    print(f"  - GUID: {guid[:100]}... (longitud: {len(guid)})")
+                    print(f"  - Título: {entry.title[:100]}... (longitud: {len(entry.title)})")
+                    print(f"  - Link: {entry.link[:100]}... (longitud: {len(entry.link)})")
+                    print(f"  - AI Filter Reason: {ai_filter_reason[:100]}... (longitud: {len(ai_filter_reason)})")
+                    print("SALTANDO esta noticia problemática...")
+                    continue
+                    
                 continue # Pasar a la siguiente noticia
             elif ai_filter_reason: # Si Gemini devolvió algo pero no es un string válido
                 print(f"Advertencia: Gemini devolvió un valor para ai_filter ({ai_filter_reason}) pero no es la instrucción esperada. No se filtrará.")
             # <<<<< FIN LÓGICA FILTRADO IA >>>>>
 
             # Crear la nueva noticia (si no fue filtrada por IA ni por palabra)
-            news_item = News.objects.create(
-                guid=guid,
-                title=entry.title,
-                short_answer=short_answer,
-                description=processed_description,
-                link=entry.link,
-                published_date=published,
-                source=source,
-                image_url=image_url
-            )
-            new_articles_count += 1
+            try:
+                news_item = News.objects.create(
+                    guid=guid,
+                    title=entry.title,
+                    short_answer=short_answer,
+                    description=processed_description,
+                    link=entry.link,
+                    published_date=published,
+                    source=source,
+                    image_url=image_url
+                )
+                new_articles_count += 1
+            except Exception as e:
+                print(f"ERROR al guardar noticia normal: {str(e)}")
+                print(f"Datos problemáticos:")
+                print(f"  - GUID: {guid[:100]}... (longitud: {len(guid)})")
+                print(f"  - Título: {entry.title[:100]}... (longitud: {len(entry.title)})")
+                print(f"  - Link: {entry.link[:100]}... (longitud: {len(entry.link)})")
+                print("SALTANDO esta noticia problemática...")
+                continue
             
             # Generar embedding para la noticia
             content_for_embedding = f"{entry.title} {processed_description}"
