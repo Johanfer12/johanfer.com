@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prueba de Redundancia</title>
+    <title>Panel de Filtros de Noticias</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/news.css' %}">
     <style>
@@ -26,13 +26,95 @@
         
         .redundancy-stats {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 30px;
             font-size: 1.2em;
             color: #fff;
             padding: 15px;
             background: rgba(20, 20, 20, 0.5);
             border-radius: 8px;
         }
+
+        /* Estilos para las pestañas */
+        .tabs-container {
+            margin-bottom: 30px;
+        }
+
+        .tabs-header {
+            display: flex;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .tabs-header::-webkit-scrollbar {
+            display: none;
+        }
+
+        .tab-button {
+            background: rgba(30, 30, 30, 0.5);
+            border: none;
+            color: #ccc;
+            padding: 12px 16px;
+            cursor: pointer;
+            border-radius: 10px 10px 0 0;
+            margin-right: 5px;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+            font-weight: bold;
+            white-space: nowrap;
+            position: relative;
+            min-width: auto;
+            flex-shrink: 0;
+        }
+
+        .tab-button:hover {
+            background: rgba(50, 50, 50, 0.7);
+            color: #fff;
+        }
+
+        .tab-button.active {
+            background: #00a8ff;
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .tab-badge {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.75em;
+            margin-left: 6px;
+            font-weight: normal;
+            display: inline-block;
+        }
+
+        .tab-button.active .tab-badge {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Estilos específicos para cada tipo de pestaña */
+        .visible-tab .tab-button { border-bottom: 3px solid #00a8ff; }
+        .keyword-tab .tab-button { border-bottom: 3px solid #ffbb33; }
+        .ai-tab .tab-button { border-bottom: 3px solid #aa66cc; }
+        .redundant-tab .tab-button { border-bottom: 3px solid #ff4444; }
         
         .redundancy-pair {
             display: flex;
@@ -53,13 +135,20 @@
             border-radius: 8px;
             margin: 0 10px;
         }
+
+        .single-news-item {
+            padding: 15px;
+            background: rgba(30, 30, 30, 0.5);
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
         
         .similarity-score {
             position: absolute;
             top: -12px;
             left: 50%;
             transform: translateX(-50%);
-            background: #00a8ff;
+            background: #ff4444;
             color: white;
             padding: 5px 15px;
             border-radius: 20px;
@@ -92,30 +181,6 @@
             color: #00a8ff;
         }
         
-        .action-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin: 30px 0;
-        }
-        
-        .action-btn {
-            padding: 10px 20px;
-            border-radius: 5px;
-            background: #00a8ff;
-            color: white;
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s ease;
-        }
-        
-        .action-btn:hover {
-            background: #0096e0;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-        }
-        
         .original {
             border-left: 4px solid #00a8ff;
         }
@@ -123,8 +188,20 @@
         .redundant-item {
             border-left: 4px solid #ff4444;
         }
+
+        .visible-item {
+            border-left: 4px solid #00a8ff;
+        }
+
+        .keyword-filtered-item {
+            border-left: 4px solid #ffbb33;
+        }
+
+        .ai-filtered-item {
+            border-left: 4px solid #aa66cc;
+        }
         
-        .no-redundancy {
+        .no-data {
             text-align: center;
             padding: 50px 0;
             color: #888;
@@ -132,12 +209,80 @@
         }
         
         @media (max-width: 768px) {
+            .redundancy-container {
+                margin: 15px;
+                padding: 15px;
+                border-radius: 8px;
+            }
+
+            .redundancy-header {
+                font-size: 1.3em;
+                margin-bottom: 20px;
+            }
+
+            .redundancy-stats {
+                margin-bottom: 20px;
+                padding: 12px;
+                font-size: 1em;
+            }
+
+            .stats-bar-container {
+                width: 95%;
+                height: 25px;
+                margin: 15px auto;
+            }
+
+            .stats-bar-segment {
+                font-size: 0.7em;
+            }
+
+            .stats-legend {
+                font-size: 0.8em;
+            }
+
+            .legend-item {
+                display: block;
+                margin: 5px 0;
+                text-align: left;
+                padding-left: 25px;
+            }
+
+            .tabs-container {
+                margin-bottom: 20px;
+            }
+
+            .tabs-header {
+                margin-bottom: 15px;
+                padding: 0 5px;
+            }
+
+            .tab-button {
+                padding: 10px 12px;
+                font-size: 0.85em;
+                margin-right: 3px;
+                min-width: 120px;
+            }
+
+            .tab-badge {
+                padding: 1px 4px;
+                font-size: 0.7em;
+                margin-left: 4px;
+            }
+
             .redundancy-pair {
                 flex-direction: column;
+                margin-bottom: 20px;
+                padding-bottom: 20px;
             }
             
             .news-item {
-                margin: 10px 0;
+                margin: 8px 0;
+                padding: 12px;
+            }
+
+            .single-news-item {
+                margin-bottom: 15px;
+                padding: 12px;
             }
             
             .similarity-score {
@@ -145,6 +290,71 @@
                 left: auto;
                 right: 10px;
                 transform: none;
+                font-size: 0.8em;
+                padding: 3px 8px;
+            }
+
+            .news-title {
+                font-size: 1em;
+                margin-bottom: 10px;
+                line-height: 1.3;
+            }
+
+            .news-description {
+                font-size: 0.85em;
+                margin-bottom: 10px;
+                max-height: 150px;
+                line-height: 1.4;
+            }
+
+            .news-meta {
+                font-size: 0.75em;
+                line-height: 1.3;
+            }
+
+            .news-source {
+                display: inline-block;
+                margin-bottom: 2px;
+            }
+
+            .no-data {
+                padding: 30px 15px;
+                font-size: 1em;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .redundancy-container {
+                margin: 10px;
+                padding: 12px;
+            }
+
+            .redundancy-header {
+                font-size: 1.2em;
+            }
+
+            .tab-button {
+                min-width: 100px;
+                font-size: 0.8em;
+                padding: 8px 10px;
+            }
+
+            .stats-bar-container {
+                width: 100%;
+                height: 20px;
+            }
+
+            .stats-legend .legend-item {
+                font-size: 0.75em;
+            }
+
+            .news-title {
+                font-size: 0.95em;
+            }
+
+            .news-description {
+                font-size: 0.8em;
+                max-height: 120px;
             }
         }
 
@@ -173,7 +383,7 @@
         }
         .visible {
             background-color: #00a8ff;
-            width: var(--visible-perc, 0%); /* Usa la variable CSS, con fallback 0% */
+            width: var(--visible-perc, 0%);
         }
         .keyword {
             background-color: #ffbb33;
@@ -217,7 +427,7 @@
     
     <div class="main-content">
         <div class="redundancy-container">
-            <h1 class="redundancy-header">Prueba de Detección de Noticias Redundantes</h1>
+            <h1 class="redundancy-header">Panel de Filtros de Noticias</h1>
             
             {% if error_message %}
                 <div class="error-message" style="color: red; text-align: center; margin-bottom: 20px;">{{ error_message }}</div>
@@ -255,123 +465,127 @@
                 Total Histórico de Noticias Redundantes: <strong>{{ total_redundant|default:0 }}</strong>
             </div>
             
-            <div class="action-buttons">
-                <button class="action-btn" id="generateEmbeddings">Generar Embeddings Faltantes</button>
-                <button class="action-btn" id="checkRedundancy">Verificar Redundancia</button>
+            <!-- Sistema de pestañas -->
+            <div class="tabs-container">
+                <div class="tabs-header">
+                    <button class="tab-button active" data-tab="keyword">
+                        Filtradas por Keyword
+                        <span class="tab-badge">{{ filtered_keyword_today_count|default:0 }}</span>
+                    </button>
+                    <button class="tab-button" data-tab="ai">
+                        Filtradas por IA
+                        <span class="tab-badge">{{ filtered_ai_today_count|default:0 }}</span>
+                    </button>
+                    <button class="tab-button" data-tab="redundant">
+                        Noticias Redundantes
+                        <span class="tab-badge">{{ redundant_today_count|default:0 }}</span>
+                    </button>
+                </div>
+
+                <!-- Contenido de pestaña: Filtradas por Keyword -->
+                <div class="tab-content active" id="keyword-tab">
+                    {% if keyword_filtered_news %}
+                        {% for news in keyword_filtered_news %}
+                        <div class="single-news-item keyword-filtered-item">
+                            <h3 class="news-title">{{ news.title }}</h3>
+                            <div class="news-description">{{ news.description|safe }}</div>
+                            <div class="news-meta">
+                                <span class="news-source">{{ news.source.name }}</span> - 
+                                {{ news.published_date|date:"d/m/Y H:i" }}
+                                {% if news.filtered_by %}
+                                    <br><span style="color: #ffbb33;">Filtrada por: {{ news.filtered_by.word }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="no-data">
+                            No hay noticias filtradas por keywords para mostrar
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Contenido de pestaña: Filtradas por IA -->
+                <div class="tab-content" id="ai-tab">
+                    {% if ai_filtered_news %}
+                        {% for news in ai_filtered_news %}
+                        <div class="single-news-item ai-filtered-item">
+                            <h3 class="news-title">{{ news.title }}</h3>
+                            <div class="news-description">{{ news.description|safe }}</div>
+                            <div class="news-meta">
+                                <span class="news-source">{{ news.source.name }}</span> - 
+                                {{ news.published_date|date:"d/m/Y H:i" }}
+                                {% if news.ai_filter_reason %}
+                                    <br><span style="color: #aa66cc;">Razón IA: {{ news.ai_filter_reason }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="no-data">
+                            No hay noticias filtradas por IA para mostrar
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Contenido de pestaña: Noticias Redundantes -->
+                <div class="tab-content" id="redundant-tab">
+                    {% if redundant_news %}
+                        {% for news in redundant_news %}
+                        <div class="redundancy-pair">
+                            <div class="similarity-score">{{ news.similarity_score|floatformat:4 }}</div>
+                            
+                            <div class="news-item original">
+                                <h3 class="news-title">{{ news.similar_to.title }}</h3>
+                                <div class="news-description">{{ news.similar_to.description|safe }}</div>
+                                <div class="news-meta">
+                                    <span class="news-source">{{ news.similar_to.source.name }}</span> - 
+                                    {{ news.similar_to.published_date|date:"d/m/Y H:i" }}
+                                </div>
+                            </div>
+                            
+                            <div class="news-item redundant-item">
+                                <h3 class="news-title">{{ news.title }}</h3>
+                                <div class="news-description">{{ news.description|safe }}</div>
+                                <div class="news-meta">
+                                    <span class="news-source">{{ news.source.name }}</span> - 
+                                    {{ news.published_date|date:"d/m/Y H:i" }}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="no-data">
+                            No se han detectado noticias redundantes
+                        </div>
+                    {% endif %}
+                </div>
             </div>
-            
-            {% if redundant_news %}
-                {% for news in redundant_news %}
-                <div class="redundancy-pair">
-                    <div class="similarity-score">{{ news.similarity_score|floatformat:4 }}</div>
-                    
-                    <div class="news-item original">
-                        <h3 class="news-title">{{ news.similar_to.title }}</h3>
-                        <div class="news-description">{{ news.similar_to.description|safe }}</div>
-                        <div class="news-meta">
-                            <span class="news-source">{{ news.similar_to.source.name }}</span> - 
-                            {{ news.similar_to.published_date|date:"d/m/Y H:i" }}
-                        </div>
-                    </div>
-                    
-                    <div class="news-item redundant-item">
-                        <h3 class="news-title">{{ news.title }}</h3>
-                        <div class="news-description">{{ news.description|safe }}</div>
-                        <div class="news-meta">
-                            <span class="news-source">{{ news.source.name }}</span> - 
-                            {{ news.published_date|date:"d/m/Y H:i" }}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="no-redundancy">
-                    No se han detectado noticias redundantes aún
-                </div>
-            {% endif %}
         </div>
     </div>
     
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Función para mostrar mensajes de estado
-        function showMessage(message, isError = false) {
-            alert(message); // Por simplicidad usamos alert, pero podría ser algo más sofisticado
-        }
-        
-        // Obtener token CSRF
-        function getCookie(name) {
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
-                }
-            }
-            return cookieValue;
-        }
+        // Manejar cambio de pestañas
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
 
-        // Generar embeddings faltantes
-        document.getElementById('generateEmbeddings').addEventListener('click', function() {
-            this.disabled = true;
-            this.textContent = 'Procesando...';
-            
-            fetch('/noticias/generate-embeddings/', {
-                method: 'GET',
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken'),
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    showMessage(`Se generaron embeddings para ${data.processed_count} noticias. Quedan ${data.remaining} por procesar.`);
-                } else {
-                    showMessage('Error: ' + data.message, true);
-                }
-            })
-            .catch(error => {
-                showMessage('Error en la solicitud: ' + error, true);
-            })
-            .finally(() => {
-                this.disabled = false;
-                this.textContent = 'Generar Embeddings Faltantes';
-            });
-        });
+        tabButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const targetTab = this.getAttribute('data-tab');
 
-        // Verificar redundancia
-        document.getElementById('checkRedundancy').addEventListener('click', function() {
-            this.disabled = true;
-            this.textContent = 'Verificando...';
-            
-            fetch('/noticias/check-redundancy/', {
-                method: 'GET',
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken'),
+                // Remover clase active de todos los botones y contenidos
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                tabContents.forEach(content => content.classList.remove('active'));
+
+                // Agregar clase active al botón clickeado
+                this.classList.add('active');
+
+                // Mostrar el contenido correspondiente
+                const targetContent = document.getElementById(targetTab + '-tab');
+                if (targetContent) {
+                    targetContent.classList.add('active');
                 }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    showMessage(`Se verificaron ${data.total_checked} noticias. Se encontraron ${data.redundant_count} redundancias.`);
-                    if (data.redundant_count > 0) {
-                        // Recargar la página para mostrar las nuevas redundancias
-                        location.reload();
-                    }
-                } else {
-                    showMessage('Error: ' + data.message, true);
-                }
-            })
-            .catch(error => {
-                showMessage('Error en la solicitud: ' + error, true);
-            })
-            .finally(() => {
-                this.disabled = false;
-                this.textContent = 'Verificar Redundancia';
             });
         });
     });

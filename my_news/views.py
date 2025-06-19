@@ -193,6 +193,20 @@ def test_redundancy(request):
             created_at__lte=today_end_utc
         ).select_related('similar_to', 'source', 'similar_to__source').order_by('-created_at')
 
+        # Obtener listas de noticias para cada pestaña
+        # 1. Noticias filtradas por keywords (pero no redundantes ni IA)
+        keyword_filtered_news = news_today_qs.filter(
+            filtered_by__isnull=False,
+            is_redundant=False,
+            is_ai_filtered=False
+        ).select_related('source', 'filtered_by').order_by('-created_at')
+
+        # 2. Noticias filtradas por IA (pero no redundantes)
+        ai_filtered_news = news_today_qs.filter(
+            is_ai_filtered=True,
+            is_redundant=False
+        ).select_related('source').order_by('-created_at')
+
         # Calcular estadísticas para la barra (lógica revisada para exclusividad)
         if total_today > 0:
             # 1. Redundantes (máxima prioridad)
@@ -247,6 +261,8 @@ def test_redundancy(request):
         # Preparar el contexto
         context = {
             'redundant_news': redundant_news_today_list, # Lista para mostrar abajo
+            'keyword_filtered_news': keyword_filtered_news,  # Nueva variable para la pestaña de keywords
+            'ai_filtered_news': ai_filtered_news,  # Nueva variable para la pestaña de IA
             'total_redundant': total_redundant_all_time,
             'current_date': today_local,
             'total_today': total_today,
