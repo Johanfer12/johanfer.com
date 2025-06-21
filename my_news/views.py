@@ -59,7 +59,6 @@ def superuser_required(view_func):
 class NewsListView(ListView):
     model = News
     template_name = 'news_list.html'
-    context_object_name = 'news'
     paginate_by = 25
 
     def get_queryset(self):
@@ -69,8 +68,9 @@ class NewsListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Calcular total de noticias (reutilizar consulta del queryset)
-        total_news = self.get_queryset().count()
+        # Reutilizar el count de paginación que ya calcula Django
+        # En lugar de hacer self.get_queryset().count() duplicado
+        total_news = context['paginator'].count
         context['total_news'] = total_news
         
         # Obtener página actual

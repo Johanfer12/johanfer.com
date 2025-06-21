@@ -14,14 +14,14 @@
     
     <div class="main-content">
         <div class="news-grid" id="news-grid">
-            {% for article in news %}
+            {% for article in page_obj %}
                 {% include 'news_card.html' with article=article %}
             {% endfor %}
         </div>
 
         <!-- Contenedor para los modales -->
         <div id="news-modals-container">
-            {% for article in news %}
+            {% for article in page_obj %}
                 {% include 'news_modal.html' with article=article %}
             {% endfor %}
         </div>
