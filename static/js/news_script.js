@@ -34,6 +34,8 @@
         totalPending: 0,
         userInteracted: false,
         lastChecked: new Date().toISOString(),
+        backupCards: [], // Noticias de respaldo precargadas
+        backupModals: [], // Modales de respaldo precargados
     };
 
     /* ---------------------------------------------------------------------
@@ -177,6 +179,25 @@
     });
 
     /* ---------------------------------------------------------------------
+     *  Carga inicial y precarga de noticias de respaldo
+     * ------------------------------------------------------------------ */
+    const initializeBackupCards = () => {
+        try {
+            const backupDataElement = $('#backup-cards-data');
+            if (backupDataElement) {
+                const backupData = JSON.parse(backupDataElement.textContent);
+                STATE.backupCards = backupData || [];
+                STATE.backupModals = backupData?.map(card => card.modal) || [];
+                log(`Inicializadas ${STATE.backupCards.length} noticias de respaldo desde el servidor`);
+            }
+        } catch (e) {
+            err('Error al inicializar noticias de respaldo:', e);
+            STATE.backupCards = [];
+            STATE.backupModals = [];
+        }
+    };
+
+    /* ---------------------------------------------------------------------
      *  Eliminación de noticias (móvil + escritorio fusionados)
      * ------------------------------------------------------------------ */
     const serverDeleteNews = (newsId, currentPage) => fetchJson(`/noticias/delete/${newsId}/`, {
@@ -197,42 +218,163 @@
 
         const oldPositions = isMobile() ? null : capturePositions();
 
-        // Animación de salida
+        // Ejecutar animación de salida inmediatamente (optimista)
         container.classList.add('deleting');
+        
+        // Intentar usar una noticia de respaldo precargada primero
+        let replacementCard = null;
+        let replacementModal = null;
+        
+        if (STATE.backupCards.length > 0) {
+            const backupData = STATE.backupCards.shift(); // Tomar la primera de respaldo
+            const backupModalData = STATE.backupModals.shift();
+            
+            if (backupData) {
+                const temp = document.createElement('div');
+                temp.innerHTML = backupData.card;
+                replacementCard = temp.firstElementChild;
+                
+                if (backupModalData) {
+                    const tempModal = document.createElement('div');
+                    tempModal.innerHTML = backupModalData;
+                    replacementModal = tempModal.firstElementChild;
+                }
+                
+                if (replacementCard) {
+                    const id = replacementCard.id.replace('news-', '');
+                    configureNewCard(replacementCard, replacementModal, id);
+                    log(`Usando noticia de respaldo precargada: ${id}`);
+                }
+            }
+        }
+        
+        // Programar eliminación del DOM después de la animación
+        const removeFromDOM = () => {
+            container.remove();
+            modal?.remove();
+        };
 
+        // Esperar a que termine la animación CSS antes de remover del DOM
+        const animationDuration = 600; // Duración de la animación deleteCard en CSS
+        const removeTimeout = setTimeout(() => {
+            removeFromDOM();
+            
+            // Agregar tarjeta de reemplazo si existe
+            if (replacementCard && !$("#" + replacementCard.id, DOM.grid)) {
+                DOM.grid.appendChild(replacementCard);
+                replacementModal && DOM.modalsContainer.appendChild(replacementModal);
+                animateScaleOpacity(replacementCard);
+            }
+            
+            if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
+            enforceCardLimit();
+        }, animationDuration);
+
+        // Llamada al servidor en paralelo
         serverDeleteNews(newsId, currentPage)
             .then(data => {
-                if (data.status !== 'success') throw new Error(data.message);
+                if (data.status !== 'success') {
+                    // Si el servidor falló, revertir la animación
+                    clearTimeout(removeTimeout);
+                    container.classList.remove('deleting');
+                    
+                    // Devolver la noticia de respaldo al array si se había tomado
+                    if (replacementCard && STATE.backupCards.length < 5) {
+                        const backupData = STATE.backupCards.find(card => card.id == replacementCard.id.replace('news-', ''));
+                        if (!backupData) {
+                            STATE.backupCards.unshift({
+                                id: replacementCard.id.replace('news-', ''),
+                                card: replacementCard.outerHTML
+                            });
+                            STATE.backupModals.unshift(replacementModal?.outerHTML || '');
+                        }
+                    }
+                    
+                    err('Error del servidor al eliminar:', data.message);
+                    return;
+                }
 
-                container.remove();
-                modal?.remove();
-                updateCounters(data.total_news, data.total_pages);
-
-                let newCard = null, newModal = null;
-                    if (data.html && data.modal) {
-                    const temp = document.createElement('div');
-                    temp.innerHTML = data.html;
-                    newCard = temp.firstElementChild;
+                // Si ya se eliminó del DOM por timeout, actualizar contadores y recargar respaldo
+                if (!document.body.contains(container)) {
+                    updateCounters(data.total_news, data.total_pages);
+                    
+                    // Si no había noticia de respaldo precargada, usar la del servidor
+                    if (!replacementCard && data.html && data.modal) {
+                        const temp = document.createElement('div');
+                        temp.innerHTML = data.html;
+                        const newCard = temp.firstElementChild;
                         const tempModal = document.createElement('div');
                         tempModal.innerHTML = data.modal;
-                    newModal = tempModal.firstElementChild;
-                    configureNewCard(newCard, newModal, newCard.id.replace('news-', ''));
+                        const newModal = tempModal.firstElementChild;
+                        
+                        if (newCard) {
+                            configureNewCard(newCard, newModal, newCard.id.replace('news-', ''));
+                            DOM.grid.appendChild(newCard);
+                            newModal && DOM.modalsContainer.appendChild(newModal);
+                            animateScaleOpacity(newCard);
+                        }
+                    }
+                    
+                    // Las noticias de respaldo se recargan automáticamente al cambiar de página
+                    
+                    return;
                 }
 
-                if (oldPositions) animateReposition(oldPositions, [container.id]);
+                // Si el servidor responde antes del timeout, cancelar timeout y proceder normalmente
+                clearTimeout(removeTimeout);
+                removeFromDOM();
+                updateCounters(data.total_news, data.total_pages);
 
-                if (newCard && !$("#" + newCard.id, DOM.grid)) {
-                    DOM.grid.appendChild(newCard);
-                    newModal && DOM.modalsContainer.appendChild(newModal);
-                    animateScaleOpacity(newCard);
+                // Agregar tarjeta de reemplazo
+                if (replacementCard && !$("#" + replacementCard.id, DOM.grid)) {
+                    DOM.grid.appendChild(replacementCard);
+                    replacementModal && DOM.modalsContainer.appendChild(replacementModal);
+                    animateScaleOpacity(replacementCard);
+                } else if (!replacementCard && data.html && data.modal) {
+                    // Usar la del servidor si no había de respaldo
+                    const temp = document.createElement('div');
+                    temp.innerHTML = data.html;
+                    const newCard = temp.firstElementChild;
+                    const tempModal = document.createElement('div');
+                    tempModal.innerHTML = data.modal;
+                    const newModal = tempModal.firstElementChild;
+                    
+                    if (newCard) {
+                        configureNewCard(newCard, newModal, newCard.id.replace('news-', ''));
+                        DOM.grid.appendChild(newCard);
+                        newModal && DOM.modalsContainer.appendChild(newModal);
+                        animateScaleOpacity(newCard);
+                    }
                 }
-                enforceCardLimit(); // Asegurar límite DESPUÉS de eliminar/reemplazar
+
+                if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
+                enforceCardLimit();
+                
+                // Las noticias de respaldo se recargan automáticamente al cambiar de página
             })
             .catch(e => {
-                err('Error al eliminar:', e);
+                // En caso de error de red o servidor, revertir la animación
+                clearTimeout(removeTimeout);
                 container.classList.remove('deleting');
+                
+                // Devolver la noticia de respaldo al array si se había tomado
+                if (replacementCard && STATE.backupCards.length < 5) {
+                    const backupData = STATE.backupCards.find(card => card.id == replacementCard.id.replace('news-', ''));
+                    if (!backupData) {
+                        STATE.backupCards.unshift({
+                            id: replacementCard.id.replace('news-', ''),
+                            card: replacementCard.outerHTML
+                        });
+                        STATE.backupModals.unshift(replacementModal?.outerHTML || '');
+                    }
+                }
+                
+                err('Error al eliminar noticia:', e);
+                alert('Error al eliminar la noticia. Por favor, inténtalo de nuevo.');
             });
     };
+
+
 
     /* ---------------------------------------------------------------------
      *  Alta de tarjetas nuevas y actualización de feed
@@ -423,6 +565,11 @@
     /* ---------------------------------------------------------------------
      *  Arranque
      * ------------------------------------------------------------------ */
+    // Inicializar noticias de respaldo desde el servidor
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeBackupCards();
+    });
+    
     setInterval(checkForNewNews, CHECK_INTERVAL);
     enforceCardLimit(); // Aplicar límite al cargar la página inicialmente
     updatePagination();

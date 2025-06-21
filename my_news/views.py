@@ -22,18 +22,15 @@ def delete_news(request, pk):
         news.is_deleted = True
         news.save()
         
-        # Definir el filtro base para noticias visibles
-        visible_news_filter = Q(is_deleted=False) & Q(is_filtered=False) & Q(is_ai_filtered=False) & Q(is_redundant=False)
-        
         # Obtener la siguiente noticia para reemplazar la eliminada
         next_news = None
-        total_news = News.objects.filter(visible_news_filter).count()
+        total_news = News.visible.count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
         # Calcular el offset para obtener la noticia que está justo fuera de la página actual
         offset = current_page * 25
         if offset < total_news:
-            next_news = News.objects.filter(visible_news_filter).order_by('-published_date')[offset:offset+1].first()
+            next_news = News.visible.order_by('-published_date')[offset:offset+1].first()
         
         response_data = {
             'status': 'success',
@@ -66,37 +63,49 @@ class NewsListView(ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        # Aplicar todos los filtros para noticias visibles
-        return News.objects.filter(
-            is_deleted=False,
-            is_filtered=False,
-            is_ai_filtered=False,
-            is_redundant=False
-        ).order_by('-published_date')
+        # Usar el manager optimizado
+        return News.visible.all().order_by('-published_date')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Usar el mismo filtro para el conteo total
-        total_news = News.objects.filter(
-            is_deleted=False,
-            is_filtered=False,
-            is_ai_filtered=False,
-            is_redundant=False
-        ).count()
+        
+        # Calcular total de noticias (reutilizar consulta del queryset)
+        total_news = self.get_queryset().count()
         context['total_news'] = total_news
+        
+        # Obtener página actual
+        page = self.request.GET.get('page', 1)
+        try:
+            current_page = int(page)
+        except (ValueError, TypeError):
+            current_page = 1
+            
+        # Obtener noticias de respaldo (5 adicionales) para JavaScript
+        backup_offset = current_page * 25  # Las siguientes 5 noticias
+        backup_news = News.visible.order_by('-published_date')[backup_offset:backup_offset + 5]
+        
+        # Renderizar noticias de respaldo como HTML para JavaScript
+        backup_cards = []
+        for article in backup_news:
+            card_html = render_to_string('news_card.html', {'article': article, 'user': self.request.user})
+            modal_html = render_to_string('news_modal.html', {'article': article, 'user': self.request.user})
+            backup_cards.append({
+                'id': article.id,
+                'card': card_html,
+                'modal': modal_html
+            })
+        
+        context['backup_cards'] = backup_cards
+        context['current_page'] = current_page
+        
         return context
 
 @require_GET
 def update_feed(request):
     try:
         new_articles = FeedService.fetch_and_save_news()
-        # Usar el filtro completo para el conteo
-        total_news = News.objects.filter(
-            is_deleted=False,
-            is_filtered=False,
-            is_ai_filtered=False,
-            is_redundant=False
-        ).count()
+        # Usar el manager optimizado
+        total_news = News.visible.count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
         return JsonResponse({
@@ -113,13 +122,9 @@ def check_new_news(request):
     try:
         last_checked = request.GET.get('last_checked')
         current_time = timezone.now().isoformat()
-        
-        # Definir el filtro base para noticias visibles
-        visible_news_filter = Q(is_deleted=False) & Q(is_filtered=False) & Q(is_ai_filtered=False) & Q(is_redundant=False)
 
-        # Obtener noticias nuevas desde la última comprobación, aplicando el filtro completo
-        new_news = News.objects.filter(
-            visible_news_filter, 
+        # Obtener noticias nuevas desde la última comprobación
+        new_news = News.visible.filter(
             created_at__gte=last_checked
         ).order_by('-published_date')
         
@@ -135,7 +140,7 @@ def check_new_news(request):
             })
         
         # Obtener el total actualizado de noticias visibles
-        total_news = News.objects.filter(visible_news_filter).count()
+        total_news = News.visible.count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
         return JsonResponse({
@@ -151,13 +156,8 @@ def check_new_news(request):
 @require_GET
 def get_news_count(request):
     try:
-        # Usar el filtro completo para el conteo
-        total_news = News.objects.filter(
-            is_deleted=False,
-            is_filtered=False,
-            is_ai_filtered=False,
-            is_redundant=False
-        ).count()
+        # Usar el manager optimizado
+        total_news = News.visible.count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
         return JsonResponse({
@@ -167,6 +167,8 @@ def get_news_count(request):
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
+
+
 
 @require_GET
 def test_redundancy(request):
@@ -291,11 +293,9 @@ def generate_embeddings(request):
         # Inicializar modelo
         embedding_model_name = EmbeddingService.initialize_embedding_model()
         
-        # Obtener noticias sin embedding
-        news_without_embedding = News.objects.filter(
-            embedding__isnull=True,
-            is_deleted=False,
-            is_filtered=False
+        # Obtener noticias sin embedding usando el manager visible
+        news_without_embedding = News.visible.filter(
+            embedding__isnull=True
         ).order_by('-published_date')[:50]  # Limitar a 50 para evitar sobrecarga
         
         processed_count = 0
@@ -312,7 +312,7 @@ def generate_embeddings(request):
         return JsonResponse({
             'status': 'success',
             'processed_count': processed_count,
-            'remaining': News.objects.filter(embedding__isnull=True, is_deleted=False, is_filtered=False).count()
+            'remaining': News.visible.filter(embedding__isnull=True).count()
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
@@ -324,12 +324,9 @@ def check_all_redundancy(request):
         # Inicializar modelo
         embedding_model_name = EmbeddingService.initialize_embedding_model()
         
-        # Obtener noticias no marcadas como redundantes
-        news_to_check = News.objects.filter(
-            is_redundant=False,
-            embedding__isnull=False,
-            is_deleted=False,
-            is_filtered=False
+        # Obtener noticias no marcadas como redundantes usando el manager visible
+        news_to_check = News.visible.filter(
+            embedding__isnull=False
         ).order_by('-published_date')[:100]  # Limitar a 100 para evitar sobrecarga
         
         redundant_count = 0

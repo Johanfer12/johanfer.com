@@ -13,7 +13,7 @@
     {% include 'header.html' %}
     
     <div class="main-content">
-        <div class="news-grid">
+        <div class="news-grid" id="news-grid">
             {% for article in news %}
                 {% include 'news_card.html' with article=article %}
             {% endfor %}
@@ -54,6 +54,9 @@
         <span id="new-news-count">0</span>
         <button id="close-notification-btn" class="close-notification">&times;</button>
     </div>
+
+    <!-- Pasar noticias de respaldo al JavaScript -->
+    {{ backup_cards|json_script:"backup-cards-data" }}
 
     <script src="{% static 'js/news_script.js' %}"></script>
 </body>

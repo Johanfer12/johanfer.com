@@ -89,41 +89,28 @@ class EmbeddingService:
     
     @staticmethod
     def check_redundancy(news_item, client):
-        """
-        Verifica si una noticia es redundante comparando con las existentes
+        # Verificar si la noticia ya tiene embedding
+        if not news_item.embedding:
+            return False, None, 0.0
         
-        Args:
-            news_item: Objeto News que se quiere verificar
-            client: Cliente genai para generar embeddings
-            
-        Returns:
-            tuple: (es_redundante, noticia_similar, puntuación_similitud)
-        """
-        # Obtener el umbral de la fuente de la noticia
+        # Obtener el umbral de similitud de la fuente
         threshold = news_item.source.similarity_threshold
- 
-        # Generar embedding para la noticia actual
-        if not news_item.embedding:
-            # Combinar título y descripción para un mejor embedding
-            content_for_embedding = f"{news_item.title} {news_item.description}"
-            # Cambiado: Pasar client a generate_embedding
-            news_item.embedding = EmbeddingService.generate_embedding(content_for_embedding, client)
-            news_item.save(update_fields=['embedding'])
         
-        # No continuar si no se pudo generar el embedding
-        if not news_item.embedding:
+        # Si no hay umbral definido, usar uno por defecto
+        if threshold is None:
             return False, None, 0.0
         
         # Buscar noticias de los últimos 7 días
         time_threshold = timezone.now() - timedelta(days=7)
         
-        # Buscar todas las noticias recientes, eliminadas o no, pero excluyendo las redundantes y filtradas
-        recent_news = News.objects.filter(
+        # Usar News.visible y excluir las redundantes adicionales, más la noticia actual
+        recent_news = News.visible.filter(
             created_at__gte=time_threshold,
-            is_redundant=False,  # No comparamos con noticias redundantes
-            is_filtered=False,  # No comparamos con noticias filtradas
             embedding__isnull=False
-        ).exclude(id=news_item.id)
+        ).exclude(
+            id=news_item.id,
+            is_redundant=True  # Excluir redundantes adicionales
+        )
         
         highest_similarity = 0.0
         most_similar_news = None

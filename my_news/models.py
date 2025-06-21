@@ -1,5 +1,20 @@
 from django.db import models
 from django.utils import timezone
+from django.db.models import Q
+
+class VisibleNewsManager(models.Manager):
+    """Manager para noticias visibles (no eliminadas, no filtradas, no redundantes, no filtradas por IA)"""
+    def get_queryset(self):
+        return super().get_queryset().filter(
+            is_deleted=False,
+            is_filtered=False,
+            is_ai_filtered=False,
+            is_redundant=False
+        )
+    
+    def visible_filter(self):
+        """Devuelve el filtro Q para noticias visibles"""
+        return Q(is_deleted=False) & Q(is_filtered=False) & Q(is_ai_filtered=False) & Q(is_redundant=False)
 
 class FeedSource(models.Model):
     name = models.CharField(max_length=200)
@@ -43,6 +58,10 @@ class News(models.Model):
     short_answer = models.TextField(null=True, blank=True, verbose_name="Respuesta corta")
     ai_filter_reason = models.TextField(null=True, blank=True, verbose_name="Razón Filtro IA")
     is_ai_filtered = models.BooleanField(default=False, verbose_name="Filtro IA")
+    
+    # Managers
+    objects = models.Manager()  # Manager por defecto
+    visible = VisibleNewsManager()  # Manager para noticias visibles
     
     class Meta:
         verbose_name = "Noticia"
