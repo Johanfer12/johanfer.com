@@ -108,7 +108,8 @@ class EmbeddingService:
             created_at__gte=time_threshold,
             embedding__isnull=False
         ).exclude(
-            id=news_item.id,
+            id=news_item.id
+        ).exclude(
             is_redundant=True  # Excluir redundantes adicionales
         )
         
