@@ -89,29 +89,40 @@ class EmbeddingService:
     
     @staticmethod
     def check_redundancy(news_item, client):
-        # Verificar si la noticia ya tiene embedding
-        if not news_item.embedding:
-            return False, None, 0.0
+        """
+        Verifica si una noticia es redundante comparando con las existentes
         
-        # Obtener el umbral de similitud de la fuente
+        Args:
+            news_item: Objeto News que se quiere verificar
+            client: Cliente genai para generar embeddings
+            
+        Returns:
+            tuple: (es_redundante, noticia_similar, puntuación_similitud)
+        """
+        # Obtener el umbral de la fuente de la noticia
         threshold = news_item.source.similarity_threshold
+
+        # Generar embedding para la noticia actual si no lo tiene
+        if not news_item.embedding:
+            # Combinar título y descripción para un mejor embedding
+            content_for_embedding = f"{news_item.title} {news_item.description}"
+            news_item.embedding = EmbeddingService.generate_embedding(content_for_embedding, client)
+            news_item.save(update_fields=['embedding'])
         
-        # Si no hay umbral definido, usar uno por defecto
-        if threshold is None:
+        # No continuar si no se pudo generar el embedding
+        if not news_item.embedding:
             return False, None, 0.0
         
         # Buscar noticias de los últimos 7 días
         time_threshold = timezone.now() - timedelta(days=7)
         
-        # Usar News.visible y excluir las redundantes adicionales, más la noticia actual
-        recent_news = News.visible.filter(
+        # Buscar todas las noticias recientes, eliminadas o no, pero excluyendo las redundantes y filtradas
+        recent_news = News.objects.filter(
             created_at__gte=time_threshold,
+            is_redundant=False,  # No comparamos con noticias redundantes
+            is_filtered=False,  # No comparamos con noticias filtradas
             embedding__isnull=False
-        ).exclude(
-            id=news_item.id
-        ).exclude(
-            is_redundant=True  # Excluir redundantes adicionales
-        )
+        ).exclude(id=news_item.id)
         
         highest_similarity = 0.0
         most_similar_news = None
@@ -614,38 +625,29 @@ class FeedService:
                 print("SALTANDO esta noticia problemática...")
                 continue
             
-            # Generar embedding para la noticia
-            content_for_embedding = f"{entry.title} {processed_description}"
-            # Cambiado: Usar gemini_client para generar embedding
-            embedding = EmbeddingService.generate_embedding(content_for_embedding, gemini_client)
-            if embedding:
-                news_item.embedding = embedding
-                news_item.save(update_fields=['embedding'])
-                
-                # Verificar redundancia
-                # Cambiado: Pasar gemini_client a check_redundancy
-                is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
-                    news_item, gemini_client
-                )
-                
-                # Siempre guardar la información de similitud si se encontró una noticia similar
-                if similar_news:
-                    news_item.similar_to = similar_news
-                    news_item.similarity_score = similarity_score
-                    # Guardamos estos campos ahora, por si no resulta redundante pero queremos la info
-                    news_item.save(update_fields=['similar_to', 'similarity_score']) 
+            # Verificar redundancia (esto generará el embedding internamente si no existe)
+            is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
+                news_item, gemini_client
+            )
+            
+            # Siempre guardar la información de similitud si se encontró una noticia similar
+            if similar_news:
+                news_item.similar_to = similar_news
+                news_item.similarity_score = similarity_score
+                # Guardamos estos campos ahora, por si no resulta redundante pero queremos la info
+                news_item.save(update_fields=['similar_to', 'similarity_score']) 
 
-                if is_redundant and similar_news:
-                    print(f"¡Noticia redundante detectada! Similar a: {similar_news.title}")
-                    print(f"Puntuación de similitud: {similarity_score:.4f} (Umbral: {news_item.source.similarity_threshold})")
-                    
-                    # Marcar como redundante y filtrada (ya hemos guardado similar_to y score)
-                    news_item.is_redundant = True
-                    news_item.is_filtered = True  # Usamos is_filtered en lugar de is_deleted
-                    # Guardamos todos los campos relevantes al marcar como redundante
-                    news_item.save(update_fields=['is_redundant', 'is_filtered', 'similar_to', 'similarity_score', 'short_answer'])
-                    
-                    redundant_count += 1
+            if is_redundant and similar_news:
+                print(f"¡Noticia redundante detectada! Similar a: {similar_news.title}")
+                print(f"Puntuación de similitud: {similarity_score:.4f} (Umbral: {news_item.source.similarity_threshold})")
+                
+                # Marcar como redundante y filtrada (ya hemos guardado similar_to y score)
+                news_item.is_redundant = True
+                news_item.is_filtered = True  # Usamos is_filtered en lugar de is_deleted
+                # Guardamos todos los campos relevantes al marcar como redundante
+                news_item.save(update_fields=['is_redundant', 'is_filtered'])
+                
+                redundant_count += 1
         
         # Actualizar la fecha de última obtención para todas las fuentes
         for source in sources:
