@@ -27,8 +27,12 @@ def delete_news(request, pk):
         total_news = News.visible.count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
-        # Calcular el offset para obtener la noticia que está justo fuera de la página actual
-        offset = current_page * 25
+        # Calcular el offset correcto: 
+        # Si estamos en página 1, queremos la noticia 26 (índice 25)
+        # Si estamos en página 2, queremos la noticia 51 (índice 50), etc.
+        # current_page comienza en 1, así que (current_page - 1) * 25 nos da el primer índice de la página
+        # Sumamos 25 para obtener el primer índice de la siguiente página
+        offset = (current_page - 1) * 25 + 25
         if offset < total_news:
             next_news = News.visible.order_by('-published_date')[offset:offset+1].first()
         
@@ -40,10 +44,13 @@ def delete_news(request, pk):
         
         # Si hay una noticia para reemplazar, incluirla en la respuesta
         if next_news:
+            print(f"[DEBUG] Noticia de reemplazo encontrada: ID={next_news.id}, Título={next_news.title[:50]}...")
             card_html = render_to_string('news_card.html', {'article': next_news, 'user': request.user})
             modal_html = render_to_string('news_modal.html', {'article': next_news, 'user': request.user})
             response_data['html'] = card_html
             response_data['modal'] = modal_html
+        else:
+            print(f"[DEBUG] No se encontró noticia de reemplazo. Offset: {offset}, Total noticias: {total_news}, Página: {current_page}")
         
         return JsonResponse(response_data)
     except News.DoesNotExist:
@@ -81,8 +88,11 @@ class NewsListView(ListView):
             current_page = 1
             
         # Obtener noticias de respaldo (5 adicionales) para JavaScript
-        backup_offset = current_page * 25  # Las siguientes 5 noticias
+        # Calcular correctamente el offset para las noticias de respaldo
+        # Las noticias de respaldo deben empezar después de la página actual
+        backup_offset = (current_page - 1) * 25 + 25  # Las siguientes 5 noticias después de la página actual
         backup_news = News.visible.order_by('-published_date')[backup_offset:backup_offset + 5]
+        print(f"[DEBUG] Noticias de respaldo: Página={current_page}, Offset={backup_offset}, Encontradas={backup_news.count()}")
         
         # Renderizar noticias de respaldo como HTML para JavaScript
         backup_cards = []

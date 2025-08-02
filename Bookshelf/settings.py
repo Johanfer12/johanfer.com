@@ -99,8 +99,12 @@ except ImportError:
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-if DEBUG:
-    # Configuración para desarrollo local (SQLite)
+# Configuración de base de datos basada en variable de entorno
+# USE_LOCAL_DATABASE=true para SQLite local, false o no definida para PostgreSQL/Supabase
+USE_LOCAL_DATABASE = os.environ.get('USE_LOCAL_DATABASE', '').lower() in ('true', '1', 'yes')
+
+if USE_LOCAL_DATABASE:
+    # Configuración para base de datos local (SQLite)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -108,7 +112,7 @@ if DEBUG:
         }
     }
 else:
-    # Configuración para producción (Supabase/PostgreSQL)
+    # Configuración para base de datos externa (Supabase/PostgreSQL)
     DATABASES = {
         "default": dj_database_url.config(
             default=os.environ.get("DATABASE_URL"),

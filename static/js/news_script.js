@@ -226,25 +226,44 @@
         let replacementModal = null;
         
         if (STATE.backupCards.length > 0) {
-            const backupData = STATE.backupCards.shift(); // Tomar la primera de respaldo
-            const backupModalData = STATE.backupModals.shift();
+            // Buscar una noticia de respaldo que no esté duplicada
+            let backupIndex = -1;
+            for (let i = 0; i < STATE.backupCards.length; i++) {
+                const backupData = STATE.backupCards[i];
+                if (backupData && backupData.id) {
+                    const existingCard = $(`#news-${backupData.id}`, DOM.grid);
+                    if (!existingCard) {
+                        backupIndex = i;
+                        break;
+                    } else {
+                        log(`Skipping duplicate backup card: ${backupData.id}`);
+                    }
+                }
+            }
             
-            if (backupData) {
-                const temp = document.createElement('div');
-                temp.innerHTML = backupData.card;
-                replacementCard = temp.firstElementChild;
+            if (backupIndex >= 0) {
+                const backupData = STATE.backupCards.splice(backupIndex, 1)[0];
+                const backupModalData = STATE.backupModals.splice(backupIndex, 1)[0];
                 
-                if (backupModalData) {
-                    const tempModal = document.createElement('div');
-                    tempModal.innerHTML = backupModalData;
-                    replacementModal = tempModal.firstElementChild;
+                if (backupData) {
+                    const temp = document.createElement('div');
+                    temp.innerHTML = backupData.card;
+                    replacementCard = temp.firstElementChild;
+                    
+                    if (backupModalData) {
+                        const tempModal = document.createElement('div');
+                        tempModal.innerHTML = backupModalData;
+                        replacementModal = tempModal.firstElementChild;
+                    }
+                    
+                    if (replacementCard) {
+                        const id = replacementCard.id.replace('news-', '');
+                        configureNewCard(replacementCard, replacementModal, id);
+                        log(`Usando noticia de respaldo precargada: ${id}`);
+                    }
                 }
-                
-                if (replacementCard) {
-                    const id = replacementCard.id.replace('news-', '');
-                    configureNewCard(replacementCard, replacementModal, id);
-                    log(`Usando noticia de respaldo precargada: ${id}`);
-                }
+            } else {
+                log('No hay noticias de respaldo válidas (sin duplicados)');
             }
         }
         
@@ -280,13 +299,15 @@
                     
                     // Devolver la noticia de respaldo al array si se había tomado
                     if (replacementCard && STATE.backupCards.length < 5) {
-                        const backupData = STATE.backupCards.find(card => card.id == replacementCard.id.replace('news-', ''));
-                        if (!backupData) {
+                        const cardId = replacementCard.id.replace('news-', '');
+                        const backupData = STATE.backupCards.find(card => card.id == cardId);
+                        if (!backupData && !$(`#news-${cardId}`, DOM.grid)) {
                             STATE.backupCards.unshift({
-                                id: replacementCard.id.replace('news-', ''),
+                                id: cardId,
                                 card: replacementCard.outerHTML
                             });
                             STATE.backupModals.unshift(replacementModal?.outerHTML || '');
+                            log(`Devuelta noticia de respaldo al array: ${cardId}`);
                         }
                     }
                     
@@ -308,10 +329,17 @@
                         const newModal = tempModal.firstElementChild;
                         
                         if (newCard) {
-                            configureNewCard(newCard, newModal, newCard.id.replace('news-', ''));
-                            DOM.grid.appendChild(newCard);
-                            newModal && DOM.modalsContainer.appendChild(newModal);
-                            animateScaleOpacity(newCard);
+                            const newCardId = newCard.id.replace('news-', '');
+                            // Verificar que no esté duplicada
+                            if (!$(`#news-${newCardId}`, DOM.grid)) {
+                                configureNewCard(newCard, newModal, newCardId);
+                                DOM.grid.appendChild(newCard);
+                                newModal && DOM.modalsContainer.appendChild(newModal);
+                                animateScaleOpacity(newCard);
+                                log(`Agregada noticia del servidor: ${newCardId}`);
+                            } else {
+                                log(`Skipping duplicate server card: ${newCardId}`);
+                            }
                         }
                     }
                     
@@ -340,10 +368,17 @@
                     const newModal = tempModal.firstElementChild;
                     
                     if (newCard) {
-                        configureNewCard(newCard, newModal, newCard.id.replace('news-', ''));
-                        DOM.grid.appendChild(newCard);
-                        newModal && DOM.modalsContainer.appendChild(newModal);
-                        animateScaleOpacity(newCard);
+                        const newCardId = newCard.id.replace('news-', '');
+                        // Verificar que no esté duplicada
+                        if (!$(`#news-${newCardId}`, DOM.grid)) {
+                            configureNewCard(newCard, newModal, newCardId);
+                            DOM.grid.appendChild(newCard);
+                            newModal && DOM.modalsContainer.appendChild(newModal);
+                            animateScaleOpacity(newCard);
+                            log(`Agregada noticia del servidor (fallback): ${newCardId}`);
+                        } else {
+                            log(`Skipping duplicate server card (fallback): ${newCardId}`);
+                        }
                     }
                 }
 
@@ -359,13 +394,15 @@
                 
                 // Devolver la noticia de respaldo al array si se había tomado
                 if (replacementCard && STATE.backupCards.length < 5) {
-                    const backupData = STATE.backupCards.find(card => card.id == replacementCard.id.replace('news-', ''));
-                    if (!backupData) {
+                    const cardId = replacementCard.id.replace('news-', '');
+                    const backupData = STATE.backupCards.find(card => card.id == cardId);
+                    if (!backupData && !$(`#news-${cardId}`, DOM.grid)) {
                         STATE.backupCards.unshift({
-                            id: replacementCard.id.replace('news-', ''),
+                            id: cardId,
                             card: replacementCard.outerHTML
                         });
                         STATE.backupModals.unshift(replacementModal?.outerHTML || '');
+                        log(`Devuelta noticia de respaldo al array (catch): ${cardId}`);
                     }
                 }
                 
@@ -397,18 +434,28 @@
             tmp.innerHTML = item.card;
             const card = tmp.firstElementChild;
             if (!card) continue; // Saltar si el HTML de la tarjeta estaba vacío
+            
+            const id = card.id.replace('news-', '');
+            
             // Comprobar duplicados ANTES de añadir al fragmento
             if ($("#" + card.id, DOM.grid)) { 
                 log(`Skipping duplicate card from pendingNews: ${card.id}`);
                 continue; 
             }
-            const id = card.id.replace('news-', '');
+            
+            // También verificar en noticias de respaldo para evitar duplicados futuros
+            const existsInBackup = STATE.backupCards.some(backup => backup.id == id);
+            if (existsInBackup) {
+                log(`Skipping card already in backup: ${card.id}`);
+                continue;
+            }
+            
             const tmpModal = document.createElement('div');
             tmpModal.innerHTML = item.modal;
             const modalEl = tmpModal.firstElementChild;
             configureNewCard(card, modalEl, id);
             frag.appendChild(card);
-            DOM.modalsContainer.appendChild(modalEl);
+            modalEl && DOM.modalsContainer.appendChild(modalEl);
             newIds.push(card);
         }
 
