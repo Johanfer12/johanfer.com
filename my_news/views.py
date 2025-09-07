@@ -11,6 +11,7 @@ from django.utils.decorators import method_decorator
 from django.utils import timezone
 import pytz
 from django.db.models import Q
+from .tasks import purge_old_news, retry_summarize_pending
 
 # Create your views here.
 
@@ -69,8 +70,22 @@ class NewsListView(ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        # Usar el manager optimizado
-        return News.visible.all().order_by('-published_date')
+        # Usar el manager optimizado + búsqueda y orden dinámico
+        order = self.request.GET.get('order', 'desc')
+        search_query = self.request.GET.get('q')
+
+        queryset = News.visible.select_related('source')
+        if search_query:
+            queryset = queryset.filter(
+                Q(title__icontains=search_query) | Q(description__icontains=search_query)
+            )
+
+        if order == 'asc':
+            queryset = queryset.order_by('published_date')
+        else:
+            queryset = queryset.order_by('-published_date')
+
+        return queryset
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -90,8 +105,10 @@ class NewsListView(ListView):
         # Obtener noticias de respaldo (5 adicionales) para JavaScript
         # Calcular correctamente el offset para las noticias de respaldo
         # Las noticias de respaldo deben empezar después de la página actual
+        order = self.request.GET.get('order', 'desc')
+        ordering = 'published_date' if order == 'asc' else '-published_date'
         backup_offset = (current_page - 1) * 25 + 25  # Las siguientes 5 noticias después de la página actual
-        backup_news = News.visible.order_by('-published_date')[backup_offset:backup_offset + 5]
+        backup_news = News.visible.select_related('source').order_by(ordering)[backup_offset:backup_offset + 5]
         print(f"[DEBUG] Noticias de respaldo: Página={current_page}, Offset={backup_offset}, Encontradas={backup_news.count()}")
         
         # Renderizar noticias de respaldo como HTML para JavaScript
@@ -107,12 +124,18 @@ class NewsListView(ListView):
         
         context['backup_cards'] = backup_cards
         context['current_page'] = current_page
+        context['order'] = order
         
         return context
 
 @require_GET
 def update_feed(request):
     try:
+        # Reintentar completar resúmenes pendientes antes de buscar nuevas
+        try:
+            retry_summarize_pending(limit=50, days=1)
+        except Exception as _:
+            pass
         new_articles = FeedService.fetch_and_save_news()
         # Usar el manager optimizado
         total_news = News.visible.count()
@@ -175,6 +198,112 @@ def get_news_count(request):
             'total_news': total_news,
             'total_pages': total_pages
         })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+
+@require_POST
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+def cleanup_old_news(request):
+    try:
+        days = int(request.POST.get('days', 15))
+        removed = purge_old_news(days)
+        total_news = News.visible.count()
+        total_pages = (total_news + 24) // 25
+        return JsonResponse({'status': 'success', 'removed': removed, 'total_news': total_news, 'total_pages': total_pages})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+
+@require_POST
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+def retry_summaries(request):
+    try:
+        limit = int(request.POST.get('limit', 50))
+        days = int(request.POST.get('days', 2))
+        processed = retry_summarize_pending(limit=limit, days=days)
+        return JsonResponse({'status': 'success', 'processed': processed})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+
+@require_GET
+def get_page(request):
+    try:
+        page = int(request.GET.get('page', 1))
+        order = request.GET.get('order', 'desc')
+        search_query = request.GET.get('q')
+
+        queryset = News.visible.select_related('source')
+        if search_query:
+            queryset = queryset.filter(
+                Q(title__icontains=search_query) | Q(description__icontains=search_query)
+            )
+
+        ordering = 'published_date' if order == 'asc' else '-published_date'
+        queryset = queryset.order_by(ordering)
+
+        total_news = queryset.count()
+        total_pages = (total_news + 24) // 25
+
+        offset = (page - 1) * 25
+        news_slice = list(queryset[offset:offset + 25])
+
+        cards = []
+        for article in news_slice:
+            card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
+            modal_html = render_to_string('news_modal.html', {'article': article, 'user': request.user})
+            cards.append({'id': article.id, 'card': card_html, 'modal': modal_html})
+
+        # Preparar 5 de respaldo a partir del siguiente bloque
+        backup_start = offset + 25
+        backup_qs = queryset[backup_start:backup_start + 5]
+        backup_cards = []
+        for article in backup_qs:
+            card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
+            modal_html = render_to_string('news_modal.html', {'article': article, 'user': request.user})
+            backup_cards.append({'id': article.id, 'card': card_html, 'modal': modal_html})
+
+        return JsonResponse({
+            'status': 'success',
+            'cards': cards,
+            'backup_cards': backup_cards,
+            'total_news': total_news,
+            'total_pages': total_pages,
+            'order': order,
+            'current_page': page
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+
+@require_POST
+def undo_delete(request, pk):
+    try:
+        news = News.objects.get(pk=pk)
+        if news.is_deleted:
+            news.is_deleted = False
+            # Restauramos cualquier marca de filtrado manual
+            news.is_filtered = False
+            news.is_ai_filtered = False
+            news.is_redundant = False
+            news.save()
+
+        card_html = render_to_string('news_card.html', {'article': news, 'user': request.user})
+        modal_html = render_to_string('news_modal.html', {'article': news, 'user': request.user})
+
+        total_news = News.visible.count()
+        total_pages = (total_news + 24) // 25
+
+        return JsonResponse({
+            'status': 'success',
+            'html': card_html,
+            'modal': modal_html,
+            'total_news': total_news,
+            'total_pages': total_pages
+        })
+    except News.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Noticia no encontrada'})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
 

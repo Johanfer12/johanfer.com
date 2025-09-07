@@ -13,6 +13,8 @@
         notificationCount: '#new-news-count',
         notifCloseBtn: '#close-notification-btn',
         updateFeedBtn: '#updateFeedBtn',
+        undoBtn: '#undoBtn',
+        orderBtn: '#orderBtn',
     };
 
     const MAX_NEWS = 25;
@@ -36,6 +38,9 @@
         lastChecked: new Date().toISOString(),
         backupCards: [], // Noticias de respaldo precargadas
         backupModals: [], // Modales de respaldo precargados
+        deleteStack: [],
+        order: new URLSearchParams(location.search).get('order') || 'desc',
+        currentPage: parseInt(new URLSearchParams(location.search).get('page') || '1', 10),
     };
 
     /* ---------------------------------------------------------------------
@@ -208,6 +213,21 @@
                 },
         body: `current_page=${currentPage}`,
     });
+
+    const serverUndoNews = (newsId) => fetchJson(`/noticias/undo/${newsId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+        },
+    });
+
+    const serverGetPage = (page, order, q) => {
+        const params = new URLSearchParams();
+        params.set('page', page);
+        if (order) params.set('order', order);
+        if (q) params.set('q', q);
+        return fetchJson(`/noticias/get-page/?${params.toString()}`);
+    };
 
     const deleteNews = (newsId) => {
         const container = $(`#news-${newsId}`);
@@ -409,6 +429,10 @@
                 err('Error al eliminar noticia:', e);
                 alert('Error al eliminar la noticia. Por favor, inténtalo de nuevo.');
             });
+
+        // Apilar para deshacer
+        STATE.deleteStack.unshift(newsId);
+        if (STATE.deleteStack.length > 5) STATE.deleteStack.length = 5;
     };
 
 
@@ -424,8 +448,12 @@
         const oldPositions = isMobile() ? null : capturePositions();
         const currentCards = Array.from(DOM.grid.children);
 
-        // Insertar nuevas (ordenadas por fecha desc.)
-        newsToAdd.sort((a, b) => new Date(b.published) - new Date(a.published));
+        // Insertar nuevas según el orden activo
+        if (STATE.order === 'asc') {
+            newsToAdd.sort((a, b) => new Date(a.published) - new Date(b.published));
+        } else {
+            newsToAdd.sort((a, b) => new Date(b.published) - new Date(a.published));
+        }
         const frag = document.createDocumentFragment();
         const newIds = [];
 
@@ -459,7 +487,11 @@
             newIds.push(card);
         }
 
-        DOM.grid.prepend(frag);
+        if (STATE.order === 'asc') {
+            DOM.grid.appendChild(frag);
+        } else {
+            DOM.grid.prepend(frag);
+        }
         if (oldPositions) animateReposition(oldPositions);
         newIds.forEach(el => animateScaleOpacity(el));
         enforceCardLimit(); // Asegurar límite DESPUÉS de añadir nuevas
@@ -603,18 +635,124 @@
             .then(data => {
                 if (data.status !== 'success') throw new Error(data.message);
                 updateCounters(data.total_news, data.total_pages);
-                    checkForNewNews();
+                checkForNewNews();
             })
             .catch(e => { err('Actualizar feed:', e); alert('Error al actualizar el feed: ' + e.message); })
             .finally(() => { btn.disabled = false; btn.classList.remove('loading'); });
     });
 
+    // Botón deshacer
+    DOM.undoBtn?.addEventListener('click', () => {
+        const last = STATE.deleteStack.shift();
+        if (!last) return;
+        serverUndoNews(last)
+            .then(data => {
+                if (data.status !== 'success') throw new Error(data.message);
+                updateCounters(data.total_news, data.total_pages);
+                if (data.html && data.modal) {
+                    const t = document.createElement('div');
+                    t.innerHTML = data.html;
+                    const card = t.firstElementChild;
+                    const tm = document.createElement('div');
+                    tm.innerHTML = data.modal;
+                    const modal = tm.firstElementChild;
+                    const id = card.id.replace('news-', '');
+                    if (STATE.order === 'desc') {
+                        DOM.grid.prepend(card);
+                    } else {
+                        DOM.grid.appendChild(card);
+                    }
+                    configureNewCard(card, modal, id);
+                    modal && DOM.modalsContainer.appendChild(modal);
+                    animateScaleOpacity(card);
+                    enforceCardLimit();
+                }
+            })
+            .catch(e => { err('Deshacer:', e); alert('No se pudo deshacer'); });
+    });
+
+    // Botón cambiar orden
+    const applyOrder = (order) => {
+        STATE.order = order;
+        const q = new URLSearchParams(location.search).get('q') || '';
+        serverGetPage(STATE.currentPage, STATE.order, q)
+            .then(data => {
+                if (data.status !== 'success') throw new Error(data.message);
+                DOM.grid.innerHTML = '';
+                DOM.modalsContainer.innerHTML = '';
+                const frag = document.createDocumentFragment();
+                (data.cards || []).forEach(item => {
+                    const t = document.createElement('div');
+                    t.innerHTML = item.card;
+                    const card = t.firstElementChild;
+                    const tm = document.createElement('div');
+                    tm.innerHTML = item.modal;
+                    const modal = tm.firstElementChild;
+                    const id = String(item.id);
+                    configureNewCard(card, modal, id);
+                    frag.appendChild(card);
+                    modal && DOM.modalsContainer.appendChild(modal);
+                });
+                DOM.grid.appendChild(frag);
+                STATE.backupCards = data.backup_cards || [];
+                STATE.backupModals = (data.backup_cards || []).map(x => x.modal);
+                updateCounters(data.total_news, data.total_pages);
+                updatePagination(data.total_pages);
+                const params = new URLSearchParams(location.search);
+                params.set('order', STATE.order);
+                history.replaceState(null, '', `?${params.toString()}`);
+            })
+            .catch(e => { err('Cambiar orden:', e); alert('No se pudo cambiar el orden'); });
+    };
+
+    const setOrderIcon = () => {
+        if (!DOM.orderBtn) return;
+        const ascIcon = '<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-sort-ascending-numbers" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"> <path stroke="none" d="M0 0h24v24H0z" fill="none"/> <path d="M4 15l3 3l3 -3" /> <path d="M7 6v12" /> <path d="M17 3a 2 2 0 0 1 2 2v3a 2 2 0 1 1 -4 0v-3a 2 2 0 0 1 2 -2z" /> <circle cx="17" cy="16" r="2" /> <path d="M19 16v3a 2 2 0 0 1 -2 2h-1.5" /> </svg>';
+        const descIcon = '<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-sort-descending-numbers" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"> <path stroke="none" d="M0 0h24v24H0z" fill="none"/> <path d="M4 15l3 3l3 -3" /> <path d="M7 6v12" /> <path d="M17 14a 2 2 0 0 1 2 2v3a 2 2 0 1 1 -4 0v-3a 2 2 0 0 1 2 -2z" /> <circle cx="17" cy="5" r="2" /> <path d="M19 5v3a 2 2 0 0 1 -2 2h-1.5" /> </svg>';
+        DOM.orderBtn.innerHTML = STATE.order === 'asc' ? ascIcon : descIcon;
+    };
+
+    DOM.orderBtn?.addEventListener('click', () => {
+        const newOrder = STATE.order === 'desc' ? 'asc' : 'desc';
+        applyOrder(newOrder);
+        STATE.order = newOrder;
+        setOrderIcon();
+    });
+
     /* ---------------------------------------------------------------------
      *  Arranque
      * ------------------------------------------------------------------ */
-    // Inicializar noticias de respaldo desde el servidor
+    // Inicializar noticias de respaldo y sincronizar con DB al abrir
     document.addEventListener('DOMContentLoaded', () => {
         initializeBackupCards();
+        const q = new URLSearchParams(location.search).get('q') || '';
+        serverGetPage(STATE.currentPage, STATE.order, q)
+            .then(data => {
+                if (data.status !== 'success') return;
+                DOM.grid.innerHTML = '';
+                DOM.modalsContainer.innerHTML = '';
+                const frag = document.createDocumentFragment();
+                (data.cards || []).forEach(item => {
+                    const t = document.createElement('div');
+                    t.innerHTML = item.card;
+                    const card = t.firstElementChild;
+                    const tm = document.createElement('div');
+                    tm.innerHTML = item.modal;
+                    const modal = tm.firstElementChild;
+                    const id = String(item.id);
+                    configureNewCard(card, modal, id);
+                    frag.appendChild(card);
+                    modal && DOM.modalsContainer.appendChild(modal);
+                });
+                DOM.grid.appendChild(frag);
+                STATE.backupCards = data.backup_cards || [];
+                STATE.backupModals = (data.backup_cards || []).map(x => x.modal);
+                updateCounters(data.total_news, data.total_pages);
+                updatePagination(data.total_pages);
+            })
+            .catch(() => {});
+        // Establecer icono inicial según orden actual
+        setOrderIcon();
     });
     
     setInterval(checkForNewNews, CHECK_INTERVAL);
