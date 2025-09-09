@@ -133,7 +133,7 @@ def update_feed(request):
     try:
         # Reintentar completar resúmenes pendientes antes de buscar nuevas
         try:
-            retry_summarize_pending(limit=50, days=1)
+            retry_summarize_pending(limit=50, days=15)
         except Exception as _:
             pass
         new_articles = FeedService.fetch_and_save_news()

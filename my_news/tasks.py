@@ -8,7 +8,7 @@ def update_news_cron():
     try:
         # Completar pendientes antes de traer nuevas
         try:
-            retry_summarize_pending(limit=50, days=1)
+            retry_summarize_pending(limit=50, days=15)
         except Exception:
             pass
         FeedService.fetch_and_save_news()
@@ -33,8 +33,12 @@ def purge_old_news(days: int = 15):
         return 0
 
 
-def retry_summarize_pending(limit: int = 50, days: int = 1):
-    """Reintenta generar resumen/short_answer para noticias recientes sin procesar por IA."""
+def retry_summarize_pending(limit: int = 50, days: int = 15):
+    """Reintenta generar resumen/short_answer para noticias recientes no filtradas por IA.
+
+    Ampliado a una ventana de 15 días y sin depender de short_answer__isnull.
+    Solo cuenta como procesada si se guardan cambios.
+    """
     try:
         client = FeedService.initialize_gemini()
         try:
@@ -45,13 +49,13 @@ def retry_summarize_pending(limit: int = 50, days: int = 1):
         cutoff = timezone.now() - timedelta(days=days)
         qs = News.objects.filter(
             created_at__gte=cutoff,
-            is_filtered=False,
-            is_ai_filtered=False,
-            short_answer__isnull=True,
+            is_deleted=False,     # no reintentar si el usuario la eliminó
+            is_ai_processed=False # solo las no procesadas por IA
         ).order_by('-created_at')[:limit]
 
         processed = 0
         for news in qs:
+            saved_changes = False
             processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_gemini(
                 news.title,
                 news.description or '',
@@ -65,15 +69,19 @@ def retry_summarize_pending(limit: int = 50, days: int = 1):
                 news.is_filtered = True
                 news.is_ai_filtered = True
                 news.ai_filter_reason = ai_filter_reason.strip()
+                news.is_ai_processed = True
                 news.save()
                 processed += 1
                 continue
 
-            if processed_description:
-                news.description = processed_description
-            if short_answer is not None:
-                news.short_answer = short_answer
-            if processed_description or short_answer is not None:
+            # Actualizar solo si hay cambios reales
+            new_description = processed_description if processed_description else news.description
+            new_short_answer = short_answer if short_answer is not None else news.short_answer
+
+            if (new_description != news.description) or (new_short_answer != news.short_answer):
+                news.description = new_description
+                news.short_answer = new_short_answer
+                news.is_ai_processed = True
                 news.save()
                 processed += 1
 

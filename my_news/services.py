@@ -390,8 +390,8 @@ class FeedService:
         print(f"Procesando {sources.count()} fuentes activas con el modelo Gemini: {global_model_name}")
         new_articles_count = 0
         
-        # Calcular la fecha límite (1 mes atrás)
-        one_month_ago = timezone.now() - timedelta(days=30)
+        # Calcular la fecha límite (15 días atrás)
+        fifteen_days_ago = timezone.now() - timedelta(days=15)
         
         # Lista para almacenar todas las entradas de todas las fuentes
         all_entries = []
@@ -407,10 +407,10 @@ class FeedService:
                 is_filtered=False
             ).order_by('-published_date').first()
             
-            latest_date = latest_news.published_date if latest_news else one_month_ago
+            latest_date = latest_news.published_date if latest_news else fifteen_days_ago
             
-            # Usar la fecha más reciente entre la última noticia y hace un mes
-            cutoff_date = max(latest_date, one_month_ago)
+            # Usar la fecha más reciente entre la última noticia y hace 15 días
+            cutoff_date = max(latest_date, fifteen_days_ago)
             
             feed = feedparser.parse(source.url)
             print(f"Encontradas {len(feed.entries)} entradas en el feed")
@@ -544,7 +544,8 @@ class FeedService:
                         source=source,
                         is_filtered=True,
                         filtered_by=filter_word,
-                        image_url=image_url
+                        image_url=image_url,
+                        is_ai_processed=True
                     )
                     new_articles_count += 1
                 except Exception as e:
@@ -585,7 +586,8 @@ class FeedService:
                         image_url=image_url,
                         is_filtered=True,
                         is_ai_filtered=True,
-                        ai_filter_reason=ai_filter_reason.strip()
+                        ai_filter_reason=ai_filter_reason.strip(),
+                        is_ai_processed=True
                     )
                     new_articles_count += 1
                 except Exception as e:
@@ -603,6 +605,10 @@ class FeedService:
                 print(f"Advertencia: Gemini devolvió un valor para ai_filter ({ai_filter_reason}) pero no es la instrucción esperada. No se filtrará.")
             # <<<<< FIN LÓGICA FILTRADO IA >>>>>
 
+            # Guard extra: nunca crear noticias anteriores a 15 días
+            if published < fifteen_days_ago:
+                continue
+
             # Crear la nueva noticia (si no fue filtrada por IA ni por palabra)
             try:
                 news_item = News.objects.create(
@@ -613,7 +619,8 @@ class FeedService:
                     link=entry.link,
                     published_date=published,
                     source=source,
-                    image_url=image_url
+                    image_url=image_url,
+                    is_ai_processed=True
                 )
                 new_articles_count += 1
             except Exception as e:

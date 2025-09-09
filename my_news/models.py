@@ -58,6 +58,7 @@ class News(models.Model):
     short_answer = models.TextField(null=True, blank=True, verbose_name="Respuesta corta")
     ai_filter_reason = models.TextField(null=True, blank=True, verbose_name="Razón Filtro IA")
     is_ai_filtered = models.BooleanField(default=False, verbose_name="Filtro IA")
+    is_ai_processed = models.BooleanField(default=False, verbose_name="Procesada por IA")
     
     # Managers
     objects = models.Manager()  # Manager por defecto
