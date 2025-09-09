@@ -489,29 +489,35 @@
     .card-front, .card-back { box-shadow: 0 4px 8px rgba(0,0,0,0.22), 0 6px 14px rgba(0,0,0,0.18); }
 }
 
-/* Animación de eliminación */
+/* Animación de eliminación (shrink + fade, barato en GPU) */
 @keyframes deleteCard {
     0% {
-        transform: scale(1) rotate(0);
+        transform: translateZ(0) scale(1);
         opacity: 1;
     }
-    20% {
-        transform: scale(1.1) rotate(5deg);
+    60% {
+        transform: translateZ(0) scale(0.92);
+        opacity: 0.55;
     }
     100% {
-        transform: scale(0) rotate(-15deg);
+        transform: translateZ(0) scale(0.85);
         opacity: 0;
-        margin: 0;
-        padding: 0;
-        width: 0;
-        height: 0;
     }
 }
 
 .news-card-container.deleting {
-    animation: deleteCard 0.5s ease-in-out forwards !important;
     pointer-events: none !important;
     z-index: 10 !important;
+}
+
+/* Colapso con reflow: altura reduce y vecinos ocupan el espacio */
+.news-card-container.collapsing {
+    overflow: hidden;
+    will-change: height, width, margin, opacity, transform;
+    transition: height 0.45s ease, width 0.45s ease, margin 0.45s ease, opacity 0.35s ease, transform 0.45s ease;
+}
+.news-card-container.collapsing .news-card {
+    box-shadow: none !important;
 }
 
 /* Animación para la nueva tarjeta que entra */

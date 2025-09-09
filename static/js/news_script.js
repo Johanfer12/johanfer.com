@@ -236,10 +236,33 @@
         const currentPage = new URLSearchParams(location.search).get('page') || 1;
         if (modal?.classList.contains('show')) closeNewsModal(newsId);
 
-        const oldPositions = isMobile() ? null : capturePositions();
+        const mobileView = isMobile();
+        const oldPositions = mobileView ? null : capturePositions();
 
-        // Ejecutar animación de salida inmediatamente (optimista)
-        container.classList.add('deleting');
+        // Ejecutar animación de salida: móvil (height) vs escritorio (width)
+        const initialHeight = container.offsetHeight;
+        const initialWidth = container.offsetWidth;
+        container.classList.add('collapsing');
+        
+        if (mobileView) {
+            container.style.height = initialHeight + 'px';
+            void container.offsetHeight;
+            requestAnimationFrame(() => {
+                container.style.height = '0px';
+                container.style.opacity = '0';
+                container.style.transform = 'scale(0.85)';
+            });
+        } else {
+            container.style.width = initialWidth + 'px';
+            container.style.marginRight = '0px';
+            void container.offsetWidth;
+            requestAnimationFrame(() => {
+                container.style.width = '0px';
+                container.style.marginRight = '-20px'; // Ayuda a que las tarjetas se muevan antes
+                container.style.opacity = '0';
+                container.style.transform = 'scale(0.85)';
+            });
+        }
         
         // Intentar usar una noticia de respaldo precargada primero
         let replacementCard = null;
@@ -293,21 +316,38 @@
             modal?.remove();
         };
 
-        // Esperar a que termine la animación CSS antes de remover del DOM
-        const animationDuration = 600; // Duración de la animación deleteCard en CSS
-        const removeTimeout = setTimeout(() => {
+        // Eliminar por transitionend con fallback por tiempo
+        const animationDuration = 500; // margen para height/opacity/transform
+        let removed = false;
+        const onAnimEnd = (ev) => {
+            const expectedProp = mobileView ? 'height' : 'width';
+            if (ev.target !== container || ev.propertyName !== expectedProp) return;
+            container.removeEventListener('transitionend', onAnimEnd);
+            if (removed) return;
+            removed = true;
             removeFromDOM();
-            
-            // Agregar tarjeta de reemplazo si existe
             if (replacementCard && !$("#" + replacementCard.id, DOM.grid)) {
                 DOM.grid.appendChild(replacementCard);
                 replacementModal && DOM.modalsContainer.appendChild(replacementModal);
                 animateScaleOpacity(replacementCard);
             }
-            
             if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
             enforceCardLimit();
-        }, animationDuration);
+        };
+        container.addEventListener('transitionend', onAnimEnd, { once: true });
+        const removeTimeout = setTimeout(() => {
+            if (removed) return;
+            removed = true;
+            container.removeEventListener('transitionend', onAnimEnd);
+            removeFromDOM();
+            if (replacementCard && !$("#" + replacementCard.id, DOM.grid)) {
+                DOM.grid.appendChild(replacementCard);
+                replacementModal && DOM.modalsContainer.appendChild(replacementModal);
+                animateScaleOpacity(replacementCard);
+            }
+            if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
+            enforceCardLimit();
+        }, animationDuration + 50);
 
         // Llamada al servidor en paralelo
         serverDeleteNews(newsId, currentPage)
@@ -315,7 +355,16 @@
                 if (data.status !== 'success') {
                     // Si el servidor falló, revertir la animación
                     clearTimeout(removeTimeout);
-                    container.classList.remove('deleting');
+                    container.removeEventListener('transitionend', onAnimEnd);
+                    // revertir colapso
+                    container.style.transition = 'none';
+                    container.style.height = '';
+                    container.style.width = '';
+                    container.style.marginRight = '';
+                    container.style.opacity = '';
+                    container.style.transform = '';
+                    container.classList.remove('collapsing');
+                    void container.offsetHeight;
                     
                     // Devolver la noticia de respaldo al array si se había tomado
                     if (replacementCard && STATE.backupCards.length < 5) {
@@ -370,6 +419,7 @@
 
                 // Si el servidor responde antes del timeout, cancelar timeout y proceder normalmente
                 clearTimeout(removeTimeout);
+                container.removeEventListener('transitionend', onAnimEnd);
                 removeFromDOM();
                 updateCounters(data.total_news, data.total_pages);
 
