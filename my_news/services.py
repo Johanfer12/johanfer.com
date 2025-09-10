@@ -620,7 +620,7 @@ class FeedService:
                     published_date=published,
                     source=source,
                     image_url=image_url,
-                    is_ai_processed=True
+                    is_ai_processed=bool(processed_description and processed_description != original_description)
                 )
                 new_articles_count += 1
             except Exception as e:
