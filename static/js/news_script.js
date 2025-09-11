@@ -77,7 +77,7 @@
                 el.style.transform = `translate(${dx}px,${dy}px)`;
                 el.style.transition = 'none';
                 requestAnimationFrame(() => {
-                    el.style.transition = 'transform 0.5s cubic-bezier(0.25,0.1,0.25,1)';
+                    el.style.transition = 'transform 0.4s ease-out';
                     el.style.transform = '';
                     el.addEventListener('transitionend', () => {
                         el.style.transition = '';
@@ -211,7 +211,7 @@
                     'X-CSRFToken': getCookie('csrftoken'),
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
-        body: `current_page=${currentPage}`,
+        body: `current_page=${currentPage}&order=${STATE.order}`,
     });
 
     const serverUndoNews = (newsId) => fetchJson(`/noticias/undo/${newsId}/`, {
@@ -327,7 +327,11 @@
             removed = true;
             removeFromDOM();
             if (replacementCard && !$("#" + replacementCard.id, DOM.grid)) {
-                DOM.grid.appendChild(replacementCard);
+                if (STATE.order === 'asc') {
+                    DOM.grid.appendChild(replacementCard);
+                } else {
+                    DOM.grid.prepend(replacementCard);
+                }
                 replacementModal && DOM.modalsContainer.appendChild(replacementModal);
                 animateScaleOpacity(replacementCard);
             }
@@ -341,7 +345,11 @@
             container.removeEventListener('transitionend', onAnimEnd);
             removeFromDOM();
             if (replacementCard && !$("#" + replacementCard.id, DOM.grid)) {
-                DOM.grid.appendChild(replacementCard);
+                if (STATE.order === 'asc') {
+                    DOM.grid.appendChild(replacementCard);
+                } else {
+                    DOM.grid.prepend(replacementCard);
+                }
                 replacementModal && DOM.modalsContainer.appendChild(replacementModal);
                 animateScaleOpacity(replacementCard);
             }
@@ -402,7 +410,11 @@
                             // Verificar que no esté duplicada
                             if (!$(`#news-${newCardId}`, DOM.grid)) {
                                 configureNewCard(newCard, newModal, newCardId);
-                                DOM.grid.appendChild(newCard);
+                                if (STATE.order === 'asc') {
+                                    DOM.grid.appendChild(newCard);
+                                } else {
+                                    DOM.grid.prepend(newCard);
+                                }
                                 newModal && DOM.modalsContainer.appendChild(newModal);
                                 animateScaleOpacity(newCard);
                                 log(`Agregada noticia del servidor: ${newCardId}`);
@@ -596,6 +608,15 @@
         }
         DOM.total && (DOM.total.textContent = `${totalCount} noticias`);
         updatePagination(totalPages);
+        
+        // Si quedamos sin noticias en la página actual, ir a página 1
+        const currentPage = parseInt(new URLSearchParams(location.search).get('page') || '1', 10);
+        const cardsInPage = $$('.news-card-container', DOM.grid).length;
+        if (cardsInPage === 0 && totalCount > 0 && currentPage > 1) {
+            const params = new URLSearchParams(location.search);
+            params.set('page', '1');
+            window.location.href = `?${params.toString()}`;
+        }
     };
 
     /* ---------------------------------------------------------------------

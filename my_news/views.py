@@ -19,6 +19,7 @@ from .tasks import purge_old_news, retry_summarize_pending
 def delete_news(request, pk):
     try:
         current_page = int(request.POST.get('current_page', 1))
+        order = request.POST.get('order', 'desc')
         news = News.objects.get(pk=pk)
         news.is_deleted = True
         news.save()
@@ -28,14 +29,11 @@ def delete_news(request, pk):
         total_news = News.visible.count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
-        # Calcular el offset correcto: 
-        # Si estamos en página 1, queremos la noticia 26 (índice 25)
-        # Si estamos en página 2, queremos la noticia 51 (índice 50), etc.
-        # current_page comienza en 1, así que (current_page - 1) * 25 nos da el primer índice de la página
-        # Sumamos 25 para obtener el primer índice de la siguiente página
+        # Calcular el offset correcto respetando el orden actual
         offset = (current_page - 1) * 25 + 25
         if offset < total_news:
-            next_news = News.visible.order_by('-published_date')[offset:offset+1].first()
+            ordering = 'published_date' if order == 'asc' else '-published_date'
+            next_news = News.visible.order_by(ordering)[offset:offset+1].first()
         
         response_data = {
             'status': 'success',
