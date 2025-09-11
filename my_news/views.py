@@ -29,11 +29,25 @@ def delete_news(request, pk):
         total_news = News.visible.count()
         total_pages = (total_news + 24) // 25  # Calcular el total de páginas
         
-        # Calcular el offset correcto respetando el orden actual
-        offset = (current_page - 1) * 25 + 25
-        if offset < total_news:
-            ordering = 'published_date' if order == 'asc' else '-published_date'
-            next_news = News.visible.order_by(ordering)[offset:offset+1].first()
+        # Buscar noticia de reemplazo por keyset para mantener orden estable (siempre, también en descendente página 1)
+        base_qs = News.visible.order_by('published_date' if order == 'asc' else '-published_date')
+        page_start = (current_page - 1) * 25
+        page_qs = list(base_qs[page_start:page_start + 25])
+        if page_qs:
+            anchor = page_qs[-1]
+            if order == 'asc':
+                keyset_q = (
+                    Q(published_date__gt=anchor.published_date) |
+                    (Q(published_date=anchor.published_date) & Q(id__gt=anchor.id))
+                )
+                ordering = 'published_date'
+            else:
+                keyset_q = (
+                    Q(published_date__lt=anchor.published_date) |
+                    (Q(published_date=anchor.published_date) & Q(id__lt=anchor.id))
+                )
+                ordering = '-published_date'
+            next_news = News.visible.filter(keyset_q).order_by(ordering).first()
         
         response_data = {
             'status': 'success',
@@ -79,9 +93,9 @@ class NewsListView(ListView):
             )
 
         if order == 'asc':
-            queryset = queryset.order_by('published_date')
+            queryset = queryset.order_by('published_date', 'id')
         else:
-            queryset = queryset.order_by('-published_date')
+            queryset = queryset.order_by('-published_date', '-id')
 
         return queryset
     
@@ -100,14 +114,24 @@ class NewsListView(ListView):
         except (ValueError, TypeError):
             current_page = 1
             
-        # Obtener noticias de respaldo (5 adicionales) para JavaScript
-        # Calcular correctamente el offset para las noticias de respaldo
-        # Las noticias de respaldo deben empezar después de la página actual
+        # Obtener noticias de respaldo (5 adicionales) por keyset (cursor) a partir del último ítem de la página
         order = self.request.GET.get('order', 'desc')
         ordering = 'published_date' if order == 'asc' else '-published_date'
-        backup_offset = (current_page - 1) * 25 + 25  # Las siguientes 5 noticias después de la página actual
-        backup_news = News.visible.select_related('source').order_by(ordering)[backup_offset:backup_offset + 5]
-        print(f"[DEBUG] Noticias de respaldo: Página={current_page}, Offset={backup_offset}, Encontradas={backup_news.count()}")
+        page_qs = list(self.get_queryset()[(current_page - 1) * 25: (current_page - 1) * 25 + 25])
+        last_item = page_qs[-1] if page_qs else None  # último en la página independientemente del orden
+        backup_news = []
+        if last_item:
+            if order == 'asc':
+                backup_q = (
+                    Q(published_date__gt=last_item.published_date) |
+                    (Q(published_date=last_item.published_date) & Q(id__gt=last_item.id))
+                )
+            else:
+                backup_q = (
+                    Q(published_date__lt=last_item.published_date) |
+                    (Q(published_date=last_item.published_date) & Q(id__lt=last_item.id))
+                )
+            backup_news = News.visible.select_related('source').filter(backup_q).order_by(ordering)[:5]
         
         # Renderizar noticias de respaldo como HTML para JavaScript
         backup_cards = []
@@ -228,48 +252,97 @@ def retry_summaries(request):
 @require_GET
 def get_page(request):
     try:
-        page = int(request.GET.get('page', 1))
+        # Keyset pagination completa con cursor
         order = request.GET.get('order', 'desc')
         search_query = request.GET.get('q')
+        page = int(request.GET.get('page', 1))  # fallback compat
+        cursor = request.GET.get('cursor')  # formato: "timestamp_iso|id"
 
-        queryset = News.visible.select_related('source')
+        base_qs = News.visible.select_related('source')
         if search_query:
-            queryset = queryset.filter(
+            base_qs = base_qs.filter(
                 Q(title__icontains=search_query) | Q(description__icontains=search_query)
             )
 
-        ordering = 'published_date' if order == 'asc' else '-published_date'
-        queryset = queryset.order_by(ordering)
+        # Orden estable por (published_date, id)
+        if order == 'asc':
+            base_qs = base_qs.order_by('published_date', 'id')
+        else:
+            base_qs = base_qs.order_by('-published_date', '-id')
 
-        total_news = queryset.count()
-        total_pages = (total_news + 24) // 25
+        # Aplicar cursor si viene
+        if cursor:
+            try:
+                ts_str, id_str = cursor.split('|')
+                from django.utils.dateparse import parse_datetime
+                anchor_dt = parse_datetime(ts_str)
+                anchor_id = int(id_str)
+                if order == 'asc':
+                    key_q = Q(published_date__gt=anchor_dt) | (Q(published_date=anchor_dt) & Q(id__gt=anchor_id))
+                else:
+                    key_q = Q(published_date__lt=anchor_dt) | (Q(published_date=anchor_dt) & Q(id__lt=anchor_id))
+                base_qs = base_qs.filter(key_q)
+            except Exception:
+                pass
+        elif page and page > 1:
+            # Fallback: derivar cursor desde page N por ancla del último ítem de la página anterior
+            anchor_idx = (page - 1) * 25 - 1
+            if anchor_idx >= 0:
+                prev_slice = list(base_qs[:anchor_idx + 1])
+                if prev_slice:
+                    anchor = prev_slice[-1]
+                    if order == 'asc':
+                        key_q = Q(published_date__gt=anchor.published_date) | (Q(published_date=anchor.published_date) & Q(id__gt=anchor.id))
+                    else:
+                        key_q = Q(published_date__lt=anchor.published_date) | (Q(published_date=anchor.published_date) & Q(id__lt=anchor.id))
+                    base_qs = base_qs.filter(key_q)
 
-        offset = (page - 1) * 25
-        news_slice = list(queryset[offset:offset + 25])
+        page_size = 25
+        window_qs = base_qs  # conservar para backup
+        items = list(window_qs[:page_size + 1])  # pedir uno extra para construir next_cursor
+        has_more = len(items) > page_size
+        items = items[:page_size]
 
         cards = []
-        for article in news_slice:
+        for article in items:
             card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
             modal_html = render_to_string('news_modal.html', {'article': article, 'user': request.user})
             cards.append({'id': article.id, 'card': card_html, 'modal': modal_html})
 
-        # Preparar 5 de respaldo a partir del siguiente bloque
-        backup_start = offset + 25
-        backup_qs = queryset[backup_start:backup_start + 5]
+        # Construir next_cursor
+        next_cursor = None
+        if has_more:
+            last = items[-1]
+            next_cursor = f"{last.published_date.isoformat()}|{last.id}"
+
+        # Preparar backups por keyset (opcional para UX fluida)
         backup_cards = []
-        for article in backup_qs:
-            card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
-            modal_html = render_to_string('news_modal.html', {'article': article, 'user': request.user})
-            backup_cards.append({'id': article.id, 'card': card_html, 'modal': modal_html})
+        try:
+            backup_qs = list(window_qs[page_size:page_size + 5])
+            for article in backup_qs:
+                card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
+                modal_html = render_to_string('news_modal.html', {'article': article, 'user': request.user})
+                backup_cards.append({'id': article.id, 'card': card_html, 'modal': modal_html})
+        except Exception:
+            pass
+
+        # Conteo total independiente del cursor
+        count_qs = News.visible
+        if search_query:
+            count_qs = count_qs.filter(Q(title__icontains=search_query) | Q(description__icontains=search_query))
+        total_news = count_qs.count()
+        total_pages = (total_news + 24) // 25
+
+        
 
         return JsonResponse({
             'status': 'success',
             'cards': cards,
+            'next_cursor': next_cursor,
             'backup_cards': backup_cards,
             'total_news': total_news,
             'total_pages': total_pages,
-            'order': order,
-            'current_page': page
+            'order': order
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})

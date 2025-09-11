@@ -41,6 +41,7 @@
         deleteStack: [],
         order: new URLSearchParams(location.search).get('order') || 'desc',
         currentPage: parseInt(new URLSearchParams(location.search).get('page') || '1', 10),
+        nextCursor: null,
     };
 
     /* ---------------------------------------------------------------------
@@ -221,9 +222,10 @@
         },
     });
 
-    const serverGetPage = (page, order, q) => {
+    const serverGetPage = ({cursor, page, order, q}) => {
         const params = new URLSearchParams();
-        params.set('page', page);
+        if (cursor) params.set('cursor', cursor);
+        else if (page) params.set('page', page);
         if (order) params.set('order', order);
         if (q) params.set('q', q);
         return fetchJson(`/noticias/get-page/?${params.toString()}`);
@@ -746,7 +748,7 @@
     const applyOrder = (order) => {
         STATE.order = order;
         const q = new URLSearchParams(location.search).get('q') || '';
-        serverGetPage(STATE.currentPage, STATE.order, q)
+        serverGetPage({page: STATE.currentPage, order: STATE.order, q})
             .then(data => {
                 if (data.status !== 'success') throw new Error(data.message);
                 DOM.grid.innerHTML = '';
@@ -767,6 +769,7 @@
                 DOM.grid.appendChild(frag);
                 STATE.backupCards = data.backup_cards || [];
                 STATE.backupModals = (data.backup_cards || []).map(x => x.modal);
+                STATE.nextCursor = data.next_cursor || null;
                 updateCounters(data.total_news, data.total_pages);
                 updatePagination(data.total_pages);
                 const params = new URLSearchParams(location.search);
@@ -797,7 +800,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         initializeBackupCards();
         const q = new URLSearchParams(location.search).get('q') || '';
-        serverGetPage(STATE.currentPage, STATE.order, q)
+        serverGetPage({page: STATE.currentPage, order: STATE.order, q})
             .then(data => {
                 if (data.status !== 'success') return;
                 DOM.grid.innerHTML = '';
@@ -818,6 +821,7 @@
                 DOM.grid.appendChild(frag);
                 STATE.backupCards = data.backup_cards || [];
                 STATE.backupModals = (data.backup_cards || []).map(x => x.modal);
+                STATE.nextCursor = data.next_cursor || null;
                 updateCounters(data.total_news, data.total_pages);
                 updatePagination(data.total_pages);
             })
