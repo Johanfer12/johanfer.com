@@ -63,7 +63,7 @@ def delete_news(request, pk):
             response_data['html'] = card_html
             response_data['modal'] = modal_html
         else:
-            print(f"[DEBUG] No se encontró noticia de reemplazo. Offset: {offset}, Total noticias: {total_news}, Página: {current_page}")
+            print(f"[DEBUG] No se encontró noticia de reemplazo. Página: {current_page}, Total noticias: {total_news}")
         
         return JsonResponse(response_data)
     except News.DoesNotExist:
