@@ -36,12 +36,15 @@
         totalPending: 0,
         userInteracted: false,
         lastChecked: new Date().toISOString(),
-        backupCards: [], // Noticias de respaldo precargadas
+        backupCards: [], // Noticias de respaldo precargadas (ahora hasta 25)
         backupModals: [], // Modales de respaldo precargados
         deleteStack: [],
         order: new URLSearchParams(location.search).get('order') || 'desc',
         currentPage: parseInt(new URLSearchParams(location.search).get('page') || '1', 10),
         nextCursor: null,
+        loadingMoreBackup: false, // Flag para evitar múltiples peticiones
+        backupCursor: null, // Cursor para las siguientes noticias de respaldo
+        deletingNews: new Set(), // IDs de noticias siendo eliminadas
     };
 
     /* ---------------------------------------------------------------------
@@ -102,6 +105,22 @@
                 el.style.transition = el.style.opacity = el.style.transform = '';
             }, {once: true});
         });
+    };
+
+    /** Crea elementos de tarjeta y modal desde HTML string */
+    const createCardFromHTML = (cardHtml, modalHtml = null) => {
+        const temp = document.createElement('div');
+        temp.innerHTML = cardHtml;
+        const card = temp.firstElementChild;
+        
+        let modal = null;
+        if (modalHtml) {
+            const tempModal = document.createElement('div');
+            tempModal.innerHTML = modalHtml;
+            modal = tempModal.firstElementChild;
+        }
+        
+        return { card, modal };
     };
 
     /** Asegura que no haya más de MAX_NEWS tarjetas visibles eliminando las más antiguas */
@@ -222,18 +241,73 @@
         },
     });
 
-    const serverGetPage = ({cursor, page, order, q}) => {
+    const serverGetPage = ({cursor, page, order, q, backupOnly = false}) => {
         const params = new URLSearchParams();
         if (cursor) params.set('cursor', cursor);
         else if (page) params.set('page', page);
         if (order) params.set('order', order);
         if (q) params.set('q', q);
+        if (backupOnly) params.set('backup_only', 'true');
         return fetchJson(`/noticias/get-page/?${params.toString()}`);
     };
 
+    // Nueva función para cargar más noticias de respaldo
+    const loadMoreBackupNews = async () => {
+        if (STATE.loadingMoreBackup) return; // Evitar múltiples peticiones
+        
+        const currentPageNum = parseInt(new URLSearchParams(location.search).get('page') || '1', 10);
+        if (currentPageNum !== 1) return; // Solo cargar respaldo en página 1
+        
+        STATE.loadingMoreBackup = true;
+        log('Cargando más noticias de respaldo...');
+        
+        try {
+            const q = new URLSearchParams(location.search).get('q') || '';
+            // Usar el cursor de respaldo o calcular desde dónde seguir
+            const cursor = STATE.backupCursor || STATE.nextCursor;
+            
+            const data = await serverGetPage({
+                cursor: cursor,
+                order: STATE.order,
+                q: q,
+                backupOnly: true
+            });
+            
+            if (data.status === 'success' && data.backup_cards) {
+                // Filtrar noticias duplicadas
+                const newBackups = data.backup_cards.filter(card => 
+                    !$(`#news-${card.id}`, DOM.grid) && 
+                    !STATE.backupCards.some(existing => existing.id == card.id)
+                );
+                
+                STATE.backupCards.push(...newBackups);
+                STATE.backupModals.push(...newBackups.map(x => x.modal));
+                
+                // Actualizar cursor para la siguiente carga
+                if (newBackups.length > 0) {
+                    // Por ahora usamos el cursor actual, podríamos construirlo desde lastBackup
+                    STATE.backupCursor = cursor;
+                }
+                
+                log(`Cargadas ${newBackups.length} noticias adicionales de respaldo. Total: ${STATE.backupCards.length}`);
+            }
+        } catch (e) {
+            err('Error cargando más noticias de respaldo:', e);
+        } finally {
+            STATE.loadingMoreBackup = false;
+        }
+    };
+
     const deleteNews = (newsId) => {
+        // Protección contra eliminaciones simultáneas
+        if (STATE.deletingNews.has(newsId)) return;
+        STATE.deletingNews.add(newsId);
+        
         const container = $(`#news-${newsId}`);
-        if (!container) return err(`Contenedor no encontrado (${newsId})`);
+        if (!container) {
+            STATE.deletingNews.delete(newsId);
+            return err(`Contenedor no encontrado (${newsId})`);
+        }
         const modal = $(`#modal-${newsId}`);
         const currentPage = new URLSearchParams(location.search).get('page') || 1;
         if (modal?.classList.contains('show')) closeNewsModal(newsId);
@@ -290,16 +364,10 @@
                 const backupData = STATE.backupCards.splice(backupIndex, 1)[0];
                 const backupModalData = STATE.backupModals.splice(backupIndex, 1)[0];
                 
-                if (backupData) {
-                    const temp = document.createElement('div');
-                    temp.innerHTML = backupData.card;
-                    replacementCard = temp.firstElementChild;
-                    
-                    if (backupModalData) {
-                        const tempModal = document.createElement('div');
-                        tempModal.innerHTML = backupModalData;
-                        replacementModal = tempModal.firstElementChild;
-                    }
+                if (backupData && backupData.card) {
+                    const { card, modal } = createCardFromHTML(backupData.card, backupModalData);
+                    replacementCard = card;
+                    replacementModal = modal;
                     
                     if (replacementCard) {
                         const id = replacementCard.id.replace('news-', '');
@@ -328,7 +396,7 @@
             if (removed) return;
             removed = true;
             removeFromDOM();
-            if (replacementCard && !$("#" + replacementCard.id, DOM.grid)) {
+            if (replacementCard && !$(`#${replacementCard.id}`, DOM.grid)) {
                 if (STATE.order === 'asc') {
                     DOM.grid.appendChild(replacementCard);
                 } else {
@@ -339,6 +407,7 @@
             }
             if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
             enforceCardLimit();
+            STATE.deletingNews.delete(newsId); // Limpiar flag
         };
         container.addEventListener('transitionend', onAnimEnd, { once: true });
         const removeTimeout = setTimeout(() => {
@@ -346,7 +415,7 @@
             removed = true;
             container.removeEventListener('transitionend', onAnimEnd);
             removeFromDOM();
-            if (replacementCard && !$("#" + replacementCard.id, DOM.grid)) {
+            if (replacementCard && !$(`#${replacementCard.id}`, DOM.grid)) {
                 if (STATE.order === 'asc') {
                     DOM.grid.appendChild(replacementCard);
                 } else {
@@ -357,6 +426,7 @@
             }
             if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
             enforceCardLimit();
+            STATE.deletingNews.delete(newsId); // Limpiar flag
         }, animationDuration + 50);
 
         // Llamada al servidor en paralelo
@@ -400,12 +470,7 @@
                     
                     // Si no había noticia de respaldo precargada, usar la del servidor
                     if (!replacementCard && data.html && data.modal) {
-                        const temp = document.createElement('div');
-                        temp.innerHTML = data.html;
-                        const newCard = temp.firstElementChild;
-                        const tempModal = document.createElement('div');
-                        tempModal.innerHTML = data.modal;
-                        const newModal = tempModal.firstElementChild;
+                        const { card: newCard, modal: newModal } = createCardFromHTML(data.html, data.modal);
                         
                         if (newCard) {
                             const newCardId = newCard.id.replace('news-', '');
@@ -426,7 +491,10 @@
                         }
                     }
                     
-                    // Las noticias de respaldo se recargan automáticamente al cambiar de página
+                    // Cargar más noticias de respaldo si quedamos con pocas
+                    if (STATE.backupCards.length < 5) {
+                        loadMoreBackupNews();
+                    }
                     
                     return;
                 }
@@ -438,18 +506,13 @@
                 updateCounters(data.total_news, data.total_pages);
 
                 // Agregar tarjeta de reemplazo
-                if (replacementCard && !$("#" + replacementCard.id, DOM.grid)) {
+                if (replacementCard && !$(`#${replacementCard.id}`, DOM.grid)) {
                     DOM.grid.appendChild(replacementCard);
                     replacementModal && DOM.modalsContainer.appendChild(replacementModal);
                     animateScaleOpacity(replacementCard);
                 } else if (!replacementCard && data.html && data.modal) {
                     // Usar la del servidor si no había de respaldo
-                    const temp = document.createElement('div');
-                    temp.innerHTML = data.html;
-                    const newCard = temp.firstElementChild;
-                    const tempModal = document.createElement('div');
-                    tempModal.innerHTML = data.modal;
-                    const newModal = tempModal.firstElementChild;
+                    const { card: newCard, modal: newModal } = createCardFromHTML(data.html, data.modal);
                     
                     if (newCard) {
                         const newCardId = newCard.id.replace('news-', '');
@@ -469,7 +532,10 @@
                 if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
                 enforceCardLimit();
                 
-                // Las noticias de respaldo se recargan automáticamente al cambiar de página
+                // Cargar más noticias de respaldo si quedamos con pocas
+                if (STATE.backupCards.length < 5) {
+                    loadMoreBackupNews();
+                }
             })
             .catch(e => {
                 // En caso de error de red o servidor, revertir la animación
@@ -492,6 +558,7 @@
                 
                 err('Error al eliminar noticia:', e);
                 alert('Error al eliminar la noticia. Por favor, inténtalo de nuevo.');
+                STATE.deletingNews.delete(newsId); // Limpiar flag en error
             });
 
         // Apilar para deshacer
@@ -510,7 +577,6 @@
         STATE.pendingNews.length = 0;
 
         const oldPositions = isMobile() ? null : capturePositions();
-        const currentCards = Array.from(DOM.grid.children);
 
         // Insertar nuevas según el orden activo
         if (STATE.order === 'asc') {
@@ -522,15 +588,13 @@
         const newIds = [];
 
         for (const item of newsToAdd) {
-            const tmp = document.createElement('div');
-            tmp.innerHTML = item.card;
-            const card = tmp.firstElementChild;
+            const { card, modal: modalEl } = createCardFromHTML(item.card, item.modal);
             if (!card) continue; // Saltar si el HTML de la tarjeta estaba vacío
             
             const id = card.id.replace('news-', '');
             
             // Comprobar duplicados ANTES de añadir al fragmento
-            if ($("#" + card.id, DOM.grid)) { 
+            if ($(`#${card.id}`, DOM.grid)) { 
                 log(`Skipping duplicate card from pendingNews: ${card.id}`);
                 continue; 
             }
@@ -542,9 +606,6 @@
                 continue;
             }
             
-            const tmpModal = document.createElement('div');
-            tmpModal.innerHTML = item.modal;
-            const modalEl = tmpModal.firstElementChild;
             configureNewCard(card, modalEl, id);
             frag.appendChild(card);
             modalEl && DOM.modalsContainer.appendChild(modalEl);
@@ -556,9 +617,35 @@
         } else {
             DOM.grid.prepend(frag);
         }
+        
+        // Manejar exceso de noticias moviéndolas al respaldo en lugar de eliminarlas
+        const allCurrentCards = $$('.news-card-container', DOM.grid);
+        if (allCurrentCards.length > MAX_NEWS) {
+            const excess = allCurrentCards.length - MAX_NEWS;
+            const cardsToMove = STATE.order === 'desc' 
+                ? allCurrentCards.slice(-excess) // Últimas en orden desc
+                : allCurrentCards.slice(0, excess); // Primeras en orden asc
+            
+            cardsToMove.forEach(card => {
+                const cardId = card.id.replace('news-', '');
+                const modal = $(`#modal-${cardId}`);
+                
+                // Mover al respaldo
+                STATE.backupCards.push({
+                    id: cardId,
+                    card: card.outerHTML
+                });
+                STATE.backupModals.push(modal?.outerHTML || '');
+                
+                // Remover del DOM
+                card.remove();
+                modal?.remove();
+                log(`Nueva noticia ${cardId} movida al respaldo para mantener límite de ${MAX_NEWS}`);
+            });
+        }
+        
         if (oldPositions) animateReposition(oldPositions);
         newIds.forEach(el => animateScaleOpacity(el));
-        enforceCardLimit(); // Asegurar límite DESPUÉS de añadir nuevas
     };
 
     const checkForNewNews = () => {
@@ -570,7 +657,12 @@
                     STATE.pendingNews.push(...data.news_cards);
                     updateCounters(data.total_news, data.total_pages);
                     showNotification(data.news_cards.length);
-                        loadNewNews();
+                    loadNewNews();
+                    
+                    // Si tenemos pocas noticias de respaldo después de cargar nuevas, pedir más
+                    if (STATE.backupCards.length < 5) {
+                        loadMoreBackupNews();
+                    }
                 }
             })
             .catch(e => err('Chequeo de noticias:', e));
@@ -582,12 +674,30 @@
     const updatePagination = (serverTotalPages) => {
         const itemsPerPage = MAX_NEWS;
         const totalItems = parseInt(DOM.counter?.textContent || '0', 10);
-        const totalPages = serverTotalPages ?? Math.ceil(totalItems / itemsPerPage);
         const currentPage = parseInt(new URLSearchParams(location.search).get('page') || '1', 10);
+        
+        // Calcular páginas considerando noticias disponibles (incluyendo las de respaldo)
+        let effectiveTotalPages = serverTotalPages ?? Math.ceil(totalItems / itemsPerPage);
+        
+        // Si estamos en página 1 y tenemos suficientes noticias (incluyendo respaldo) para llenar la página,
+        // pero el total es <= 25, entonces solo hay 1 página efectiva
+        if (currentPage === 1) {
+            const cardsInCurrentPage = $$('.news-card-container', DOM.grid).length;
+            const totalVisibleAndBackup = cardsInCurrentPage + STATE.backupCards.length;
+            
+            if (totalVisibleAndBackup <= MAX_NEWS) {
+                effectiveTotalPages = 1;
+                log(`Página 2 eliminada: solo ${totalVisibleAndBackup} noticias disponibles (visible + respaldo)`);
+            }
+        }
 
         let pagination = $('.pagination');
-        const needs = totalPages > 1;
-        if (!needs && pagination) return pagination.remove();
+        const needs = effectiveTotalPages > 1;
+        if (!needs && pagination) {
+            pagination.remove();
+            log('Paginación removida: solo 1 página efectiva');
+            return;
+        }
         if (!needs) return;
 
         const tpl = (pg) => `<a href="?page=${pg}">${pg === currentPage ? '···' : (pg < currentPage ? 'Anterior' : 'Siguiente')}</a>`;
@@ -597,8 +707,8 @@
             DOM.grid.parentNode.insertBefore(pagination, DOM.grid.nextSibling);
         }
         pagination.innerHTML = `${currentPage > 1 ? tpl(currentPage - 1) : ''}
-            <span class="active">${currentPage} / ${totalPages}</span>
-            ${currentPage < totalPages ? tpl(currentPage + 1) : ''}`;
+            <span class="active">${currentPage} / ${effectiveTotalPages}</span>
+            ${currentPage < effectiveTotalPages ? tpl(currentPage + 1) : ''}`;
     };
 
     const updateCounters = (totalCount, totalPages) => {
@@ -611,9 +721,57 @@
         DOM.total && (DOM.total.textContent = `${totalCount} noticias`);
         updatePagination(totalPages);
         
-        // Si quedamos sin noticias en la página actual, ir a página 1
+        // Si quedamos sin noticias en la página actual y hay respaldo disponible, cargarlas automáticamente
         const currentPage = parseInt(new URLSearchParams(location.search).get('page') || '1', 10);
         const cardsInPage = $$('.news-card-container', DOM.grid).length;
+        let newsMovedFromBackup = 0;
+        
+        if (cardsInPage < MAX_NEWS && totalCount > cardsInPage && STATE.backupCards.length > 0) {
+            // Llenar la página actual con noticias de respaldo
+            const needed = Math.min(MAX_NEWS - cardsInPage, STATE.backupCards.length);
+            
+            for (let i = 0; i < needed; i++) {
+                if (STATE.backupCards.length === 0) break;
+                
+                const backupData = STATE.backupCards.shift();
+                const backupModalData = STATE.backupModals.shift();
+                
+                if (backupData && backupData.card) {
+                    const { card: newCard, modal: newModal } = createCardFromHTML(backupData.card, backupModalData);
+                    if (newModal) DOM.modalsContainer.appendChild(newModal);
+                    
+                    if (newCard) {
+                        const id = newCard.id.replace('news-', '');
+                        // Verificar que no esté duplicada
+                        if (!$(`#news-${id}`, DOM.grid)) {
+                            configureNewCard(newCard, newModal, id);
+                            if (STATE.order === 'asc') {
+                                DOM.grid.appendChild(newCard);
+                            } else {
+                                DOM.grid.appendChild(newCard); // Agregar al final para orden descendente también
+                            }
+                            animateScaleOpacity(newCard);
+                            newsMovedFromBackup++;
+                            log(`Auto-cargada noticia de respaldo: ${id}`);
+                        }
+                    }
+                }
+            }
+            
+            // Pedir más noticias de respaldo si quedamos con pocas
+            if (STATE.backupCards.length < 5) {
+                loadMoreBackupNews();
+            }
+            
+            // Recalcular paginación después de mover noticias del respaldo
+            if (newsMovedFromBackup > 0) {
+                const newTotalPages = Math.ceil(totalCount / MAX_NEWS);
+                updatePagination(newTotalPages);
+                log(`Movidas ${newsMovedFromBackup} noticias del respaldo. Nueva paginación: ${newTotalPages} páginas`);
+            }
+        }
+        
+        // Si quedamos sin noticias en la página actual, ir a página 1
         if (cardsInPage === 0 && totalCount > 0 && currentPage > 1) {
             const params = new URLSearchParams(location.search);
             params.set('page', '1');
@@ -709,6 +867,11 @@
                 if (data.status !== 'success') throw new Error(data.message);
                 updateCounters(data.total_news, data.total_pages);
                 checkForNewNews();
+                
+                // Recargar respaldo si tenemos pocas noticias después de actualizar feed
+                if (STATE.backupCards.length < 5) {
+                    loadMoreBackupNews();
+                }
             })
             .catch(e => { err('Actualizar feed:', e); alert('Error al actualizar el feed: ' + e.message); })
             .finally(() => { btn.disabled = false; btn.classList.remove('loading'); });
@@ -721,15 +884,37 @@
         serverUndoNews(last)
             .then(data => {
                 if (data.status !== 'success') throw new Error(data.message);
-                updateCounters(data.total_news, data.total_pages);
+                
+                const currentCardsCount = $$('.news-card-container', DOM.grid).length;
+                
                 if (data.html && data.modal) {
-                    const t = document.createElement('div');
-                    t.innerHTML = data.html;
-                    const card = t.firstElementChild;
-                    const tm = document.createElement('div');
-                    tm.innerHTML = data.modal;
-                    const modal = tm.firstElementChild;
+                    const { card, modal } = createCardFromHTML(data.html, data.modal);
                     const id = card.id.replace('news-', '');
+                    
+                    // Si ya tenemos 25 noticias, mover la última al respaldo antes de agregar la nueva
+                    if (currentCardsCount >= MAX_NEWS) {
+                        const cardsArray = $$('.news-card-container', DOM.grid);
+                        const lastCard = STATE.order === 'desc' ? cardsArray[cardsArray.length - 1] : cardsArray[0];
+                        
+                        if (lastCard) {
+                            const lastId = lastCard.id.replace('news-', '');
+                            const lastModal = $(`#modal-${lastId}`);
+                            
+                            // Mover al respaldo
+                            STATE.backupCards.unshift({
+                                id: lastId,
+                                card: lastCard.outerHTML
+                            });
+                            STATE.backupModals.unshift(lastModal?.outerHTML || '');
+                            
+                            // Remover del DOM
+                            lastCard.remove();
+                            lastModal?.remove();
+                            log(`Noticia ${lastId} movida al respaldo por undo`);
+                        }
+                    }
+                    
+                    // Agregar la noticia restaurada
                     if (STATE.order === 'desc') {
                         DOM.grid.prepend(card);
                     } else {
@@ -738,7 +923,13 @@
                     configureNewCard(card, modal, id);
                     modal && DOM.modalsContainer.appendChild(modal);
                     animateScaleOpacity(card);
-                    enforceCardLimit();
+                    
+                    // Actualizar contadores y paginación
+                    updateCounters(data.total_news, data.total_pages);
+                    
+                    log(`Noticia ${id} restaurada. Respaldo actual: ${STATE.backupCards.length} noticias`);
+                } else {
+                    updateCounters(data.total_news, data.total_pages);
                 }
             })
             .catch(e => { err('Deshacer:', e); alert('No se pudo deshacer'); });
@@ -755,13 +946,8 @@
                 DOM.modalsContainer.innerHTML = '';
                 const frag = document.createDocumentFragment();
                 (data.cards || []).forEach(item => {
-                    const t = document.createElement('div');
-                    t.innerHTML = item.card;
-                    const card = t.firstElementChild;
-                    const tm = document.createElement('div');
-                    tm.innerHTML = item.modal;
-                    const modal = tm.firstElementChild;
-                    const id = String(item.id);
+                    const { card, modal } = createCardFromHTML(item.card, item.modal);
+                    const id = card ? card.id.replace('news-', '') : String(item.id);
                     configureNewCard(card, modal, id);
                     frag.appendChild(card);
                     modal && DOM.modalsContainer.appendChild(modal);
@@ -770,6 +956,8 @@
                 STATE.backupCards = data.backup_cards || [];
                 STATE.backupModals = (data.backup_cards || []).map(x => x.modal);
                 STATE.nextCursor = data.next_cursor || null;
+                STATE.backupCursor = data.next_cursor || null; // Usar el mismo cursor para las siguientes cargas
+                log(`Inicializadas ${STATE.backupCards.length} noticias de respaldo`);
                 updateCounters(data.total_news, data.total_pages);
                 updatePagination(data.total_pages);
                 const params = new URLSearchParams(location.search);
@@ -807,13 +995,8 @@
                 DOM.modalsContainer.innerHTML = '';
                 const frag = document.createDocumentFragment();
                 (data.cards || []).forEach(item => {
-                    const t = document.createElement('div');
-                    t.innerHTML = item.card;
-                    const card = t.firstElementChild;
-                    const tm = document.createElement('div');
-                    tm.innerHTML = item.modal;
-                    const modal = tm.firstElementChild;
-                    const id = String(item.id);
+                    const { card, modal } = createCardFromHTML(item.card, item.modal);
+                    const id = card ? card.id.replace('news-', '') : String(item.id);
                     configureNewCard(card, modal, id);
                     frag.appendChild(card);
                     modal && DOM.modalsContainer.appendChild(modal);
@@ -822,16 +1005,18 @@
                 STATE.backupCards = data.backup_cards || [];
                 STATE.backupModals = (data.backup_cards || []).map(x => x.modal);
                 STATE.nextCursor = data.next_cursor || null;
+                STATE.backupCursor = data.next_cursor || null; // Usar el mismo cursor para las siguientes cargas
+                log(`Inicializadas ${STATE.backupCards.length} noticias de respaldo`);
                 updateCounters(data.total_news, data.total_pages);
                 updatePagination(data.total_pages);
             })
-            .catch(() => {});
+            .catch(e => err('Error al cargar página inicial:', e));
         // Establecer icono inicial según orden actual
         setOrderIcon();
     });
     
     setInterval(checkForNewNews, CHECK_INTERVAL);
     enforceCardLimit(); // Aplicar límite al cargar la página inicialmente
-    updatePagination();
+    // updatePagination será llamada por updateCounters en la carga inicial
 
 })();

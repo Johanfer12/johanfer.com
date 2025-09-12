@@ -315,10 +315,12 @@ def get_page(request):
             last = items[-1]
             next_cursor = f"{last.published_date.isoformat()}|{last.id}"
 
-        # Preparar backups por keyset (opcional para UX fluida)
+        # Preparar backups por keyset - cargar más noticias para respaldo fluido
         backup_cards = []
         try:
-            backup_qs = list(window_qs[page_size:page_size + 5])
+            # Si es página 1, cargar las siguientes 25 noticias como respaldo
+            backup_size = 25 if page == 1 else 5
+            backup_qs = list(window_qs[page_size:page_size + backup_size])
             for article in backup_qs:
                 card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
                 modal_html = render_to_string('news_modal.html', {'article': article, 'user': request.user})
@@ -335,6 +337,25 @@ def get_page(request):
 
         
 
+        # Si se solicita solo backup, devolver las siguientes 25 noticias desde el cursor actual
+        backup_only = request.GET.get('backup_only', 'false').lower() == 'true'
+        if backup_only:
+            # Para backup_only, devolver hasta 25 noticias adicionales
+            additional_backup = list(window_qs[page_size:page_size + 25])
+            backup_cards = []
+            for article in additional_backup:
+                card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
+                modal_html = render_to_string('news_modal.html', {'article': article, 'user': request.user})
+                backup_cards.append({'id': article.id, 'card': card_html, 'modal': modal_html})
+            
+            return JsonResponse({
+                'status': 'success',
+                'backup_cards': backup_cards,
+                'total_news': total_news,
+                'total_pages': total_pages,
+                'order': order
+            })
+        
         return JsonResponse({
             'status': 'success',
             'cards': cards,
