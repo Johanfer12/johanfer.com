@@ -340,45 +340,10 @@
             });
         }
         
-        // Intentar usar una noticia de respaldo precargada primero
+        // No usar respaldo precargado para evitar problemas de orden cronológico
+        // Siempre esperar la respuesta del servidor que calcula el reemplazo correcto
         let replacementCard = null;
         let replacementModal = null;
-        
-        if (STATE.backupCards.length > 0) {
-            // Buscar una noticia de respaldo que no esté duplicada
-            let backupIndex = -1;
-            for (let i = 0; i < STATE.backupCards.length; i++) {
-                const backupData = STATE.backupCards[i];
-                if (backupData && backupData.id) {
-                    const existingCard = $(`#news-${backupData.id}`, DOM.grid);
-                    if (!existingCard) {
-                        backupIndex = i;
-                        break;
-                    } else {
-                        log(`Skipping duplicate backup card: ${backupData.id}`);
-                    }
-                }
-            }
-            
-            if (backupIndex >= 0) {
-                const backupData = STATE.backupCards.splice(backupIndex, 1)[0];
-                const backupModalData = STATE.backupModals.splice(backupIndex, 1)[0];
-                
-                if (backupData && backupData.card) {
-                    const { card, modal } = createCardFromHTML(backupData.card, backupModalData);
-                    replacementCard = card;
-                    replacementModal = modal;
-                    
-                    if (replacementCard) {
-                        const id = replacementCard.id.replace('news-', '');
-                        configureNewCard(replacementCard, replacementModal, id);
-                        log(`Usando noticia de respaldo precargada: ${id}`);
-                    }
-                }
-            } else {
-                log('No hay noticias de respaldo válidas (sin duplicados)');
-            }
-        }
         
         // Programar eliminación del DOM después de la animación
         const removeFromDOM = () => {
@@ -396,15 +361,6 @@
             if (removed) return;
             removed = true;
             removeFromDOM();
-            if (replacementCard && !$(`#${replacementCard.id}`, DOM.grid)) {
-                if (STATE.order === 'asc') {
-                    DOM.grid.appendChild(replacementCard);
-                } else {
-                    DOM.grid.prepend(replacementCard);
-                }
-                replacementModal && DOM.modalsContainer.appendChild(replacementModal);
-                animateScaleOpacity(replacementCard);
-            }
             if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
             enforceCardLimit();
             STATE.deletingNews.delete(newsId); // Limpiar flag
@@ -415,15 +371,6 @@
             removed = true;
             container.removeEventListener('transitionend', onAnimEnd);
             removeFromDOM();
-            if (replacementCard && !$(`#${replacementCard.id}`, DOM.grid)) {
-                if (STATE.order === 'asc') {
-                    DOM.grid.appendChild(replacementCard);
-                } else {
-                    DOM.grid.prepend(replacementCard);
-                }
-                replacementModal && DOM.modalsContainer.appendChild(replacementModal);
-                animateScaleOpacity(replacementCard);
-            }
             if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
             enforceCardLimit();
             STATE.deletingNews.delete(newsId); // Limpiar flag
@@ -446,56 +393,40 @@
                     container.classList.remove('collapsing');
                     void container.offsetHeight;
                     
-                    // Devolver la noticia de respaldo al array si se había tomado
-                    if (replacementCard && STATE.backupCards.length < 5) {
-                        const cardId = replacementCard.id.replace('news-', '');
-                        const backupData = STATE.backupCards.find(card => card.id == cardId);
-                        if (!backupData && !$(`#news-${cardId}`, DOM.grid)) {
-                            STATE.backupCards.unshift({
-                                id: cardId,
-                                card: replacementCard.outerHTML
-                            });
-                            STATE.backupModals.unshift(replacementModal?.outerHTML || '');
-                            log(`Devuelta noticia de respaldo al array: ${cardId}`);
-                        }
-                    }
                     
                     err('Error del servidor al eliminar:', data.message);
                     return;
                 }
 
-                // Si ya se eliminó del DOM por timeout, actualizar contadores y recargar respaldo
+                // Si ya se eliminó del DOM por timeout, actualizar contadores
                 if (!document.body.contains(container)) {
                     updateCounters(data.total_news, data.total_pages);
-                    
-                    // Si no había noticia de respaldo precargada, usar la del servidor
-                    if (!replacementCard && data.html && data.modal) {
+
+                    // Usar la noticia del servidor (orden cronológico correcto)
+                    if (data.html && data.modal) {
                         const { card: newCard, modal: newModal } = createCardFromHTML(data.html, data.modal);
-                        
+
                         if (newCard) {
                             const newCardId = newCard.id.replace('news-', '');
                             // Verificar que no esté duplicada
                             if (!$(`#news-${newCardId}`, DOM.grid)) {
                                 configureNewCard(newCard, newModal, newCardId);
-                                if (STATE.order === 'asc') {
-                                    DOM.grid.appendChild(newCard);
-                                } else {
-                                    DOM.grid.prepend(newCard);
-                                }
+                                // Agregar al final de la página (posición correcta)
+                                DOM.grid.appendChild(newCard);
                                 newModal && DOM.modalsContainer.appendChild(newModal);
                                 animateScaleOpacity(newCard);
-                                log(`Agregada noticia del servidor: ${newCardId}`);
+                                log(`Agregada noticia del servidor (orden correcto): ${newCardId}`);
                             } else {
                                 log(`Skipping duplicate server card: ${newCardId}`);
                             }
                         }
                     }
-                    
+
                     // Cargar más noticias de respaldo si quedamos con pocas
                     if (STATE.backupCards.length < 5) {
                         loadMoreBackupNews();
                     }
-                    
+
                     return;
                 }
 
@@ -505,26 +436,22 @@
                 removeFromDOM();
                 updateCounters(data.total_news, data.total_pages);
 
-                // Agregar tarjeta de reemplazo
-                if (replacementCard && !$(`#${replacementCard.id}`, DOM.grid)) {
-                    DOM.grid.appendChild(replacementCard);
-                    replacementModal && DOM.modalsContainer.appendChild(replacementModal);
-                    animateScaleOpacity(replacementCard);
-                } else if (!replacementCard && data.html && data.modal) {
-                    // Usar la del servidor si no había de respaldo
+                // Usar solo la tarjeta del servidor (orden cronológico correcto)
+                if (data.html && data.modal) {
                     const { card: newCard, modal: newModal } = createCardFromHTML(data.html, data.modal);
-                    
+
                     if (newCard) {
                         const newCardId = newCard.id.replace('news-', '');
                         // Verificar que no esté duplicada
                         if (!$(`#news-${newCardId}`, DOM.grid)) {
                             configureNewCard(newCard, newModal, newCardId);
+                            // Agregar al final de la página (posición correcta)
                             DOM.grid.appendChild(newCard);
                             newModal && DOM.modalsContainer.appendChild(newModal);
                             animateScaleOpacity(newCard);
-                            log(`Agregada noticia del servidor (fallback): ${newCardId}`);
+                            log(`Agregada noticia del servidor (orden correcto): ${newCardId}`);
                         } else {
-                            log(`Skipping duplicate server card (fallback): ${newCardId}`);
+                            log(`Skipping duplicate server card: ${newCardId}`);
                         }
                     }
                 }
@@ -541,21 +468,7 @@
                 // En caso de error de red o servidor, revertir la animación
                 clearTimeout(removeTimeout);
                 container.classList.remove('deleting');
-                
-                // Devolver la noticia de respaldo al array si se había tomado
-                if (replacementCard && STATE.backupCards.length < 5) {
-                    const cardId = replacementCard.id.replace('news-', '');
-                    const backupData = STATE.backupCards.find(card => card.id == cardId);
-                    if (!backupData && !$(`#news-${cardId}`, DOM.grid)) {
-                        STATE.backupCards.unshift({
-                            id: cardId,
-                            card: replacementCard.outerHTML
-                        });
-                        STATE.backupModals.unshift(replacementModal?.outerHTML || '');
-                        log(`Devuelta noticia de respaldo al array (catch): ${cardId}`);
-                    }
-                }
-                
+
                 err('Error al eliminar noticia:', e);
                 alert('Error al eliminar la noticia. Por favor, inténtalo de nuevo.');
                 STATE.deletingNews.delete(newsId); // Limpiar flag en error
