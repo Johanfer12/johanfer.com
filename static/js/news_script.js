@@ -433,7 +433,9 @@
                 // Si el servidor responde antes del timeout, cancelar timeout y proceder normalmente
                 clearTimeout(removeTimeout);
                 container.removeEventListener('transitionend', onAnimEnd);
+                removed = true;
                 removeFromDOM();
+                STATE.deletingNews.delete(newsId); // Liberar flag incluso si se elimina antes de la animación
                 updateCounters(data.total_news, data.total_pages);
 
                 // Usar solo la tarjeta del servidor (orden cronológico correcto)
