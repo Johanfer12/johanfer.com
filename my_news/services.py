@@ -14,6 +14,13 @@ import numpy as np
 from django.db.models import Q
 import json
 import textwrap
+from django.conf import settings
+
+try:
+    from .vector_index import VectorIndexService, VectorIndexUnavailable
+except Exception:
+    VectorIndexService = None  # type: ignore
+    VectorIndexUnavailable = Exception  # type: ignore
 
 class EmbeddingService:
     @staticmethod
@@ -34,15 +41,21 @@ class EmbeddingService:
         # Asegurar que el texto no sea demasiado largo
         if len(clean_text) > 8000:
             clean_text = clean_text[:8000]
+
+        # Config por defecto para embeddings (modelo y dimensión)
+        embedding_model = getattr(settings, 'GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001')
+        output_dim = int(getattr(settings, 'GEMINI_EMBEDDING_DIM', 768))
         
         for attempt in range(max_retries):
             try:
                 # Cambiado: Usar client.models.embed_content y pasar task_type en config
                 result = client.models.embed_content(
-                    model="models/text-embedding-004",
+                    model=embedding_model,
                     contents=clean_text,
-                    # Corregido: Mover task_type a un objeto EmbedContentConfig
-                    config=types.EmbedContentConfig(task_type="retrieval_document") 
+                    config=types.EmbedContentConfig(
+                        task_type="SEMANTIC_SIMILARITY",
+                        output_dimensionality=output_dim,
+                    ) 
                 )
                 
                 # Extraer los valores del embedding
@@ -50,7 +63,12 @@ class EmbeddingService:
                     if hasattr(result, 'embeddings') and result.embeddings:
                         first_embedding = result.embeddings[0]
                         if hasattr(first_embedding, 'values'):
-                            return list(map(float, first_embedding.values))
+                            # Normalizar L2 (recomendado para dims != 3072)
+                            vec = np.array(first_embedding.values, dtype=np.float32)
+                            norm = np.linalg.norm(vec)
+                            if norm > 0:
+                                vec = vec / norm
+                            return list(map(float, vec.tolist()))
                     
                     # Fallback seguro
                     return []
@@ -76,12 +94,16 @@ class EmbeddingService:
             return 0.0
             
         # Convertir a numpy arrays para cÃ¡lculos eficientes
-        vec1 = np.array(embedding1)
-        vec2 = np.array(embedding2)
+        vec1 = np.array(embedding1, dtype=np.float32)
+        vec2 = np.array(embedding2, dtype=np.float32)
         
-        # Normalizar los vectores
-        norm_vec1 = vec1 / np.linalg.norm(vec1)
-        norm_vec2 = vec2 / np.linalg.norm(vec2)
+        # Normalizar los vectores con protección de norma 0
+        n1 = np.linalg.norm(vec1)
+        n2 = np.linalg.norm(vec2)
+        if n1 == 0 or n2 == 0:
+            return 0.0
+        norm_vec1 = vec1 / n1
+        norm_vec2 = vec2 / n2
         
         # Calcular similitud del coseno
         similarity = np.dot(norm_vec1, norm_vec2)
@@ -89,7 +111,7 @@ class EmbeddingService:
         return float(similarity)
     
     @staticmethod
-    def check_redundancy(news_item, client, recent_news_cache=None):
+    def check_redundancy(news_item, client, recent_news_cache=None, vector_index=None):
         """
         Verifica si una noticia es redundante comparando con las existentes
 
@@ -111,6 +133,35 @@ class EmbeddingService:
         if not news_item.embedding:
             return False, None, 0.0
 
+        # Intentar vector DB (Qdrant) con ventana de 14 días
+        try:
+            if vector_index is not None and hasattr(vector_index, 'search'):
+                vector_index.ensure_collection(len(news_item.embedding))
+                now_ts = int(time.time())
+                min_ts = now_ts - 14 * 24 * 3600
+                hits = vector_index.search(
+                    vector=news_item.embedding,
+                    top_k=5,
+                    min_published_ts=min_ts,
+                    exclude_guid=getattr(news_item, 'guid', None),
+                )
+                if hits:
+                    best = hits[0]
+                    score = float(getattr(best, 'score', 0.0) or 0.0)
+                    payload = getattr(best, 'payload', {}) or {}
+                    similar = None
+                    similar_id = payload.get('news_id')
+                    if similar_id:
+                        similar = News.objects.filter(id=similar_id).first()
+                    if similar is None:
+                        similar_guid = payload.get('guid')
+                        if similar_guid:
+                            similar = News.objects.filter(guid=similar_guid).first()
+                    is_redundant = score >= threshold and similar is not None
+                    return is_redundant, similar, score
+        except Exception:
+            pass
+
         if recent_news_cache is not None:
             candidates = [
                 cached_news
@@ -118,14 +169,13 @@ class EmbeddingService:
                 if cached_news.id != getattr(news_item, 'id', None) and cached_news.embedding
             ]
         else:
-            time_threshold = timezone.now() - timedelta(days=7)
+            time_threshold = timezone.now() - timedelta(days=14)
             candidates = list(News.objects.filter(
                 created_at__gte=time_threshold,
                 is_redundant=False,
                 is_filtered=False,
                 embedding__isnull=False
             ).exclude(id=news_item.id))
-
         highest_similarity = 0.0
         most_similar_news = None
 
@@ -191,12 +241,28 @@ class FeedService:
     _DEFAULT_FILTER_INSTRUCTIONS = "(No hay instrucciones de filtro IA activas)"
 
     _GEMINI_CLIENT = None
+    _VECTOR_INDEX = None
 
     @staticmethod
     def initialize_gemini():
         if FeedService._GEMINI_CLIENT is None:
             FeedService._GEMINI_CLIENT = genai.Client()
         return FeedService._GEMINI_CLIENT
+
+    @staticmethod
+    def initialize_vector_index():
+        if VectorIndexService is None:
+            return None
+        if FeedService._VECTOR_INDEX is not None:
+            return FeedService._VECTOR_INDEX
+        try:
+            url = getattr(settings, 'QDRANT_URL', 'http://localhost:6333')
+            collection = getattr(settings, 'QDRANT_COLLECTION', 'news_embeddings_gemini001_d768_v1')
+            api_key = getattr(settings, 'QDRANT_API_KEY', None)
+            FeedService._VECTOR_INDEX = VectorIndexService(url=url, collection=collection, api_key=api_key)
+        except Exception:
+            FeedService._VECTOR_INDEX = None
+        return FeedService._VECTOR_INDEX
 
     @staticmethod
     def build_filter_instructions_text(instructions):
@@ -384,6 +450,7 @@ class FeedService:
         print("Inicializando modelos...")
         # Cambiado: obtener el cliente
         gemini_client = FeedService.initialize_gemini()
+        vector_index = FeedService.initialize_vector_index()
         # Eliminado: Reutilizamos gemini_client para embeddings
         # embedding_model_name = EmbeddingService.initialize_embedding_model()
         
@@ -412,7 +479,7 @@ class FeedService:
         
         # Calcular la fecha lÃ­mite (15 dÃ­as atrÃ¡s)
         fifteen_days_ago = timezone.now() - timedelta(days=15)
-        redundancy_window = timezone.now() - timedelta(days=7)
+        redundancy_window = timezone.now() - timedelta(days=14)
         recent_news_cache = list(
             News.objects.filter(
                 created_at__gte=redundancy_window,
@@ -667,7 +734,7 @@ class FeedService:
             
             # Verificar redundancia (esto generarÃ¡ el embedding internamente si no existe)
             is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
-                news_item, gemini_client, recent_news_cache
+                news_item, gemini_client, recent_news_cache, vector_index
             )
             
             # Siempre guardar la informaciÃ³n de similitud si se encontrÃ³ una noticia similar
@@ -690,6 +757,22 @@ class FeedService:
                 redundant_count += 1
             if not is_redundant and news_item.embedding:
                 recent_news_cache.append(news_item)
+                # Indexar en Qdrant (si está disponible) para futuras búsquedas
+                if vector_index is not None:
+                    try:
+                        vector_index.ensure_collection(len(news_item.embedding))
+                        published_ts = int(news_item.published_date.timestamp()) if news_item.published_date else int(time.time())
+                        payload = {
+                            'news_id': news_item.id,
+                            'source_id': news_item.source_id,
+                            'published_ts': published_ts,
+                            'is_filtered': False,
+                            'is_redundant': False,
+                            'model_version': getattr(settings, 'GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001'),
+                        }
+                        vector_index.upsert(news_item.guid, news_item.embedding, payload)
+                    except Exception:
+                        pass
 
         
         # Actualizar la fecha de Ãºltima obtenciÃ³n para todas las fuentes
@@ -704,5 +787,3 @@ class FeedService:
         print(f"Noticias redundantes eliminadas: {redundant_count}")
         
         return new_articles_count 
-
-
