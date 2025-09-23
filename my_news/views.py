@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from django.views.generic import ListView
-from .models import News
+from .models import News, FeedSource
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.template.loader import render_to_string
@@ -10,7 +10,7 @@ from django.contrib.auth.views import LoginView
 from django.utils.decorators import method_decorator
 from django.utils import timezone
 import pytz
-from django.db.models import Q
+from django.db.models import Q, Count
 from .tasks import purge_old_news, retry_summarize_pending
 
 # Create your views here.
@@ -405,11 +405,21 @@ def undo_delete(request, pk):
 def test_redundancy(request):
     """Vista para probar la detección de redundancia en noticias"""
     try:
-        # Obtener fecha de hoy en la zona horaria correcta (America/Bogota)
+        # Obtener fecha seleccionada o fecha de hoy
         bogota_tz = pytz.timezone('America/Bogota')
-        today_local = timezone.now().astimezone(bogota_tz).date()
-        today_start_utc = bogota_tz.localize(timezone.datetime.combine(today_local, timezone.datetime.min.time())).astimezone(pytz.utc)
-        today_end_utc = bogota_tz.localize(timezone.datetime.combine(today_local, timezone.datetime.max.time())).astimezone(pytz.utc)
+        selected_date_str = request.GET.get('date')
+
+        if selected_date_str:
+            try:
+                selected_date = timezone.datetime.strptime(selected_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                selected_date = timezone.now().astimezone(bogota_tz).date()
+        else:
+            selected_date = timezone.now().astimezone(bogota_tz).date()
+
+        # Convertir a UTC para consultas
+        today_start_utc = bogota_tz.localize(timezone.datetime.combine(selected_date, timezone.datetime.min.time())).astimezone(pytz.utc)
+        today_end_utc = bogota_tz.localize(timezone.datetime.combine(selected_date, timezone.datetime.max.time())).astimezone(pytz.utc)
 
         # Queryset base para noticias creadas hoy
         news_today_qs = News.objects.filter(
@@ -491,13 +501,42 @@ def test_redundancy(request):
         # Total general de redundantes histórico
         total_redundant_all_time = News.objects.filter(is_redundant=True).count()
 
+        # Calcular estadísticas de redundancia por fuente
+        source_stats = []
+        sources = FeedSource.objects.filter(active=True)
+
+        for source in sources:
+            # Total de noticias de esta fuente hoy
+            source_total_today = news_today_qs.filter(source=source).count()
+
+            if source_total_today > 0:
+                # Noticias redundantes de esta fuente hoy
+                source_redundant_today = news_today_qs.filter(
+                    source=source,
+                    is_redundant=True
+                ).count()
+
+                # Calcular porcentaje de redundancia
+                redundancy_percentage = (source_redundant_today / source_total_today) * 100
+
+                source_stats.append({
+                    'name': source.name,
+                    'total_today': source_total_today,
+                    'redundant_today': source_redundant_today,
+                    'redundancy_percentage': redundancy_percentage,
+                    'non_redundant_today': source_total_today - source_redundant_today
+                })
+
+        # Ordenar por porcentaje de redundancia descendente
+        source_stats.sort(key=lambda x: x['redundancy_percentage'], reverse=True)
+
         # Preparar el contexto
         context = {
             'redundant_news': redundant_news_today_list, # Lista para mostrar abajo
             'keyword_filtered_news': keyword_filtered_news,  # Nueva variable para la pestaña de keywords
             'ai_filtered_news': ai_filtered_news,  # Nueva variable para la pestaña de IA
             'total_redundant': total_redundant_all_time,
-            'current_date': today_local,
+            'current_date': selected_date,
             'total_today': total_today,
             'visible_today_count': visible_today_count, # Contiene el recuento recalculado
             'filtered_keyword_today_count': filtered_keyword_today_count, # Contiene el recuento exclusivo
@@ -507,6 +546,7 @@ def test_redundancy(request):
             'keyword_perc': keyword_perc,
             'ai_perc': ai_perc,
             'redundant_perc': redundant_perc,
+            'source_stats': source_stats,  # Nuevas estadísticas por fuente
         }
 
         return render(request, 'redundancy_test.html', context)

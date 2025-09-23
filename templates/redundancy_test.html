@@ -434,7 +434,13 @@
             {% endif %}
 
             <div class="redundancy-stats">
-                <strong>Estadísticas de Hoy ({{ current_date|date:"d/m/Y" }}): Total {{ total_today }}</strong>
+                <div style="margin-bottom: 15px;">
+                    <label for="date-picker" style="color: #00a8ff; margin-right: 10px;">Seleccionar fecha:</label>
+                    <input type="date" id="date-picker" value="{{ current_date|date:'Y-m-d' }}"
+                           style="padding: 5px; border-radius: 5px; border: 1px solid #ccc; background: #333; color: #fff;">
+                    <button id="load-date" style="margin-left: 10px; padding: 5px 15px; background: #00a8ff; color: white; border: none; border-radius: 5px; cursor: pointer;">Cargar</button>
+                </div>
+                <strong>Estadísticas del {{ current_date|date:"d/m/Y" }}: Total {{ total_today }}</strong>
 
                 {% if total_today > 0 %}
                 <div class="stats-bar-container"
@@ -479,6 +485,10 @@
                     <button class="tab-button" data-tab="redundant">
                         Noticias Redundantes
                         <span class="tab-badge">{{ redundant_today_count|default:0 }}</span>
+                    </button>
+                    <button class="tab-button" data-tab="sources">
+                        Estadísticas por Fuente
+                        <span class="tab-badge">{{ source_stats|length }}</span>
                     </button>
                 </div>
 
@@ -560,6 +570,38 @@
                         </div>
                     {% endif %}
                 </div>
+
+                <!-- Contenido de pestaña: Estadísticas por Fuente -->
+                <div class="tab-content" id="sources-tab">
+                    {% if source_stats %}
+                        <div style="margin-bottom: 20px;">
+                            <h3 style="color: #00a8ff; margin-bottom: 15px;">Redundancia por Fuente ({{ current_date|date:"d/m/Y" }})</h3>
+                            {% for stat in source_stats %}
+                            <div class="source-stat-item" style="background: rgba(30, 30, 30, 0.5); padding: 15px; margin-bottom: 15px; border-radius: 8px; border-left: 4px solid {% if stat.redundancy_percentage > 50 %}#ff4444{% elif stat.redundancy_percentage > 25 %}#ffbb33{% else %}#00a8ff{% endif %};">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <h4 style="margin: 0; color: #fff; font-size: 1.1em;">{{ stat.name }}</h4>
+                                    <span style="background: {% if stat.redundancy_percentage > 50 %}#ff4444{% elif stat.redundancy_percentage > 25 %}#ffbb33{% else %}#00a8ff{% endif %}; color: white; padding: 4px 12px; border-radius: 15px; font-weight: bold;">
+                                        {{ stat.redundancy_percentage|floatformat:1 }}%
+                                    </span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; color: #ccc; font-size: 0.9em;">
+                                    <span>Total: <strong style="color: #fff;">{{ stat.total_today }}</strong></span>
+                                    <span>Redundantes: <strong style="color: #ff4444;">{{ stat.redundant_today }}</strong></span>
+                                    <span>No redundantes: <strong style="color: #00a8ff;">{{ stat.non_redundant_today }}</strong></span>
+                                </div>
+                                <!-- Barra de progreso -->
+                                <div style="width: 100%; background: rgba(255, 255, 255, 0.1); border-radius: 5px; overflow: hidden; height: 8px; margin-top: 10px;">
+                                    <div style="height: 100%; background: {% if stat.redundancy_percentage > 50 %}#ff4444{% elif stat.redundancy_percentage > 25 %}#ffbb33{% else %}#00a8ff{% endif %}; width: {{ stat.redundancy_percentage }}%; transition: width 0.5s ease;"></div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="no-data">
+                            No hay fuentes con noticias para mostrar estadísticas
+                        </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
@@ -587,6 +629,26 @@
                     targetContent.classList.add('active');
                 }
             });
+        });
+
+        // Manejar selector de fecha
+        const datePickerInput = document.getElementById('date-picker');
+        const loadDateButton = document.getElementById('load-date');
+
+        loadDateButton.addEventListener('click', function() {
+            const selectedDate = datePickerInput.value;
+            if (selectedDate) {
+                const currentUrl = new URL(window.location);
+                currentUrl.searchParams.set('date', selectedDate);
+                window.location.href = currentUrl.toString();
+            }
+        });
+
+        // Permitir cargar fecha al presionar Enter
+        datePickerInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                loadDateButton.click();
+            }
         });
     });
     </script>
