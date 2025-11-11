@@ -7,9 +7,10 @@
     <title>Estadísticas del Sistema</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/news.css' %}">
+    <link rel="stylesheet" href="{% static 'css/header.css' %}">
     <style>
         .stats-container {
-            max-width: 900px;
+            max-width: 1600px;
             margin: 30px auto;
             padding: 20px;
             background: rgba(0, 0, 0, 0.8);
@@ -25,8 +26,21 @@
             font-weight: bold;
         }
 
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        @media (min-width: 1024px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 20px;
+            }
+        }
+
         .stats-info {
-            margin-bottom: 15px;
+            margin-bottom: 0;
             padding: 15px;
             background: rgba(20, 20, 20, 0.5);
             border-radius: 8px;
@@ -73,21 +87,6 @@
             margin-top: 5px;
         }
 
-        .back-link {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 10px 20px;
-            background: #00a8ff;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            transition: background 0.3s;
-        }
-
-        .back-link:hover {
-            background: #0088cc;
-        }
-
         .refresh-btn {
             display: block;
             margin: 0 auto 20px;
@@ -117,7 +116,9 @@
         }
     </style>
 </head>
-<body>
+<body class="has-header">
+    {% include 'header.html' %}
+
     <div class="stats-container">
         <h1 class="stats-header">📊 Estadísticas del Sistema</h1>
 
@@ -130,34 +131,36 @@
         {% endif %}
 
         <!-- Información general del sistema -->
-        <div class="stats-info">
-            <div class="stats-label">🖥️ Sistema Operativo</div>
-            <div class="stats-value">{{ stats.system }}</div>
-        </div>
+        <div class="stats-grid">
+            <div class="stats-info">
+                <div class="stats-label">🖥️ Sistema Operativo</div>
+                <div class="stats-value">{{ stats.system }}</div>
+            </div>
 
-        <div class="stats-info">
-            <div class="stats-label">💻 Arquitectura</div>
-            <div class="stats-value">{{ stats.machine }}</div>
-        </div>
+            <div class="stats-info">
+                <div class="stats-label">💻 Arquitectura</div>
+                <div class="stats-value">{{ stats.machine }}</div>
+            </div>
 
-        <div class="stats-info">
-            <div class="stats-label">🏷️ Hostname</div>
-            <div class="stats-value">{{ stats.hostname }}</div>
-        </div>
+            <div class="stats-info">
+                <div class="stats-label">🏷️ Hostname</div>
+                <div class="stats-value">{{ stats.hostname }}</div>
+            </div>
 
-        {% if stats.uptime != "N/A" %}
-        <div class="stats-info">
-            <div class="stats-label">⏱️ Uptime</div>
-            <div class="stats-value">{{ stats.uptime }}</div>
-        </div>
-        {% endif %}
+            {% if stats.uptime != "N/A" %}
+            <div class="stats-info">
+                <div class="stats-label">⏱️ Uptime</div>
+                <div class="stats-value">{{ stats.uptime }}</div>
+            </div>
+            {% endif %}
 
-        {% if stats.load_average != "N/A" %}
-        <div class="stats-info">
-            <div class="stats-label">📈 Carga del Sistema (1m, 5m, 15m)</div>
-            <div class="stats-value">{{ stats.load_average }}</div>
+            {% if stats.load_average != "N/A" %}
+            <div class="stats-info">
+                <div class="stats-label">📈 Carga del Sistema (1m, 5m, 15m)</div>
+                <div class="stats-value">{{ stats.load_average }}</div>
+            </div>
+            {% endif %}
         </div>
-        {% endif %}
 
         {% if is_raspberry_pi %}
         <div class="section-divider"></div>
@@ -165,58 +168,56 @@
         <!-- Estadísticas específicas de Raspberry Pi -->
         <h2 style="color: #00a8ff; text-align: center; margin: 20px 0;">🥧 Estadísticas Raspberry Pi</h2>
 
-        {% if stats.temperature %}
-        <div class="stats-info">
-            <div class="stats-label">🌡️ Temperatura</div>
-            <div class="stats-value">{{ stats.temperature }}</div>
-        </div>
-        {% endif %}
-
-        {% if stats.voltage %}
-        <div class="stats-info">
-            <div class="stats-label">⚡ Voltaje del Núcleo</div>
-            <div class="stats-value">{{ stats.voltage }}</div>
-        </div>
-        {% endif %}
-
-        {% if stats.cpu_frequency %}
-        <div class="stats-info">
-            <div class="stats-label">🔧 Frecuencia CPU</div>
-            <div class="stats-value">{{ stats.cpu_frequency }}</div>
-        </div>
-        {% endif %}
-
-        {% if stats.memory_arm %}
-        <div class="stats-info">
-            <div class="stats-label">🧠 Memoria ARM</div>
-            <div class="stats-value">{{ stats.memory_arm }}</div>
-        </div>
-        {% endif %}
-
-        {% if stats.memory_gpu %}
-        <div class="stats-info">
-            <div class="stats-label">🎮 Memoria GPU</div>
-            <div class="stats-value">{{ stats.memory_gpu }}</div>
-        </div>
-        {% endif %}
-
-        {% if stats.throttled %}
-        <div class="stats-info">
-            <div class="stats-label">⚠️ Estado de Limitaciones (Throttling)</div>
-            <div class="stats-value">
-                {% if "No hay limitaciones" in stats.throttled %}
-                    <span class="success-badge">✓ {{ stats.throttled }}</span>
-                {% else %}
-                    <span class="warning-badge">⚠ {{ stats.throttled }}</span>
-                {% endif %}
+        <div class="stats-grid">
+            {% if stats.temperature %}
+            <div class="stats-info">
+                <div class="stats-label">🌡️ Temperatura</div>
+                <div class="stats-value">{{ stats.temperature }}</div>
             </div>
-        </div>
-        {% endif %}
-        {% endif %}
+            {% endif %}
 
-        <div style="text-align: center;">
-            <a href="/noticias/" class="back-link">← Volver a Noticias</a>
+            {% if stats.voltage %}
+            <div class="stats-info">
+                <div class="stats-label">⚡ Voltaje del Núcleo</div>
+                <div class="stats-value">{{ stats.voltage }}</div>
+            </div>
+            {% endif %}
+
+            {% if stats.cpu_frequency %}
+            <div class="stats-info">
+                <div class="stats-label">🔧 Frecuencia CPU</div>
+                <div class="stats-value">{{ stats.cpu_frequency }}</div>
+            </div>
+            {% endif %}
+
+            {% if stats.memory_arm %}
+            <div class="stats-info">
+                <div class="stats-label">🧠 Memoria ARM</div>
+                <div class="stats-value">{{ stats.memory_arm }}</div>
+            </div>
+            {% endif %}
+
+            {% if stats.memory_gpu %}
+            <div class="stats-info">
+                <div class="stats-label">🎮 Memoria GPU</div>
+                <div class="stats-value">{{ stats.memory_gpu }}</div>
+            </div>
+            {% endif %}
+
+            {% if stats.throttled %}
+            <div class="stats-info">
+                <div class="stats-label">⚠️ Estado de Limitaciones (Throttling)</div>
+                <div class="stats-value">
+                    {% if "No hay limitaciones" in stats.throttled %}
+                        <span class="success-badge">✓ {{ stats.throttled }}</span>
+                    {% else %}
+                        <span class="warning-badge">⚠ {{ stats.throttled }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
         </div>
+        {% endif %}
     </div>
 </body>
 </html>

@@ -28,6 +28,14 @@
                     <h2>Mi Música</h2>
                 </a>
             </div>
+            {% if user.is_authenticated and user.is_superuser %}
+            <div class="main-icon">
+                <a href="/noticias/">
+                    <img src="{% static 'Img/news-icon.svg' %}" alt="Noticias">
+                    <h2>Mis Noticias</h2>
+                </a>
+            </div>
+            {% endif %}
         </div>
     </div>
 </body>
