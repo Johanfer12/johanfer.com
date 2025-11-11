@@ -1,0 +1,222 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estadísticas del Sistema</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'css/news.css' %}">
+    <style>
+        .stats-container {
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .stats-header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #00a8ff;
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .stats-info {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: rgba(20, 20, 20, 0.5);
+            border-radius: 8px;
+            border-left: 4px solid #00a8ff;
+        }
+
+        .stats-label {
+            font-weight: bold;
+            color: #00a8ff;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+
+        .stats-value {
+            color: #fff;
+            font-size: 1.2em;
+            padding-left: 10px;
+        }
+
+        .error-message {
+            text-align: center;
+            padding: 20px;
+            background: rgba(255, 69, 58, 0.2);
+            border-radius: 8px;
+            color: #ff453a;
+            margin-bottom: 20px;
+        }
+
+        .warning-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            background: rgba(255, 149, 0, 0.3);
+            border-radius: 5px;
+            color: #ff9500;
+            margin-top: 5px;
+        }
+
+        .success-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            background: rgba(52, 199, 89, 0.3);
+            border-radius: 5px;
+            color: #34c759;
+            margin-top: 5px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: #00a8ff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        .back-link:hover {
+            background: #0088cc;
+        }
+
+        .refresh-btn {
+            display: block;
+            margin: 0 auto 20px;
+            padding: 10px 25px;
+            background: #10ac84;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .refresh-btn:hover {
+            background: #0e9972;
+        }
+
+        body {
+            background-color: #000;
+            color: #fff;
+        }
+
+        .section-divider {
+            height: 2px;
+            background: linear-gradient(to right, transparent, #00a8ff, transparent);
+            margin: 30px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="stats-container">
+        <h1 class="stats-header">📊 Estadísticas del Sistema</h1>
+
+        <button class="refresh-btn" onclick="location.reload()">🔄 Actualizar</button>
+
+        {% if error_message %}
+        <div class="error-message">
+            {{ error_message }}
+        </div>
+        {% endif %}
+
+        <!-- Información general del sistema -->
+        <div class="stats-info">
+            <div class="stats-label">🖥️ Sistema Operativo</div>
+            <div class="stats-value">{{ stats.system }}</div>
+        </div>
+
+        <div class="stats-info">
+            <div class="stats-label">💻 Arquitectura</div>
+            <div class="stats-value">{{ stats.machine }}</div>
+        </div>
+
+        <div class="stats-info">
+            <div class="stats-label">🏷️ Hostname</div>
+            <div class="stats-value">{{ stats.hostname }}</div>
+        </div>
+
+        {% if stats.uptime != "N/A" %}
+        <div class="stats-info">
+            <div class="stats-label">⏱️ Uptime</div>
+            <div class="stats-value">{{ stats.uptime }}</div>
+        </div>
+        {% endif %}
+
+        {% if stats.load_average != "N/A" %}
+        <div class="stats-info">
+            <div class="stats-label">📈 Carga del Sistema (1m, 5m, 15m)</div>
+            <div class="stats-value">{{ stats.load_average }}</div>
+        </div>
+        {% endif %}
+
+        {% if is_raspberry_pi %}
+        <div class="section-divider"></div>
+
+        <!-- Estadísticas específicas de Raspberry Pi -->
+        <h2 style="color: #00a8ff; text-align: center; margin: 20px 0;">🥧 Estadísticas Raspberry Pi</h2>
+
+        {% if stats.temperature %}
+        <div class="stats-info">
+            <div class="stats-label">🌡️ Temperatura</div>
+            <div class="stats-value">{{ stats.temperature }}</div>
+        </div>
+        {% endif %}
+
+        {% if stats.voltage %}
+        <div class="stats-info">
+            <div class="stats-label">⚡ Voltaje del Núcleo</div>
+            <div class="stats-value">{{ stats.voltage }}</div>
+        </div>
+        {% endif %}
+
+        {% if stats.cpu_frequency %}
+        <div class="stats-info">
+            <div class="stats-label">🔧 Frecuencia CPU</div>
+            <div class="stats-value">{{ stats.cpu_frequency }}</div>
+        </div>
+        {% endif %}
+
+        {% if stats.memory_arm %}
+        <div class="stats-info">
+            <div class="stats-label">🧠 Memoria ARM</div>
+            <div class="stats-value">{{ stats.memory_arm }}</div>
+        </div>
+        {% endif %}
+
+        {% if stats.memory_gpu %}
+        <div class="stats-info">
+            <div class="stats-label">🎮 Memoria GPU</div>
+            <div class="stats-value">{{ stats.memory_gpu }}</div>
+        </div>
+        {% endif %}
+
+        {% if stats.throttled %}
+        <div class="stats-info">
+            <div class="stats-label">⚠️ Estado de Limitaciones (Throttling)</div>
+            <div class="stats-value">
+                {% if "No hay limitaciones" in stats.throttled %}
+                    <span class="success-badge">✓ {{ stats.throttled }}</span>
+                {% else %}
+                    <span class="warning-badge">⚠ {{ stats.throttled }}</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <div style="text-align: center;">
+            <a href="/noticias/" class="back-link">← Volver a Noticias</a>
+        </div>
+    </div>
+</body>
+</html>

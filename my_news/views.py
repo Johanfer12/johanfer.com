@@ -12,6 +12,8 @@ from django.utils import timezone
 import pytz
 from django.db.models import Q, Count
 from .tasks import purge_old_news, retry_summarize_pending
+import subprocess
+import platform
 
 # Create your views here.
 
@@ -621,6 +623,125 @@ def check_all_redundancy(request):
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
+
+
+@require_GET
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+def system_stats(request):
+    """Vista para mostrar estadísticas del sistema Raspberry Pi"""
+    stats = {}
+    is_raspberry_pi = False
+    error_message = None
+
+    try:
+        # Detectar si estamos en Raspberry Pi
+        system_info = platform.uname()
+        is_raspberry_pi = 'arm' in system_info.machine.lower() or 'aarch64' in system_info.machine.lower()
+
+        if is_raspberry_pi:
+            # Temperatura
+            try:
+                result = subprocess.run(['vcgencmd', 'measure_temp'],
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    temp_str = result.stdout.strip().replace("temp=", "").replace("'C", "")
+                    stats['temperature'] = f"{temp_str}°C"
+            except Exception as e:
+                stats['temperature'] = f"Error: {str(e)}"
+
+            # Voltaje del núcleo
+            try:
+                result = subprocess.run(['vcgencmd', 'measure_volts', 'core'],
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    stats['voltage'] = result.stdout.strip().replace("volt=", "")
+            except Exception as e:
+                stats['voltage'] = f"Error: {str(e)}"
+
+            # Frecuencia del CPU
+            try:
+                result = subprocess.run(['vcgencmd', 'measure_clock', 'arm'],
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    freq_hz = int(result.stdout.strip().split('=')[1])
+                    freq_mhz = freq_hz / 1000000
+                    stats['cpu_frequency'] = f"{freq_mhz:.0f} MHz"
+            except Exception as e:
+                stats['cpu_frequency'] = f"Error: {str(e)}"
+
+            # Memoria
+            try:
+                result = subprocess.run(['vcgencmd', 'get_mem', 'arm'],
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    stats['memory_arm'] = result.stdout.strip().replace("arm=", "")
+
+                result = subprocess.run(['vcgencmd', 'get_mem', 'gpu'],
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    stats['memory_gpu'] = result.stdout.strip().replace("gpu=", "")
+            except Exception as e:
+                stats['memory_arm'] = f"Error: {str(e)}"
+
+            # Throttling (si el Pi está limitando rendimiento por temperatura/voltaje)
+            try:
+                result = subprocess.run(['vcgencmd', 'get_throttled'],
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    throttled_hex = result.stdout.strip().split('=')[1]
+                    throttled_val = int(throttled_hex, 16)
+                    if throttled_val == 0:
+                        stats['throttled'] = "No hay limitaciones"
+                    else:
+                        issues = []
+                        if throttled_val & 0x1: issues.append("Under-voltage detectado")
+                        if throttled_val & 0x2: issues.append("Límite de frecuencia ARM")
+                        if throttled_val & 0x4: issues.append("Actualmente limitado")
+                        if throttled_val & 0x8: issues.append("Soft temperature limit activo")
+                        if throttled_val & 0x10000: issues.append("Under-voltage ha ocurrido")
+                        if throttled_val & 0x20000: issues.append("Límite de frecuencia ARM ha ocurrido")
+                        if throttled_val & 0x40000: issues.append("Throttling ha ocurrido")
+                        if throttled_val & 0x80000: issues.append("Soft temperature limit ha ocurrido")
+                        stats['throttled'] = ", ".join(issues)
+            except Exception as e:
+                stats['throttled'] = f"Error: {str(e)}"
+        else:
+            error_message = "Este sistema no es un Raspberry Pi. Las estadísticas de vcgencmd no están disponibles."
+
+        # Información del sistema (disponible en cualquier plataforma)
+        stats['system'] = f"{system_info.system} {system_info.release}"
+        stats['machine'] = system_info.machine
+        stats['hostname'] = system_info.node
+
+        # Uptime (intentar obtener en Linux)
+        try:
+            with open('/proc/uptime', 'r') as f:
+                uptime_seconds = float(f.readline().split()[0])
+                uptime_hours = int(uptime_seconds // 3600)
+                uptime_minutes = int((uptime_seconds % 3600) // 60)
+                stats['uptime'] = f"{uptime_hours}h {uptime_minutes}m"
+        except Exception:
+            stats['uptime'] = "N/A"
+
+        # Carga del sistema
+        try:
+            with open('/proc/loadavg', 'r') as f:
+                load_avg = f.readline().split()[:3]
+                stats['load_average'] = f"{load_avg[0]} {load_avg[1]} {load_avg[2]}"
+        except Exception:
+            stats['load_average'] = "N/A"
+
+    except Exception as e:
+        error_message = f"Error al obtener estadísticas: {str(e)}"
+
+    context = {
+        'stats': stats,
+        'is_raspberry_pi': is_raspberry_pi,
+        'error_message': error_message,
+    }
+
+    return render(request, 'system_stats.html', context)
+
 
 # Vista de Login Personalizada
 class NewsLoginView(LoginView):

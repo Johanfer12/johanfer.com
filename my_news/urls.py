@@ -17,4 +17,5 @@ urlpatterns = [
     path('redundancy-test/', views.test_redundancy, name='redundancy_test'),
     path('generate-embeddings/', views.generate_embeddings, name='generate_embeddings'),
     path('check-redundancy/', views.check_all_redundancy, name='check_redundancy'),
+    path('system-stats/', views.system_stats, name='system_stats'),
 ] 
