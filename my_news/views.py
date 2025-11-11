@@ -641,7 +641,7 @@ def system_stats(request):
         if is_raspberry_pi:
             # Temperatura
             try:
-                result = subprocess.run(['vcgencmd', 'measure_temp'],
+                result = subprocess.run(['/usr/bin/vcgencmd', 'measure_temp'],
                                       capture_output=True, text=True, timeout=5)
                 if result.returncode == 0:
                     temp_str = result.stdout.strip().replace("temp=", "").replace("'C", "")
@@ -651,7 +651,7 @@ def system_stats(request):
 
             # Voltaje del núcleo
             try:
-                result = subprocess.run(['vcgencmd', 'measure_volts', 'core'],
+                result = subprocess.run(['/usr/bin/vcgencmd', 'measure_volts', 'core'],
                                       capture_output=True, text=True, timeout=5)
                 if result.returncode == 0:
                     stats['voltage'] = result.stdout.strip().replace("volt=", "")
@@ -660,7 +660,7 @@ def system_stats(request):
 
             # Frecuencia del CPU
             try:
-                result = subprocess.run(['vcgencmd', 'measure_clock', 'arm'],
+                result = subprocess.run(['/usr/bin/vcgencmd', 'measure_clock', 'arm'],
                                       capture_output=True, text=True, timeout=5)
                 if result.returncode == 0:
                     freq_hz = int(result.stdout.strip().split('=')[1])
@@ -671,12 +671,12 @@ def system_stats(request):
 
             # Memoria
             try:
-                result = subprocess.run(['vcgencmd', 'get_mem', 'arm'],
+                result = subprocess.run(['/usr/bin/vcgencmd', 'get_mem', 'arm'],
                                       capture_output=True, text=True, timeout=5)
                 if result.returncode == 0:
                     stats['memory_arm'] = result.stdout.strip().replace("arm=", "")
 
-                result = subprocess.run(['vcgencmd', 'get_mem', 'gpu'],
+                result = subprocess.run(['/usr/bin/vcgencmd', 'get_mem', 'gpu'],
                                       capture_output=True, text=True, timeout=5)
                 if result.returncode == 0:
                     stats['memory_gpu'] = result.stdout.strip().replace("gpu=", "")
@@ -685,7 +685,7 @@ def system_stats(request):
 
             # Throttling (si el Pi está limitando rendimiento por temperatura/voltaje)
             try:
-                result = subprocess.run(['vcgencmd', 'get_throttled'],
+                result = subprocess.run(['/usr/bin/vcgencmd', 'get_throttled'],
                                       capture_output=True, text=True, timeout=5)
                 if result.returncode == 0:
                     throttled_hex = result.stdout.strip().split('=')[1]
