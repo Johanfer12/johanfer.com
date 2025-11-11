@@ -4,7 +4,13 @@
         {
             "label": "Iniciar Django Server",
             "type": "shell",
-            "command": "python manage.py runserver 0.0.0.0:8000 --insecure",
+            "command": "${workspaceFolder}/venv/Scripts/python.exe",
+            "args": [
+                "manage.py",
+                "runserver",
+                "0.0.0.0:8000",
+                "--insecure"
+            ],
             "group": {
                 "kind": "none",
                 "isDefault": true
