@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#000000">
+    <meta name="color-scheme" content="dark">
     <title>Noticias</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/news.css' %}">
@@ -80,15 +82,39 @@
         {% endif %}
     </button>
 
+    <!-- Botón de modo lectura con TTS -->
+    <button class="reader-btn" id="readerBtn" title="Modo lectura con voz">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+        </svg>
+    </button>
+
     <!-- Notificación de nuevas noticias -->
     <div id="new-news-notification" class="notification">
         <span id="new-news-count">0</span>
         <button id="close-notification-btn" class="close-notification">&times;</button>
     </div>
 
+    <!-- Overlay de modo lectura -->
+    <div id="reader-overlay" class="reader-overlay">
+        <div class="reader-content">
+            <div class="reader-title"></div>
+            <div class="reader-text"></div>
+            <div class="reader-gestures-hint">
+                <div>↑ Siguiente noticia</div>
+                <div>← Eliminar</div>
+                <div>→ Leer descripción</div>
+                <div>↓ Salir</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Pasar noticias de respaldo al JavaScript -->
     {{ backup_cards|json_script:"backup-cards-data" }}
 
     <script src="{% static 'js/news_script.js' %}"></script>
+    <script src="{% static 'js/reader_mode.js' %}"></script>
 </body>
 </html>
