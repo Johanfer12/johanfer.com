@@ -37,6 +37,7 @@
         touchEndX: 0,
         touchEndY: 0,
         minSwipeDistance: 50,
+        processingGesture: false,
     };
 
     /* ---------------------------------------------------------------------
@@ -231,7 +232,7 @@
         // Simular click en botón eliminar
         data.deleteBtn.click();
 
-        // Esperar un momento y cargar siguiente noticia
+        // Esperar a que la animación de eliminación termine (500ms + margen)
         setTimeout(() => {
             STATE.newsCards = getNewsCards();
             if (STATE.newsCards.length === 0) {
@@ -240,7 +241,7 @@
                 // Mantener el mismo índice (la siguiente noticia tomará la posición actual)
                 loadNews(STATE.currentIndex);
             }
-        }, 300);
+        }, 650);
     };
 
     /* ---------------------------------------------------------------------
@@ -259,6 +260,12 @@
     };
 
     const handleGesture = () => {
+        // Prevenir gestos múltiples simultáneos
+        if (STATE.processingGesture) {
+            console.log('[reader] Gesto ignorado: ya procesando otro gesto');
+            return;
+        }
+
         const deltaX = STATE.touchEndX - STATE.touchStartX;
         const deltaY = STATE.touchEndY - STATE.touchStartY;
         const absDeltaX = Math.abs(deltaX);
@@ -269,6 +276,9 @@
             return; // No es un swipe significativo
         }
 
+        // Marcar que estamos procesando un gesto
+        STATE.processingGesture = true;
+
         // Determinar dirección principal
         if (absDeltaX > absDeltaY) {
             // Swipe horizontal
@@ -276,10 +286,16 @@
                 // Swipe derecha → Leer reverso
                 console.log('[reader] Gesto: Derecha - Leer reverso');
                 readBack();
+                // Liberar inmediatamente para permitir otro gesto
+                STATE.processingGesture = false;
             } else {
-                // Swipe izquierda → Eliminar
-                console.log('[reader] Gesto: Izquierda - Eliminar');
+                // Swipe izquierda → Eliminar y pasar a la siguiente
+                console.log('[reader] Gesto: Izquierda - Eliminar y pasar a siguiente');
                 deleteCurrentNews();
+                // Liberar después de que la eliminación termine
+                setTimeout(() => {
+                    STATE.processingGesture = false;
+                }, 700);
             }
         } else {
             // Swipe vertical
@@ -287,10 +303,14 @@
                 // Swipe abajo → Salir
                 console.log('[reader] Gesto: Abajo - Salir');
                 exitReaderMode();
+                // Liberar inmediatamente
+                STATE.processingGesture = false;
             } else {
-                // Swipe arriba → Siguiente noticia
-                console.log('[reader] Gesto: Arriba - Siguiente');
+                // Swipe arriba → Siguiente noticia (sin eliminar)
+                console.log('[reader] Gesto: Arriba - Siguiente sin eliminar');
                 nextNews();
+                // Liberar inmediatamente
+                STATE.processingGesture = false;
             }
         }
     };
