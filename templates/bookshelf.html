@@ -18,7 +18,7 @@
             <div class="book-info-container">
                 <!-- Carátula con cursor "manito" y evento de apertura -->
                 <div class="book-cover" onclick="openModal('{{ book.id }}')">
-                    <img src="{% static 'Img/Covers/' %}{{ book.id }}.webp" alt="{{ book.title }}">
+                    <img src="{{ MEDIA_URL }}Covers/{{ book.id }}.webp" alt="{{ book.title }}">
                 </div>
                 
                 <!-- Info del libro que se ve al girar la carátula -->

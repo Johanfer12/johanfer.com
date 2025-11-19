@@ -5,6 +5,7 @@ from datetime import datetime
 from PIL import Image
 import re
 from django.utils import timezone
+from django.conf import settings
 from .models import Book, DeletedBook
 
 def modify_cover_url(cover_url):
@@ -57,7 +58,7 @@ def process_date(date_read_str):
         return None
 
 def refresh_books_data():
-    folder_path = "static/Img/Covers"
+    folder_path = os.path.join(settings.MEDIA_ROOT, "Covers")
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
