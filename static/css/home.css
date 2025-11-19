@@ -107,23 +107,62 @@ body {
 
 @media (max-width: 480px) {
     .content-container {
-        padding: 20px;
+        padding: 15px;
+        width: 90%;
     }
 
     .main-icons-container {
-        gap: 2rem;
+        gap: 1.5rem;
+    }
+
+    .welcome-text {
+        margin-bottom: 2rem;
     }
 
     .welcome-text h1 {
-        font-size: 2rem;
+        font-size: 1.8rem;
     }
 
     .main-icon img {
-        width: 150px;
-        height: 150px;
+        width: 100px;
+        height: 100px;
     }
 
     .main-icon h2 {
-        font-size: 1.8rem;
+        font-size: 1.4rem;
+        margin-top: 1rem;
+    }
+}
+
+@media (max-width: 360px) {
+    .content-container {
+        padding: 10px;
+        width: 95%;
+    }
+
+    .main-icons-container {
+        gap: 1rem;
+    }
+
+    .welcome-text {
+        margin-bottom: 1.5rem;
+    }
+
+    .welcome-text h1 {
+        font-size: 1.5rem;
+    }
+
+    .welcome-text p {
+        font-size: 0.9rem;
+    }
+
+    .main-icon img {
+        width: 80px;
+        height: 80px;
+    }
+
+    .main-icon h2 {
+        font-size: 1.2rem;
+        margin-top: 0.8rem;
     }
 }
