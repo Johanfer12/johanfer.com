@@ -9,14 +9,16 @@ body {
     background-color: #000000;
     font-family: 'Ubuntu', sans-serif;
     background-image: url('../Img/bg.svg');
-    opacity: 0.9;
-    background-repeat: repeat;
-    background-size: auto;
+    background-repeat: no-repeat;
+    background-size: 120% 120%;
+    background-position: center center;
+    transition: background-position 0.1s ease;
     margin: 0;
     min-height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
+    overflow: hidden; /* Prevents scrollbars from appearing during movement */
 }
 
 .content-container {
