@@ -824,6 +824,13 @@ body.reader-active {
     color: #333333; /* Gris muy tenue para ahorrar batería AMOLED */
 }
 
+.reader-remaining {
+    font-size: 1em;
+    margin-bottom: 35px;
+    color: #333333; /* Igual que el texto principal */
+    opacity: 0.8;
+}
+
 .reader-gestures-hint {
     position: absolute;
     bottom: 30px;
@@ -865,6 +872,10 @@ body.reader-active {
     .reader-text {
         font-size: 1.1em;
         color: #2a2a2a; /* Aún más tenue en móvil */
+    }
+
+    .reader-remaining {
+        color: #2a2a2a;
     }
 
     .reader-gestures-hint {

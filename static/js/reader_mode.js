@@ -24,6 +24,8 @@
         title: $('.reader-title'),
         text: $('.reader-text'),
         grid: $('.news-grid'),
+        remaining: $('.reader-remaining'),
+        headerCounter: $('.header-counter'),
     };
 
     const STATE = {
@@ -76,6 +78,28 @@
             .replace(/<[^>]+>/g, '') // Remover HTML
             .replace(/\s+/g, ' ')     // Normalizar espacios
             .trim();
+    };
+
+    /** Obtener el total global desde el header */
+    const getHeaderTotal = () => {
+        if (!DOM.headerCounter) return null;
+        const digits = DOM.headerCounter.textContent?.replace(/[^\d]/g, '');
+        if (!digits) return null;
+        const total = parseInt(digits, 10);
+        return Number.isNaN(total) ? null : total;
+    };
+
+    /** Actualizar contador de noticias restantes */
+    const updateRemaining = () => {
+        if (!DOM.remaining) return;
+        const headerTotal = getHeaderTotal();
+        if (headerTotal !== null) {
+            DOM.remaining.textContent = `Restantes: ${headerTotal}`;
+            return;
+        }
+        const total = STATE.newsCards.length;
+        const remaining = Math.max(total - (STATE.currentIndex + 1), 0);
+        DOM.remaining.textContent = `Restantes: ${remaining}`;
     };
 
     /* ---------------------------------------------------------------------
@@ -182,6 +206,7 @@
         // Actualizar UI
         DOM.title.textContent = data.title;
         DOM.text.textContent = data.shortAnswer || 'Sin resumen disponible';
+        updateRemaining();
 
         // Leer título y resumen corto
         const textToRead = `${data.title}. ${data.shortAnswer || ''}`;
@@ -389,6 +414,9 @@
         // Limpiar contenido
         DOM.title.textContent = '';
         DOM.text.textContent = '';
+        if (DOM.remaining) {
+            DOM.remaining.textContent = '';
+        }
 
         console.log('[reader] Modo lectura desactivado');
     };
@@ -441,6 +469,19 @@
             stopSpeaking();
         }
     });
+
+    if (DOM.headerCounter && DOM.remaining) {
+        const headerObserver = new MutationObserver(() => {
+            if (STATE.active) {
+                updateRemaining();
+            }
+        });
+        headerObserver.observe(DOM.headerCounter, {
+            childList: true,
+            characterData: true,
+            subtree: true,
+        });
+    }
 
     // Cargar voces (necesario en Chrome)
     if (speechSynthesis.onvoiceschanged !== undefined) {

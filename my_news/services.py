@@ -202,21 +202,21 @@ class FeedService:
         Contenido: '{content}...'
 
         Realiza las siguientes tareas y devuelve el resultado EXACTAMENTE en formato JSON:
-        1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, en español, de aproximadamente 60 a 70 palabras, eliminando clickbait y relleno, manteniendo los puntos clave. NO apliques formato HTML aquí, solo texto plano.
+        1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, en español, de aproximadamente 60 a 70 palabras. Explica qué ocurrió, quiénes participaron, dónde/cuándo, causas, consecuencias o cifras relevantes. El summary debe añadir contexto nuevo respecto al titular y al short_answer, evitando cualquier tono de clickbait. NO apliques formato HTML aquí, solo texto plano.
         2.  **short_answer**: Analiza el titular. Si el titular:
             (a) Es una pregunta directa (ej: '¿Por qué deberías...?', '¿Cuál es...?').
-            O (b) NO es una pregunta directa PERO crea una fuerte expectativa de una respuesta concreta, revelación, explicación, lista, o 'secreto' que se encuentra en el contenido (ej: 'El truco definitivo para...', 'Así es como funciona X cosa...', 'La razón por la que Y sucede...', 'Descubren el motivo de Z...', 'Cinco claves para entender...', 'Lo que nadie te contó sobre...').
-            Si se cumple (a) o (b), extrae o resume la respuesta/punto clave del contenido original de forma EXTREMADAMENTE CONCISA (máximo 15 palabras) y DIRECTA. No uses introducciones ni parafrasees. Si el titular NO cumple estas condiciones (es decir, es un titular informativo estándar que no genera esa expectativa específica), el valor de 'short_answer' debe ser null (JSON null).
+            O (b) NO es una pregunta directa PERO crea una fuerte expectativa de una respuesta concreta, revelación, explicación, lista, o 'secreto' que se encuentra en el contenido (ej: 'El truco definitivo para...', 'Así es como funciona X cosa...', 'La razón por la que Y sucede...', 'Descubren el motivo de Z...', 'Cinco claves para entender...', 'Lo que nadie te contó sobre...', 'Este juego me envició todo el día').
+            Si se cumple (a) o (b), extrae o resume la respuesta/punto clave del contenido original de forma EXTREMADAMENTE CONCISA (máximo 15 palabras) y DIRECTA. Menciona explícitamente el dato, nombre, lugar o cifra que el titular deja sin revelar. Nunca repitas ni parafrasees el titular; revela la información concreta (por ejemplo: "Terraria se convirtió en el juego favorito del autor"). Si el titular NO cumple estas condiciones, el valor de 'short_answer' debe ser null (JSON null).
         3.  **ai_filter**: Basándote en las siguientes instrucciones de filtrado, determina si esta noticia DEBE SER ELIMINADA. Si coincide con ALGUNA instrucción, el valor debe ser EXACTAMENTE EL TEXTO LITERAL de la instrucción que coincidió (solo una, la primera que coincida si hay varias). Si NO coincide con ninguna, el valor debe ser null (JSON null).
             Instrucciones de Filtrado:
             {instructions}
 
-        REGLAS CRÍTICAS PARA EVITAR REDUNDANCIA:
-        - Si generaste un short_answer, el summary DEBE contener información ADICIONAL y DIFERENTE que no esté en el short_answer
-        - Si el short_answer ya responde la pregunta principal del titular, el summary debe profundizar en contexto, causas, consecuencias, o detalles adicionales
-        - NUNCA repitas la misma información en ambos campos
-        - Si toda la información relevante está en el short_answer y no hay contexto adicional útil, usa frases como: "Esta noticia no aporta información adicional más allá de lo indicado", "El contenido no aborda detalles adicionales al titular", "La noticia se limita a confirmar lo expresado en el título", etc.
-        - El summary NUNCA debe ser null - siempre debe contener algún texto explicativo
+        REGLAS CLAVE PARA RESUMEN Y SHORT_ANSWER:
+        - Ni el summary ni el short_answer pueden repetir literal el titular; cada uno debe aportar información nueva.
+        - Si generas un short_answer, el summary DEBE contener información adicional y diferente (contexto, causas, efectos, antecedentes, reacciones, cifras, etc.).
+        - El short_answer siempre debe revelar el elemento que el titular oculta o promete, mencionando explícitamente nombres, resultados o respuestas concretas.
+        - Ambos campos deben ser complementarios y libres de relleno o frases ambiguas; evita cualquier forma de clickbait.
+        - El summary NUNCA debe ser null: describe lo ocurrido incluso si el short_answer ya dio el dato principal.
 
         Ejemplo de JSON de salida esperado (sin filtro IA):
         {{
@@ -234,12 +234,6 @@ class FeedService:
         {{
           "summary": "El estudio analizó 1000 casos durante 5 años y encontró correlaciones con factores genéticos y ambientales específicos.",
           "short_answer": "La clave fue la combinación de ejercicio y dieta mediterránea.",
-          "ai_filter": null
-        }}
-        Ejemplo de JSON de salida esperado (clickbait sin contexto adicional útil):
-        {{
-          "summary": "Esta noticia no aporta información adicional más allá de lo indicado en la respuesta.",
-          "short_answer": "El truco es usar la técnica Pomodoro.",
           "ai_filter": null
         }}
 
@@ -272,35 +266,6 @@ class FeedService:
         return FeedService._VECTOR_INDEX
 
     @staticmethod
-    def detect_redundancy(summary_text, short_answer, threshold=0.7):
-        """
-        Detecta si el summary y short_answer son redundantes
-
-        Args:
-            summary_text: Texto del resumen
-            short_answer: Texto de la respuesta corta
-            threshold: Umbral de superposición para considerar redundante (default: 0.7)
-
-        Returns:
-            bool: True si son redundantes, False si no
-        """
-        if not summary_text or not short_answer:
-            return False
-
-        # Normalizar y dividir en palabras
-        summary_words = set(summary_text.lower().split())
-        answer_words = set(short_answer.lower().split())
-
-        # Calcular superposición
-        if len(answer_words) == 0:
-            return False
-
-        overlap = len(summary_words.intersection(answer_words))
-        overlap_ratio = overlap / len(answer_words)
-
-        return overlap_ratio > threshold
-
-    @staticmethod
     def build_filter_instructions_text(instructions):
         instructions_list = list(instructions or [])
         lines = []
@@ -331,6 +296,7 @@ class FeedService:
         instructions_section = (filter_instructions_text or FeedService._DEFAULT_FILTER_INSTRUCTIONS)
         content_limit = 4000
         base_content = (original_content or "")[:content_limit]
+        plain_content = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', base_content)).strip()
 
         safe_title = (title or "").replace("{", "{{").replace("}", "}}")
         safe_content = base_content.replace("{", "{{").replace("}", "}}")
@@ -358,17 +324,14 @@ class FeedService:
                     short_answer = result_json.get('short_answer')
                     ai_filter_reason = result_json.get('ai_filter')
 
-                    # Validación de redundancia post-procesamiento
-                    if FeedService.detect_redundancy(summary_text, short_answer):
-                        print("Detectada redundancia entre summary y short_answer. Reemplazando con mensaje explicativo.")
-                        summary_text = "Esta noticia no aporta información adicional más allá de lo indicado en la respuesta anterior."
-
-                    # Si no hay summary pero sí hay short_answer, generar mensaje explicativo
-                    if not summary_text and short_answer:
-                        summary_text = "El contenido no aborda detalles adicionales al titular."
-                    elif not summary_text and not short_answer:
-                        print("Error: JSON recibido no contiene 'summary' ni 'short_answer' válidos.")
-                        continue
+                    if not summary_text:
+                        if plain_content:
+                            summary_text = plain_content[:600]
+                        elif short_answer:
+                            summary_text = short_answer
+                        else:
+                            print("Error: JSON recibido no contiene 'summary' ni 'short_answer' válidos.")
+                            continue
 
                     processed_summary = summary_text
                     processed_summary = re.sub(r'^\* (.+?)$', r' <strong>\1</strong>', processed_summary, flags=re.MULTILINE)
