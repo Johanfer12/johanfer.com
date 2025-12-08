@@ -169,3 +169,15 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Groq API (para procesamiento de noticias)
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+GROQ_MODEL = os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile')
+
+# Gemini Embeddings
+GEMINI_EMBEDDING_MODEL = os.getenv('GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001')
+GEMINI_EMBEDDING_DIM = int(os.getenv('GEMINI_EMBEDDING_DIM', 768))
+
+# Qdrant (vector DB)
+QDRANT_URL = os.getenv('QDRANT_URL', 'http://localhost:6333')
+QDRANT_COLLECTION = os.getenv('QDRANT_COLLECTION', 'news_embeddings_gemini001_d768_v1')

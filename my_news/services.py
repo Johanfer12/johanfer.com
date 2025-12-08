@@ -2,12 +2,14 @@ import feedparser
 from datetime import datetime, timedelta
 from django.utils import timezone
 import pytz
-from .models import News, FeedSource, FilterWord, AIFilterInstruction, GeminiGlobalSetting
+from .models import News, FeedSource, FilterWord, AIFilterInstruction, GeminiGlobalSetting, GroqGlobalSetting
 import re
 from google import genai
 from google.genai import types
 import time
 import requests
+import os
+from groq import Groq
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import numpy as np
@@ -242,13 +244,25 @@ class FeedService:
     _DEFAULT_FILTER_INSTRUCTIONS = "(No hay instrucciones de filtro IA activas)"
 
     _GEMINI_CLIENT = None
+    _GROQ_CLIENT = None
     _VECTOR_INDEX = None
 
     @staticmethod
     def initialize_gemini():
+        """Cliente Gemini - solo para embeddings"""
         if FeedService._GEMINI_CLIENT is None:
             FeedService._GEMINI_CLIENT = genai.Client()
         return FeedService._GEMINI_CLIENT
+
+    @staticmethod
+    def initialize_groq():
+        """Cliente Groq - para procesamiento de contenido (resúmenes)"""
+        if FeedService._GROQ_CLIENT is None:
+            api_key = getattr(settings, 'GROQ_API_KEY', None) or os.environ.get('GROQ_API_KEY')
+            if not api_key:
+                raise ValueError("GROQ_API_KEY no configurada. Agrégala en settings.py o como variable de entorno.")
+            FeedService._GROQ_CLIENT = Groq(api_key=api_key)
+        return FeedService._GROQ_CLIENT
 
     @staticmethod
     def initialize_vector_index():
@@ -290,7 +304,7 @@ class FeedService:
         return patterns
 
     @staticmethod
-    def process_content_with_gemini(title, original_content, client, global_gemini_model_name, filter_instructions_text, max_retries=3):
+    def process_content_with_groq(title, original_content, groq_client, model_name, filter_instructions_text, max_retries=3):
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
         instructions_section = (filter_instructions_text or FeedService._DEFAULT_FILTER_INSTRUCTIONS)
@@ -310,16 +324,25 @@ class FeedService:
 
         for attempt in range(max_retries):
             try:
-                response = client.models.generate_content(
-                    model=global_gemini_model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        thinking_config=types.ThinkingConfig(thinking_budget=4096)
-                    )
+                response = groq_client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "Eres un asistente que analiza noticias y responde ÚNICAMENTE con JSON válido."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.3,
+                    max_tokens=1024
                 )
+                response_text = response.choices[0].message.content
                 try:
-                    result_json = json.loads(response.text)
+                    result_json = json.loads(response_text)
                     summary_text = result_json.get('summary')
                     short_answer = result_json.get('short_answer')
                     ai_filter_reason = result_json.get('ai_filter')
@@ -342,30 +365,31 @@ class FeedService:
                     return processed_summary, short_answer, ai_filter_reason
 
                 except json.JSONDecodeError as json_e:
-                    print(f"Error decodificando JSON de Gemini (intento {attempt + 1}): {json_e}")
-                    print(f"Texto recibido: {response.text[:200]}...")
+                    print(f"Error decodificando JSON de Groq (intento {attempt + 1}): {json_e}")
+                    print(f"Texto recibido: {response_text[:200]}...")
                     if attempt == max_retries - 1:
-                        print("Fallo de JSON en ï¿½ltimo intento, usando texto como resumen simple.")
-                        fallback_summary = response.text.strip().replace('\n\n', '<br><br>').replace('\n', '<br>')
+                        print("Fallo de JSON en último intento, usando texto como resumen simple.")
+                        fallback_summary = response_text.strip().replace('\n\n', '<br><br>').replace('\n', '<br>')
                         return fallback_summary, None, None
                     time.sleep(5)
                     continue
 
             except Exception as e:
-                if ("429" in str(e) or "Resource has been exhausted" in str(e)) and attempt < max_retries - 1:
+                error_str = str(e)
+                if ("429" in error_str or "rate_limit" in error_str.lower()) and attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 10
-                    print(f"Lï¿½mite de peticiones/Recurso agotado (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
+                    print(f"Límite de peticiones Groq (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
                     time.sleep(wait_time)
                     continue
-                elif "500 INTERNAL" in str(e) and attempt < max_retries - 1:
+                elif "500" in error_str and attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 5
-                    print(f"Error interno de Gemini (500) (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos para reintentar...")
+                    print(f"Error interno de Groq (500) (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
                     time.sleep(wait_time)
                     continue
-                print(f"Error procesando contenido con Gemini: {str(e)}")
+                print(f"Error procesando contenido con Groq: {error_str}")
                 return original_content, None, None
 
-        print("Se agotaron los reintentos para procesar contenido.")
+        print("Se agotaron los reintentos para procesar contenido con Groq.")
         return original_content, None, None
 
     @staticmethod
@@ -455,23 +479,22 @@ class FeedService:
         start_time = time.time()
         
         print("Inicializando modelos...")
-        # Cambiado: obtener el cliente
+        # Cliente Gemini solo para embeddings
         gemini_client = FeedService.initialize_gemini()
+        # Cliente Groq para procesamiento de contenido (resúmenes)
+        groq_client = FeedService.initialize_groq()
         vector_index = FeedService.initialize_vector_index()
-        # Eliminado: Reutilizamos gemini_client para embeddings
-        # embedding_model_name = EmbeddingService.initialize_embedding_model()
-        
-        # Obtener la configuraciÃ³n global del modelo Gemini
+
+        # Obtener modelo de Groq desde el admin (base de datos) o usar default
         try:
-            global_gemini_setting = GeminiGlobalSetting.objects.first()
-            if not global_gemini_setting:
-                # Si no hay configuraciÃ³n, usar un valor predeterminado y crear uno
-                print("Advertencia: No se encontrÃ³ configuraciÃ³n global de Gemini. Creando una con el modelo predeterminado 'gemini-2.0-flash'.")
-                global_gemini_setting = GeminiGlobalSetting.objects.create(model_name='gemini-2.0-flash')
-            global_model_name = global_gemini_setting.model_name
+            groq_setting = GroqGlobalSetting.objects.first()
+            if not groq_setting:
+                print("Advertencia: No se encontró configuración global de Groq. Creando con modelo predeterminado.")
+                groq_setting = GroqGlobalSetting.objects.create(model_name='llama-3.3-70b-versatile')
+            groq_model = groq_setting.model_name
         except Exception as e:
-            print(f"Error al obtener la configuraciÃ³n global de Gemini: {e}. Usando 'gemini-2.0-flash' como fallback.")
-            global_model_name = 'gemini-2.0-flash'
+            print(f"Error al obtener configuración de Groq: {e}. Usando default.")
+            groq_model = 'llama-3.3-70b-versatile'
         
         filter_word_patterns = FeedService.build_filter_word_patterns(
             FilterWord.objects.filter(active=True)
@@ -481,7 +504,7 @@ class FeedService:
         )
 
         sources = FeedSource.objects.filter(active=True)
-        print(f"Procesando {sources.count()} fuentes activas con el modelo Gemini: {global_model_name}")
+        print(f"Procesando {sources.count()} fuentes activas con Groq ({groq_model})")
         new_articles_count = 0
         
         # Calcular la fecha lÃ­mite (15 dÃ­as atrÃ¡s)
@@ -667,13 +690,13 @@ class FeedService:
                 continue # Pasar a la siguiente noticia
             # <<<<< FIN FILTRO PALABRA CLAVE >>>>>
 
-            # Si no se filtrÃ³ por palabra clave, procesar con IA
-            processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_gemini(
+            # Si no se filtró por palabra clave, procesar con IA (Groq)
+            processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_groq(
                 entry.title,
                 original_description,
-                gemini_client,
-                global_model_name,
-                filter_instructions_text # Pasar las instrucciones ya precargadas
+                groq_client,
+                groq_model,
+                filter_instructions_text
             )
 
             # >>>>> LÃGICA DE FILTRADO IA (despuÃ©s de palabra clave) <<<<<
