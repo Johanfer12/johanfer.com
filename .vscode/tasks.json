@@ -2,6 +2,41 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Iniciar Docker Desktop",
+            "type": "shell",
+            "command": "Start-Process",
+            "args": [
+                "-FilePath",
+                "C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe"
+            ],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Iniciar Qdrant",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-Command",
+                "Start-Sleep -Seconds 5; docker start qdrant"
+            ],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            },
+            "dependsOn": ["Iniciar Docker Desktop"],
+            "problemMatcher": []
+        },
+        {
             "label": "Iniciar Django Server",
             "type": "shell",
             "command": "${workspaceFolder}/venv/Scripts/python.exe",
@@ -22,6 +57,7 @@
             "runOptions": {
                 "runOn": "folderOpen"
             },
+            "dependsOn": ["Iniciar Qdrant"],
             "problemMatcher": []
         }
     ]

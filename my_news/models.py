@@ -132,3 +132,20 @@ class GeminiGlobalSetting(models.Model):
     class Meta:
         verbose_name = "Configuración Global Gemini"
         verbose_name_plural = "Configuraciones Globales Gemini"
+
+
+class GroqGlobalSetting(models.Model):
+    model_name = models.CharField(
+        max_length=100,
+        default='llama-3.3-70b-versatile',
+        verbose_name="Modelo Groq Global",
+        help_text="Nombre del modelo de Groq a utilizar (ej: 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768')."
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Configuración Global Groq ({self.model_name})"
+
+    class Meta:
+        verbose_name = "Configuración Global Groq"
+        verbose_name_plural = "Configuraciones Globales Groq"
