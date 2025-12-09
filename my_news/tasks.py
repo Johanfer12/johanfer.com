@@ -2,7 +2,7 @@ from .services import FeedService
 from django.utils import timezone
 from datetime import timedelta
 from .models import News
-from .models import GeminiGlobalSetting
+from .models import GroqGlobalSetting
 from .models import AIFilterInstruction
 
 def update_news_cron():
@@ -37,15 +37,15 @@ def purge_old_news(days: int = 15):
 def retry_summarize_pending(limit: int = 50, days: int = 15):
     """Reintenta generar resumen/short_answer para noticias recientes no filtradas por IA.
 
-    Ampliado a una ventana de 15 dÃ­as y sin depender de short_answer__isnull.
+    Ampliado a una ventana de 15 días y sin depender de short_answer__isnull.
     Solo cuenta como procesada si se guardan cambios.
     """
     try:
-        client = FeedService.initialize_gemini()
+        groq_client = FeedService.initialize_groq()
         try:
-            global_model_name = (GeminiGlobalSetting.objects.first() or GeminiGlobalSetting(model_name='gemini-2.0-flash')).model_name
+            global_model_name = (GroqGlobalSetting.objects.first() or GroqGlobalSetting(model_name='llama-3.3-70b-versatile')).model_name
         except Exception:
-            global_model_name = 'gemini-2.0-flash'
+            global_model_name = 'llama-3.3-70b-versatile'
 
         try:
             filter_instructions_text = FeedService.build_filter_instructions_text(
@@ -57,17 +57,17 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
         cutoff = timezone.now() - timedelta(days=days)
         qs = News.objects.filter(
             created_at__gte=cutoff,
-            is_deleted=False,     # no reintentar si el usuario la eliminÃ³
+            is_deleted=False,     # no reintentar si el usuario la eliminó
             is_ai_processed=False # solo las no procesadas por IA
         ).order_by('-created_at')[:limit]
 
         processed = 0
         for news in qs:
             saved_changes = False
-            processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_gemini(
+            processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_groq(
                 news.title,
                 news.description or '',
-                client,
+                groq_client,
                 global_model_name,
                 filter_instructions_text
             )
