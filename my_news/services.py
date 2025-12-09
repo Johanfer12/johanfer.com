@@ -251,7 +251,10 @@ class FeedService:
     def initialize_gemini():
         """Cliente Gemini - solo para embeddings"""
         if FeedService._GEMINI_CLIENT is None:
-            FeedService._GEMINI_CLIENT = genai.Client()
+            api_key = getattr(settings, 'GOOGLE_API_KEY', None) or os.environ.get('GOOGLE_API_KEY')
+            if not api_key:
+                raise ValueError("GOOGLE_API_KEY no configurada. Agrégala en settings.py o como variable de entorno.")
+            FeedService._GEMINI_CLIENT = genai.Client(api_key=api_key)
         return FeedService._GEMINI_CLIENT
 
     @staticmethod
