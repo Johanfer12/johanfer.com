@@ -36,17 +36,19 @@ def get_book_description(book_url, headers):
 
 def process_rating(rating_element):
     if rating_element:
-        rating_title = rating_element.find('span', class_='staticStars').get('title', '')
-        if 'did not like it' in rating_title:
-            return 1
-        elif 'it was ok' in rating_title:
-            return 2
-        elif 'really liked it' in rating_title:
-            return 4
-        elif 'liked it' in rating_title:
-            return 3
-        elif 'it was amazing' in rating_title:
-            return 5
+        stars_span = rating_element.find('span', class_='staticStars')
+        if stars_span:
+            rating_title = stars_span.get('title', '')
+            if 'did not like it' in rating_title:
+                return 1
+            elif 'it was ok' in rating_title:
+                return 2
+            elif 'really liked it' in rating_title:
+                return 4
+            elif 'liked it' in rating_title:
+                return 3
+            elif 'it was amazing' in rating_title:
+                return 5
     return 0
 
 def process_date(date_read_str):
@@ -64,7 +66,8 @@ def refresh_books_data():
 
     base_url = "https://www.goodreads.com/review/list/27786474-johan-gonzalez?print=true&ref=nav_mybooks&shelf=read&utf8=%E2%9C%93"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0',
+        'Cookie': 'session-id=142-2609523-9866743; ubid-main=134-7604816-3078305; x-main=C2Abju0UblUE9jVZcnpcV8XZZ61l37JU1xvjONg7wcdxPMU98sVlHoT2E941dmI7; at-main=Atza|gQBDm0aLAwEBAHE6sn03-zn39eqRtCDoFL12a6l9MVuFUKGChkp7sjfBxATjP6GmbxXbWOCcqYE7IV1vyigCyg4vpjZ_uiPXt2HN4WhnXTTy3U0GwwazIoMtt3K7EVtH25E3lr_PkFoUmbrdwf7QOHA5gWUvaHLE8JjQZ80ryNShtLAzQ8Jtc9MPcih6YVd0oqETnQ_NMJxLhOKFehM414P4wE-Wc87ghLJYVbqtgYyLh8l29sHCFZAr2DWxyULqmb5nY63Pf2-pJnFxdVh0y-hkNxa--6xX_4GHIHQXxki6ptK3uL2ZVXOR5GVh2ze3CZgMeUA_IknqHObuindQVwxnGUC51sxSsGxBCatU4-_K1AgBtUbuWfUsGlnElAOanrSS3UbxUYzOCl1T-QunJz1DyvMF; sess-at-main=VyeFXgMI585KmqnioMAUTvqI40iDeWAhn6XVarU893g=; session-token=SocZwcOmUu4xUIBMfRpU+ZZjkgQwH5pRrLbe6Lb6TgHyOeU1UgGWLem1UYcIcuFtsz38txSIsQdnmByGJXYUrrAQWVtEP4omWZ83wE1LH5K+yuJViSM6sTtGj+9qjRLH1gJUgrGHTHuDiAgiJBhKRWy4xxMYL9ozRGWdLJEjeB/5aJvaAK5pZnnYaOzk+WXa4qIsmoHFQxVnnOby3p0qhuYwlR0q/8M+3Z5WZ+NbXJxkDd+nrg2dlUijLDSoB4YxWSBc826aB+b1NbwGpQg/+hQVDjbQ9LWZSvtiFNy9YLdgWUAJbjWKnNOiicm+48CON4OdmFWQTZlvJcuCmhWSh5YNfAmCHwdKQ3aStxNmKZdbww/34dIHaw==; _session_id2=2c4ba87d06afd896306c45ea90071ce7'
     }
 
     response = requests.get(base_url, headers=headers)
@@ -72,6 +75,13 @@ def refresh_books_data():
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
         pagination_div = soup.find("div", id="reviewPagination")
+        
+        if not pagination_div:
+            print(f"Error: No se encontró la paginación. Posible redirección a login o cambio de estructura.")
+            # Opcional: imprimir título para depuración
+            print(f"Título de la página: {soup.title.string if soup.title else 'No title'}")
+            return
+
         last_page_link = pagination_div.find_all("a")[-2]
         total_pages = int(last_page_link.text)
 
@@ -91,7 +101,6 @@ def refresh_books_data():
 
         # Obtener todos los book_links existentes
         current_books = set(Book.objects.values_list('book_link', flat=True))
-        book_counter = 0  # Inicializar contador en 0 si empezamos de cero
 
         if total_libros_db == 0:
             # Si la DB está vacía, procesar todas las páginas desde la última a la primera
@@ -99,7 +108,6 @@ def refresh_books_data():
         else:
             # Si ya hay libros, solo procesar la primera página
             page_range = range(1, 2)
-            book_counter = total_libros_db  # Inicializar contador con total actual si ya hay libros
 
         for page_number in page_range:
             page_url = f"{base_url}&page={page_number}"
@@ -112,39 +120,57 @@ def refresh_books_data():
                 reviews = reviews[::-1]
 
             for review in reviews:
-                book_link = review.find('td', class_='field title').find('a')['href']
-                
-                # Si el libro ya existe, saltamos al siguiente
-                if book_link in current_books:
+                try:
+                    book_link_tag = review.find('td', class_='field title').find('a')
+                    if not book_link_tag:
+                        continue
+                    book_link = book_link_tag['href']
+                    
+                    # Si el libro ya existe, saltamos al siguiente
+                    if book_link in current_books:
+                        continue
+
+                    # Procesar datos del libro nuevo
+                    title = book_link_tag.get_text(strip=True)
+                    
+                    author_tag = review.find('td', class_='field author').find('a')
+                    author = author_tag.get_text(strip=True) if author_tag else "Unknown Author"
+                    
+                    rating_element = review.find('td', class_='field rating')
+                    my_rating = process_rating(rating_element)
+                    
+                    avg_rating_tag = review.find('td', class_='field avg_rating').find('div', class_='value')
+                    public_rating = avg_rating_tag.get_text(strip=True) if avg_rating_tag else "0.0"
+                    
+                    date_read_span = review.find('td', class_='field date_read').find('span', class_='date_read_value')
+                    date_read_str = date_read_span.get_text(strip=True) if date_read_span else ""
+                    date_read = process_date(date_read_str)
+                    
+                    description = get_book_description(book_link, headers)
+
+                    # Procesar portada antes de crear el libro
+                    cover_link = None
+                    cover_info = review.find('td', class_='field cover')
+                    if cover_info:
+                        img_tag = cover_info.find('img')
+                        if img_tag:
+                            cover_link = img_tag['src']
+
+                    # Crear el libro con la URL de la portada
+                    nuevo_libro = Book.objects.create(
+                        title=title,
+                        author=author,
+                        cover_link=cover_link,
+                        my_rating=my_rating,
+                        public_rating=public_rating,
+                        date_read=date_read,
+                        book_link=book_link,
+                        description=description
+                    )
+                    print(f"Libro creado: {title}")
+                except Exception as e:
+                    print(f"Error procesando libro en página {page_number}: {e}")
                     continue
-
-                # Procesar datos del libro nuevo
-                title = review.find('td', class_='field title').find('a').get_text(strip=True)
-                author = review.find('td', class_='field author').find('a').get_text(strip=True)
-                rating_element = review.find('td', class_='field rating')
-                my_rating = process_rating(rating_element)
-                public_rating = review.find('td', class_='field avg_rating').find('div', class_='value').get_text(strip=True)
-                date_read_str = review.find('td', class_='field date_read').find('span', class_='date_read_value').get_text(strip=True)
-                date_read = process_date(date_read_str)
-                description = get_book_description(book_link, headers)
-
-                # Procesar portada antes de crear el libro
-                cover_link = None
-                cover_info = review.find('td', class_='field cover')
-                if cover_info:
-                    cover_link = cover_info.find('img')['src']
-
-                # Crear el libro con la URL de la portada
-                nuevo_libro = Book.objects.create(
-                    title=title,
-                    author=author,
-                    cover_link=cover_link,
-                    my_rating=my_rating,
-                    public_rating=public_rating,
-                    date_read=date_read,
-                    book_link=book_link,
-                    description=description
-                )
 
                 # Procesar y guardar la imagen de la portada
                 if cover_link and cover_link.endswith('.jpg'):

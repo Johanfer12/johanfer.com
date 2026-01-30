@@ -24,7 +24,7 @@
             "command": "powershell",
             "args": [
                 "-Command",
-                "Start-Sleep -Seconds 5; docker start qdrant"
+                "Start-Sleep -Seconds 5; docker-compose up -d"
             ],
             "presentation": {
                 "reveal": "silent",
