@@ -3,6 +3,8 @@ database.db
 staticfiles/
 /.claude
 CLAUDE.md
+/qdrant_storage/
+/media/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
