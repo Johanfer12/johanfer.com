@@ -59,6 +59,10 @@ def process_date(date_read_str):
     except:
         return None
 
+def extract_goodreads_id(url):
+    match = re.search(r'/show/(\d+)', url)
+    return match.group(1) if match else None
+
 def refresh_books_data():
     folder_path = os.path.join(settings.MEDIA_ROOT, "Covers")
     if not os.path.exists(folder_path):
@@ -99,8 +103,13 @@ def refresh_books_data():
             print("No hay nuevos libros para actualizar")
             return
 
-        # Obtener todos los book_links existentes
-        current_books = set(Book.objects.values_list('book_link', flat=True))
+        # Obtener todos los book_links existentes y extraer sus IDs
+        current_books_links = Book.objects.values_list('book_link', flat=True)
+        current_ids = set()
+        for link in current_books_links:
+            gid = extract_goodreads_id(link)
+            if gid:
+                current_ids.add(gid)
 
         if total_libros_db == 0:
             # Si la DB está vacía, procesar todas las páginas desde la última a la primera
@@ -125,9 +134,10 @@ def refresh_books_data():
                     if not book_link_tag:
                         continue
                     book_link = book_link_tag['href']
+                    scraped_id = extract_goodreads_id(book_link)
                     
-                    # Si el libro ya existe, saltamos al siguiente
-                    if book_link in current_books:
+                    # Si el libro ya existe (por ID), saltamos al siguiente
+                    if scraped_id and scraped_id in current_ids:
                         continue
 
                     # Procesar datos del libro nuevo
