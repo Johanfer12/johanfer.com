@@ -2,6 +2,7 @@ from django.shortcuts import render
 from django.views.generic import ListView
 from .models import News, FeedSource
 from django.http import JsonResponse
+from django.http import HttpResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.template.loader import render_to_string
 from .services import FeedService, EmbeddingService
@@ -14,6 +15,8 @@ from django.db.models import Q, Count
 from .tasks import purge_old_news, retry_summarize_pending
 import subprocess
 import platform
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 # Create your views here.
 
@@ -61,9 +64,7 @@ def delete_news(request, pk):
         if next_news:
             print(f"[DEBUG] Noticia de reemplazo encontrada: ID={next_news.id}, Título={next_news.title[:50]}...")
             card_html = render_to_string('news_card.html', {'article': next_news, 'user': request.user})
-            modal_html = render_to_string('news_modal.html', {'article': next_news, 'user': request.user})
             response_data['html'] = card_html
-            response_data['modal'] = modal_html
         else:
             print(f"[DEBUG] No se encontró noticia de reemplazo. Página: {current_page}, Total noticias: {total_news}")
         
@@ -139,11 +140,9 @@ class NewsListView(ListView):
         backup_cards = []
         for article in backup_news:
             card_html = render_to_string('news_card.html', {'article': article, 'user': self.request.user})
-            modal_html = render_to_string('news_modal.html', {'article': article, 'user': self.request.user})
             backup_cards.append({
                 'id': article.id,
-                'card': card_html,
-                'modal': modal_html
+                'card': card_html
             })
         
         context['backup_cards'] = backup_cards
@@ -189,11 +188,9 @@ def check_new_news(request):
         news_cards = []
         for article in new_news:
             card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
-            modal_html = render_to_string('news_modal.html', {'article': article, 'user': request.user})
             news_cards.append({
                 'id': article.id,
-                'card': card_html,
-                'modal': modal_html
+                'card': card_html
             })
         
         # Obtener el total actualizado de noticias visibles
@@ -224,6 +221,36 @@ def get_news_count(request):
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
+
+@require_GET
+@superuser_required
+def image_proxy(request):
+    image_url = request.GET.get('url', '').strip()
+    if not image_url:
+        return JsonResponse({'status': 'error', 'message': 'Falta url'}, status=400)
+
+    parsed = urlparse(image_url)
+    if parsed.scheme not in ('http', 'https'):
+        return JsonResponse({'status': 'error', 'message': 'URL no valida'}, status=400)
+
+    try:
+        req = Request(image_url, headers={
+            'User-Agent': 'Mozilla/5.0 (compatible; johanfer-news-bot/1.0)'
+        })
+        with urlopen(req, timeout=6) as resp:
+            content_type = resp.headers.get('Content-Type', '').split(';')[0].strip().lower()
+            if not content_type.startswith('image/'):
+                return JsonResponse({'status': 'error', 'message': 'El recurso no es imagen'}, status=415)
+
+            data = resp.read(5 * 1024 * 1024 + 1)  # max 5MB
+            if len(data) > 5 * 1024 * 1024:
+                return JsonResponse({'status': 'error', 'message': 'Imagen demasiado grande'}, status=413)
+
+            response = HttpResponse(data, content_type=content_type)
+            response['Cache-Control'] = 'public, max-age=3600'
+            return response
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'No se pudo obtener la imagen'}, status=502)
 
 
 @require_POST
@@ -308,8 +335,7 @@ def get_page(request):
         cards = []
         for article in items:
             card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
-            modal_html = render_to_string('news_modal.html', {'article': article, 'user': request.user})
-            cards.append({'id': article.id, 'card': card_html, 'modal': modal_html})
+            cards.append({'id': article.id, 'card': card_html})
 
         # Construir next_cursor
         next_cursor = None
@@ -325,8 +351,7 @@ def get_page(request):
             backup_qs = list(window_qs[page_size:page_size + backup_size])
             for article in backup_qs:
                 card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
-                modal_html = render_to_string('news_modal.html', {'article': article, 'user': request.user})
-                backup_cards.append({'id': article.id, 'card': card_html, 'modal': modal_html})
+                backup_cards.append({'id': article.id, 'card': card_html})
         except Exception:
             pass
 
@@ -347,8 +372,7 @@ def get_page(request):
             backup_cards = []
             for article in additional_backup:
                 card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
-                modal_html = render_to_string('news_modal.html', {'article': article, 'user': request.user})
-                backup_cards.append({'id': article.id, 'card': card_html, 'modal': modal_html})
+                backup_cards.append({'id': article.id, 'card': card_html})
             
             return JsonResponse({
                 'status': 'success',
@@ -384,15 +408,12 @@ def undo_delete(request, pk):
             news.save()
 
         card_html = render_to_string('news_card.html', {'article': news, 'user': request.user})
-        modal_html = render_to_string('news_modal.html', {'article': news, 'user': request.user})
-
         total_news = News.visible.count()
         total_pages = (total_news + 24) // 25
 
         return JsonResponse({
             'status': 'success',
             'html': card_html,
-            'modal': modal_html,
             'total_news': total_news,
             'total_pages': total_pages
         })

@@ -8,7 +8,6 @@
         grid: '.news-grid',
         total: '.total',
         counter: '.header-counter',
-        modalsContainer: '#news-modals-container',
         notification: '#new-news-notification',
         notificationCount: '#new-news-count',
         notifCloseBtn: '#close-notification-btn',
@@ -37,7 +36,6 @@
         userInteracted: false,
         lastChecked: new Date().toISOString(),
         backupCards: [], // Noticias de respaldo precargadas (ahora hasta 25)
-        backupModals: [], // Modales de respaldo precargados
         deleteStack: [],
         order: new URLSearchParams(location.search).get('order') || 'desc',
         currentPage: parseInt(new URLSearchParams(location.search).get('page') || '1', 10),
@@ -52,6 +50,8 @@
      * ------------------------------------------------------------------ */
     const log = (...args) => console.log('[news]', ...args);
     const err = (...args) => console.error('[news]', ...args);
+    const SHARE_ICON_HTML = '<svg class="share-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 483 483" aria-hidden="true"><path fill="currentColor" d="M395.72,0c-48.204,0-87.281,39.078-87.281,87.281c0,2.036,0.164,4.03,0.309,6.029l-161.233,75.674 c-15.668-14.971-36.852-24.215-60.231-24.215c-48.204,0.001-87.282,39.079-87.282,87.282c0,48.204,39.078,87.281,87.281,87.281 c15.206,0,29.501-3.907,41.948-10.741l69.789,58.806c-3.056,8.896-4.789,18.396-4.789,28.322c0,48.204,39.078,87.281,87.281,87.281 c48.205,0,87.281-39.078,87.281-87.281s-39.077-87.281-87.281-87.281c-15.205,0-29.5,3.908-41.949,10.74l-69.788-58.805 c3.057-8.891,4.789-18.396,4.789-28.322c0-2.035-0.164-4.024-0.308-6.029l161.232-75.674c15.668,14.971,36.852,24.215,60.23,24.215 c48.203,0,87.281-39.078,87.281-87.281C482.999,39.079,443.923,0,395.72,0z"/></svg>';
+    const SHARE_CHECK_HTML = '<svg class="share-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.285 6.709a1 1 0 0 1 .006 1.414l-9.3 9.4a1 1 0 0 1-1.421.005L3.71 11.72a1 1 0 1 1 1.414-1.414l5.146 5.146 8.593-8.68a1 1 0 0 1 1.422-.063z"/></svg>';
 
     const getCookie = (name) => {
         const value = document.cookie
@@ -107,20 +107,247 @@
         });
     };
 
-    /** Crea elementos de tarjeta y modal desde HTML string */
-    const createCardFromHTML = (cardHtml, modalHtml = null) => {
+    const normalizeText = (value) => (value || '').replace(/\s+/g, ' ').trim();
+
+    const buildShareCardData = (container) => {
+        const front = container?.querySelector('.card-front');
+        const back = container?.querySelector('.card-back');
+        const header = normalizeText(front?.querySelector('.meta-info')?.textContent) || 'Noticia';
+        const title = normalizeText(front?.querySelector('.news-title')?.textContent) || 'Sin titulo';
+        const summary = normalizeText(back?.querySelector('.news-description')?.textContent) || 'Sin resumen disponible';
+        const imageEl = front?.querySelector('.news-image');
+        const imageUrl = imageEl?.currentSrc || imageEl?.src || '';
+        return { header, title, summary, imageUrl };
+    };
+
+    const wrapText = (ctx, text, maxWidth, maxLines) => {
+        const words = (text || '').split(' ');
+        const lines = [];
+        let current = '';
+
+        for (const word of words) {
+            const candidate = current ? `${current} ${word}` : word;
+            if (ctx.measureText(candidate).width <= maxWidth) {
+                current = candidate;
+                continue;
+            }
+            if (current) lines.push(current);
+            current = word;
+            if (lines.length >= maxLines) break;
+        }
+        if (current && lines.length < maxLines) lines.push(current);
+
+        if (lines.length === maxLines) {
+            const last = lines[maxLines - 1];
+            if (ctx.measureText(last).width > maxWidth) {
+                let trimmed = last;
+                while (trimmed.length > 1 && ctx.measureText(`${trimmed}...`).width > maxWidth) {
+                    trimmed = trimmed.slice(0, -1);
+                }
+                lines[maxLines - 1] = `${trimmed}...`;
+            } else if (words.join(' ') !== lines.join(' ')) {
+                let trimmed = last;
+                while (trimmed.length > 1 && ctx.measureText(`${trimmed}...`).width > maxWidth) {
+                    trimmed = trimmed.slice(0, -1);
+                }
+                lines[maxLines - 1] = `${trimmed}...`;
+            }
+        }
+        return lines;
+    };
+
+    const roundRect = (ctx, x, y, width, height, radius) => {
+        const r = Math.min(radius, width / 2, height / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + width - r, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+        ctx.lineTo(x + width, y + height - r);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+        ctx.lineTo(x + r, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+    };
+
+    const loadImage = (url) => new Promise((resolve, reject) => {
+        if (!url) return reject(new Error('Sin imagen'));
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('No se pudo cargar imagen'));
+        img.src = url;
+    });
+
+    const drawCenteredParagraph = (ctx, text, boxX, boxY, boxWidth, boxHeight, { font, color, lineHeight, maxLines, verticalAlign = 'center' }) => {
+        ctx.save();
+        ctx.font = font;
+        ctx.fillStyle = color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        const lines = wrapText(ctx, text, boxWidth - 24, maxLines);
+        const totalHeight = lines.length * lineHeight;
+        const freeSpace = Math.max(0, boxHeight - totalHeight);
+        let y = boxY;
+        if (verticalAlign === 'center') {
+            y = boxY + (freeSpace / 2);
+        } else if (verticalAlign === 'adaptive') {
+            // Centrado, pero sin bajar demasiado el bloque para evitar hueco inutil.
+            y = boxY + Math.min(freeSpace / 2, 52);
+        }
+        const x = boxX + (boxWidth / 2);
+        lines.forEach((line) => {
+            ctx.fillText(line, x, y);
+            y += lineHeight;
+        });
+        ctx.restore();
+    };
+
+    const createShareCardBlob = async ({ header, title, summary, imageUrl }) => {
+        const width = 844;
+        const height = 1424;
+        const padding = 54;
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, width, height); // PNG transparente fuera de la tarjeta
+
+        const cardX = 0;
+        const cardY = 0;
+        const cardW = width;
+        const cardH = height;
+        roundRect(ctx, cardX, cardY, cardW, cardH, 28);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.84)';
+        ctx.fill();
+
+        const darkOverlay = ctx.createLinearGradient(cardX, cardY, cardX, cardY + cardH);
+        darkOverlay.addColorStop(0, 'rgba(0, 0, 0, 0.08)');
+        darkOverlay.addColorStop(1, 'rgba(0, 0, 0, 0.22)');
+        roundRect(ctx, cardX, cardY, cardW, cardH, 28);
+        ctx.fillStyle = darkOverlay;
+        ctx.fill();
+
+        // Zona de imagen superior con clipping redondeado
+        const imageAreaX = cardX + 20;
+        const imageAreaY = cardY + 20;
+        const imageAreaW = cardW - 40;
+        const imageAreaH = 430;
+        roundRect(ctx, imageAreaX, imageAreaY, imageAreaW, imageAreaH, 28);
+        ctx.save();
+        ctx.clip();
+
+        let imageDrawn = false;
+        try {
+            const safeImageUrl = imageUrl
+                ? `/noticias/image-proxy/?url=${encodeURIComponent(imageUrl)}`
+                : '';
+            const img = await loadImage(safeImageUrl);
+            const scale = Math.max(imageAreaW / img.width, imageAreaH / img.height);
+            const drawW = img.width * scale;
+            const drawH = img.height * scale;
+            const drawX = imageAreaX + (imageAreaW - drawW) / 2;
+            const drawY = imageAreaY + (imageAreaH - drawH) / 2;
+            ctx.drawImage(img, drawX, drawY, drawW, drawH);
+            imageDrawn = true;
+        } catch (_) {
+            imageDrawn = false;
+        }
+
+        if (!imageDrawn) {
+            const ph = ctx.createLinearGradient(imageAreaX, imageAreaY, imageAreaX, imageAreaY + imageAreaH);
+            ph.addColorStop(0, '#334155');
+            ph.addColorStop(1, '#1e293b');
+            ctx.fillStyle = ph;
+            ctx.fillRect(imageAreaX, imageAreaY, imageAreaW, imageAreaH);
+            ctx.fillStyle = '#cbd5e1';
+            ctx.font = '600 32px Arial, sans-serif';
+            ctx.fillText('Imagen no disponible', imageAreaX + 34, imageAreaY + imageAreaH / 2);
+        }
+        ctx.restore();
+
+        let y = imageAreaY + imageAreaH + 56;
+
+        ctx.fillStyle = '#93c5fd';
+        ctx.font = '600 22px Arial, sans-serif';
+        ctx.textBaseline = 'top';
+        const headerLines = wrapText(ctx, header, width - (padding * 2), 2);
+        headerLines.forEach(line => {
+            ctx.fillText(line, padding, y);
+            y += 30;
+        });
+
+        y += 16;
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 48px Arial, sans-serif';
+        const titleLines = wrapText(ctx, title, width - (padding * 2), 5);
+        titleLines.forEach(line => {
+            ctx.fillText(line, padding, y);
+            y += 58;
+        });
+
+        y += 18;
+        const summaryBoxX = padding;
+        const summaryBoxY = y;
+        const summaryBoxW = width - (padding * 2);
+        const summaryBoxH = (cardY + cardH - 36) - summaryBoxY;
+        drawCenteredParagraph(ctx, summary, summaryBoxX, summaryBoxY, summaryBoxW, summaryBoxH, {
+            font: '400 36px Arial, sans-serif',
+            color: '#d1d5db',
+            lineHeight: 50,
+            maxLines: 11,
+            verticalAlign: 'adaptive',
+        });
+
+        // Mascara final para exportar PNG con esquinas redondeadas reales
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-in';
+        roundRect(ctx, 0, 0, width, height, 28);
+        ctx.fillStyle = '#000';
+        ctx.fill();
+        ctx.restore();
+
+        return new Promise((resolve, reject) => {
+            canvas.toBlob((blob) => {
+                if (!blob) return reject(new Error('No se pudo generar imagen'));
+                resolve(blob);
+            }, 'image/png');
+        });
+    };
+
+    const copyImageToClipboard = async (blob) => {
+        if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+            throw new Error('El navegador no soporta copiar imagen al portapapeles');
+        }
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    };
+
+    const shareNewsCard = async (container, id, actionButton) => {
+        const shareData = buildShareCardData(container);
+        try {
+            const imageBlob = await createShareCardBlob(shareData);
+            await copyImageToClipboard(imageBlob);
+            if (actionButton) {
+                const previousHTML = actionButton.innerHTML;
+                actionButton.innerHTML = SHARE_CHECK_HTML;
+                actionButton.classList.add('copied');
+                setTimeout(() => {
+                    actionButton.innerHTML = previousHTML || SHARE_ICON_HTML;
+                    actionButton.classList.remove('copied');
+                }, 1100);
+            }
+        } catch (e) {
+            err(`No se pudo copiar la noticia ${id}:`, e);
+            alert('No se pudo copiar la imagen al portapapeles en este navegador.');
+        }
+    };
+
+    /** Crea elemento de tarjeta desde HTML string */
+    const createCardFromHTML = (cardHtml) => {
         const temp = document.createElement('div');
         temp.innerHTML = cardHtml;
         const card = temp.firstElementChild;
-        
-        let modal = null;
-        if (modalHtml) {
-            const tempModal = document.createElement('div');
-            tempModal.innerHTML = modalHtml;
-            modal = tempModal.firstElementChild;
-        }
-        
-        return { card, modal };
+        return { card };
     };
 
     /** Asegura que no haya más de MAX_NEWS tarjetas visibles eliminando las más antiguas */
@@ -132,9 +359,7 @@
         const excessCards = cards.slice(MAX_NEWS);
         excessCards.forEach(card => {
             const cardId = card.id.replace('news-', '');
-            const modal = $(`#modal-${cardId}`);
             card.remove();
-            modal?.remove();
             log(`Enforce limit: Removed excess card ${cardId}`);
         });
     };
@@ -171,39 +396,6 @@
     };
 
     /* ---------------------------------------------------------------------
-     *  Modales (API pública: openNewsModal / closeNewsModal)
-     * ------------------------------------------------------------------ */
-    const toggleBodyScroll = (disable) => {
-        document.body.style.overflow = disable ? 'hidden' : 'auto';
-    };
-
-    const openNewsModal = (id) => {
-        const modal = $(`#modal-${id}`);
-        if (!modal) return;
-        modal.style.display = 'block';
-        setTimeout(() => modal.classList.add('show'), 10);
-        toggleBodyScroll(true);
-    };
-
-    const closeNewsModal = (id) => {
-        const modal = $(`#modal-${id}`);
-        if (!modal) return;
-        modal.classList.remove('show');
-        setTimeout(() => {
-            modal.style.display = 'none';
-            toggleBodyScroll(false);
-        }, 300);
-    };
-
-    // Exponer en window para atributos inline
-    Object.assign(window, {openNewsModal, closeNewsModal});
-
-    // Cerrar al hacer clic fuera del contenido
-    window.addEventListener('click', (e) => {
-        if (e.target.classList.contains('modal')) closeNewsModal(e.target.id.replace('modal-', ''));
-    });
-
-    /* ---------------------------------------------------------------------
      *  Carga inicial y precarga de noticias de respaldo
      * ------------------------------------------------------------------ */
     const initializeBackupCards = () => {
@@ -212,13 +404,11 @@
             if (backupDataElement) {
                 const backupData = JSON.parse(backupDataElement.textContent);
                 STATE.backupCards = backupData || [];
-                STATE.backupModals = backupData?.map(card => card.modal) || [];
                 log(`Inicializadas ${STATE.backupCards.length} noticias de respaldo desde el servidor`);
             }
         } catch (e) {
             err('Error al inicializar noticias de respaldo:', e);
             STATE.backupCards = [];
-            STATE.backupModals = [];
         }
     };
 
@@ -281,7 +471,6 @@
                 );
                 
                 STATE.backupCards.push(...newBackups);
-                STATE.backupModals.push(...newBackups.map(x => x.modal));
                 
                 // Actualizar cursor para la siguiente carga
                 if (newBackups.length > 0) {
@@ -308,9 +497,7 @@
             STATE.deletingNews.delete(newsId);
             return err(`Contenedor no encontrado (${newsId})`);
         }
-        const modal = $(`#modal-${newsId}`);
         const currentPage = new URLSearchParams(location.search).get('page') || 1;
-        if (modal?.classList.contains('show')) closeNewsModal(newsId);
 
         const mobileView = isMobile();
         const oldPositions = mobileView ? null : capturePositions();
@@ -342,13 +529,9 @@
         
         // No usar respaldo precargado para evitar problemas de orden cronológico
         // Siempre esperar la respuesta del servidor que calcula el reemplazo correcto
-        let replacementCard = null;
-        let replacementModal = null;
-        
         // Programar eliminación del DOM después de la animación
         const removeFromDOM = () => {
             container.remove();
-            modal?.remove();
         };
 
         // Eliminar por transitionend con fallback por tiempo
@@ -403,17 +586,16 @@
                     updateCounters(data.total_news, data.total_pages);
 
                     // Usar la noticia del servidor (orden cronológico correcto)
-                    if (data.html && data.modal) {
-                        const { card: newCard, modal: newModal } = createCardFromHTML(data.html, data.modal);
+                    if (data.html) {
+                        const { card: newCard } = createCardFromHTML(data.html);
 
                         if (newCard) {
                             const newCardId = newCard.id.replace('news-', '');
                             // Verificar que no esté duplicada
                             if (!$(`#news-${newCardId}`, DOM.grid)) {
-                                configureNewCard(newCard, newModal, newCardId);
+                                configureNewCard(newCard, newCardId);
                                 // Agregar al final de la página (posición correcta)
                                 DOM.grid.appendChild(newCard);
-                                newModal && DOM.modalsContainer.appendChild(newModal);
                                 animateScaleOpacity(newCard);
                                 log(`Agregada noticia del servidor (orden correcto): ${newCardId}`);
                             } else {
@@ -439,17 +621,16 @@
                 updateCounters(data.total_news, data.total_pages);
 
                 // Usar solo la tarjeta del servidor (orden cronológico correcto)
-                if (data.html && data.modal) {
-                    const { card: newCard, modal: newModal } = createCardFromHTML(data.html, data.modal);
+                if (data.html) {
+                    const { card: newCard } = createCardFromHTML(data.html);
 
                     if (newCard) {
                         const newCardId = newCard.id.replace('news-', '');
                         // Verificar que no esté duplicada
                         if (!$(`#news-${newCardId}`, DOM.grid)) {
-                            configureNewCard(newCard, newModal, newCardId);
+                            configureNewCard(newCard, newCardId);
                             // Agregar al final de la página (posición correcta)
                             DOM.grid.appendChild(newCard);
-                            newModal && DOM.modalsContainer.appendChild(newModal);
                             animateScaleOpacity(newCard);
                             log(`Agregada noticia del servidor (orden correcto): ${newCardId}`);
                         } else {
@@ -503,7 +684,7 @@
         const newIds = [];
 
         for (const item of newsToAdd) {
-            const { card, modal: modalEl } = createCardFromHTML(item.card, item.modal);
+            const { card } = createCardFromHTML(item.card);
             if (!card) continue; // Saltar si el HTML de la tarjeta estaba vacío
             
             const id = card.id.replace('news-', '');
@@ -521,9 +702,8 @@
                 continue;
             }
             
-            configureNewCard(card, modalEl, id);
+            configureNewCard(card, id);
             frag.appendChild(card);
-            modalEl && DOM.modalsContainer.appendChild(modalEl);
             newIds.push(card);
         }
 
@@ -543,18 +723,15 @@
             
             cardsToMove.forEach(card => {
                 const cardId = card.id.replace('news-', '');
-                const modal = $(`#modal-${cardId}`);
                 
                 // Mover al respaldo
                 STATE.backupCards.push({
                     id: cardId,
                     card: card.outerHTML
                 });
-                STATE.backupModals.push(modal?.outerHTML || '');
                 
                 // Remover del DOM
                 card.remove();
-                modal?.remove();
                 log(`Nueva noticia ${cardId} movida al respaldo para mantener límite de ${MAX_NEWS}`);
             });
         }
@@ -649,17 +826,15 @@
                 if (STATE.backupCards.length === 0) break;
                 
                 const backupData = STATE.backupCards.shift();
-                const backupModalData = STATE.backupModals.shift();
                 
                 if (backupData && backupData.card) {
-                    const { card: newCard, modal: newModal } = createCardFromHTML(backupData.card, backupModalData);
-                    if (newModal) DOM.modalsContainer.appendChild(newModal);
+                    const { card: newCard } = createCardFromHTML(backupData.card);
                     
                     if (newCard) {
                         const id = newCard.id.replace('news-', '');
                         // Verificar que no esté duplicada
                         if (!$(`#news-${id}`, DOM.grid)) {
-                            configureNewCard(newCard, newModal, id);
+                            configureNewCard(newCard, id);
                             if (STATE.order === 'asc') {
                                 DOM.grid.appendChild(newCard);
                             } else {
@@ -697,7 +872,7 @@
     /* ---------------------------------------------------------------------
      *  Configuración de tarjetas (botones, hover, etc.)
      * ------------------------------------------------------------------ */
-    const configureNewCard = (container, modal, id) => {
+    const configureNewCard = (container, id) => {
         if (!container) return;
         const front = container.querySelector('.card-front');
         const back = container.querySelector('.card-back');
@@ -718,23 +893,25 @@
             front.appendChild(mbBtn);
         }
 
-        // Enlace "Más" para modal
-        if (links && !links.querySelector('.modal-opener')) {
-            const more = document.createElement('a');
-            more.href = 'javascript:void(0)';
-            more.className = 'news-link modal-opener';
-            more.textContent = 'Más';
-            more.addEventListener('click', (e) => { e.stopPropagation(); openNewsModal(id); });
-            links.prepend(more);
+        // Acción compartir para copiar tarjeta compacta al portapapeles
+        if (links && !links.querySelector('.share-opener')) {
+            const share = document.createElement('button');
+            share.type = 'button';
+            share.className = 'news-link share-opener';
+            share.title = 'Copiar tarjeta';
+            share.setAttribute('aria-label', 'Copiar tarjeta');
+            share.innerHTML = SHARE_ICON_HTML;
+            share.addEventListener('click', (e) => {
+                e.stopPropagation();
+                shareNewsCard(container, id, share);
+            });
+            links.prepend(share);
         }
 
-        // Delete dentro de card‑back y modal
-        [container.querySelector('.card-back .delete-btn'), modal?.querySelector('.delete-btn')].forEach(btn => {
+        // Delete dentro del reverso
+        [container.querySelector('.card-back .delete-btn')].forEach(btn => {
             btn?.addEventListener('click', (e) => { e.stopPropagation(); deleteNews(id); });
         });
-
-        // Close modal X
-        modal?.querySelector('.close')?.addEventListener('click', () => closeNewsModal(id));
 
         // Evitar flip al pasar por la imagen
         const img = container.querySelector('.news-image');
@@ -748,7 +925,7 @@
     // Configurar tarjetas existentes al cargar
     $$('.news-grid .news-card-container').forEach(el => {
         const id = el.id.replace('news-', '');
-        configureNewCard(el, $(`#modal-${id}`), id);
+        configureNewCard(el, id);
     });
 
     /* ---------------------------------------------------------------------
@@ -802,8 +979,8 @@
                 
                 const currentCardsCount = $$('.news-card-container', DOM.grid).length;
                 
-                if (data.html && data.modal) {
-                    const { card, modal } = createCardFromHTML(data.html, data.modal);
+                if (data.html) {
+                    const { card } = createCardFromHTML(data.html);
                     const id = card.id.replace('news-', '');
                     
                     // Si ya tenemos 25 noticias, mover la última al respaldo antes de agregar la nueva
@@ -813,18 +990,15 @@
                         
                         if (lastCard) {
                             const lastId = lastCard.id.replace('news-', '');
-                            const lastModal = $(`#modal-${lastId}`);
                             
                             // Mover al respaldo
                             STATE.backupCards.unshift({
                                 id: lastId,
                                 card: lastCard.outerHTML
                             });
-                            STATE.backupModals.unshift(lastModal?.outerHTML || '');
                             
                             // Remover del DOM
                             lastCard.remove();
-                            lastModal?.remove();
                             log(`Noticia ${lastId} movida al respaldo por undo`);
                         }
                     }
@@ -835,8 +1009,7 @@
                     } else {
                         DOM.grid.appendChild(card);
                     }
-                    configureNewCard(card, modal, id);
-                    modal && DOM.modalsContainer.appendChild(modal);
+                    configureNewCard(card, id);
                     animateScaleOpacity(card);
                     
                     // Actualizar contadores y paginación
@@ -858,18 +1031,15 @@
             .then(data => {
                 if (data.status !== 'success') throw new Error(data.message);
                 DOM.grid.innerHTML = '';
-                DOM.modalsContainer.innerHTML = '';
                 const frag = document.createDocumentFragment();
                 (data.cards || []).forEach(item => {
-                    const { card, modal } = createCardFromHTML(item.card, item.modal);
+                    const { card } = createCardFromHTML(item.card);
                     const id = card ? card.id.replace('news-', '') : String(item.id);
-                    configureNewCard(card, modal, id);
+                    configureNewCard(card, id);
                     frag.appendChild(card);
-                    modal && DOM.modalsContainer.appendChild(modal);
                 });
                 DOM.grid.appendChild(frag);
                 STATE.backupCards = data.backup_cards || [];
-                STATE.backupModals = (data.backup_cards || []).map(x => x.modal);
                 STATE.nextCursor = data.next_cursor || null;
                 STATE.backupCursor = data.next_cursor || null; // Usar el mismo cursor para las siguientes cargas
                 log(`Inicializadas ${STATE.backupCards.length} noticias de respaldo`);
@@ -907,18 +1077,15 @@
             .then(data => {
                 if (data.status !== 'success') return;
                 DOM.grid.innerHTML = '';
-                DOM.modalsContainer.innerHTML = '';
                 const frag = document.createDocumentFragment();
                 (data.cards || []).forEach(item => {
-                    const { card, modal } = createCardFromHTML(item.card, item.modal);
+                    const { card } = createCardFromHTML(item.card);
                     const id = card ? card.id.replace('news-', '') : String(item.id);
-                    configureNewCard(card, modal, id);
+                    configureNewCard(card, id);
                     frag.appendChild(card);
-                    modal && DOM.modalsContainer.appendChild(modal);
                 });
                 DOM.grid.appendChild(frag);
                 STATE.backupCards = data.backup_cards || [];
-                STATE.backupModals = (data.backup_cards || []).map(x => x.modal);
                 STATE.nextCursor = data.next_cursor || null;
                 STATE.backupCursor = data.next_cursor || null; // Usar el mismo cursor para las siguientes cargas
                 log(`Inicializadas ${STATE.backupCards.length} noticias de respaldo`);

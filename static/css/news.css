@@ -103,6 +103,10 @@
     transform: none; 
 }
 
+.card-back .news-links * {
+    transform: none !important;
+}
+
 /* Elementos de la tarjeta */
 .news-card .news-image {
     width: 100%;
@@ -196,6 +200,57 @@
     border: 1px solid #00a8ff;
     border-radius: 15px;
     transition: all 0.3s ease;
+}
+
+.news-link.icon-only {
+    width: 34px;
+    min-width: 34px;
+    height: 30px;
+    padding: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.news-link .news-icon {
+    width: 17px;
+    height: 17px;
+    display: block;
+    transform: none !important;
+    pointer-events: none;
+}
+
+.news-link.share-opener {
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    min-height: 30px;
+    padding: 6px 9px;
+    line-height: 1;
+    color: #00a8ff;
+}
+
+.news-link.share-opener .share-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    fill: currentColor;
+    transform: none !important;
+    pointer-events: none;
+}
+
+.news-link.share-opener * {
+    transform: none !important;
+}
+
+.news-link.share-opener.copied {
+    color: #22c55e;
+    border-color: #22c55e;
 }
 
 .news-link:hover {
@@ -354,124 +409,7 @@
     }
 }
 
-/* Estilos del modal */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 9999;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    background-color: rgba(0, 0, 0, 0.8);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.modal.show {
-    opacity: 1;
-}
-
-.modal .modal-content {
-    background-color: rgba(0, 0, 0, 0.8);
-    margin: 80px auto;
-    padding: 20px;
-    border-radius: 10px;
-    width: 60% !important;
-    max-width: 600px !important;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3), 0 12px 30px rgba(0, 0, 0, 0.25);
-    position: relative;
-    transform: scale(0.9);
-    opacity: 0;
-    transition: transform 0.3s ease-out, opacity 0.3s ease-out;
-}
-
-.modal.show .modal-content {
-    transform: scale(1);
-    opacity: 1;
-}
-
-.modal .modal-image {
-    width: 100%;
-    max-height: 300px !important;
-    object-fit: cover;
-    border-radius: 8px;
-    margin-bottom: 20px;
-}
-
-.modal-meta {
-    color: #888;
-    font-size: 0.9em;
-    margin: 15px 0;
-}
-
-.modal-description {
-    color: #ddd;
-    line-height: 1.6;
-    margin: 20px 0;
-    text-align: justify;
-}
-
-.modal-content {
-    display: flex;
-    flex-direction: column;
-    min-height: 400px;  
-}
-
-.modal-actions {
-    display: flex;
-    gap: 10px;
-    margin-top: auto;  
-    justify-content: center;  
-    padding-top: 20px;
-}
-
-.btn {
-    padding: 8px 16px;
-    border-radius: 4px;
-    border: none;
-    cursor: pointer;
-    font-weight: bold;
-    text-decoration: none;
-    min-width: 100px;  /* Ancho mínimo para los botones */
-    text-align: center;
-}
-
-.btn-primary {
-    background: #00a8ff;
-    color: white;
-}
-
-.btn-danger {
-    background: #ff4444;
-    color: white;
-}
-
-.btn-danger:hover {
-    background: #cc0000;
-}
-
-.close {
-    position: absolute;
-    right: 20px;
-    top: 15px;
-    color: #888;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
-}
-
-.close:hover {
-    color: #fff;
-}
-
 @media (max-width: 767px) {
-    .modal .modal-content {
-        width: 85% !important;
-        margin: 60px auto;
-    }
-
     .main-content {
         min-height: calc(100vh - 100px);
     }
