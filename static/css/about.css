@@ -2,17 +2,25 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    height: calc(90vh - 150px); 
+    height: calc(90vh - 150px);
 }
 
 .about-content {
-    background-color: rgba(2, 0, 0, 0.8); 
+    background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
+    border: 1px solid rgba(207, 220, 241, 0.27);
     padding: 40px;
-    color: #ffffff;
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    max-width: 75%; /* Ajusta este valor según tus necesidades */
+    color: #f2f5fb;
+    border-radius: 18px;
+    box-shadow: 0 18px 38px rgba(2, 8, 18, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    max-width: 75%;
     text-align: justify;
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+}
+
+.about-content h2,
+.about-content h3 {
+    letter-spacing: 0.01em;
 }
 
 .social-icons {
@@ -29,7 +37,8 @@
     width: 30px;
     height: 30px;
     margin-top: 10px;
-    transition: transform 0.3s ease;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    opacity: 0.9;
 }
 
 .cat img {
@@ -40,7 +49,8 @@
 }
 
 .social-icons img:hover {
-    transform: scale(1.5);
+    transform: scale(1.2);
+    opacity: 1;
 }
 
 @media (max-width: 1368px) {
@@ -55,7 +65,7 @@
         font-size: 14px;
         padding: 20px;
     }
-    
+
     .social-icons img {
         width: 25px;
         height: 25px;

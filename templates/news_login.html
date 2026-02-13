@@ -13,19 +13,21 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background-color: #1a1a1a; /* Fondo oscuro similar */
-            color: #e0e0e0;
+            color: #f2f5fb;
         }
         .login-container {
-            background-color: #2a2a2a;
+            background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
+            border: 1px solid rgba(207, 220, 241, 0.27);
+            backdrop-filter: blur(16px) saturate(120%);
+            -webkit-backdrop-filter: blur(16px) saturate(120%);
             padding: 30px 40px;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            border-radius: 14px;
+            box-shadow: 0 20px 36px rgba(2, 8, 18, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
             text-align: center;
         }
         .login-container h2 {
             margin-bottom: 25px;
-            color: #ffffff;
+            color: #f2f5fb;
         }
         .login-container form p {
             margin-bottom: 15px;
@@ -34,32 +36,32 @@
         .login-container label {
             display: block;
             margin-bottom: 5px;
-            color: #b0b0b0;
+            color: rgba(227, 233, 245, 0.76);
             font-size: 0.9em;
         }
         .login-container input[type="text"],
         .login-container input[type="password"] {
             width: 100%;
             padding: 10px;
-            border: 1px solid #444;
-            background-color: #333;
-            color: #e0e0e0;
-            border-radius: 4px;
+            border: 1px solid rgba(207, 220, 241, 0.27);
+            background-color: rgba(20, 31, 48, 0.72);
+            color: #f2f5fb;
+            border-radius: 8px;
             box-sizing: border-box; /* Para incluir padding en el width */
         }
         .login-container button {
             padding: 10px 25px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
+            background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
+            color: #06101f;
+            border: 1px solid rgba(207, 220, 241, 0.3);
+            border-radius: 8px;
             cursor: pointer;
             font-size: 1em;
             transition: background-color 0.3s ease;
             margin-top: 10px;
         }
         .login-container button:hover {
-            background-color: #0056b3;
+            background: linear-gradient(165deg, rgba(255, 255, 255, 0.3), rgba(143, 180, 232, 0.94));
         }
         .errorlist {
             color: #ff4d4d;

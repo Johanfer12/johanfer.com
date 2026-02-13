@@ -114,6 +114,47 @@
             background: linear-gradient(to right, transparent, #00a8ff, transparent);
             margin: 30px 0;
         }
+
+        /* Premium override */
+        .stats-container {
+            background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
+            border: 1px solid rgba(207, 220, 241, 0.27);
+            border-radius: 18px;
+            box-shadow: 0 20px 40px rgba(2, 8, 18, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(16px) saturate(120%);
+            -webkit-backdrop-filter: blur(16px) saturate(120%);
+        }
+
+        .stats-header,
+        .stats-label,
+        h2 {
+            color: #c6d6f5 !important;
+        }
+
+        .stats-info {
+            background: rgba(19, 32, 52, 0.56);
+            border-left: 4px solid #8fb4e8;
+            border: 1px solid rgba(198, 214, 242, 0.16);
+        }
+
+        .stats-value {
+            color: #f2f5fb;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
+            color: #06101f;
+            border: 1px solid rgba(207, 220, 241, 0.3);
+            border-radius: 10px;
+        }
+
+        .refresh-btn:hover {
+            background: linear-gradient(165deg, rgba(255, 255, 255, 0.3), rgba(143, 180, 232, 0.94));
+        }
+
+        .section-divider {
+            background: linear-gradient(to right, transparent, rgba(198, 214, 242, 0.7), transparent);
+        }
     </style>
 </head>
 <body class="has-header">

@@ -6,10 +6,13 @@
 }
 
 .content-container {
-    background-color: rgba(2, 0, 0, 0.85);
+    background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
+    border: 1px solid rgba(207, 220, 241, 0.27);
+    backdrop-filter: blur(18px) saturate(120%);
+    -webkit-backdrop-filter: blur(18px) saturate(120%);
     padding: 20px 30px;
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    border-radius: 18px;
+    box-shadow: 0 18px 38px rgba(2, 8, 18, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
     width: 90%;
     max-width: 1400px;
     margin: 0 auto;
@@ -17,16 +20,17 @@
 }
 
 h1, h3 {
-    color: #ffffff;
+    color: #f2f5fb;
     margin-bottom: 1rem;
 }
 
 .message {
     padding: 1rem;
     margin-bottom: 1rem;
-    border-radius: 5px;
-    background-color: rgba(40, 40, 40, 0.9);
-    color: white;
+    border-radius: 10px;
+    background-color: rgba(19, 32, 52, 0.7);
+    color: #f2f5fb;
+    border: 1px solid rgba(198, 214, 242, 0.16);
 }
 
 .music-grid {
@@ -36,8 +40,9 @@ h1, h3 {
 }
 
 .music-section {
-    background-color: rgba(30, 30, 30, 0.9);
-    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+    border: 1px solid rgba(198, 214, 242, 0.16);
+    border-radius: 14px;
     padding: 1rem;
     width: 95%;
     margin: 0 auto;
@@ -55,22 +60,24 @@ h1, h3 {
     align-items: center;
     gap: 1rem;
     padding: 0.8rem;
-    background-color: rgba(40, 40, 40, 0.9);
-    border-radius: 8px;
-    transition: transform 0.2s ease;
+    background-color: rgba(19, 32, 52, 0.56);
+    border: 1px solid rgba(198, 214, 242, 0.14);
+    border-radius: 10px;
+    transition: transform 0.2s ease, border-color 0.2s ease;
     position: relative;
 }
 
 .song-item:hover {
     transform: translateY(-2px);
+    border-color: rgba(216, 228, 248, 0.46);
 }
 
 .album-cover {
     width: 60px;
     height: 60px;
     object-fit: cover;
-    border-radius: 4px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.8);
+    border-radius: 6px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
 }
 
 .song-details {
@@ -78,7 +85,7 @@ h1, h3 {
 }
 
 .song-details a {
-    color: #ffffff;
+    color: #f2f5fb;
     text-decoration: none;
     display: block;
     font-size: 1.1rem;
@@ -86,7 +93,7 @@ h1, h3 {
 
 .artist-name {
     display: block;
-    color: #999999;
+    color: rgba(227, 233, 245, 0.72);
     font-size: 0.9rem;
     margin-top: 0.2rem;
 }
@@ -94,7 +101,7 @@ h1, h3 {
 .song-meta {
     margin-top: 0.5rem;
     font-size: 0.8rem;
-    color: #999999;
+    color: rgba(227, 233, 245, 0.72);
 }
 
 .song-meta span {
@@ -103,12 +110,11 @@ h1, h3 {
 }
 
 .empty-message {
-    color: #999999;
+    color: rgba(227, 233, 245, 0.72);
     text-align: center;
     padding: 1rem;
 }
 
-/* Nuevo: estilo específico para la lista de favoritas */
 .music-section:last-child .song-list {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -176,7 +182,7 @@ h1, h3 {
     .album-link .album-cover {
         width: 45px;
         height: 45px;
-        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.8);
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5);
     }
 }
 
@@ -193,8 +199,8 @@ h1, h3 {
 }
 
 .play-button {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(198, 214, 242, 0.2);
     width: 40px;
     height: 40px;
     cursor: pointer;
@@ -209,18 +215,18 @@ h1, h3 {
 }
 
 .play-button:hover {
-    background-color: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.3);
+    background-color: rgba(255, 255, 255, 0.16);
+    border-color: rgba(216, 228, 248, 0.46);
     transform: scale(1.05);
 }
 
 .play-button.playing {
-    background-color: rgba(30, 215, 96, 0.2);
-    border-color: rgba(30, 215, 96, 0.3);
+    background-color: rgba(143, 180, 232, 0.22);
+    border-color: rgba(143, 180, 232, 0.4);
 }
 
 .play-button.playing:hover {
-    background-color: rgba(30, 215, 96, 0.3);
+    background-color: rgba(143, 180, 232, 0.32);
 }
 
 .play-button svg {
@@ -273,14 +279,13 @@ h1, h3 {
 }
 
 .deletion-info {
-    color: #666;
+    color: rgba(227, 233, 245, 0.72);
     font-size: 0.8em;
     margin-top: 4px;
 }
 
-/* Estilo para la lista de canciones eliminadas con 3 columnas */
 .deleted-song-list {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 1rem; /* Ajusta el espacio entre canciones si es necesario */
+    gap: 1rem;
 }

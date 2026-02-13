@@ -420,6 +420,50 @@
             top: 50%;
             transform: translateY(-50%);
         }
+
+        /* Premium override */
+        .redundancy-container {
+            background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
+            border: 1px solid rgba(207, 220, 241, 0.27);
+            border-radius: 18px;
+            box-shadow: 0 20px 40px rgba(2, 8, 18, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(16px) saturate(120%);
+            -webkit-backdrop-filter: blur(16px) saturate(120%);
+        }
+
+        .redundancy-header,
+        .news-source,
+        #sources-tab h3,
+        #date-picker + button + strong {
+            color: #c6d6f5 !important;
+        }
+
+        .redundancy-stats,
+        .news-item,
+        .single-news-item,
+        .source-stat-item {
+            background: rgba(19, 32, 52, 0.56) !important;
+            border: 1px solid rgba(198, 214, 242, 0.16) !important;
+        }
+
+        .tab-button {
+            background: rgba(19, 32, 52, 0.56);
+            color: rgba(227, 233, 245, 0.8);
+            border: 1px solid rgba(198, 214, 242, 0.16);
+        }
+
+        .tab-button.active {
+            background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
+            color: #06101f;
+        }
+
+        .stats-bar-container {
+            background-color: rgba(20, 31, 48, 0.74);
+        }
+
+        .visible { background-color: #8fb4e8; }
+        .keyword { background-color: #d6bc8f; }
+        .ai { background-color: #a7b8d6; }
     </style>
 </head>
 <body class="has-header">
