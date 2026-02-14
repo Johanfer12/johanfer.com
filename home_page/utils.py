@@ -36,6 +36,14 @@ def get_book_description(book_url, headers):
 
 def process_rating(rating_element):
     if rating_element:
+        stars_div = rating_element.find('div', class_='stars')
+        if stars_div:
+            data_rating = stars_div.get('data-rating')
+            if data_rating and data_rating.isdigit():
+                rating = int(data_rating)
+                if 0 <= rating <= 5:
+                    return rating
+
         stars_span = rating_element.find('span', class_='staticStars')
         if stars_span:
             rating_title = stars_span.get('title', '')
