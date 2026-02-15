@@ -68,6 +68,13 @@ class News(models.Model):
         verbose_name = "Noticia"
         verbose_name_plural = "Noticias"
         ordering = ['-published_date']
+        indexes = [
+            models.Index(
+                fields=['is_deleted', 'is_filtered', 'is_ai_filtered', 'is_redundant', 'published_date', 'id'],
+                name='news_visible_pub_id_idx'
+            ),
+            models.Index(fields=['created_at', 'id'], name='news_created_id_idx'),
+        ]
     
     def __str__(self):
         return self.title

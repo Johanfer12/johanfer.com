@@ -4,40 +4,214 @@ from .models import News, FeedSource
 from django.http import JsonResponse
 from django.http import HttpResponse
 from django.views.decorators.http import require_POST, require_GET
-from django.template.loader import render_to_string
 from .services import FeedService, EmbeddingService
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.views import LoginView
 from django.utils.decorators import method_decorator
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from django.templatetags.static import static
+from django.core.cache import cache
 import pytz
 from django.db.models import Q, Count
 from .tasks import purge_old_news, retry_summarize_pending
 import subprocess
 import platform
+import hashlib
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 # Create your views here.
+PAGE_SIZE = 25
+COUNT_CACHE_TTL = 20
+PAGE_CACHE_TTL = 20
+CACHE_VERSION_KEY = 'news_feed_cache_version'
+
+
+def _get_cache_version():
+    value = cache.get(CACHE_VERSION_KEY)
+    if value is None:
+        cache.set(CACHE_VERSION_KEY, 1, None)
+        return 1
+    return int(value)
+
+
+def _bump_cache_version():
+    try:
+        cache.incr(CACHE_VERSION_KEY)
+    except ValueError:
+        cache.set(CACHE_VERSION_KEY, _get_cache_version() + 1, None)
+
+
+def _safe_page(value):
+    try:
+        page = int(value)
+        return page if page > 0 else 1
+    except (TypeError, ValueError):
+        return 1
+
+
+def _counts_cache_key(search_query):
+    version = _get_cache_version()
+    query_hash = hashlib.md5((search_query or '').strip().lower().encode('utf-8')).hexdigest()
+    return f"news:count:v{version}:q:{query_hash}"
+
+
+def _get_total_news_and_pages(search_query=None):
+    key = _counts_cache_key(search_query)
+    cached = cache.get(key)
+    if cached:
+        return cached
+
+    count_qs = News.visible
+    if search_query:
+        count_qs = count_qs.filter(Q(title__icontains=search_query) | Q(description__icontains=search_query))
+    total_news = count_qs.count()
+    total_pages = (total_news + (PAGE_SIZE - 1)) // PAGE_SIZE
+    result = (total_news, total_pages)
+    cache.set(key, result, COUNT_CACHE_TTL)
+    return result
+
+
+def _serialize_news_card(article):
+    published_local = timezone.localtime(article.published_date) if article.published_date else None
+    created_local = timezone.localtime(article.created_at) if article.created_at else None
+    return {
+        'id': article.id,
+        'title': article.title or '',
+        'description_html': article.description or '',
+        'link': article.link or '',
+        'image_url': article.image_url or static('Img/News_Default.png'),
+        'short_answer': article.short_answer or '',
+        'source_name': article.source.name if article.source_id and article.source else '',
+        'published_at': article.published_date.isoformat() if article.published_date else None,
+        'published_label': published_local.strftime('%d/%m/%Y %H:%M') if published_local else '',
+        'created_at': article.created_at.isoformat() if article.created_at else None,
+        'created_cursor': f"{article.created_at.isoformat()}|{article.id}" if article.created_at else None,
+        'similarity_score': article.similarity_score,
+        'similarity_label': f"{article.similarity_score:.2f}" if article.similarity_score is not None else '',
+    }
+
+
+def _parse_created_cursor(cursor):
+    if not cursor:
+        return None, None
+    try:
+        ts_str, id_str = cursor.split('|', 1)
+        dt = parse_datetime(ts_str)
+        if dt is None:
+            return None, None
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+        return dt, int(id_str)
+    except Exception:
+        return None, None
+
+
+def _build_page_response(*, order, page, cursor, search_query, backup_only=False):
+    base_qs = News.visible.select_related('source')
+    if search_query:
+        base_qs = base_qs.filter(
+            Q(title__icontains=search_query) | Q(description__icontains=search_query)
+        )
+
+    if order == 'asc':
+        base_qs = base_qs.order_by('published_date', 'id')
+    else:
+        base_qs = base_qs.order_by('-published_date', '-id')
+
+    if cursor:
+        try:
+            ts_str, id_str = cursor.split('|')
+            anchor_dt = parse_datetime(ts_str)
+            anchor_id = int(id_str)
+            if order == 'asc':
+                key_q = Q(published_date__gt=anchor_dt) | (Q(published_date=anchor_dt) & Q(id__gt=anchor_id))
+            else:
+                key_q = Q(published_date__lt=anchor_dt) | (Q(published_date=anchor_dt) & Q(id__lt=anchor_id))
+            base_qs = base_qs.filter(key_q)
+        except Exception:
+            pass
+    elif page and page > 1:
+        anchor_idx = (page - 1) * PAGE_SIZE - 1
+        if anchor_idx >= 0:
+            prev_slice = list(base_qs[:anchor_idx + 1])
+            if prev_slice:
+                anchor = prev_slice[-1]
+                if order == 'asc':
+                    key_q = Q(published_date__gt=anchor.published_date) | (Q(published_date=anchor.published_date) & Q(id__gt=anchor.id))
+                else:
+                    key_q = Q(published_date__lt=anchor.published_date) | (Q(published_date=anchor.published_date) & Q(id__lt=anchor.id))
+                base_qs = base_qs.filter(key_q)
+
+    window_qs = base_qs
+
+    if backup_only:
+        backup_items = list(window_qs[:PAGE_SIZE])
+        backup_cards = [_serialize_news_card(article) for article in backup_items]
+        backup_next_cursor = None
+        if backup_items:
+            last_backup = backup_items[-1]
+            backup_next_cursor = f"{last_backup.published_date.isoformat()}|{last_backup.id}"
+        total_news, total_pages = _get_total_news_and_pages(search_query)
+        return {
+            'status': 'success',
+            'backup_cards': backup_cards,
+            'backup_next_cursor': backup_next_cursor,
+            'total_news': total_news,
+            'total_pages': total_pages,
+            'order': order
+        }
+
+    items = list(window_qs[:PAGE_SIZE + 1])
+    has_more = len(items) > PAGE_SIZE
+    items = items[:PAGE_SIZE]
+    cards = [_serialize_news_card(article) for article in items]
+
+    next_cursor = None
+    if has_more:
+        last = items[-1]
+        next_cursor = f"{last.published_date.isoformat()}|{last.id}"
+
+    backup_size = PAGE_SIZE if page == 1 else 5
+    backup_items = list(window_qs[PAGE_SIZE:PAGE_SIZE + backup_size])
+    backup_cards = [_serialize_news_card(article) for article in backup_items]
+
+    backup_next_cursor = None
+    if backup_items:
+        last_backup = backup_items[-1]
+        backup_next_cursor = f"{last_backup.published_date.isoformat()}|{last_backup.id}"
+
+    total_news, total_pages = _get_total_news_and_pages(search_query)
+    return {
+        'status': 'success',
+        'cards': cards,
+        'next_cursor': next_cursor,
+        'backup_cards': backup_cards,
+        'backup_next_cursor': backup_next_cursor,
+        'total_news': total_news,
+        'total_pages': total_pages,
+        'order': order
+    }
 
 @require_POST
 def delete_news(request, pk):
     try:
-        current_page = int(request.POST.get('current_page', 1))
+        current_page = _safe_page(request.POST.get('current_page', 1))
         order = request.POST.get('order', 'desc')
         news = News.objects.get(pk=pk)
         news.is_deleted = True
-        news.save()
+        news.save(update_fields=['is_deleted'])
+        _bump_cache_version()
         
         # Obtener la siguiente noticia para reemplazar la eliminada
         next_news = None
-        total_news = News.visible.count()
-        total_pages = (total_news + 24) // 25  # Calcular el total de páginas
+        total_news, total_pages = _get_total_news_and_pages()
         
         # Buscar noticia de reemplazo por keyset para mantener orden estable (siempre, también en descendente página 1)
-        base_qs = News.visible.order_by('published_date' if order == 'asc' else '-published_date')
-        page_start = (current_page - 1) * 25
-        page_qs = list(base_qs[page_start:page_start + 25])
+        base_qs = News.visible.order_by('published_date', 'id') if order == 'asc' else News.visible.order_by('-published_date', '-id')
+        page_start = (current_page - 1) * PAGE_SIZE
+        page_qs = list(base_qs[page_start:page_start + PAGE_SIZE])
         if page_qs:
             anchor = page_qs[-1]
             if order == 'asc':
@@ -45,14 +219,14 @@ def delete_news(request, pk):
                     Q(published_date__gt=anchor.published_date) |
                     (Q(published_date=anchor.published_date) & Q(id__gt=anchor.id))
                 )
-                ordering = 'published_date'
+                ordering = ('published_date', 'id')
             else:
                 keyset_q = (
                     Q(published_date__lt=anchor.published_date) |
                     (Q(published_date=anchor.published_date) & Q(id__lt=anchor.id))
                 )
-                ordering = '-published_date'
-            next_news = News.visible.filter(keyset_q).order_by(ordering).first()
+                ordering = '-published_date', '-id'
+            next_news = News.visible.filter(keyset_q).order_by(*ordering).first()
         
         response_data = {
             'status': 'success',
@@ -62,11 +236,7 @@ def delete_news(request, pk):
         
         # Si hay una noticia para reemplazar, incluirla en la respuesta
         if next_news:
-            print(f"[DEBUG] Noticia de reemplazo encontrada: ID={next_news.id}, Título={next_news.title[:50]}...")
-            card_html = render_to_string('news_card.html', {'article': next_news, 'user': request.user})
-            response_data['html'] = card_html
-        else:
-            print(f"[DEBUG] No se encontró noticia de reemplazo. Página: {current_page}, Total noticias: {total_news}")
+            response_data['card'] = _serialize_news_card(next_news)
         
         return JsonResponse(response_data)
     except News.DoesNotExist:
@@ -120,7 +290,7 @@ class NewsListView(ListView):
         # Obtener noticias de respaldo (5 adicionales) por keyset (cursor) a partir del último ítem de la página
         order = self.request.GET.get('order', 'desc')
         ordering = 'published_date' if order == 'asc' else '-published_date'
-        page_qs = list(self.get_queryset()[(current_page - 1) * 25: (current_page - 1) * 25 + 25])
+        page_qs = list(self.get_queryset()[(current_page - 1) * PAGE_SIZE: (current_page - 1) * PAGE_SIZE + PAGE_SIZE])
         last_item = page_qs[-1] if page_qs else None  # último en la página independientemente del orden
         backup_news = []
         if last_item:
@@ -136,18 +306,18 @@ class NewsListView(ListView):
                 )
             backup_news = News.visible.select_related('source').filter(backup_q).order_by(ordering)[:5]
         
-        # Renderizar noticias de respaldo como HTML para JavaScript
-        backup_cards = []
-        for article in backup_news:
-            card_html = render_to_string('news_card.html', {'article': article, 'user': self.request.user})
-            backup_cards.append({
-                'id': article.id,
-                'card': card_html
-            })
+        # Noticias de respaldo serializadas para JavaScript
+        backup_cards = [_serialize_news_card(article) for article in backup_news]
         
         context['backup_cards'] = backup_cards
         context['current_page'] = current_page
         context['order'] = order
+        latest_created = News.visible.order_by('-created_at', '-id').values_list('created_at', 'id').first()
+        context['initial_news_cursor'] = f"{latest_created[0].isoformat()}|{latest_created[1]}" if latest_created else None
+        context['news_user_flags'] = {
+            'is_staff': bool(self.request.user.is_staff),
+            'default_image_url': static('Img/News_Default.png'),
+        }
         
         return context
 
@@ -160,9 +330,8 @@ def update_feed(request):
         except Exception as _:
             pass
         new_articles = FeedService.fetch_and_save_news()
-        # Usar el manager optimizado
-        total_news = News.visible.count()
-        total_pages = (total_news + 24) // 25  # Calcular el total de páginas
+        _bump_cache_version()
+        total_news, total_pages = _get_total_news_and_pages()
         
         return JsonResponse({
             'status': 'success',
@@ -176,31 +345,44 @@ def update_feed(request):
 @require_GET
 def check_new_news(request):
     try:
+        cursor = request.GET.get('cursor')
         last_checked = request.GET.get('last_checked')
         current_time = timezone.now().isoformat()
+        news_qs = News.visible.select_related('source')
+        created_dt, created_id = _parse_created_cursor(cursor)
 
-        # Obtener noticias nuevas desde la última comprobación
-        new_news = News.visible.filter(
-            created_at__gte=last_checked
-        ).order_by('-published_date')
-        
-        # Preparar los datos de las tarjetas
-        news_cards = []
-        for article in new_news:
-            card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
-            news_cards.append({
-                'id': article.id,
-                'card': card_html
-            })
-        
-        # Obtener el total actualizado de noticias visibles
-        total_news = News.visible.count()
-        total_pages = (total_news + 24) // 25  # Calcular el total de páginas
+        if created_dt and created_id is not None:
+            news_qs = news_qs.filter(
+                Q(created_at__gt=created_dt) |
+                (Q(created_at=created_dt) & Q(id__gt=created_id))
+            )
+        elif last_checked:
+            dt = parse_datetime(last_checked)
+            if dt is not None:
+                if timezone.is_naive(dt):
+                    dt = timezone.make_aware(dt, timezone.get_current_timezone())
+                news_qs = news_qs.filter(created_at__gte=dt)
+            else:
+                news_qs = news_qs.none()
+        else:
+            news_qs = news_qs.none()
+
+        new_news = list(news_qs.order_by('created_at', 'id')[:200])
+        news_cards = [_serialize_news_card(article) for article in new_news]
+        latest_cursor = None
+        if new_news:
+            last_item = new_news[-1]
+            latest_cursor = f"{last_item.created_at.isoformat()}|{last_item.id}"
+        elif cursor:
+            latest_cursor = cursor
+
+        total_news, total_pages = _get_total_news_and_pages()
         
         return JsonResponse({
             'status': 'success',
             'current_time': current_time,
             'news_cards': news_cards,
+            'cursor': latest_cursor,
             'total_news': total_news,
             'total_pages': total_pages
         })
@@ -210,9 +392,7 @@ def check_new_news(request):
 @require_GET
 def get_news_count(request):
     try:
-        # Usar el manager optimizado
-        total_news = News.visible.count()
-        total_pages = (total_news + 24) // 25  # Calcular el total de páginas
+        total_news, total_pages = _get_total_news_and_pages()
         
         return JsonResponse({
             'status': 'success',
@@ -259,8 +439,8 @@ def cleanup_old_news(request):
     try:
         days = int(request.POST.get('days', 15))
         removed = purge_old_news(days)
-        total_news = News.visible.count()
-        total_pages = (total_news + 24) // 25
+        _bump_cache_version()
+        total_news, total_pages = _get_total_news_and_pages()
         return JsonResponse({'status': 'success', 'removed': removed, 'total_news': total_news, 'total_pages': total_pages})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
@@ -281,126 +461,28 @@ def retry_summaries(request):
 @require_GET
 def get_page(request):
     try:
-        # Keyset pagination completa con cursor
         order = request.GET.get('order', 'desc')
         search_query = request.GET.get('q')
-        page = int(request.GET.get('page', 1))  # fallback compat
-        cursor = request.GET.get('cursor')  # formato: "timestamp_iso|id"
-
-        base_qs = News.visible.select_related('source')
-        if search_query:
-            base_qs = base_qs.filter(
-                Q(title__icontains=search_query) | Q(description__icontains=search_query)
-            )
-
-        # Orden estable por (published_date, id)
-        if order == 'asc':
-            base_qs = base_qs.order_by('published_date', 'id')
-        else:
-            base_qs = base_qs.order_by('-published_date', '-id')
-
-        # Aplicar cursor si viene
-        if cursor:
-            try:
-                ts_str, id_str = cursor.split('|')
-                from django.utils.dateparse import parse_datetime
-                anchor_dt = parse_datetime(ts_str)
-                anchor_id = int(id_str)
-                if order == 'asc':
-                    key_q = Q(published_date__gt=anchor_dt) | (Q(published_date=anchor_dt) & Q(id__gt=anchor_id))
-                else:
-                    key_q = Q(published_date__lt=anchor_dt) | (Q(published_date=anchor_dt) & Q(id__lt=anchor_id))
-                base_qs = base_qs.filter(key_q)
-            except Exception:
-                pass
-        elif page and page > 1:
-            # Fallback: derivar cursor desde page N por ancla del último ítem de la página anterior
-            anchor_idx = (page - 1) * 25 - 1
-            if anchor_idx >= 0:
-                prev_slice = list(base_qs[:anchor_idx + 1])
-                if prev_slice:
-                    anchor = prev_slice[-1]
-                    if order == 'asc':
-                        key_q = Q(published_date__gt=anchor.published_date) | (Q(published_date=anchor.published_date) & Q(id__gt=anchor.id))
-                    else:
-                        key_q = Q(published_date__lt=anchor.published_date) | (Q(published_date=anchor.published_date) & Q(id__lt=anchor.id))
-                    base_qs = base_qs.filter(key_q)
-
-        page_size = 25
-        window_qs = base_qs  # conservar para backup
-        items = list(window_qs[:page_size + 1])  # pedir uno extra para construir next_cursor
-        has_more = len(items) > page_size
-        items = items[:page_size]
-
-        cards = []
-        for article in items:
-            card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
-            cards.append({'id': article.id, 'card': card_html})
-
-        # Construir next_cursor
-        next_cursor = None
-        if has_more:
-            last = items[-1]
-            next_cursor = f"{last.published_date.isoformat()}|{last.id}"
-
-        # Preparar backups por keyset - cargar más noticias para respaldo fluido
-        backup_cards = []
-        backup_next_cursor = None
-        try:
-            # Si es página 1, cargar las siguientes 25 noticias como respaldo
-            backup_size = 25 if page == 1 else 5
-            backup_items = list(window_qs[page_size:page_size + backup_size])
-            for article in backup_items:
-                card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
-                backup_cards.append({'id': article.id, 'card': card_html})
-            if backup_items:
-                last_backup = backup_items[-1]
-                backup_next_cursor = f"{last_backup.published_date.isoformat()}|{last_backup.id}"
-        except Exception:
-            pass
-
-        # Conteo total independiente del cursor
-        count_qs = News.visible
-        if search_query:
-            count_qs = count_qs.filter(Q(title__icontains=search_query) | Q(description__icontains=search_query))
-        total_news = count_qs.count()
-        total_pages = (total_news + 24) // 25
-
-        
-
-        # Si se solicita solo backup, devolver las siguientes 25 noticias desde el cursor actual
         backup_only = request.GET.get('backup_only', 'false').lower() == 'true'
-        if backup_only:
-            # Para backup_only, devolver hasta 25 noticias a partir del cursor actual
-            additional_backup = list(window_qs[:25])
-            backup_cards = []
-            backup_next_cursor = None
-            for article in additional_backup:
-                card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
-                backup_cards.append({'id': article.id, 'card': card_html})
-            if additional_backup:
-                last_backup = additional_backup[-1]
-                backup_next_cursor = f"{last_backup.published_date.isoformat()}|{last_backup.id}"
-            
-            return JsonResponse({
-                'status': 'success',
-                'backup_cards': backup_cards,
-                'backup_next_cursor': backup_next_cursor,
-                'total_news': total_news,
-                'total_pages': total_pages,
-                'order': order
-            })
-        
-        return JsonResponse({
-            'status': 'success',
-            'cards': cards,
-            'next_cursor': next_cursor,
-            'backup_cards': backup_cards,
-            'backup_next_cursor': backup_next_cursor,
-            'total_news': total_news,
-            'total_pages': total_pages,
-            'order': order
-        })
+        page = _safe_page(request.GET.get('page', 1))
+        cursor = request.GET.get('cursor')
+
+        version = _get_cache_version()
+        key_raw = f"{version}|{order}|{search_query or ''}|{page}|{cursor or ''}|{int(backup_only)}"
+        cache_key = f"news:page:{hashlib.md5(key_raw.encode('utf-8')).hexdigest()}"
+        cached = cache.get(cache_key)
+        if cached:
+            return JsonResponse(cached)
+
+        payload = _build_page_response(
+            order=order,
+            page=page,
+            cursor=cursor,
+            search_query=search_query,
+            backup_only=backup_only,
+        )
+        cache.set(cache_key, payload, PAGE_CACHE_TTL)
+        return JsonResponse(payload)
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
 
@@ -416,14 +498,13 @@ def undo_delete(request, pk):
             news.is_ai_filtered = False
             news.is_redundant = False
             news.save()
+            _bump_cache_version()
 
-        card_html = render_to_string('news_card.html', {'article': news, 'user': request.user})
-        total_news = News.visible.count()
-        total_pages = (total_news + 24) // 25
+        total_news, total_pages = _get_total_news_and_pages()
 
         return JsonResponse({
             'status': 'success',
-            'html': card_html,
+            'card': _serialize_news_card(news),
             'total_news': total_news,
             'total_pages': total_pages
         })
@@ -646,6 +727,8 @@ def check_all_redundancy(request):
                 news.similarity_score = similarity_score
                 news.save()
                 redundant_count += 1
+        if redundant_count:
+            _bump_cache_version()
         
         return JsonResponse({
             'status': 'success',
