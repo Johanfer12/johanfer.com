@@ -1,40 +1,28 @@
-const isTouchDevice = () => {
-    return (('ontouchstart' in window) ||
-        (navigator.maxTouchPoints > 0) ||
-        (navigator.msMaxTouchPoints > 0));
-}
+(() => {
+    const isSmallScreen = window.matchMedia('(max-width: 900px)').matches;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (isSmallScreen || reduceMotion) return;
 
-if (isTouchDevice() && window.DeviceOrientationEvent) {
-    window.addEventListener('deviceorientation', function(event) {
-        const body = document.body;
-        let { beta, gamma } = event;
+    let ticking = false;
+    let nextX = 50;
+    let nextY = 50;
 
-        // Constrain the values to a range of -45 to 45
-        beta = Math.max(-45, Math.min(45, beta));
-        gamma = Math.max(-45, Math.min(45, gamma));
+    const flush = () => {
+        document.body.style.backgroundPosition = `${nextX}% ${nextY}%`;
+        ticking = false;
+    };
 
-        // Map the gamma value (-45 to 45) to a background-position-x percentage (40% to 60%)
-        const x = 50 + (gamma / 45) * 10;
+    const schedule = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(flush);
+    };
 
-        // Map the beta value (-45 to 45) to a background-position-y percentage (40% to 60%)
-        const y = 50 + (beta / 45) * 10;
-
-        // Request animation frame to avoid performance issues
-        requestAnimationFrame(function() {
-            body.style.backgroundPosition = `${x}% ${y}%`;
-        });
-    });
-} else {
-    document.addEventListener('mousemove', function(event) {
+    document.addEventListener('mousemove', (event) => {
         const { clientX, clientY } = event;
         const { innerWidth, innerHeight } = window;
-        const body = document.body;
-
-        const x = 50 + (clientX / innerWidth - 0.5) * 20; // Maps mouse X to 40-60 range
-        const y = 50 + (clientY / innerHeight - 0.5) * 20; // Maps mouse Y to 40-60 range
-
-        requestAnimationFrame(function() {
-            body.style.backgroundPosition = `${x}% ${y}%`;
-        });
-    });
-}
+        nextX = 50 + (clientX / innerWidth - 0.5) * 20;
+        nextY = 50 + (clientY / innerHeight - 0.5) * 20;
+        schedule();
+    }, { passive: true });
+})();
