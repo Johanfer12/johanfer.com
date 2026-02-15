@@ -18,13 +18,35 @@
 
     const MAX_NEWS = 25;
     const NOTIF_DURATION = 10_000;         // 10 s
-    const CHECK_INTERVAL = 180_000;        // 3 min
+    const CHECK_INTERVAL_VISIBLE = 45_000; // 45 s en pestaña activa
+    const CHECK_INTERVAL_HIDDEN = 180_000; // 3 min en background
 
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
     const isMobile = () => window.innerWidth <= 767;
     
     const DOM = Object.fromEntries(Object.entries(SELECTORS).map(([k, v]) => [k, $(v)]));
+    const USER_FLAGS = (() => {
+        try {
+            const raw = $('#news-user-flags')?.textContent;
+            if (!raw) return {is_staff: false, default_image_url: ''};
+            const parsed = JSON.parse(raw);
+            return {
+                is_staff: !!parsed.is_staff,
+                default_image_url: parsed.default_image_url || '',
+            };
+        } catch (_) {
+            return {is_staff: false, default_image_url: ''};
+        }
+    })();
+    const INITIAL_CURSOR = (() => {
+        try {
+            const raw = $('#initial-news-cursor')?.textContent;
+            return raw ? JSON.parse(raw) : null;
+        } catch (_) {
+            return null;
+        }
+    })();
 
     const STATE = {
         notifTimer: null,
@@ -35,6 +57,7 @@
         totalPending: 0,
         userInteracted: false,
         lastChecked: new Date().toISOString(),
+        latestNewsCursor: INITIAL_CURSOR,
         backupCards: [], // Noticias de respaldo precargadas (ahora hasta 25)
         deleteStack: [],
         order: new URLSearchParams(location.search).get('order') || 'desc',
@@ -45,6 +68,10 @@
         deletingNews: new Set(), // IDs de noticias siendo eliminadas
         syncingFromDb: false, // evita refrescos simultaneos al recuperar foco/conexion
         lastDbSyncAt: 0, // timestamp del ultimo sync fuerte con DB
+        pollTimer: null,
+        checkController: null,
+        backupController: null,
+        syncController: null,
     };
 
     /* ---------------------------------------------------------------------
@@ -344,12 +371,66 @@
         }
     };
 
-    /** Crea elemento de tarjeta desde HTML string */
-    const createCardFromHTML = (cardHtml) => {
+    const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const renderNewsCardHTML = (data) => {
+        if (!data || !data.id) return '';
+        const similarity = data.similarity_label
+            ? `<span class="similarity-score">${escapeHtml(data.similarity_label)}</span>`
+            : '';
+        const shortAnswer = data.short_answer
+            ? `<div class="short-answer">${escapeHtml(data.short_answer)}</div>`
+            : '';
+        const deleteButton = USER_FLAGS.is_staff ? `
+                <button class="news-link icon-only delete-btn" data-id="${escapeHtml(data.id)}" title="Eliminar" aria-label="Eliminar">
+                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M10 12V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                        <path d="M14 12V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                        <path d="M4 7H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                        <path d="M6 10V18C6 19.6569 7.34315 21 9 21H15C16.6569 21 18 19.6569 18 18V10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                        <path d="M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5V7H9V5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                </button>` : '';
+        return `<div class="news-card-container" id="news-${escapeHtml(data.id)}">
+    <div class="news-card">
+        <div class="card-front">
+            <img src="${escapeHtml(data.image_url || USER_FLAGS.default_image_url)}" alt="${escapeHtml(data.title)}" class="news-image" loading="lazy" decoding="async">
+            <h3 class="news-title">${escapeHtml(data.title)}</h3>
+            ${shortAnswer}
+            <div class="news-meta">
+                <span class="meta-info">${escapeHtml(data.source_name)} - ${escapeHtml(data.published_label || '')}</span>
+                ${similarity}
+            </div>
+        </div>
+        <div class="card-back">
+            <div class="news-description">${data.description_html || ''}</div>
+            <div class="news-links">
+                <a href="${escapeHtml(data.link)}" target="_blank" rel="noopener noreferrer" class="news-link icon-only source-link" title="Fuente" aria-label="Fuente">
+                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M12.7076 18.3639L11.2933 19.7781C9.34072 21.7308 6.1749 21.7308 4.22228 19.7781C2.26966 17.8255 2.26966 14.6597 4.22228 12.7071L5.63649 11.2929M18.3644 12.7071L19.7786 11.2929C21.7312 9.34024 21.7312 6.17441 19.7786 4.22179C17.826 2.26917 14.6602 2.26917 12.7076 4.22179L11.2933 5.636M8.50045 15.4999L15.5005 8.49994" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                </a>
+                ${deleteButton}
+            </div>
+        </div>
+    </div>
+</div>`;
+    };
+
+    /** Crea elemento de tarjeta desde payload (data JSON o HTML legado) */
+    const createCardFromPayload = (item) => {
+        const data = item?.data || (item && !item.card && item.id ? item : null);
+        const html = item?.card || (data ? renderNewsCardHTML(data) : '');
+        if (!html) return {card: null};
         const temp = document.createElement('div');
-        temp.innerHTML = cardHtml;
+        temp.innerHTML = html;
         const card = temp.firstElementChild;
-        return { card };
+        return {card};
     };
 
     /** Asegura que no haya más de MAX_NEWS tarjetas visibles eliminando las más antiguas */
@@ -402,7 +483,8 @@
         DOM.grid.innerHTML = '';
         const frag = document.createDocumentFragment();
         (data.cards || []).forEach(item => {
-            const { card } = createCardFromHTML(item.card);
+            const { card } = createCardFromPayload(item);
+            if (!card) return;
             const id = card ? card.id.replace('news-', '') : String(item.id);
             configureNewCard(card, id);
             frag.appendChild(card);
@@ -411,6 +493,13 @@
         STATE.backupCards = data.backup_cards || [];
         STATE.nextCursor = data.next_cursor || null;
         STATE.backupCursor = data.backup_next_cursor || data.next_cursor || null;
+        const latestCard = (data.cards || []).reduce((acc, item) => {
+            if (!item?.created_at) return acc;
+            if (!acc || new Date(item.created_at) > new Date(acc.created_at)) return item;
+            if (acc.created_at === item.created_at && Number(item.id || 0) > Number(acc.id || 0)) return item;
+            return acc;
+        }, null);
+        if (latestCard?.created_cursor) STATE.latestNewsCursor = latestCard.created_cursor;
         log(`Inicializadas ${STATE.backupCards.length} noticias de respaldo`);
         updateCounters(data.total_news, data.total_pages);
         updatePagination(data.total_pages);
@@ -421,8 +510,10 @@
         const now = Date.now();
         // cooldown para evitar duplicados por focus + visibilitychange seguidos
         if (!force && (now - STATE.lastDbSyncAt) < 1500) return;
-        if (STATE.syncingFromDb) return;
         if (!navigator.onLine) return;
+        if (STATE.syncController) STATE.syncController.abort();
+        const syncController = new AbortController();
+        STATE.syncController = syncController;
 
         STATE.syncingFromDb = true;
         try {
@@ -433,12 +524,21 @@
             STATE.currentPage = page;
             STATE.order = order;
 
-            const data = await serverGetPage({page: STATE.currentPage, order: STATE.order, q});
+            const data = await serverGetPage({
+                page: STATE.currentPage,
+                order: STATE.order,
+                q,
+                signal: syncController.signal
+            });
             renderPageFromServerData(data);
             STATE.lastDbSyncAt = Date.now();
         } catch (e) {
+            if (e.name === 'AbortError') return;
             err('Sync DB al recuperar foco/conexion:', e);
         } finally {
+            if (STATE.syncController === syncController) {
+                STATE.syncController = null;
+            }
             STATE.syncingFromDb = false;
         }
     };
@@ -479,14 +579,14 @@
         },
     });
 
-    const serverGetPage = ({cursor, page, order, q, backupOnly = false}) => {
+    const serverGetPage = ({cursor, page, order, q, backupOnly = false, signal}) => {
         const params = new URLSearchParams();
         if (cursor) params.set('cursor', cursor);
         else if (page) params.set('page', page);
         if (order) params.set('order', order);
         if (q) params.set('q', q);
         if (backupOnly) params.set('backup_only', 'true');
-        return fetchJson(`/noticias/get-page/?${params.toString()}`);
+        return fetchJson(`/noticias/get-page/?${params.toString()}`, {signal});
     };
 
     // Nueva función para cargar más noticias de respaldo
@@ -500,6 +600,9 @@
         log('Cargando más noticias de respaldo...');
         
         try {
+            if (STATE.backupController) STATE.backupController.abort();
+            const backupController = new AbortController();
+            STATE.backupController = backupController;
             const q = new URLSearchParams(location.search).get('q') || '';
             // Usar el cursor de respaldo o calcular desde dónde seguir
             const cursor = STATE.backupCursor || STATE.nextCursor;
@@ -508,7 +611,8 @@
                 cursor: cursor,
                 order: STATE.order,
                 q: q,
-                backupOnly: true
+                backupOnly: true,
+                signal: backupController.signal
             });
             
             if (data.status === 'success' && data.backup_cards) {
@@ -530,8 +634,10 @@
                 log(`Cargadas ${newBackups.length} noticias adicionales de respaldo. Total: ${STATE.backupCards.length}`);
             }
         } catch (e) {
+            if (e.name === 'AbortError') return;
             err('Error cargando más noticias de respaldo:', e);
         } finally {
+            STATE.backupController = null;
             STATE.loadingMoreBackup = false;
         }
     };
@@ -583,8 +689,8 @@
             container.remove();
         };
         const appendServerReplacement = (data) => {
-            if (!data?.html) return false;
-            const { card: newCard } = createCardFromHTML(data.html);
+            if (!data?.card) return false;
+            const { card: newCard } = createCardFromPayload({data: data.card});
             if (!newCard) return false;
             const newCardId = newCard.id.replace('news-', '');
             if ($(`#news-${newCardId}`, DOM.grid)) {
@@ -716,15 +822,15 @@
 
         // Insertar nuevas según el orden activo
         if (STATE.order === 'asc') {
-            newsToAdd.sort((a, b) => new Date(a.published) - new Date(b.published));
+            newsToAdd.sort((a, b) => new Date(a.published_at || 0) - new Date(b.published_at || 0));
         } else {
-            newsToAdd.sort((a, b) => new Date(b.published) - new Date(a.published));
+            newsToAdd.sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0));
         }
         const frag = document.createDocumentFragment();
         const newIds = [];
 
         for (const item of newsToAdd) {
-            const { card } = createCardFromHTML(item.card);
+            const { card } = createCardFromPayload({data: item});
             if (!card) continue; // Saltar si el HTML de la tarjeta estaba vacío
             
             const id = card.id.replace('news-', '');
@@ -781,10 +887,21 @@
     };
 
     const checkForNewNews = () => {
-        fetchJson(`/noticias/check-new-news/?last_checked=${encodeURIComponent(STATE.lastChecked)}`)
+        if (STATE.checkController) STATE.checkController.abort();
+        const checkController = new AbortController();
+        STATE.checkController = checkController;
+        const params = new URLSearchParams();
+        if (STATE.latestNewsCursor) {
+            params.set('cursor', STATE.latestNewsCursor);
+        } else {
+            params.set('last_checked', STATE.lastChecked);
+        }
+
+        return fetchJson(`/noticias/check-new-news/?${params.toString()}`, {signal: checkController.signal})
             .then(data => {
                 if (data.status !== 'success') throw new Error(data.message);
                 STATE.lastChecked = data.current_time;
+                if (data.cursor) STATE.latestNewsCursor = data.cursor;
                 if (data.news_cards?.length) {
                     STATE.pendingNews.push(...data.news_cards);
                     updateCounters(data.total_news, data.total_pages);
@@ -797,7 +914,15 @@
                     }
                 }
             })
-            .catch(e => err('Chequeo de noticias:', e));
+            .catch(e => {
+                if (e.name === 'AbortError') return;
+                err('Chequeo de noticias:', e);
+            })
+            .finally(() => {
+                if (STATE.checkController === checkController) {
+                    STATE.checkController = null;
+                }
+            });
     };
 
     /* ---------------------------------------------------------------------
@@ -867,8 +992,8 @@
                 
                 const backupData = STATE.backupCards.shift();
                 
-                if (backupData && backupData.card) {
-                    const { card: newCard } = createCardFromHTML(backupData.card);
+                if (backupData) {
+                    const { card: newCard } = createCardFromPayload(backupData.data ? backupData : {data: backupData});
                     
                     if (newCard) {
                         const id = newCard.id.replace('news-', '');
@@ -924,12 +1049,6 @@
             mbBtn.className = 'mobile-delete-btn';
             mbBtn.type = 'button';
             mbBtn.dataset.id = id;
-            const cardElement = container.querySelector('.news-card'); // Reutilizamos la selección
-            mbBtn.addEventListener('click', (e) => { e.stopPropagation(); mbBtn.classList.add('pulse'); setTimeout(() => mbBtn.classList.remove('pulse'), 300); deleteNews(id); });
-            if (cardElement) { // Aplicar hover al elemento interno .news-card
-                mbBtn.addEventListener('mouseenter', (e) => { e.stopPropagation(); cardElement.classList.add('delete-hover'); });
-                mbBtn.addEventListener('mouseleave', (e) => { e.stopPropagation(); cardElement.classList.remove('delete-hover'); });
-            }
             front.appendChild(mbBtn);
         }
 
@@ -941,24 +1060,8 @@
             share.title = 'Copiar tarjeta';
             share.setAttribute('aria-label', 'Copiar tarjeta');
             share.innerHTML = SHARE_ICON_HTML;
-            share.addEventListener('click', (e) => {
-                e.stopPropagation();
-                shareNewsCard(container, id, share);
-            });
+            share.dataset.id = id;
             links.prepend(share);
-        }
-
-        // Delete dentro del reverso
-        [container.querySelector('.card-back .delete-btn')].forEach(btn => {
-            btn?.addEventListener('click', (e) => { e.stopPropagation(); deleteNews(id); });
-        });
-
-        // Evitar flip al pasar por la imagen
-        const img = container.querySelector('.news-image');
-        const cardElement = container.querySelector('.news-card'); // Selecciona el elemento .news-card interno
-        if (img && cardElement) {
-            img.addEventListener('mouseenter', () => cardElement.classList.add('image-hover'));
-            img.addEventListener('mouseleave', () => cardElement.classList.remove('image-hover'));
         }
     };
 
@@ -967,6 +1070,70 @@
         const id = el.id.replace('news-', '');
         configureNewCard(el, id);
     });
+
+    // Delegación de eventos para reducir listeners por tarjeta
+    DOM.grid?.addEventListener('click', (e) => {
+        const shareBtn = e.target.closest('.share-opener');
+        if (shareBtn) {
+            e.stopPropagation();
+            const container = shareBtn.closest('.news-card-container');
+            const id = container?.id?.replace('news-', '') || shareBtn.dataset.id;
+            if (container && id) shareNewsCard(container, id, shareBtn);
+            return;
+        }
+
+        const deleteBtn = e.target.closest('.delete-btn, .mobile-delete-btn');
+        if (deleteBtn) {
+            e.stopPropagation();
+            deleteBtn.classList.add('pulse');
+            setTimeout(() => deleteBtn.classList.remove('pulse'), 300);
+            const container = deleteBtn.closest('.news-card-container');
+            const id = deleteBtn.dataset.id || container?.id?.replace('news-', '');
+            if (id) deleteNews(id);
+        }
+    });
+
+    DOM.grid?.addEventListener('mouseover', (e) => {
+        const container = e.target.closest('.news-card-container');
+        if (!container) return;
+        const cardElement = container.querySelector('.news-card');
+        if (!cardElement) return;
+
+        const deleteBtn = e.target.closest('.delete-btn, .mobile-delete-btn');
+        if (deleteBtn && !deleteBtn.contains(e.relatedTarget)) {
+            cardElement.classList.add('delete-hover');
+        }
+
+        const image = e.target.closest('.news-image');
+        if (image && !image.contains(e.relatedTarget)) {
+            cardElement.classList.add('image-hover');
+        }
+    });
+
+    DOM.grid?.addEventListener('mouseout', (e) => {
+        const container = e.target.closest('.news-card-container');
+        if (!container) return;
+        const cardElement = container.querySelector('.news-card');
+        if (!cardElement) return;
+
+        const deleteBtn = e.target.closest('.delete-btn, .mobile-delete-btn');
+        if (deleteBtn && !deleteBtn.contains(e.relatedTarget)) {
+            cardElement.classList.remove('delete-hover');
+        }
+
+        const image = e.target.closest('.news-image');
+        if (image && !image.contains(e.relatedTarget)) {
+            cardElement.classList.remove('image-hover');
+        }
+    });
+
+    const getPollingInterval = () => (document.hidden ? CHECK_INTERVAL_HIDDEN : CHECK_INTERVAL_VISIBLE);
+    const schedulePolling = (delay = getPollingInterval()) => {
+        clearTimeout(STATE.pollTimer);
+        STATE.pollTimer = setTimeout(() => {
+            checkForNewNews().finally(() => schedulePolling());
+        }, delay);
+    };
 
     /* ---------------------------------------------------------------------
      *  Event listeners globales
@@ -981,11 +1148,16 @@
             STATE.notifStart = Date.now();
             STATE.notifTimer = setTimeout(hideNotification, STATE.notifRemaining);
         }
-        if (STATE.pageVisible) syncCurrentPageFromDb();
+        if (STATE.pageVisible) {
+            syncCurrentPageFromDb();
+            schedulePolling(2_000);
+        } else {
+            schedulePolling();
+        }
     });
-    window.addEventListener('focus', () => syncCurrentPageFromDb());
-    window.addEventListener('pageshow', () => syncCurrentPageFromDb({force: true}));
-    window.addEventListener('online', () => syncCurrentPageFromDb({force: true}));
+    window.addEventListener('focus', () => { syncCurrentPageFromDb(); schedulePolling(1_000); });
+    window.addEventListener('pageshow', () => { syncCurrentPageFromDb({force: true}); schedulePolling(500); });
+    window.addEventListener('online', () => { syncCurrentPageFromDb({force: true}); schedulePolling(500); });
 
     // Interacción del usuario → reset userInteracted para unir notificaciones
     ['click', 'scroll'].forEach(evt => document.addEventListener(evt, () => { STATE.userInteracted = true; }));
@@ -1023,8 +1195,8 @@
                 
                 const currentCardsCount = $$('.news-card-container', DOM.grid).length;
                 
-                if (data.html) {
-                    const { card } = createCardFromHTML(data.html);
+                if (data.card) {
+                    const { card } = createCardFromPayload({data: data.card});
                     const id = card.id.replace('news-', '');
                     
                     // Si ya tenemos 25 noticias, mover la última al respaldo antes de agregar la nueva
@@ -1108,7 +1280,7 @@
         setOrderIcon();
     });
     
-    setInterval(checkForNewNews, CHECK_INTERVAL);
+    schedulePolling(10_000);
     enforceCardLimit(); // Aplicar límite al cargar la página inicialmente
     // updatePagination será llamada por updateCounters en la carga inicial
 
