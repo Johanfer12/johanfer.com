@@ -93,3 +93,20 @@
         font-size: 14px;
     }
 }
+
+@media (max-width: 900px), (prefers-reduced-motion: reduce) {
+    .header {
+        background: rgba(11, 20, 44, 0.92) !important;
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
+        box-shadow: 0 4px 12px rgba(2, 8, 18, 0.26) !important;
+    }
+
+    .header-nav a {
+        transition: none !important;
+    }
+
+    .header-nav a:hover {
+        transform: none !important;
+    }
+}
