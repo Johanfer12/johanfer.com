@@ -345,13 +345,17 @@ def get_page(request):
 
         # Preparar backups por keyset - cargar más noticias para respaldo fluido
         backup_cards = []
+        backup_next_cursor = None
         try:
             # Si es página 1, cargar las siguientes 25 noticias como respaldo
             backup_size = 25 if page == 1 else 5
-            backup_qs = list(window_qs[page_size:page_size + backup_size])
-            for article in backup_qs:
+            backup_items = list(window_qs[page_size:page_size + backup_size])
+            for article in backup_items:
                 card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
                 backup_cards.append({'id': article.id, 'card': card_html})
+            if backup_items:
+                last_backup = backup_items[-1]
+                backup_next_cursor = f"{last_backup.published_date.isoformat()}|{last_backup.id}"
         except Exception:
             pass
 
@@ -367,16 +371,21 @@ def get_page(request):
         # Si se solicita solo backup, devolver las siguientes 25 noticias desde el cursor actual
         backup_only = request.GET.get('backup_only', 'false').lower() == 'true'
         if backup_only:
-            # Para backup_only, devolver hasta 25 noticias adicionales
-            additional_backup = list(window_qs[page_size:page_size + 25])
+            # Para backup_only, devolver hasta 25 noticias a partir del cursor actual
+            additional_backup = list(window_qs[:25])
             backup_cards = []
+            backup_next_cursor = None
             for article in additional_backup:
                 card_html = render_to_string('news_card.html', {'article': article, 'user': request.user})
                 backup_cards.append({'id': article.id, 'card': card_html})
+            if additional_backup:
+                last_backup = additional_backup[-1]
+                backup_next_cursor = f"{last_backup.published_date.isoformat()}|{last_backup.id}"
             
             return JsonResponse({
                 'status': 'success',
                 'backup_cards': backup_cards,
+                'backup_next_cursor': backup_next_cursor,
                 'total_news': total_news,
                 'total_pages': total_pages,
                 'order': order
@@ -387,6 +396,7 @@ def get_page(request):
             'cards': cards,
             'next_cursor': next_cursor,
             'backup_cards': backup_cards,
+            'backup_next_cursor': backup_next_cursor,
             'total_news': total_news,
             'total_pages': total_pages,
             'order': order
