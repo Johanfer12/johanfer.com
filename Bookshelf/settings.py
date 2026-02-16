@@ -181,3 +181,7 @@ GEMINI_EMBEDDING_DIM = int(os.getenv('GEMINI_EMBEDDING_DIM', 768))
 # Qdrant (vector DB)
 QDRANT_URL = os.getenv('QDRANT_URL', 'http://localhost:6333')
 QDRANT_COLLECTION = os.getenv('QDRANT_COLLECTION', 'news_embeddings_gemini001_d768_v1')
+
+# Goodreads
+GOODREADS_USER_ID = os.getenv('GOODREADS_USER_ID', '27786474-johan-gonzalez')
+GOODREADS_COOKIE = os.getenv('GOODREADS_COOKIE', '')

@@ -159,6 +159,30 @@ python manage.py refresh_spotify_data
 python manage.py crontab add
 ```
 
+## Variables de entorno recomendadas
+
+Para scraping y backfill de Goodreads en local y producción:
+
+```
+GOODREADS_USER_ID=27786474-johan-gonzalez
+GOODREADS_COOKIE=session-id=...; ubid-main=...; ...
+```
+
+- `GOODREADS_COOKIE` debe ser una cookie de sesión vigente (si expira, hay que renovarla).
+- Sin esta cookie, Goodreads puede responder con login/HTML incompleto y no habrá extracción de libros/géneros.
+
+### Backfill de géneros (manual)
+
+```
+python manage.py backfill_book_genres --overwrite
+```
+
+Opcionalmente puedes pasar cookie por parámetro:
+
+```
+python manage.py backfill_book_genres --cookie "session-id=...; ..."
+```
+
 ## Uso
 
 ### Tareas Automatizadas con django-crontab

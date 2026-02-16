@@ -9,6 +9,7 @@ class Book(models.Model):
     date_read = models.DateField()
     book_link = models.TextField(unique=True)
     description = models.TextField(null=True, blank=True)
+    genres = models.TextField(null=True, blank=True)
 
     class Meta:
         ordering = ['-date_read']
@@ -27,6 +28,7 @@ class DeletedBook(models.Model):
     date_read = models.DateField()
     book_link = models.TextField()
     description = models.TextField(null=True, blank=True)
+    genres = models.TextField(null=True, blank=True)
     deleted_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
