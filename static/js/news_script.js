@@ -1099,7 +1099,9 @@
         const cardElement = container.querySelector('.news-card');
         if (!cardElement) return;
 
-        const deleteBtn = e.target.closest('.delete-btn, .mobile-delete-btn');
+        // Solo el boton movil (frente) debe bloquear el flip.
+        // El delete del reverso no debe forzar rotateY(0), porque devuelve la tarjeta.
+        const deleteBtn = e.target.closest('.mobile-delete-btn');
         if (deleteBtn && !deleteBtn.contains(e.relatedTarget)) {
             cardElement.classList.add('delete-hover');
         }
@@ -1116,7 +1118,7 @@
         const cardElement = container.querySelector('.news-card');
         if (!cardElement) return;
 
-        const deleteBtn = e.target.closest('.delete-btn, .mobile-delete-btn');
+        const deleteBtn = e.target.closest('.mobile-delete-btn');
         if (deleteBtn && !deleteBtn.contains(e.relatedTarget)) {
             cardElement.classList.remove('delete-hover');
         }
