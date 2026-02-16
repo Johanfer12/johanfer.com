@@ -2,7 +2,7 @@
 function openModal(bookId) {
     var modal = document.getElementById("modal-" + bookId);
     if (modal) {
-        modal.style.display = "block";
+        modal.style.display = "flex";
     }
 }
 

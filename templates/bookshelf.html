@@ -35,7 +35,7 @@
                         {% endfor %}
                     </p>
                     <p><strong>Calificación General</strong><br>{{ book.public_rating }}</p>
-                    <p><strong>Lo leí el...</strong><br>{{ book.date_read }}</p>
+                    <p><strong>Lo leí el...</strong><br>{{ book.date_read|date:"d/m/Y" }}</p>
                 </div>
             </div>
         </div>
@@ -54,7 +54,7 @@
                     {% endfor %}
                 </p>
                 <p><strong>Calificación General:</strong> {{ book.public_rating }}</p>
-                <p><strong>Lo leí el...</strong> {{ book.date_read }}</p>
+                <p><strong>Lo leí el...</strong> {{ book.date_read|date:"d/m/Y" }}</p>
                 
                 <!-- Descripción debajo de "Lo leí el..." -->
                 <div class="book-description">
