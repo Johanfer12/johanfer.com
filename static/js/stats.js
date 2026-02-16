@@ -152,14 +152,14 @@ new Chart(document.getElementById('starsChart'), {
     }
 });
 
-// Gráfico de autores más leídos
-new Chart(document.getElementById('topAuthorsChart'), {
+// Gráfico de generos más leídos
+new Chart(document.getElementById('topGenresChart'), {
     type: 'bar',
     data: {
-        labels: topAuthorsLabels,
+        labels: topGenresLabels,
         datasets: [{
-            label: 'Libros por autor',
-            data: topAuthorsValues,
+            label: 'Libros por género',
+            data: topGenresValues,
             backgroundColor: 'rgba(153, 102, 255, 0.6)',
             borderColor: 'rgba(153, 102, 255, 1)',
             borderWidth: 1

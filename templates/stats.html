@@ -26,8 +26,8 @@
                     <canvas id="starsChart"></canvas>
                 </div>
                 <div class="chart-container">
-                    <h3>Top Autores Más Leídos</h3>
-                    <canvas id="topAuthorsChart"></canvas>
+                    <h3>Top Géneros Más Leídos</h3>
+                    <canvas id="topGenresChart"></canvas>
                 </div>
             </div>
         </div>
@@ -38,8 +38,8 @@
         const booksPerYearValues = JSON.parse('{{ books_per_year_values|escapejs }}');
         const starsLabels = JSON.parse('{{ stars_labels|escapejs }}');
         const starsValues = JSON.parse('{{ stars_values|escapejs }}');
-        const topAuthorsLabels = JSON.parse('{{ top_authors_labels|escapejs }}');
-        const topAuthorsValues = JSON.parse('{{ top_authors_values|escapejs }}');
+        const topGenresLabels = JSON.parse('{{ top_genres_labels|escapejs }}');
+        const topGenresValues = JSON.parse('{{ top_genres_values|escapejs }}');
     </script>
     <script src="{% static 'js/stats.js' %}"></script>
     <script>

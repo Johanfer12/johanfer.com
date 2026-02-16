@@ -8,6 +8,75 @@ from django.utils import timezone
 from django.conf import settings
 from .models import Book, DeletedBook
 
+_GOODREADS_GENRES_CACHE = {}
+
+
+def extract_genres_from_review(review):
+    """Extrae hasta 3 generos desde la columna shelves de Goodreads."""
+    try:
+        shelves_td = review.find('td', class_='field shelves')
+        if not shelves_td:
+            return ""
+
+        ignored = {'read', 'to-read', 'currently-reading', 'owned', 'kindle', 'edit', '[edit]'}
+        genres = []
+        for link in shelves_td.find_all('a'):
+            href = (link.get('href') or '').lower()
+            label = link.get_text(strip=True).lower()
+            if '/shelf/show/' not in href and 'shelf=' not in href:
+                continue
+            if not label or label in ignored:
+                continue
+            if label.startswith('[') and label.endswith(']'):
+                continue
+            if label not in genres:
+                genres.append(label)
+            if len(genres) >= 3:
+                break
+
+        if not genres:
+            return ""
+        return ", ".join(g.title() for g in genres)
+    except Exception:
+        return ""
+
+def extract_genres_from_book_link(book_url, headers, max_genres=3):
+    """Extrae hasta max_genres generos desde la pagina del libro en Goodreads."""
+    try:
+        if not book_url:
+            return ""
+        if book_url in _GOODREADS_GENRES_CACHE:
+            return _GOODREADS_GENRES_CACHE[book_url]
+
+        full_url = f"https://www.goodreads.com{book_url}"
+        response = requests.get(full_url, headers=headers, timeout=20)
+        if response.status_code != 200:
+            _GOODREADS_GENRES_CACHE[book_url] = ""
+            return ""
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        genre_elements = soup.select("span.BookPageMetadataSection__genreButton")
+        if not genre_elements:
+            genre_elements = soup.select('a[href*="/genres/"]')
+
+        genres = []
+        ignored = {"more", "all genres"}
+        for el in genre_elements:
+            label = el.get_text(" ", strip=True)
+            normalized = label.lower()
+            if not label or normalized in ignored:
+                continue
+            if normalized not in [g.lower() for g in genres]:
+                genres.append(label)
+            if len(genres) >= max_genres:
+                break
+
+        value = ", ".join(genres)
+        _GOODREADS_GENRES_CACHE[book_url] = value
+        return value
+    except Exception:
+        return ""
+
 def modify_cover_url(cover_url):
     return re.sub(r'(_SX\d+_SY\d+_|_SY\d+_SX\d+_|_SX\d+_|_SY\d+_)', '_SY700_', cover_url)
 
@@ -76,11 +145,20 @@ def refresh_books_data():
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
-    base_url = "https://www.goodreads.com/review/list/27786474-johan-gonzalez?print=true&ref=nav_mybooks&shelf=read&utf8=%E2%9C%93"
+    goodreads_user_id = getattr(settings, "GOODREADS_USER_ID", "27786474-johan-gonzalez")
+    goodreads_cookie = (getattr(settings, "GOODREADS_COOKIE", "") or "").strip()
+    base_url = (
+        "https://www.goodreads.com/review/list/"
+        f"{goodreads_user_id}?print=true&ref=nav_mybooks&shelf=read&utf8=%E2%9C%93"
+    )
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0',
-        'Cookie': 'session-id=142-2609523-9866743; ubid-main=134-7604816-3078305; x-main=C2Abju0UblUE9jVZcnpcV8XZZ61l37JU1xvjONg7wcdxPMU98sVlHoT2E941dmI7; at-main=Atza|gQBDm0aLAwEBAHE6sn03-zn39eqRtCDoFL12a6l9MVuFUKGChkp7sjfBxATjP6GmbxXbWOCcqYE7IV1vyigCyg4vpjZ_uiPXt2HN4WhnXTTy3U0GwwazIoMtt3K7EVtH25E3lr_PkFoUmbrdwf7QOHA5gWUvaHLE8JjQZ80ryNShtLAzQ8Jtc9MPcih6YVd0oqETnQ_NMJxLhOKFehM414P4wE-Wc87ghLJYVbqtgYyLh8l29sHCFZAr2DWxyULqmb5nY63Pf2-pJnFxdVh0y-hkNxa--6xX_4GHIHQXxki6ptK3uL2ZVXOR5GVh2ze3CZgMeUA_IknqHObuindQVwxnGUC51sxSsGxBCatU4-_K1AgBtUbuWfUsGlnElAOanrSS3UbxUYzOCl1T-QunJz1DyvMF; sess-at-main=VyeFXgMI585KmqnioMAUTvqI40iDeWAhn6XVarU893g=; session-token=SocZwcOmUu4xUIBMfRpU+ZZjkgQwH5pRrLbe6Lb6TgHyOeU1UgGWLem1UYcIcuFtsz38txSIsQdnmByGJXYUrrAQWVtEP4omWZ83wE1LH5K+yuJViSM6sTtGj+9qjRLH1gJUgrGHTHuDiAgiJBhKRWy4xxMYL9ozRGWdLJEjeB/5aJvaAK5pZnnYaOzk+WXa4qIsmoHFQxVnnOby3p0qhuYwlR0q/8M+3Z5WZ+NbXJxkDd+nrg2dlUijLDSoB4YxWSBc826aB+b1NbwGpQg/+hQVDjbQ9LWZSvtiFNy9YLdgWUAJbjWKnNOiicm+48CON4OdmFWQTZlvJcuCmhWSh5YNfAmCHwdKQ3aStxNmKZdbww/34dIHaw==; _session_id2=2c4ba87d06afd896306c45ea90071ce7'
     }
+    if goodreads_cookie:
+        headers['Cookie'] = goodreads_cookie
+    else:
+        print("GOODREADS_COOKIE no configurada. No se puede actualizar Goodreads.")
+        return
 
     response = requests.get(base_url, headers=headers)
 
@@ -165,6 +243,9 @@ def refresh_books_data():
                     date_read = process_date(date_read_str)
                     
                     description = get_book_description(book_link, headers)
+                    genres = extract_genres_from_review(review)
+                    if not genres:
+                        genres = extract_genres_from_book_link(book_link, headers)
 
                     # Procesar portada antes de crear el libro
                     cover_link = None
@@ -183,7 +264,8 @@ def refresh_books_data():
                         public_rating=public_rating,
                         date_read=date_read,
                         book_link=book_link,
-                        description=description
+                        description=description,
+                        genres=genres
                     )
                     print(f"Libro creado: {title}")
                 except Exception as e:

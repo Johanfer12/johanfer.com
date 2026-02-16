@@ -35,7 +35,8 @@ def bookshelf(request):
                 'book_link': book.book_link,
                 'cover_image': f"/static/Img/Covers/{book.id}.webp",
                 'id': book.id,
-                'description': book.description
+                'description': book.description,
+                'genres': book.genres or ''
             })
         return JsonResponse({'books': book_data, 'has_next': page_obj.has_next()})
     else:
@@ -64,18 +65,28 @@ def stats(request):
     stars_labels = ['1 Estrella', '2 Estrellas', '3 Estrellas', '4 Estrellas', '5 Estrellas']
     stars_values = [books.filter(my_rating=i).count() for i in range(1, 6)]
 
-    # Top autores más leídos
-    top_authors = books.values('author').annotate(total=Count('id')).order_by('-total')[:5]
-    top_authors_labels = [entry['author'] for entry in top_authors]
-    top_authors_values = [entry['total'] for entry in top_authors]
+    # Top generos mas leidos (maximo 5)
+    genre_counter = {}
+    for raw_genres in books.values_list('genres', flat=True):
+        if not raw_genres:
+            continue
+        for part in raw_genres.split(','):
+            genre = part.strip()
+            if not genre:
+                continue
+            genre_counter[genre] = genre_counter.get(genre, 0) + 1
+
+    top_genres = sorted(genre_counter.items(), key=lambda x: x[1], reverse=True)[:5]
+    top_genres_labels = [entry[0] for entry in top_genres]
+    top_genres_values = [entry[1] for entry in top_genres]
 
     context = {
         'books_per_year_labels': json.dumps(books_per_year_labels),
         'books_per_year_values': json.dumps(books_per_year_values),
         'stars_labels': json.dumps(stars_labels),
         'stars_values': json.dumps(stars_values),
-        'top_authors_labels': json.dumps(top_authors_labels),
-        'top_authors_values': json.dumps(top_authors_values)
+        'top_genres_labels': json.dumps(top_genres_labels),
+        'top_genres_values': json.dumps(top_genres_values)
     }
 
     return render(request, 'stats.html', context)

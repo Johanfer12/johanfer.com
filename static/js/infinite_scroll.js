@@ -46,6 +46,7 @@ function loadMoreBooks() {
                     <p><strong>Autor:</strong> ${book.author}</p>
                     <p><strong>Mi Calificación</strong> ${'★'.repeat(book.my_rating)}</p>
                     <p><strong>Calificación General:</strong> ${book.public_rating}</p>
+                    <p><strong>Géneros:</strong> ${book.genres || 'Sin género'}</p>
                     <p><strong>Lo leí el...</strong> ${book.date_read}</p>
                     <div class="book-description">
                         <strong>Descripción</strong><br><br>

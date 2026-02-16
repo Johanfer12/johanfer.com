@@ -54,6 +54,7 @@
                     {% endfor %}
                 </p>
                 <p><strong>Calificación General:</strong> {{ book.public_rating }}</p>
+                <p><strong>Géneros:</strong> {{ book.genres|default:"Sin género" }}</p>
                 <p><strong>Lo leí el...</strong> {{ book.date_read|date:"d/m/Y" }}</p>
                 
                 <!-- Descripción debajo de "Lo leí el..." -->
