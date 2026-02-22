@@ -45,6 +45,7 @@ class News(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     image_url = models.URLField(null=True, blank=True)
     is_deleted = models.BooleanField(default=False, verbose_name="Eliminada")
+    is_saved = models.BooleanField(default=False, verbose_name="Guardada")
     is_filtered = models.BooleanField(default=False, verbose_name="Filtro Aut.")
     filtered_by = models.ForeignKey('FilterWord', null=True, blank=True, on_delete=models.SET_NULL,
                                   verbose_name="Palabra Filtro", related_name="filtered_news")

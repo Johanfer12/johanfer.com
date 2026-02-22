@@ -109,6 +109,7 @@
     {{ backup_cards|json_script:"backup-cards-data" }}
     {{ news_user_flags|json_script:"news-user-flags" }}
     {{ initial_news_cursor|json_script:"initial-news-cursor" }}
+    {{ news_view_mode|json_script:"news-view-mode" }}
 
     <script src="{% static 'js/news_script.js' %}"></script>
     <script src="{% static 'js/reader_mode.js' %}"></script>

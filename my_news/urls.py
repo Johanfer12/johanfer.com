@@ -5,7 +5,9 @@ app_name = 'my_news'
 
 urlpatterns = [
     path('', views.NewsListView.as_view(), name='news_list'),
+    path('guardadas/', views.SavedNewsListView.as_view(), name='saved_news_list'),
     path('login/', views.NewsLoginView.as_view(), name='news_login'),
+    path('save/<int:pk>/', views.toggle_save_news, name='toggle_save_news'),
     path('delete/<int:pk>/', views.delete_news, name='delete_news'),
     path('undo/<int:pk>/', views.undo_delete, name='undo_delete'),
     path('update-feed/', views.update_feed, name='update_feed'),
