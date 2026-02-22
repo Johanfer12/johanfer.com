@@ -271,6 +271,27 @@
     color: #06101f;
 }
 
+.news-link.save-btn {
+    border: 1px solid #8fb4e8;
+    color: #8fb4e8;
+    background-color: rgba(15, 27, 43, 0.72);
+}
+
+.news-link.save-btn:hover {
+    background-color: #8fb4e8;
+    color: #06101f;
+}
+
+.news-link.save-btn.is-saved {
+    border-color: #35b56a;
+    color: #35b56a;
+}
+
+.news-link.save-btn.is-saved:hover {
+    background-color: #35b56a;
+    color: #06101f;
+}
+
 /* Paginación */
 .pagination {
     display: flex;

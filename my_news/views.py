@@ -51,19 +51,24 @@ def _safe_page(value):
         return 1
 
 
-def _counts_cache_key(search_query):
+def _counts_cache_key(search_query, saved_only=False):
     version = _get_cache_version()
     query_hash = hashlib.md5((search_query or '').strip().lower().encode('utf-8')).hexdigest()
-    return f"news:count:v{version}:q:{query_hash}"
+    saved_flag = '1' if saved_only else '0'
+    return f"news:count:v{version}:q:{query_hash}:saved:{saved_flag}"
 
 
-def _get_total_news_and_pages(search_query=None):
-    key = _counts_cache_key(search_query)
+def _get_total_news_and_pages(search_query=None, saved_only=False):
+    key = _counts_cache_key(search_query, saved_only=saved_only)
     cached = cache.get(key)
     if cached:
         return cached
 
     count_qs = News.visible
+    if saved_only:
+        count_qs = count_qs.filter(is_saved=True)
+    else:
+        count_qs = count_qs.filter(is_saved=False)
     if search_query:
         count_qs = count_qs.filter(Q(title__icontains=search_query) | Q(description__icontains=search_query))
     total_news = count_qs.count()
@@ -90,6 +95,7 @@ def _serialize_news_card(article):
         'created_cursor': f"{article.created_at.isoformat()}|{article.id}" if article.created_at else None,
         'similarity_score': article.similarity_score,
         'similarity_label': f"{article.similarity_score:.2f}" if article.similarity_score is not None else '',
+        'is_saved': bool(article.is_saved),
     }
 
 
@@ -108,8 +114,12 @@ def _parse_created_cursor(cursor):
         return None, None
 
 
-def _build_page_response(*, order, page, cursor, search_query, backup_only=False):
+def _build_page_response(*, order, page, cursor, search_query, backup_only=False, saved_only=False):
     base_qs = News.visible.select_related('source')
+    if saved_only:
+        base_qs = base_qs.filter(is_saved=True)
+    else:
+        base_qs = base_qs.filter(is_saved=False)
     if search_query:
         base_qs = base_qs.filter(
             Q(title__icontains=search_query) | Q(description__icontains=search_query)
@@ -153,7 +163,7 @@ def _build_page_response(*, order, page, cursor, search_query, backup_only=False
         if backup_items:
             last_backup = backup_items[-1]
             backup_next_cursor = f"{last_backup.published_date.isoformat()}|{last_backup.id}"
-        total_news, total_pages = _get_total_news_and_pages(search_query)
+        total_news, total_pages = _get_total_news_and_pages(search_query, saved_only=saved_only)
         return {
             'status': 'success',
             'backup_cards': backup_cards,
@@ -182,7 +192,7 @@ def _build_page_response(*, order, page, cursor, search_query, backup_only=False
         last_backup = backup_items[-1]
         backup_next_cursor = f"{last_backup.published_date.isoformat()}|{last_backup.id}"
 
-    total_news, total_pages = _get_total_news_and_pages(search_query)
+    total_news, total_pages = _get_total_news_and_pages(search_query, saved_only=saved_only)
     return {
         'status': 'success',
         'cards': cards,
@@ -199,6 +209,7 @@ def delete_news(request, pk):
     try:
         current_page = _safe_page(request.POST.get('current_page', 1))
         order = request.POST.get('order', 'desc')
+        saved_only = request.POST.get('saved_only', 'false').lower() == 'true'
         news = News.objects.get(pk=pk)
         news.is_deleted = True
         news.save(update_fields=['is_deleted'])
@@ -206,10 +217,15 @@ def delete_news(request, pk):
         
         # Obtener la siguiente noticia para reemplazar la eliminada
         next_news = None
-        total_news, total_pages = _get_total_news_and_pages()
+        total_news, total_pages = _get_total_news_and_pages(saved_only=saved_only)
         
         # Buscar noticia de reemplazo por keyset para mantener orden estable (siempre, también en descendente página 1)
-        base_qs = News.visible.order_by('published_date', 'id') if order == 'asc' else News.visible.order_by('-published_date', '-id')
+        base_qs = News.visible
+        if saved_only:
+            base_qs = base_qs.filter(is_saved=True)
+        else:
+            base_qs = base_qs.filter(is_saved=False)
+        base_qs = base_qs.order_by('published_date', 'id') if order == 'asc' else base_qs.order_by('-published_date', '-id')
         page_start = (current_page - 1) * PAGE_SIZE
         page_qs = list(base_qs[page_start:page_start + PAGE_SIZE])
         if page_qs:
@@ -226,7 +242,12 @@ def delete_news(request, pk):
                     (Q(published_date=anchor.published_date) & Q(id__lt=anchor.id))
                 )
                 ordering = '-published_date', '-id'
-            next_news = News.visible.filter(keyset_q).order_by(*ordering).first()
+            next_qs = News.visible
+            if saved_only:
+                next_qs = next_qs.filter(is_saved=True)
+            else:
+                next_qs = next_qs.filter(is_saved=False)
+            next_news = next_qs.filter(keyset_q).order_by(*ordering).first()
         
         response_data = {
             'status': 'success',
@@ -259,7 +280,7 @@ class NewsListView(ListView):
         order = self.request.GET.get('order', 'desc')
         search_query = self.request.GET.get('q')
 
-        queryset = News.visible.select_related('source')
+        queryset = News.visible.select_related('source').filter(is_saved=False)
         if search_query:
             queryset = queryset.filter(
                 Q(title__icontains=search_query) | Q(description__icontains=search_query)
@@ -290,7 +311,8 @@ class NewsListView(ListView):
         # Obtener noticias de respaldo (5 adicionales) por keyset (cursor) a partir del último ítem de la página
         order = self.request.GET.get('order', 'desc')
         ordering = 'published_date' if order == 'asc' else '-published_date'
-        page_qs = list(self.get_queryset()[(current_page - 1) * PAGE_SIZE: (current_page - 1) * PAGE_SIZE + PAGE_SIZE])
+        current_queryset = self.get_queryset()
+        page_qs = list(current_queryset[(current_page - 1) * PAGE_SIZE: (current_page - 1) * PAGE_SIZE + PAGE_SIZE])
         last_item = page_qs[-1] if page_qs else None  # último en la página independientemente del orden
         backup_news = []
         if last_item:
@@ -304,7 +326,7 @@ class NewsListView(ListView):
                     Q(published_date__lt=last_item.published_date) |
                     (Q(published_date=last_item.published_date) & Q(id__lt=last_item.id))
                 )
-            backup_news = News.visible.select_related('source').filter(backup_q).order_by(ordering)[:5]
+            backup_news = current_queryset.filter(backup_q).order_by(ordering)[:5]
         
         # Noticias de respaldo serializadas para JavaScript
         backup_cards = [_serialize_news_card(article) for article in backup_news]
@@ -312,13 +334,41 @@ class NewsListView(ListView):
         context['backup_cards'] = backup_cards
         context['current_page'] = current_page
         context['order'] = order
-        latest_created = News.visible.order_by('-created_at', '-id').values_list('created_at', 'id').first()
+        latest_created = current_queryset.order_by('-created_at', '-id').values_list('created_at', 'id').first()
         context['initial_news_cursor'] = f"{latest_created[0].isoformat()}|{latest_created[1]}" if latest_created else None
         context['news_user_flags'] = {
             'is_staff': bool(self.request.user.is_staff),
             'default_image_url': static('Img/News_Default.png'),
         }
+        context['news_view_mode'] = {'saved_only': False}
         
+        return context
+
+
+@method_decorator(superuser_required, name='dispatch')
+class SavedNewsListView(NewsListView):
+    template_name = 'news_list.html'
+
+    def get_queryset(self):
+        order = self.request.GET.get('order', 'desc')
+        search_query = self.request.GET.get('q')
+
+        queryset = News.visible.select_related('source').filter(is_saved=True)
+        if search_query:
+            queryset = queryset.filter(
+                Q(title__icontains=search_query) | Q(description__icontains=search_query)
+            )
+
+        if order == 'asc':
+            queryset = queryset.order_by('published_date', 'id')
+        else:
+            queryset = queryset.order_by('-published_date', '-id')
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['news_view_mode'] = {'saved_only': True}
         return context
 
 @require_GET
@@ -392,7 +442,8 @@ def check_new_news(request):
 @require_GET
 def get_news_count(request):
     try:
-        total_news, total_pages = _get_total_news_and_pages()
+        saved_only = request.GET.get('saved_only', 'false').lower() == 'true'
+        total_news, total_pages = _get_total_news_and_pages(saved_only=saved_only)
         
         return JsonResponse({
             'status': 'success',
@@ -464,11 +515,12 @@ def get_page(request):
         order = request.GET.get('order', 'desc')
         search_query = request.GET.get('q')
         backup_only = request.GET.get('backup_only', 'false').lower() == 'true'
+        saved_only = request.GET.get('saved_only', 'false').lower() == 'true'
         page = _safe_page(request.GET.get('page', 1))
         cursor = request.GET.get('cursor')
 
         version = _get_cache_version()
-        key_raw = f"{version}|{order}|{search_query or ''}|{page}|{cursor or ''}|{int(backup_only)}"
+        key_raw = f"{version}|{order}|{search_query or ''}|{page}|{cursor or ''}|{int(backup_only)}|{int(saved_only)}"
         cache_key = f"news:page:{hashlib.md5(key_raw.encode('utf-8')).hexdigest()}"
         cached = cache.get(cache_key)
         if cached:
@@ -480,6 +532,7 @@ def get_page(request):
             cursor=cursor,
             search_query=search_query,
             backup_only=backup_only,
+            saved_only=saved_only,
         )
         cache.set(cache_key, payload, PAGE_CACHE_TTL)
         return JsonResponse(payload)
@@ -490,6 +543,7 @@ def get_page(request):
 @require_POST
 def undo_delete(request, pk):
     try:
+        saved_only = request.POST.get('saved_only', 'false').lower() == 'true'
         news = News.objects.get(pk=pk)
         if news.is_deleted:
             news.is_deleted = False
@@ -500,13 +554,36 @@ def undo_delete(request, pk):
             news.save()
             _bump_cache_version()
 
-        total_news, total_pages = _get_total_news_and_pages()
+        total_news, total_pages = _get_total_news_and_pages(saved_only=saved_only)
 
         return JsonResponse({
             'status': 'success',
             'card': _serialize_news_card(news),
             'total_news': total_news,
             'total_pages': total_pages
+        })
+    except News.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Noticia no encontrada'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+
+@require_POST
+def toggle_save_news(request, pk):
+    try:
+        saved_only = request.POST.get('saved_only', 'false').lower() == 'true'
+        news = News.objects.get(pk=pk)
+        news.is_saved = not news.is_saved
+        news.save(update_fields=['is_saved'])
+        _bump_cache_version()
+
+        total_news, total_pages = _get_total_news_and_pages(saved_only=saved_only)
+        return JsonResponse({
+            'status': 'success',
+            'news_id': news.id,
+            'is_saved': bool(news.is_saved),
+            'total_news': total_news,
+            'total_pages': total_pages,
         })
     except News.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Noticia no encontrada'})

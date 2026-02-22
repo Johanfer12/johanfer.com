@@ -47,6 +47,16 @@
             return null;
         }
     })();
+    const VIEW_MODE = (() => {
+        try {
+            const raw = $('#news-view-mode')?.textContent;
+            if (!raw) return {saved_only: false};
+            const parsed = JSON.parse(raw);
+            return {saved_only: !!parsed.saved_only};
+        } catch (_) {
+            return {saved_only: false};
+        }
+    })();
 
     const STATE = {
         notifTimer: null,
@@ -66,6 +76,7 @@
         loadingMoreBackup: false, // Flag para evitar múltiples peticiones
         backupCursor: null, // Cursor para las siguientes noticias de respaldo
         deletingNews: new Set(), // IDs de noticias siendo eliminadas
+        savingNews: new Set(), // IDs de noticias siendo guardadas/desguardadas
         syncingFromDb: false, // evita refrescos simultaneos al recuperar foco/conexion
         lastDbSyncAt: 0, // timestamp del ultimo sync fuerte con DB
         pollTimer: null,
@@ -81,6 +92,8 @@
     const err = (...args) => console.error('[news]', ...args);
     const SHARE_ICON_HTML = '<svg class="share-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 483 483" aria-hidden="true"><path fill="currentColor" d="M395.72,0c-48.204,0-87.281,39.078-87.281,87.281c0,2.036,0.164,4.03,0.309,6.029l-161.233,75.674 c-15.668-14.971-36.852-24.215-60.231-24.215c-48.204,0.001-87.282,39.079-87.282,87.282c0,48.204,39.078,87.281,87.281,87.281 c15.206,0,29.501-3.907,41.948-10.741l69.789,58.806c-3.056,8.896-4.789,18.396-4.789,28.322c0,48.204,39.078,87.281,87.281,87.281 c48.205,0,87.281-39.078,87.281-87.281s-39.077-87.281-87.281-87.281c-15.205,0-29.5,3.908-41.949,10.74l-69.788-58.805 c3.057-8.891,4.789-18.396,4.789-28.322c0-2.035-0.164-4.024-0.308-6.029l161.232-75.674c15.668,14.971,36.852,24.215,60.23,24.215 c48.203,0,87.281-39.078,87.281-87.281C482.999,39.079,443.923,0,395.72,0z"/></svg>';
     const SHARE_CHECK_HTML = '<svg class="share-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.285 6.709a1 1 0 0 1 .006 1.414l-9.3 9.4a1 1 0 0 1-1.421.005L3.71 11.72a1 1 0 1 1 1.414-1.414l5.146 5.146 8.593-8.68a1 1 0 0 1 1.422-.063z"/></svg>';
+    const BOOKMARK_DEFAULT_HTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="news-icon bookmark-icon bookmark-default" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/></svg>';
+    const BOOKMARK_SAVED_HTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="news-icon bookmark-icon bookmark-saved" viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2 15.5V2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.74.439L8 13.069l-5.26 2.87A.5.5 0 0 1 2 15.5zm8.854-9.646a.5.5 0 0 0-.708-.708L7.5 7.793 6.354 6.646a.5.5 0 1 0-.708.708l1.5 1.5a.5.5 0 0 0 .708 0l3-3z"/></svg>';
 
     const getCookie = (name) => {
         const value = document.cookie
@@ -378,6 +391,17 @@
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 
+    const isSavedView = () => !!VIEW_MODE.saved_only;
+    const getSavedIconHtml = (isSaved) => (isSaved ? BOOKMARK_SAVED_HTML : BOOKMARK_DEFAULT_HTML);
+    const updateSaveButtonVisual = (button, isSaved) => {
+        if (!button) return;
+        button.classList.toggle('is-saved', !!isSaved);
+        button.dataset.saved = isSaved ? 'true' : 'false';
+        button.innerHTML = getSavedIconHtml(!!isSaved);
+        button.title = isSaved ? 'Guardada' : 'Guardar';
+        button.setAttribute('aria-label', isSaved ? 'Guardada' : 'Guardar');
+    };
+
     const renderNewsCardHTML = (data) => {
         if (!data || !data.id) return '';
         const similarity = data.similarity_label
@@ -386,6 +410,9 @@
         const shortAnswer = data.short_answer
             ? `<div class="short-answer">${escapeHtml(data.short_answer)}</div>`
             : '';
+        const saveButton = `<button class="news-link icon-only save-btn ${data.is_saved ? 'is-saved' : ''}" data-id="${escapeHtml(data.id)}" data-saved="${data.is_saved ? 'true' : 'false'}" title="${data.is_saved ? 'Guardada' : 'Guardar'}" aria-label="${data.is_saved ? 'Guardada' : 'Guardar'}">
+                    ${getSavedIconHtml(!!data.is_saved)}
+                </button>`;
         const deleteButton = USER_FLAGS.is_staff ? `
                 <button class="news-link icon-only delete-btn" data-id="${escapeHtml(data.id)}" title="Eliminar" aria-label="Eliminar">
                     <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -415,6 +442,7 @@
                         <path d="M12.7076 18.3639L11.2933 19.7781C9.34072 21.7308 6.1749 21.7308 4.22228 19.7781C2.26966 17.8255 2.26966 14.6597 4.22228 12.7071L5.63649 11.2929M18.3644 12.7071L19.7786 11.2929C21.7312 9.34024 21.7312 6.17441 19.7786 4.22179C17.826 2.26917 14.6602 2.26917 12.7076 4.22179L11.2933 5.636M8.50045 15.4999L15.5005 8.49994" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
                     </svg>
                 </a>
+                ${saveButton}
                 ${deleteButton}
             </div>
         </div>
@@ -569,14 +597,16 @@
                     'X-CSRFToken': getCookie('csrftoken'),
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
-        body: `current_page=${currentPage}&order=${STATE.order}`,
+        body: `current_page=${currentPage}&order=${STATE.order}&saved_only=${isSavedView() ? 'true' : 'false'}`,
     });
 
     const serverUndoNews = (newsId) => fetchJson(`/noticias/undo/${newsId}/`, {
         method: 'POST',
         headers: {
             'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/x-www-form-urlencoded',
         },
+        body: `saved_only=${isSavedView() ? 'true' : 'false'}`,
     });
 
     const serverGetPage = ({cursor, page, order, q, backupOnly = false, signal}) => {
@@ -586,8 +616,18 @@
         if (order) params.set('order', order);
         if (q) params.set('q', q);
         if (backupOnly) params.set('backup_only', 'true');
+        if (isSavedView()) params.set('saved_only', 'true');
         return fetchJson(`/noticias/get-page/?${params.toString()}`, {signal});
     };
+
+    const serverToggleSaveNews = (newsId) => fetchJson(`/noticias/save/${newsId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `saved_only=${isSavedView() ? 'true' : 'false'}`,
+    });
 
     // Nueva función para cargar más noticias de respaldo
     const loadMoreBackupNews = async () => {
@@ -640,6 +680,47 @@
             STATE.backupController = null;
             STATE.loadingMoreBackup = false;
         }
+    };
+
+    const toggleSaveNews = (newsId) => {
+        if (STATE.savingNews.has(newsId)) return;
+        STATE.savingNews.add(newsId);
+
+        const container = $(`#news-${newsId}`);
+        const saveBtn = container?.querySelector('.save-btn');
+        if (!container || !saveBtn) {
+            STATE.savingNews.delete(newsId);
+            return;
+        }
+
+        saveBtn.disabled = true;
+        serverToggleSaveNews(newsId)
+            .then(data => {
+                if (data.status !== 'success') throw new Error(data.message || 'Error al guardar');
+
+                updateSaveButtonVisual(saveBtn, !!data.is_saved);
+                updateCounters(data.total_news, data.total_pages);
+
+                const shouldRemoveFromCurrentView = (isSavedView() && !data.is_saved) || (!isSavedView() && data.is_saved);
+                if (shouldRemoveFromCurrentView) {
+                    const oldPositions = isMobile() ? null : capturePositions();
+                    container.remove();
+                    if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
+                    updateCounters(data.total_news, data.total_pages);
+
+                    if (STATE.backupCards.length < 5) {
+                        loadMoreBackupNews();
+                    }
+                }
+            })
+            .catch(e => {
+                err('Error al guardar noticia:', e);
+                alert('No se pudo guardar la noticia.');
+            })
+            .finally(() => {
+                saveBtn.disabled = false;
+                STATE.savingNews.delete(newsId);
+            });
     };
 
     const deleteNews = (newsId) => {
@@ -887,6 +968,7 @@
     };
 
     const checkForNewNews = () => {
+        if (isSavedView()) return Promise.resolve();
         if (STATE.checkController) STATE.checkController.abort();
         const checkController = new AbortController();
         STATE.checkController = checkController;
@@ -975,7 +1057,15 @@
             DOM.counter.classList.add('counter-updated');
             setTimeout(() => DOM.counter.classList.remove('counter-updated'), 1_000);
         }
-        DOM.total && (DOM.total.textContent = `${totalCount} noticias`);
+        if (DOM.total) {
+            const suffix = isSavedView() ? 'guardadas' : 'noticias';
+            if (DOM.counter && DOM.total.contains(DOM.counter)) {
+                DOM.total.innerHTML = `<span class="header-counter">${totalCount}</span> ${suffix}`;
+                DOM.counter = $('.header-counter', DOM.total) || DOM.counter;
+            } else {
+                DOM.total.textContent = `${totalCount} ${suffix}`;
+            }
+        }
         updatePagination(totalPages);
         
         // Si quedamos sin noticias en la página actual y hay respaldo disponible, cargarlas automáticamente
@@ -1042,6 +1132,7 @@
         const front = container.querySelector('.card-front');
         const back = container.querySelector('.card-back');
         const links = back?.querySelector('.news-links');
+        const saveBtn = container.querySelector('.save-btn');
 
         // Botón eliminar móvil ✕
         if (front && !front.querySelector('.mobile-delete-btn') && container.querySelector('.delete-btn')) {
@@ -1062,6 +1153,11 @@
             share.innerHTML = SHARE_ICON_HTML;
             share.dataset.id = id;
             links.prepend(share);
+        }
+
+        if (saveBtn) {
+            const isSaved = saveBtn.dataset.saved === 'true' || saveBtn.classList.contains('is-saved');
+            updateSaveButtonVisual(saveBtn, isSaved);
         }
     };
 
@@ -1090,6 +1186,15 @@
             const container = deleteBtn.closest('.news-card-container');
             const id = deleteBtn.dataset.id || container?.id?.replace('news-', '');
             if (id) deleteNews(id);
+            return;
+        }
+
+        const saveBtn = e.target.closest('.save-btn');
+        if (saveBtn) {
+            e.stopPropagation();
+            const container = saveBtn.closest('.news-card-container');
+            const id = saveBtn.dataset.id || container?.id?.replace('news-', '');
+            if (id) toggleSaveNews(id);
         }
     });
 
@@ -1131,6 +1236,10 @@
 
     const getPollingInterval = () => (document.hidden ? CHECK_INTERVAL_HIDDEN : CHECK_INTERVAL_VISIBLE);
     const schedulePolling = (delay = getPollingInterval()) => {
+        if (isSavedView()) {
+            clearTimeout(STATE.pollTimer);
+            return;
+        }
         clearTimeout(STATE.pollTimer);
         STATE.pollTimer = setTimeout(() => {
             checkForNewNews().finally(() => schedulePolling());
@@ -1169,6 +1278,7 @@
 
     // Botón de actualizar feed
     DOM.updateFeedBtn?.addEventListener('click', function () {
+        if (isSavedView()) return;
         const btn = this;
         btn.disabled = true;
         btn.classList.add('loading');
@@ -1282,7 +1392,7 @@
         setOrderIcon();
     });
     
-    schedulePolling(10_000);
+    if (!isSavedView()) schedulePolling(10_000);
     enforceCardLimit(); // Aplicar límite al cargar la página inicialmente
     // updatePagination será llamada por updateCounters en la carga inicial
 
