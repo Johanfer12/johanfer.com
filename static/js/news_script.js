@@ -83,6 +83,7 @@
         checkController: null,
         backupController: null,
         syncController: null,
+        locallyDeletedIds: new Set(), // IDs borrados localmente para evitar reinserciones desde cache cliente
     };
 
     /* ---------------------------------------------------------------------
@@ -150,6 +151,20 @@
     };
 
     const normalizeText = (value) => (value || '').replace(/\s+/g, ' ').trim();
+    const normalizeId = (value) => String(value ?? '').trim();
+    const isLocallyDeleted = (newsId) => STATE.locallyDeletedIds.has(normalizeId(newsId));
+    const extractPayloadId = (item) => {
+        if (!item) return '';
+        if (item.id != null) return normalizeId(item.id);
+        if (item.data?.id != null) return normalizeId(item.data.id);
+        return '';
+    };
+    const pruneNewsFromClientCaches = (newsId) => {
+        const targetId = normalizeId(newsId);
+        if (!targetId) return;
+        STATE.pendingNews = STATE.pendingNews.filter(item => normalizeId(item?.id) !== targetId);
+        STATE.backupCards = STATE.backupCards.filter(item => extractPayloadId(item) !== targetId);
+    };
 
     const buildShareCardData = (container) => {
         const front = container?.querySelector('.card-front');
@@ -727,6 +742,7 @@
         // Protección contra eliminaciones simultáneas
         if (STATE.deletingNews.has(newsId)) return;
         STATE.deletingNews.add(newsId);
+        pruneNewsFromClientCaches(newsId);
         
         const container = $(`#news-${newsId}`);
         if (!container) {
@@ -771,6 +787,7 @@
         };
         const appendServerReplacement = (data) => {
             if (!data?.card) return false;
+            if (isLocallyDeleted(data.card.id)) return false;
             const { card: newCard } = createCardFromPayload({data: data.card});
             if (!newCard) return false;
             const newCardId = newCard.id.replace('news-', '');
@@ -839,6 +856,8 @@
 
                 // Si ya se eliminó del DOM por timeout, actualizar contadores
                 if (!document.body.contains(container)) {
+                    STATE.locallyDeletedIds.add(normalizeId(newsId));
+                    pruneNewsFromClientCaches(newsId);
                     appendServerReplacement(data);
                     updateCounters(data.total_news, data.total_pages);
                     enforceCardLimit();
@@ -857,6 +876,8 @@
                 removed = true;
                 removeFromDOM();
                 STATE.deletingNews.delete(newsId); // Liberar flag incluso si se elimina antes de la animación
+                STATE.locallyDeletedIds.add(normalizeId(newsId));
+                pruneNewsFromClientCaches(newsId);
                 appendServerReplacement(data);
                 updateCounters(data.total_news, data.total_pages);
 
@@ -911,6 +932,7 @@
         const newIds = [];
 
         for (const item of newsToAdd) {
+            if (isLocallyDeleted(item?.id)) continue;
             const { card } = createCardFromPayload({data: item});
             if (!card) continue; // Saltar si el HTML de la tarjeta estaba vacío
             
@@ -1083,6 +1105,8 @@
                 const backupData = STATE.backupCards.shift();
                 
                 if (backupData) {
+                    const backupId = extractPayloadId(backupData);
+                    if (isLocallyDeleted(backupId)) continue;
                     const { card: newCard } = createCardFromPayload(backupData.data ? backupData : {data: backupData});
                     
                     if (newCard) {
@@ -1310,6 +1334,7 @@
                 if (data.card) {
                     const { card } = createCardFromPayload({data: data.card});
                     const id = card.id.replace('news-', '');
+                    STATE.locallyDeletedIds.delete(normalizeId(id));
                     
                     // Si ya tenemos 25 noticias, mover la última al respaldo antes de agregar la nueva
                     if (currentCardsCount >= MAX_NEWS) {
