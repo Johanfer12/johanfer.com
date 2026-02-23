@@ -13,7 +13,7 @@ from groq import Groq
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import numpy as np
-from django.db.models import Q
+from django.db.models import Q, Max
 import json
 import textwrap
 from django.conf import settings
@@ -130,7 +130,6 @@ class EmbeddingService:
         if not news_item.embedding:
             content_for_embedding = f"{news_item.title} {news_item.description}"
             news_item.embedding = EmbeddingService.generate_embedding(content_for_embedding, client)
-            news_item.save(update_fields=['embedding'])
 
         if not news_item.embedding:
             return False, None, 0.0
@@ -506,8 +505,8 @@ class FeedService:
             AIFilterInstruction.objects.filter(active=True)
         )
 
-        sources = FeedSource.objects.filter(active=True)
-        print(f"Procesando {sources.count()} fuentes activas con Groq ({groq_model})")
+        sources = list(FeedSource.objects.filter(active=True))
+        print(f"Procesando {len(sources)} fuentes activas con Groq ({groq_model})")
         new_articles_count = 0
         
         # Calcular la fecha lÃ­mite (15 dÃ­as atrÃ¡s)
@@ -526,6 +525,20 @@ class FeedService:
             News.objects.filter(published_date__gte=fifteen_days_ago).values_list('guid', flat=True)
         )
 
+        # Obtener última fecha visible por fuente en una sola consulta (evita N+1)
+        source_ids = [source.id for source in sources]
+        latest_by_source = {}
+        if source_ids:
+            latest_by_source = dict(
+                News.objects.filter(
+                    source_id__in=source_ids,
+                    is_deleted=False,
+                    is_filtered=False
+                ).values('source_id').annotate(
+                    latest_date=Max('published_date')
+                ).values_list('source_id', 'latest_date')
+            )
+
         
         # Lista para almacenar todas las entradas de todas las fuentes
         all_entries = []
@@ -534,14 +547,8 @@ class FeedService:
         for source in sources:
             print(f"\nRecolectando entradas de fuente: {source.name}")
             
-            # Obtener la fecha de la Ãºltima noticia para esta fuente
-            latest_news = News.objects.filter(
-                source=source,
-                is_deleted=False,
-                is_filtered=False
-            ).order_by('-published_date').first()
-            
-            latest_date = latest_news.published_date if latest_news else fifteen_days_ago
+            # Obtener la fecha de la última noticia visible por fuente (cacheada en memoria)
+            latest_date = latest_by_source.get(source.id) or fifteen_days_ago
             
             # Usar la fecha mÃ¡s reciente entre la Ãºltima noticia y hace 15 dÃ­as
             cutoff_date = max(latest_date, fifteen_days_ago)
@@ -645,15 +652,6 @@ class FeedService:
                      # Si falla, usar una decodificaciÃ³n con reemplazo
                     original_description = original_description.decode('utf-8', 'replace')
             
-            # Si deep_search estÃ¡ activado, obtener el contenido completo independientemente de la imagen
-            if source.deep_search:
-                full_content = FeedService.get_full_article_content(entry.link)
-                if full_content['text']:
-                    original_description = full_content['text']
-                # Solo usar la imagen del contenido si no se encontrÃ³ una en el feed
-                if not image_url and full_content['image_url']:
-                    image_url = full_content['image_url']
-
             # >>>>> ORDEN CAMBIADO: Primero filtro por PALABRA CLAVE <<<<<
             should_filter, filter_word = FeedService.should_filter_news(entry.title, original_description, filter_word_patterns)
             if should_filter:
@@ -692,6 +690,15 @@ class FeedService:
                     
                 continue # Pasar a la siguiente noticia
             # <<<<< FIN FILTRO PALABRA CLAVE >>>>>
+
+            # Si deep_search está activado, obtener contenido completo solo para noticias no filtradas por keyword
+            if source.deep_search:
+                full_content = FeedService.get_full_article_content(entry.link)
+                if full_content['text']:
+                    original_description = full_content['text']
+                # Solo usar la imagen del contenido si no se encontró una en el feed
+                if not image_url and full_content['image_url']:
+                    image_url = full_content['image_url']
 
             # Si no se filtró por palabra clave, procesar con IA (Groq)
             processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_groq(
@@ -769,13 +776,15 @@ class FeedService:
             is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
                 news_item, gemini_client, recent_news_cache, vector_index
             )
-            
-            # Siempre guardar la informaciÃ³n de similitud si se encontrÃ³ una noticia similar
+
+            # Consolidar en una sola escritura posterior al create()
+            update_fields = []
+            if news_item.embedding:
+                update_fields.append('embedding')
             if similar_news:
                 news_item.similar_to = similar_news
                 news_item.similarity_score = similarity_score
-                # Guardamos estos campos ahora, por si no resulta redundante pero queremos la info
-                news_item.save(update_fields=['similar_to', 'similarity_score']) 
+                update_fields.extend(['similar_to', 'similarity_score'])
 
             if is_redundant and similar_news:
                 print(f"Â¡Noticia redundante detectada! Similar a: {similar_news.title}")
@@ -784,10 +793,14 @@ class FeedService:
                 # Marcar como redundante y filtrada (ya hemos guardado similar_to y score)
                 news_item.is_redundant = True
                 news_item.is_filtered = True  # Usamos is_filtered en lugar de is_deleted
-                # Guardamos todos los campos relevantes al marcar como redundante
-                news_item.save(update_fields=['is_redundant', 'is_filtered'])
+                update_fields.extend(['is_redundant', 'is_filtered'])
                 
                 redundant_count += 1
+
+            if update_fields:
+                # de-duplicar campos para evitar SQL redundante
+                news_item.save(update_fields=list(dict.fromkeys(update_fields)))
+
             if not is_redundant and news_item.embedding:
                 recent_news_cache.append(news_item)
                 # Indexar en Qdrant (si está disponible) para futuras búsquedas
@@ -808,11 +821,14 @@ class FeedService:
                         pass
 
         
-        # Actualizar la fecha de Ãºltima obtenciÃ³n para todas las fuentes
+        # Actualizar la fecha de última obtención para todas las fuentes con una sola escritura
+        fetched_at = timezone.now()
         for source in sources:
-            source.last_fetch = timezone.now()
-            source.save()
-            print(f"Actualizada fecha de Ãºltima obtenciÃ³n para {source.name}")
+            source.last_fetch = fetched_at
+        if sources:
+            FeedSource.objects.bulk_update(sources, ['last_fetch'])
+            for source in sources:
+                print(f"Actualizada fecha de última obtención para {source.name}")
         
         total_time = time.time() - start_time
         print(f"\nProceso completado en {total_time:.2f} segundos")
