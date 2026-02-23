@@ -18,8 +18,6 @@
 
     const MAX_NEWS = 25;
     const NOTIF_DURATION = 10_000;         // 10 s
-    const CHECK_INTERVAL_VISIBLE = 45_000; // 45 s en pestaña activa
-    const CHECK_INTERVAL_HIDDEN = 180_000; // 3 min en background
 
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
@@ -79,7 +77,9 @@
         savingNews: new Set(), // IDs de noticias siendo guardadas/desguardadas
         syncingFromDb: false, // evita refrescos simultaneos al recuperar foco/conexion
         lastDbSyncAt: 0, // timestamp del ultimo sync fuerte con DB
-        pollTimer: null,
+        sse: null,
+        sseConnected: false,
+        sseRetryTimer: null,
         checkController: null,
         backupController: null,
         syncController: null,
@@ -521,18 +521,42 @@
         STATE.userInteracted = false;
     };
 
-    const renderPageFromServerData = (data) => {
+    const renderPageFromServerData = (data, {animateMerge = false} = {}) => {
         if (!data || data.status !== 'success') return;
-        DOM.grid.innerHTML = '';
+        const shouldAnimateMerge = !!animateMerge && !!DOM.grid;
+        const oldPositions = shouldAnimateMerge && !isMobile() ? capturePositions() : null;
+        const existingCards = shouldAnimateMerge
+            ? new Map($$('.news-card-container', DOM.grid).map(el => [el.id.replace('news-', ''), el]))
+            : new Map();
+        const insertedCards = [];
         const frag = document.createDocumentFragment();
+
         (data.cards || []).forEach(item => {
-            const { card } = createCardFromPayload(item);
-            if (!card) return;
-            const id = card ? card.id.replace('news-', '') : String(item.id);
-            configureNewCard(card, id);
+            const payloadId = extractPayloadId(item);
+            let card = null;
+
+            if (shouldAnimateMerge && payloadId && existingCards.has(payloadId)) {
+                card = existingCards.get(payloadId);
+                existingCards.delete(payloadId);
+            } else {
+                const created = createCardFromPayload(item);
+                card = created.card;
+                if (!card) return;
+                const id = card.id.replace('news-', '');
+                configureNewCard(card, id);
+                if (shouldAnimateMerge) insertedCards.push(card);
+            }
+
             frag.appendChild(card);
         });
+
+        DOM.grid.innerHTML = '';
         DOM.grid.appendChild(frag);
+
+        if (shouldAnimateMerge) {
+            if (oldPositions) animateReposition(oldPositions);
+            insertedCards.forEach(el => animateScaleOpacity(el));
+        }
         STATE.backupCards = data.backup_cards || [];
         STATE.nextCursor = data.next_cursor || null;
         STATE.backupCursor = data.backup_next_cursor || data.next_cursor || null;
@@ -573,7 +597,7 @@
                 q,
                 signal: syncController.signal
             });
-            renderPageFromServerData(data);
+            renderPageFromServerData(data, {animateMerge: true});
             STATE.lastDbSyncAt = Date.now();
         } catch (e) {
             if (e.name === 'AbortError') return;
@@ -989,6 +1013,22 @@
         newIds.forEach(el => animateScaleOpacity(el));
     };
 
+    const handleIncomingNewsPayload = (data) => {
+        if (!data || data.status !== 'success') return;
+        STATE.lastChecked = data.current_time || new Date().toISOString();
+        if (data.cursor) STATE.latestNewsCursor = data.cursor;
+        if (data.news_cards?.length) {
+            STATE.pendingNews.push(...data.news_cards);
+            updateCounters(data.total_news, data.total_pages);
+            showNotification(data.news_cards.length);
+            loadNewNews();
+
+            if (STATE.backupCards.length < 5) {
+                loadMoreBackupNews();
+            }
+        }
+    };
+
     const checkForNewNews = () => {
         if (isSavedView()) return Promise.resolve();
         if (STATE.checkController) STATE.checkController.abort();
@@ -1004,19 +1044,7 @@
         return fetchJson(`/noticias/check-new-news/?${params.toString()}`, {signal: checkController.signal})
             .then(data => {
                 if (data.status !== 'success') throw new Error(data.message);
-                STATE.lastChecked = data.current_time;
-                if (data.cursor) STATE.latestNewsCursor = data.cursor;
-                if (data.news_cards?.length) {
-                    STATE.pendingNews.push(...data.news_cards);
-                    updateCounters(data.total_news, data.total_pages);
-                    showNotification(data.news_cards.length);
-                    loadNewNews();
-                    
-                    // Si tenemos pocas noticias de respaldo después de cargar nuevas, pedir más
-                    if (STATE.backupCards.length < 5) {
-                        loadMoreBackupNews();
-                    }
-                }
+                handleIncomingNewsPayload(data);
             })
             .catch(e => {
                 if (e.name === 'AbortError') return;
@@ -1258,16 +1286,56 @@
         }
     });
 
-    const getPollingInterval = () => (document.hidden ? CHECK_INTERVAL_HIDDEN : CHECK_INTERVAL_VISIBLE);
-    const schedulePolling = (delay = getPollingInterval()) => {
-        if (isSavedView()) {
-            clearTimeout(STATE.pollTimer);
-            return;
+    const closeNewsStream = () => {
+        if (STATE.sseRetryTimer) {
+            clearTimeout(STATE.sseRetryTimer);
+            STATE.sseRetryTimer = null;
         }
-        clearTimeout(STATE.pollTimer);
-        STATE.pollTimer = setTimeout(() => {
-            checkForNewNews().finally(() => schedulePolling());
-        }, delay);
+        if (STATE.sse) {
+            STATE.sse.close();
+            STATE.sse = null;
+        }
+        STATE.sseConnected = false;
+    };
+
+    const connectNewsStream = () => {
+        if (isSavedView() || !window.EventSource) return;
+        closeNewsStream();
+
+        const params = new URLSearchParams();
+        if (STATE.latestNewsCursor) params.set('cursor', STATE.latestNewsCursor);
+        if (isSavedView()) params.set('saved_only', 'true');
+        const streamUrl = `/noticias/news-stream/?${params.toString()}`;
+        const sse = new EventSource(streamUrl);
+        STATE.sse = sse;
+
+        sse.addEventListener('open', () => {
+            STATE.sseConnected = true;
+            log('SSE conectado');
+        });
+
+        sse.addEventListener('news', (event) => {
+            try {
+                const payload = JSON.parse(event.data);
+                handleIncomingNewsPayload(payload);
+            } catch (e) {
+                err('Error parseando SSE:', e);
+            }
+        });
+
+        sse.onerror = () => {
+            STATE.sseConnected = false;
+            if (STATE.sse) {
+                STATE.sse.close();
+                STATE.sse = null;
+            }
+            if (!STATE.sseRetryTimer) {
+                STATE.sseRetryTimer = setTimeout(() => {
+                    STATE.sseRetryTimer = null;
+                    connectNewsStream();
+                }, 5_000);
+            }
+        };
     };
 
     /* ---------------------------------------------------------------------
@@ -1285,14 +1353,15 @@
         }
         if (STATE.pageVisible) {
             syncCurrentPageFromDb();
-            schedulePolling(2_000);
+            connectNewsStream();
         } else {
-            schedulePolling();
+            closeNewsStream();
         }
     });
-    window.addEventListener('focus', () => { syncCurrentPageFromDb(); schedulePolling(1_000); });
-    window.addEventListener('pageshow', () => { syncCurrentPageFromDb({force: true}); schedulePolling(500); });
-    window.addEventListener('online', () => { syncCurrentPageFromDb({force: true}); schedulePolling(500); });
+    window.addEventListener('focus', () => { syncCurrentPageFromDb(); connectNewsStream(); });
+    window.addEventListener('pageshow', () => { syncCurrentPageFromDb({force: true}); connectNewsStream(); });
+    window.addEventListener('online', () => { syncCurrentPageFromDb({force: true}); connectNewsStream(); });
+    window.addEventListener('beforeunload', closeNewsStream);
 
     // Interacción del usuario → reset userInteracted para unir notificaciones
     ['click', 'scroll'].forEach(evt => document.addEventListener(evt, () => { STATE.userInteracted = true; }));
@@ -1413,11 +1482,11 @@
         initializeBackupCards();
         syncCurrentPageFromDb({force: true})
             .catch(e => err('Error al cargar página inicial:', e));
+        connectNewsStream();
         // Establecer icono inicial según orden actual
         setOrderIcon();
     });
     
-    if (!isSavedView()) schedulePolling(10_000);
     enforceCardLimit(); // Aplicar límite al cargar la página inicialmente
     // updatePagination será llamada por updateCounters en la carga inicial
 

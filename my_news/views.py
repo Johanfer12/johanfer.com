@@ -3,6 +3,7 @@ from django.views.generic import ListView
 from .models import News, FeedSource
 from django.http import JsonResponse
 from django.http import HttpResponse
+from django.http import StreamingHttpResponse
 from django.views.decorators.http import require_POST, require_GET
 from .services import FeedService, EmbeddingService
 from django.contrib.auth.decorators import user_passes_test
@@ -18,6 +19,8 @@ from .tasks import purge_old_news, retry_summarize_pending
 import subprocess
 import platform
 import hashlib
+import json
+import time
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
@@ -566,6 +569,86 @@ def undo_delete(request, pk):
         return JsonResponse({'status': 'error', 'message': 'Noticia no encontrada'})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
+
+
+@require_GET
+def news_stream(request):
+    if not request.user.is_authenticated or not request.user.is_superuser:
+        return HttpResponse(status=403)
+
+    saved_only = request.GET.get('saved_only', 'false').lower() == 'true'
+    cursor = request.GET.get('cursor')
+    created_dt, created_id = _parse_created_cursor(cursor)
+
+    if created_dt is None or created_id is None:
+        latest_qs = News.visible
+        if saved_only:
+            latest_qs = latest_qs.filter(is_saved=True)
+        else:
+            latest_qs = latest_qs.filter(is_saved=False)
+        latest = latest_qs.order_by('-created_at', '-id').values_list('created_at', 'id').first()
+        if latest:
+            created_dt, created_id = latest
+
+    def event_stream():
+        nonlocal created_dt, created_id
+        heartbeat_every = 15.0
+        poll_interval = 2.0
+        last_heartbeat = time.monotonic()
+
+        while True:
+            try:
+                news_qs = News.visible.select_related('source')
+                if saved_only:
+                    news_qs = news_qs.filter(is_saved=True)
+                else:
+                    news_qs = news_qs.filter(is_saved=False)
+
+                if created_dt is not None and created_id is not None:
+                    news_qs = news_qs.filter(
+                        Q(created_at__gt=created_dt) |
+                        (Q(created_at=created_dt) & Q(id__gt=created_id))
+                    )
+                else:
+                    news_qs = news_qs.none()
+
+                new_news = list(news_qs.order_by('created_at', 'id')[:200])
+                if new_news:
+                    cards = [_serialize_news_card(article) for article in new_news]
+                    last_item = new_news[-1]
+                    created_dt, created_id = last_item.created_at, last_item.id
+                    latest_cursor = f"{created_dt.isoformat()}|{created_id}"
+                    total_news, total_pages = _get_total_news_and_pages(saved_only=saved_only)
+
+                    payload = json.dumps({
+                        'status': 'success',
+                        'news_cards': cards,
+                        'cursor': latest_cursor,
+                        'current_time': timezone.now().isoformat(),
+                        'total_news': total_news,
+                        'total_pages': total_pages,
+                    }, ensure_ascii=False)
+                    yield 'event: news\n'
+                    yield f'id: {latest_cursor}\n'
+                    yield f'data: {payload}\n\n'
+
+                now = time.monotonic()
+                if (now - last_heartbeat) >= heartbeat_every:
+                    yield ': ping\n\n'
+                    last_heartbeat = now
+
+                time.sleep(poll_interval)
+            except GeneratorExit:
+                break
+            except Exception:
+                # Mantener el stream vivo ante errores transitorios.
+                time.sleep(poll_interval)
+                continue
+
+    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'
+    return response
 
 
 @require_POST

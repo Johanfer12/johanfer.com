@@ -14,6 +14,7 @@ urlpatterns = [
     path('cleanup-old/', views.cleanup_old_news, name='cleanup_old_news'),
     path('retry-summaries/', views.retry_summaries, name='retry_summaries'),
     path('check-new-news/', views.check_new_news, name='check_new_news'),
+    path('news-stream/', views.news_stream, name='news_stream'),
     path('get-news-count/', views.get_news_count, name='get_news_count'),
     path('get-page/', views.get_page, name='get_page'),
     path('redundancy-test/', views.test_redundancy, name='redundancy_test'),
