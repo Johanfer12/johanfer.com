@@ -5,6 +5,8 @@ staticfiles/
 CLAUDE.md
 /qdrant_storage/
 /media/
+/ops_local/
+RASPBERRY_SERVER_REBUILD.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
