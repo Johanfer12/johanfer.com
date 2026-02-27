@@ -5,6 +5,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Estadísticas de mi música</title>
+    <meta name="description" content="Estadísticas de música en Spotify: géneros top, artistas top y evolución mensual.">
+    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    <meta property="og:site_name" content="Rincón de Johan">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Estadísticas de mi música | Rincón de Johan">
+    <meta property="og:description" content="Géneros top, artistas top y evolución mensual de canciones.">
+    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/spotify-icon.svg' %}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Estadísticas de mi música | Rincón de Johan">
+    <meta name="twitter:description" content="Géneros top, artistas top y evolución mensual de canciones.">
+    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/spotify-icon.svg' %}">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
     <link rel="stylesheet" href="{% static 'css/stats.css' %}">

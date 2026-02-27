@@ -7,6 +7,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rincón de Johan</title>
     <meta name="description" content="Home personal de Johan: libros, música y noticias en un solo lugar.">
+    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    <meta property="og:site_name" content="Rincón de Johan">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Rincón de Johan">
+    <meta property="og:description" content="Home personal de Johan: libros, música y noticias en un solo lugar.">
+    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Rincón de Johan">
+    <meta name="twitter:description" content="Home personal de Johan: libros, música y noticias en un solo lugar.">
+    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     <link rel="stylesheet" href="{% static 'css/home.css' %}">
 </head>
