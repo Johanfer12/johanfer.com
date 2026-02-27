@@ -38,3 +38,21 @@ class DeletedBook(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.author}"
+
+
+class VisitLog(models.Model):
+    ip_address = models.CharField(max_length=45, db_index=True)
+    visitor_id = models.CharField(max_length=64, db_index=True, blank=True, default='')
+    country = models.CharField(max_length=120, blank=True, default='')
+    path = models.CharField(max_length=255, db_index=True)
+    user_agent = models.TextField(blank=True, default='')
+    referrer = models.TextField(blank=True, default='')
+    visited_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-visited_at']
+        verbose_name = 'Visita'
+        verbose_name_plural = 'Visitas'
+
+    def __str__(self):
+        return f"{self.ip_address} - {self.path}"

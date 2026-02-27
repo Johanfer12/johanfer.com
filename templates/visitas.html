@@ -1,0 +1,206 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visitas</title>
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'css/header.css' %}">
+    <style>
+        .visits-wrap {
+            max-width: 1200px;
+            margin: 24px auto;
+            padding: 0 16px 24px;
+        }
+        .visits-table-wrap {
+            border: 1px solid rgba(207, 220, 241, 0.27);
+            border-radius: 12px;
+            overflow: hidden;
+            background: rgba(9, 16, 28, 0.62);
+            box-shadow: 0 12px 24px rgba(2, 8, 18, 0.45);
+        }
+        .visits-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .visits-table th,
+        .visits-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(207, 220, 241, 0.18);
+            font-size: 0.92rem;
+            vertical-align: top;
+        }
+        .visits-table th {
+            background: rgba(12, 22, 40, 0.75);
+            color: #c6d6f5;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+        .visits-table tr:last-child td {
+            border-bottom: 0;
+        }
+        .visit-path {
+            max-width: 360px;
+            word-break: break-word;
+        }
+        .visit-agent {
+            max-width: 420px;
+            word-break: break-word;
+            color: rgba(227, 233, 245, 0.86);
+        }
+        .country-flag {
+            font-size: 1rem;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+        .self-badge {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(140, 202, 255, 0.62);
+            background: rgba(62, 140, 212, 0.22);
+            color: #d5ecff;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            vertical-align: middle;
+        }
+        .pagination {
+            margin-top: 16px;
+        }
+        .filter-row th {
+            background: rgba(8, 15, 30, 0.9);
+            padding-top: 8px;
+            padding-bottom: 8px;
+        }
+        .filter-input {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid rgba(164, 188, 222, 0.35);
+            background: rgba(10, 20, 37, 0.72);
+            color: #eaf2ff;
+            padding: 6px 8px;
+            font-size: 0.82rem;
+        }
+        .date-filter {
+            display: grid;
+            gap: 6px;
+        }
+        .filter-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            align-items: center;
+        }
+        .filter-actions .filter-input {
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+        .filter-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            border: 1px solid rgba(171, 195, 235, 0.35);
+            background: rgba(19, 36, 64, 0.84);
+            color: #dbe7ff;
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+        .filter-btn:hover {
+            background: rgba(31, 56, 94, 0.9);
+        }
+        .filter-btn.secondary {
+            background: rgba(34, 28, 49, 0.78);
+            border-color: rgba(190, 162, 222, 0.33);
+        }
+    </style>
+</head>
+<body class="has-header">
+    {% include 'header.html' %}
+
+    <div class="visits-wrap">
+        <form method="get">
+        <div class="visits-table-wrap">
+            <table class="visits-table">
+                <thead>
+                    <tr>
+                        <th>Fecha/Hora</th>
+                        <th>IP</th>
+                        <th>País</th>
+                        <th>Ruta</th>
+                        <th>User-Agent</th>
+                    </tr>
+                    <tr class="filter-row">
+                        <th>
+                            <div class="date-filter">
+                                <input class="filter-input" type="datetime-local" name="from" value="{{ filters.from }}" title="Desde">
+                                <input class="filter-input" type="datetime-local" name="to" value="{{ filters.to }}" title="Hasta">
+                            </div>
+                        </th>
+                        <th><input class="filter-input" type="text" name="ip" value="{{ filters.ip }}" placeholder="Filtrar IP"></th>
+                        <th><input class="filter-input" type="text" name="country" value="{{ filters.country }}" placeholder="Filtrar país"></th>
+                        <th><input class="filter-input" type="text" name="path" value="{{ filters.path }}" placeholder="Filtrar ruta"></th>
+                        <th>
+                            <div class="filter-actions">
+                                <input class="filter-input" type="text" name="ua" value="{{ filters.ua }}" placeholder="Filtrar user-agent">
+                                <button class="filter-btn" type="submit">Filtrar</button>
+                                <a class="filter-btn secondary" href="/visitas/">Limpiar</a>
+                            </div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for visit in page_obj %}
+                    <tr>
+                        <td>{{ visit.visited_at|date:"Y-m-d H:i:s" }}</td>
+                        <td>
+                            {{ visit.ip_address }}
+                            {% if visit.is_self %}
+                            <span class="self-badge">YO</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if visit.country %}
+                            {% if visit.country_flag %}<span class="country-flag">{{ visit.country_flag }}</span>{% endif %}
+                            {{ visit.country }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td class="visit-path">{{ visit.path }}</td>
+                        <td class="visit-agent">{{ visit.user_agent|default:"-" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5">No hay visitas registradas todavía.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        </form>
+
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+            <a href="?{% if filter_query %}{{ filter_query }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+            {% endif %}
+
+            <span class="active">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+
+            {% if page_obj.has_next %}
+            <a href="?{% if filter_query %}{{ filter_query }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

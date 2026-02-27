@@ -2,12 +2,65 @@ from django.shortcuts import render
 from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.http import HttpResponse
+from django.contrib.auth.decorators import user_passes_test
 from .models import Book
+from .models import VisitLog
 from django.db.models import Count
 from django.db.models import Q
 from django.urls import reverse
+from django.utils import timezone as dj_timezone
 import json
 from datetime import datetime, timezone
+
+SESSION_VISITOR_KEY = 'visit_visitor_id'
+
+
+COUNTRY_TO_ISO2 = {
+    'argentina': 'AR',
+    'bolivia': 'BO',
+    'brazil': 'BR',
+    'brasil': 'BR',
+    'canada': 'CA',
+    'chile': 'CL',
+    'colombia': 'CO',
+    'costa rica': 'CR',
+    'dominican republic': 'DO',
+    'ecuador': 'EC',
+    'el salvador': 'SV',
+    'spain': 'ES',
+    'españa': 'ES',
+    'guatemala': 'GT',
+    'honduras': 'HN',
+    'mexico': 'MX',
+    'méxico': 'MX',
+    'nicaragua': 'NI',
+    'panama': 'PA',
+    'panamá': 'PA',
+    'paraguay': 'PY',
+    'peru': 'PE',
+    'perú': 'PE',
+    'puerto rico': 'PR',
+    'united kingdom': 'GB',
+    'united states': 'US',
+    'uruguay': 'UY',
+    'venezuela': 'VE',
+}
+
+
+def _iso2_to_flag(iso2):
+    if not iso2 or len(iso2) != 2 or not iso2.isalpha():
+        return ''
+    base = 127397
+    return chr(ord(iso2[0].upper()) + base) + chr(ord(iso2[1].upper()) + base)
+
+
+def _country_to_flag(country):
+    if not country:
+        return ''
+    value = country.strip()
+    iso2 = value.upper() if len(value) == 2 and value.isalpha() else COUNTRY_TO_ISO2.get(value.lower(), '')
+    return _iso2_to_flag(iso2)
+
 
 def home(request):
     return render(request, 'home_page.html')
@@ -110,6 +163,90 @@ def stats(request):
 
 def custom_404_view(request, exception):
     return render(request, '404.html', status=404)
+
+
+def _get_client_ip(request):
+    forwarded = request.headers.get('X-Forwarded-For')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return (request.META.get('REMOTE_ADDR') or '').strip()
+
+
+def _get_visitor_id(request):
+    return (request.session.get(SESSION_VISITOR_KEY) or '').strip()
+
+
+def _parse_datetime_local(value):
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if dj_timezone.is_naive(dt):
+        dt = dj_timezone.make_aware(dt, dj_timezone.get_current_timezone())
+    return dt
+
+
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+def visits(request):
+    ip_filter = (request.GET.get('ip') or '').strip()
+    country_filter = (request.GET.get('country') or '').strip()
+    path_filter = (request.GET.get('path') or '').strip()
+    user_agent_filter = (request.GET.get('ua') or '').strip()
+    date_from_raw = (request.GET.get('from') or '').strip()
+    date_to_raw = (request.GET.get('to') or '').strip()
+
+    visit_qs = VisitLog.objects.all()
+    if ip_filter:
+        visit_qs = visit_qs.filter(ip_address__icontains=ip_filter)
+    if country_filter:
+        visit_qs = visit_qs.filter(country__icontains=country_filter)
+    if path_filter:
+        visit_qs = visit_qs.filter(path__icontains=path_filter)
+    if user_agent_filter:
+        visit_qs = visit_qs.filter(user_agent__icontains=user_agent_filter)
+
+    date_from = _parse_datetime_local(date_from_raw)
+    date_to = _parse_datetime_local(date_to_raw)
+    if date_from:
+        visit_qs = visit_qs.filter(visited_at__gte=date_from)
+    if date_to:
+        visit_qs = visit_qs.filter(visited_at__lte=date_to)
+
+    visit_qs = visit_qs.order_by('-visited_at')
+    paginator = Paginator(visit_qs, 100)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    current_ip = _get_client_ip(request)
+    current_visitor_id = _get_visitor_id(request)
+
+    for visit in page_obj.object_list:
+        visit.country_flag = _country_to_flag(visit.country)
+        visit.is_self = (
+            bool(current_visitor_id and visit.visitor_id == current_visitor_id)
+            or bool(current_ip and visit.ip_address == current_ip)
+        )
+
+    query_params = request.GET.copy()
+    if 'page' in query_params:
+        del query_params['page']
+
+    return render(request, 'visitas.html', {
+        'page_obj': page_obj,
+        'total_visits': visit_qs.count(),
+        'current_ip': current_ip,
+        'current_visitor_id': current_visitor_id,
+        'filter_query': query_params.urlencode(),
+        'filters': {
+            'ip': ip_filter,
+            'country': country_filter,
+            'path': path_filter,
+            'ua': user_agent_filter,
+            'from': date_from_raw,
+            'to': date_to_raw,
+        },
+    })
 
 
 def robots_txt(request):
