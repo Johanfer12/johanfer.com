@@ -16,38 +16,6 @@ from urllib.parse import urlencode
 SESSION_VISITOR_KEY = 'visit_visitor_id'
 
 
-COUNTRY_TO_ISO2 = {
-    'argentina': 'AR',
-    'bolivia': 'BO',
-    'brazil': 'BR',
-    'brasil': 'BR',
-    'canada': 'CA',
-    'chile': 'CL',
-    'colombia': 'CO',
-    'costa rica': 'CR',
-    'dominican republic': 'DO',
-    'ecuador': 'EC',
-    'el salvador': 'SV',
-    'spain': 'ES',
-    'españa': 'ES',
-    'guatemala': 'GT',
-    'honduras': 'HN',
-    'mexico': 'MX',
-    'méxico': 'MX',
-    'nicaragua': 'NI',
-    'panama': 'PA',
-    'panamá': 'PA',
-    'paraguay': 'PY',
-    'peru': 'PE',
-    'perú': 'PE',
-    'puerto rico': 'PR',
-    'united kingdom': 'GB',
-    'united states': 'US',
-    'uruguay': 'UY',
-    'venezuela': 'VE',
-}
-
-
 def _iso2_to_flag(iso2):
     if not iso2 or len(iso2) != 2 or not iso2.isalpha():
         return ''
@@ -55,12 +23,16 @@ def _iso2_to_flag(iso2):
     return chr(ord(iso2[0].upper()) + base) + chr(ord(iso2[1].upper()) + base)
 
 
-def _country_to_flag(country):
+def _extract_iso2_from_country_text(country):
     if not country:
         return ''
     value = country.strip()
-    iso2 = value.upper() if len(value) == 2 and value.isalpha() else COUNTRY_TO_ISO2.get(value.lower(), '')
-    return _iso2_to_flag(iso2)
+    if len(value) == 2 and value.isalpha():
+        return value.upper()
+    parts = value.replace('-', ' ').split()
+    if parts and len(parts[0]) == 2 and parts[0].isalpha():
+        return parts[0].upper()
+    return ''
 
 
 def home(request):
@@ -260,7 +232,10 @@ def visits(request):
     current_visitor_id = _get_visitor_id(request)
 
     for visit in page_obj.object_list:
-        visit.country_flag = _country_to_flag(visit.country)
+        iso2 = (visit.country_code or '').upper()
+        if not iso2:
+            iso2 = _extract_iso2_from_country_text(visit.country)
+        visit.country_flag = _iso2_to_flag(iso2)
         visit.is_self = (
             bool(current_visitor_id and visit.visitor_id == current_visitor_id)
             or bool(current_ip and visit.ip_address == current_ip)

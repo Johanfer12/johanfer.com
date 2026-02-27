@@ -56,11 +56,15 @@ class VisitLogMiddleware:
             return
 
         visitor_id = self._get_or_create_visitor_id(request)
-        country = self._resolve_country(ip) if self._is_public_ip(ip) else 'Local'
+        if self._is_public_ip(ip):
+            country, country_code = self._resolve_country(ip)
+        else:
+            country, country_code = 'Local', ''
 
         VisitLog.objects.create(
             ip_address=ip,
             visitor_id=visitor_id,
+            country_code=country_code or '',
             country=country or '',
             path=request.path[:255],
             user_agent=(request.headers.get('User-Agent') or '')[:1500],
@@ -96,6 +100,7 @@ class VisitLogMiddleware:
             return cached
 
         country = ''
+        country_code = ''
         try:
             req = Request(
                 f'https://ipwho.is/{ip}',
@@ -105,11 +110,14 @@ class VisitLogMiddleware:
                 data = json.loads(resp.read().decode('utf-8', errors='ignore'))
                 if data.get('success'):
                     country = data.get('country', '') or ''
+                    country_code = (data.get('country_code', '') or '').upper()
         except Exception:
             country = ''
+            country_code = ''
 
-        cache.set(cache_key, country, 60 * 60 * 24 * 7)
-        return country
+        result = (country, country_code)
+        cache.set(cache_key, result, 60 * 60 * 24 * 7)
+        return result
 
     def _get_or_create_visitor_id(self, request):
         visitor_id = request.session.get(self.SESSION_VISITOR_KEY, '').strip()
