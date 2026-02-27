@@ -43,6 +43,7 @@ class DeletedBook(models.Model):
 class VisitLog(models.Model):
     ip_address = models.CharField(max_length=45, db_index=True)
     visitor_id = models.CharField(max_length=64, db_index=True, blank=True, default='')
+    country_code = models.CharField(max_length=2, blank=True, default='')
     country = models.CharField(max_length=120, blank=True, default='')
     path = models.CharField(max_length=255, db_index=True)
     user_agent = models.TextField(blank=True, default='')
