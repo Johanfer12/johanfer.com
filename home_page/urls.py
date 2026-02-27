@@ -8,6 +8,7 @@ urlpatterns = [
     path('robots.txt', views.robots_txt, name='robots_txt'),
     path('sitemap.xml', views.sitemap_xml, name='sitemap_xml'),
     path('bookshelf/', views.bookshelf, name='bookshelf'),
+    path('visitas/', views.visits, name='visits'),
     path('bookshelf/stats/', views.stats, name='stats'),
     path('about/', views.about, name='about'),
 ]
