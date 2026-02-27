@@ -3,13 +3,18 @@ from django.core.paginator import Paginator
 from django.http import JsonResponse
 from .models import Book
 from django.db.models import Count
+from django.db.models import Q
 import json
 
 def home(request):
     return render(request, 'home_page.html')
 
 def bookshelf(request):
+    query = (request.GET.get('q') or '').strip()
     books = Book.objects.all().order_by('-id')
+    if query:
+        books = books.filter(Q(title__icontains=query) | Q(author__icontains=query))
+
     total_books = books.count()  # Total de libros en la base de datos
     
     # Truncar el título de los libros que tienen ':' en el título
@@ -38,10 +43,19 @@ def bookshelf(request):
                 'description': book.description,
                 'genres': book.genres or ''
             })
-        return JsonResponse({'books': book_data, 'has_next': page_obj.has_next()})
+        return JsonResponse({
+            'books': book_data,
+            'has_next': page_obj.has_next(),
+            'query': query,
+            'total_books': total_books,
+        })
     else:
         # Para peticiones normales, renderizar la plantilla
-        return render(request, 'bookshelf.html', {'page_obj': page_obj, 'total_books': total_books})
+        return render(request, 'bookshelf.html', {
+            'page_obj': page_obj,
+            'total_books': total_books,
+            'current_query': query,
+        })
 
 def about(request):
     # Guardar la página de origen si viene de bookshelf o spotify
