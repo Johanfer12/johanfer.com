@@ -12,7 +12,7 @@
 <body class="has-header">
     {% include 'header.html' %}
     
-    <div id="book-container" class="book-container">
+    <div id="book-container" class="book-container" data-has-next="{% if page_obj.has_next %}true{% else %}false{% endif %}">
         {% for book in page_obj %}
         <div class="book-item">
             <div class="book-info-container">
@@ -70,12 +70,36 @@
 
     <div id="loading" style="display: none;">Loading more books...</div>
 
-    <div class="floating-button">
-        <a href="#"><img src="{% static 'Img/circle.svg' %}" alt="Scroll to Top"></a>
+    <button class="book-scroll-top-btn" id="bookScrollTopBtn" title="Volver arriba" aria-label="Volver arriba">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" aria-hidden="true">
+            <path d="M214.6 41.4c-12.5-12.5-32.8-12.5-45.3 0l-160 160c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L160 141.3V480c0 17.7 14.3 32 32 32s32-14.3 32-32V141.3L329.4 246.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3l-160-160z"/>
+        </svg>
+    </button>
+
+    <button class="book-search-btn" id="bookSearchBtn" title="Buscar libros" aria-label="Buscar libros">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true">
+            <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z"/>
+        </svg>
+    </button>
+
+    <div id="booksSearchModal" class="modal books-search-modal" role="dialog" aria-modal="true" aria-labelledby="booksSearchTitle">
+        <div class="modal-content books-search-content">
+            <button type="button" class="close books-search-close" id="booksSearchCloseBtn" aria-label="Cerrar">&times;</button>
+            <h2 id="booksSearchTitle">Buscar libros</h2>
+            <p class="books-search-subtitle">Filtra por título o autor.</p>
+            <form id="booksSearchForm" class="books-search-form">
+                <input id="booksSearchInput" type="text" class="books-search-input" placeholder="Escribe aquí..." autocomplete="off" value="{{ current_query|default:'' }}">
+                <div class="books-search-actions">
+                    <button type="submit" class="books-search-apply">Buscar</button>
+                    <button type="button" class="books-search-cancel" id="booksSearchCancelBtn">Cancelar</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script src="{% static 'js/modal.js' %}"></script>
     <script src="{% static 'js/infinite_scroll.js' %}"></script>
-    <script src="{% static 'js/scroll_button.js' %}"></script>
+    <script src="{% static 'js/books_scroll_top.js' %}"></script>
+    <script src="{% static 'js/books_search.js' %}"></script>
 </body>
 </html>
