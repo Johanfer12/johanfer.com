@@ -193,10 +193,10 @@ El proyecto utiliza `django-crontab` para gestionar tareas programadas que actua
 CRONJOBS = [
     # Actualiza las noticias cada 30 minutos
     ('*/30 * * * *', 'my_news.tasks.update_news_feed'),
-    
+
     # Actualiza los libros una vez al día a las 2:00 AM
     ('0 2 * * *', 'home_page.tasks.refresh_books_data'),
-    
+
     # Actualiza los datos de Spotify una vez al día a las 3:00 AM
     ('0 3 * * *', 'spotify.tasks.refresh_spotify_data')
 ]
@@ -230,6 +230,12 @@ Las tareas se ejecutan automáticamente en segundo plano según su programación
 - **Libros**: Se actualizan una vez al día (a las 2:00 AM) para obtener nuevas lecturas de Goodreads.
 - **Noticias**: Se actualizan cada 30 minutos para mantener el feed de noticias actualizado.
 - **Música**: Se actualizan una vez al día (a las 3:00 AM) para sincronizar con la biblioteca de Spotify.
+
+Nota de producción (Raspberry):
+
+- Actualmente la tarea de noticias se limita a la franja `08:00` a `22:00` (hora del servidor):
+  - `*/30 8-21 * * * ... #News`
+  - `0 22 * * * ... #News`
 
 En ambientes de desarrollo local, puede ser más conveniente ejecutar estos comandos manualmente en lugar de configurar los cronjobs.
 
