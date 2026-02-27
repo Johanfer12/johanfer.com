@@ -5,6 +5,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Estadísticas de Lectura</title>
+    <meta name="description" content="Estadísticas de lectura: libros por año, calificaciones y géneros más leídos.">
+    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    <meta property="og:site_name" content="Rincón de Johan">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Estadísticas de Lectura | Rincón de Johan">
+    <meta property="og:description" content="Libros por año, calificaciones y géneros más leídos.">
+    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Estadísticas de Lectura | Rincón de Johan">
+    <meta name="twitter:description" content="Libros por año, calificaciones y géneros más leídos.">
+    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/stats.css' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">

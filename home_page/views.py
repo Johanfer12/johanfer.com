@@ -1,10 +1,13 @@
 from django.shortcuts import render
 from django.core.paginator import Paginator
 from django.http import JsonResponse
+from django.http import HttpResponse
 from .models import Book
 from django.db.models import Count
 from django.db.models import Q
+from django.urls import reverse
 import json
+from datetime import datetime, timezone
 
 def home(request):
     return render(request, 'home_page.html')
@@ -107,3 +110,43 @@ def stats(request):
 
 def custom_404_view(request, exception):
     return render(request, '404.html', status=404)
+
+
+def robots_txt(request):
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /j_admin/",
+        "Disallow: /noticias/",
+        "",
+        f"Sitemap: {request.scheme}://{request.get_host()}{reverse('home_page:sitemap_xml')}",
+    ]
+    return HttpResponse("\n".join(lines), content_type="text/plain; charset=utf-8")
+
+
+def sitemap_xml(request):
+    base = f"{request.scheme}://{request.get_host()}"
+    now = datetime.now(timezone.utc).date().isoformat()
+    urls = [
+        reverse('home_page:index'),
+        reverse('home_page:bookshelf'),
+        reverse('home_page:stats'),
+        reverse('home_page:about'),
+        reverse('spotify:dashboard'),
+        reverse('spotify:stats'),
+        reverse('spotify:deleted'),
+    ]
+
+    body = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for path in urls:
+        body.extend([
+            "  <url>",
+            f"    <loc>{base}{path}</loc>",
+            f"    <lastmod>{now}</lastmod>",
+            "  </url>",
+        ])
+    body.append("</urlset>")
+    return HttpResponse("\n".join(body), content_type="application/xml; charset=utf-8")
