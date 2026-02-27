@@ -10,20 +10,88 @@
     <link rel="stylesheet" href="{% static 'css/header.css' %}">
     <style>
         .visits-wrap {
-            max-width: 1200px;
+            max-width: 1280px;
             margin: 24px auto;
             padding: 0 16px 24px;
+        }
+        .visits-toolbar {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 12px;
+            margin-bottom: 12px;
+            padding: 12px;
+            border: 1px solid rgba(207, 220, 241, 0.27);
+            border-radius: 12px;
+            background: rgba(9, 16, 28, 0.62);
+            box-shadow: 0 12px 24px rgba(2, 8, 18, 0.3);
+        }
+        .filter-grid {
+            display: grid;
+            grid-template-columns: 190px 190px 150px 150px 150px 1fr;
+            gap: 8px;
+            align-items: center;
+        }
+        .filter-input {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid rgba(164, 188, 222, 0.35);
+            background: rgba(10, 20, 37, 0.72);
+            color: #eaf2ff;
+            padding: 7px 9px;
+            font-size: 0.84rem;
+        }
+        .toolbar-actions {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+        .toolbar-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 168px;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            border: 1px solid rgba(171, 195, 235, 0.35);
+            background: rgba(19, 36, 64, 0.84);
+            color: #dbe7ff;
+            text-decoration: none;
+            font-size: 0.82rem;
+            font-weight: 600;
+            padding: 7px 10px;
+            cursor: pointer;
+            line-height: 1;
+            min-height: 32px;
+        }
+        .btn:hover {
+            background: rgba(31, 56, 94, 0.9);
+        }
+        .btn.secondary {
+            background: rgba(34, 28, 49, 0.78);
+            border-color: rgba(190, 162, 222, 0.33);
+        }
+        .btn.danger {
+            background: rgba(92, 25, 33, 0.84);
+            border-color: rgba(223, 109, 124, 0.42);
+        }
+        .btn.danger:hover {
+            background: rgba(121, 33, 45, 0.9);
         }
         .visits-table-wrap {
             border: 1px solid rgba(207, 220, 241, 0.27);
             border-radius: 12px;
-            overflow: hidden;
+            overflow: auto;
             background: rgba(9, 16, 28, 0.62);
             box-shadow: 0 12px 24px rgba(2, 8, 18, 0.45);
         }
         .visits-table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 980px;
         }
         .visits-table th,
         .visits-table td {
@@ -34,7 +102,7 @@
             vertical-align: top;
         }
         .visits-table th {
-            background: rgba(12, 22, 40, 0.75);
+            background: rgba(12, 22, 40, 0.85);
             color: #c6d6f5;
             font-weight: 600;
             letter-spacing: 0.02em;
@@ -42,14 +110,44 @@
         .visits-table tr:last-child td {
             border-bottom: 0;
         }
+        .visit-check {
+            width: 34px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .visit-check input[type="checkbox"] {
+            width: 15px;
+            height: 15px;
+        }
         .visit-path {
-            max-width: 360px;
+            max-width: 240px;
             word-break: break-word;
         }
         .visit-agent {
-            max-width: 420px;
+            max-width: 340px;
             word-break: break-word;
             color: rgba(227, 233, 245, 0.86);
+        }
+        .visit-actions {
+            width: 58px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .inline-delete {
+            border-radius: 8px;
+            border: 1px solid rgba(223, 109, 124, 0.42);
+            background: rgba(92, 25, 33, 0.84);
+            color: #ffe3e8;
+            font-size: 1rem;
+            font-weight: 600;
+            line-height: 1;
+            width: 32px;
+            height: 28px;
+            padding: 0;
+            cursor: pointer;
+        }
+        .inline-delete:hover {
+            background: rgba(121, 33, 45, 0.9);
         }
         .country-flag {
             font-size: 1rem;
@@ -72,54 +170,17 @@
         .pagination {
             margin-top: 16px;
         }
-        .filter-row th {
-            background: rgba(8, 15, 30, 0.9);
-            padding-top: 8px;
-            padding-bottom: 8px;
-        }
-        .filter-input {
-            width: 100%;
-            border-radius: 8px;
-            border: 1px solid rgba(164, 188, 222, 0.35);
-            background: rgba(10, 20, 37, 0.72);
-            color: #eaf2ff;
-            padding: 6px 8px;
-            font-size: 0.82rem;
-        }
-        .date-filter {
-            display: grid;
-            gap: 6px;
-        }
-        .filter-actions {
-            display: flex;
-            gap: 8px;
-            justify-content: flex-end;
-            align-items: center;
-        }
-        .filter-actions .filter-input {
-            min-width: 0;
-            flex: 1 1 auto;
-        }
-        .filter-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 8px;
-            border: 1px solid rgba(171, 195, 235, 0.35);
-            background: rgba(19, 36, 64, 0.84);
-            color: #dbe7ff;
-            text-decoration: none;
-            font-size: 0.8rem;
-            font-weight: 600;
-            padding: 6px 10px;
-            cursor: pointer;
-        }
-        .filter-btn:hover {
-            background: rgba(31, 56, 94, 0.9);
-        }
-        .filter-btn.secondary {
-            background: rgba(34, 28, 49, 0.78);
-            border-color: rgba(190, 162, 222, 0.33);
+        @media (max-width: 1100px) {
+            .visits-toolbar {
+                grid-template-columns: 1fr;
+            }
+            .toolbar-actions {
+                justify-content: flex-end;
+                flex-wrap: wrap;
+            }
+            .filter-grid {
+                grid-template-columns: repeat(2, minmax(150px, 1fr));
+            }
         }
     </style>
 </head>
@@ -127,65 +188,83 @@
     {% include 'header.html' %}
 
     <div class="visits-wrap">
-        <form method="get">
-        <div class="visits-table-wrap">
-            <table class="visits-table">
-                <thead>
-                    <tr>
-                        <th>Fecha/Hora</th>
-                        <th>IP</th>
-                        <th>País</th>
-                        <th>Ruta</th>
-                        <th>User-Agent</th>
-                    </tr>
-                    <tr class="filter-row">
-                        <th>
-                            <div class="date-filter">
-                                <input class="filter-input" type="datetime-local" name="from" value="{{ filters.from }}" title="Desde">
-                                <input class="filter-input" type="datetime-local" name="to" value="{{ filters.to }}" title="Hasta">
-                            </div>
-                        </th>
-                        <th><input class="filter-input" type="text" name="ip" value="{{ filters.ip }}" placeholder="Filtrar IP"></th>
-                        <th><input class="filter-input" type="text" name="country" value="{{ filters.country }}" placeholder="Filtrar país"></th>
-                        <th><input class="filter-input" type="text" name="path" value="{{ filters.path }}" placeholder="Filtrar ruta"></th>
-                        <th>
-                            <div class="filter-actions">
-                                <input class="filter-input" type="text" name="ua" value="{{ filters.ua }}" placeholder="Filtrar user-agent">
-                                <button class="filter-btn" type="submit">Filtrar</button>
-                                <a class="filter-btn secondary" href="/visitas/">Limpiar</a>
-                            </div>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for visit in page_obj %}
-                    <tr>
-                        <td>{{ visit.visited_at|date:"Y-m-d H:i:s" }}</td>
-                        <td>
-                            {{ visit.ip_address }}
-                            {% if visit.is_self %}
-                            <span class="self-badge">YO</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if visit.country %}
-                            {% if visit.country_flag %}<span class="country-flag">{{ visit.country_flag }}</span>{% endif %}
-                            {{ visit.country }}
-                            {% else %}
-                            -
-                            {% endif %}
-                        </td>
-                        <td class="visit-path">{{ visit.path }}</td>
-                        <td class="visit-agent">{{ visit.user_agent|default:"-" }}</td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="5">No hay visitas registradas todavía.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="visits-toolbar">
+            <form method="get" id="visits-filter-form">
+                <div class="filter-grid">
+                    <input class="filter-input" type="datetime-local" name="from" value="{{ filters.from }}" title="Desde">
+                    <input class="filter-input" type="datetime-local" name="to" value="{{ filters.to }}" title="Hasta">
+                    <input class="filter-input" type="text" name="ip" value="{{ filters.ip }}" placeholder="Filtrar IP">
+                    <input class="filter-input" type="text" name="country" value="{{ filters.country }}" placeholder="Filtrar país">
+                    <input class="filter-input" type="text" name="path" value="{{ filters.path }}" placeholder="Filtrar ruta">
+                    <input class="filter-input" type="text" name="ua" value="{{ filters.ua }}" placeholder="Filtrar user-agent">
+                </div>
+            </form>
+
+            <div class="toolbar-actions">
+                <button class="btn" type="submit" form="visits-filter-form">Filtrar</button>
+                <a class="btn secondary" href="/visitas/">Limpiar</a>
+                <div class="toolbar-group">
+                    <button class="btn danger" type="submit" form="visits-delete-form" name="action" value="delete_selected" onclick="return confirm('¿Eliminar visitas seleccionadas?');">Eliminar seleccionadas</button>
+                    <button class="btn danger" type="submit" form="visits-delete-form" name="action" value="delete_all_filtered" onclick="return confirm('¿Eliminar todas las visitas del filtro actual?');">Eliminar todo</button>
+                </div>
+            </div>
         </div>
+
+        <form method="post" id="visits-delete-form">
+            {% csrf_token %}
+            <input type="hidden" name="from" value="{{ filters.from }}">
+            <input type="hidden" name="to" value="{{ filters.to }}">
+            <input type="hidden" name="ip" value="{{ filters.ip }}">
+            <input type="hidden" name="country" value="{{ filters.country }}">
+            <input type="hidden" name="path" value="{{ filters.path }}">
+            <input type="hidden" name="ua" value="{{ filters.ua }}">
+
+            <div class="visits-table-wrap">
+                <table class="visits-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha/Hora</th>
+                            <th class="visit-check"><input id="select-all-visits" type="checkbox" title="Seleccionar todo"></th>
+                            <th>IP</th>
+                            <th>País</th>
+                            <th>Ruta</th>
+                            <th>User-Agent</th>
+                            <th class="visit-actions">X</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for visit in page_obj %}
+                        <tr>
+                            <td>{{ visit.visited_at|date:"Y-m-d H:i:s" }}</td>
+                            <td class="visit-check"><input class="visit-select" type="checkbox" name="selected_visits" value="{{ visit.id }}"></td>
+                            <td>
+                                {{ visit.ip_address }}
+                                {% if visit.is_self %}
+                                <span class="self-badge">YO</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if visit.country %}
+                                {% if visit.country_flag %}<span class="country-flag">{{ visit.country_flag }}</span>{% endif %}
+                                {{ visit.country }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td class="visit-path">{{ visit.path }}</td>
+                            <td class="visit-agent">{{ visit.user_agent|default:"-" }}</td>
+                            <td class="visit-actions">
+                                <button class="inline-delete" type="submit" name="delete_one" value="{{ visit.id }}" title="Eliminar visita" aria-label="Eliminar visita" onclick="return confirm('¿Eliminar esta visita?');">&times;</button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7">No hay visitas registradas todavía.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </form>
 
         {% if page_obj.paginator.num_pages > 1 %}
@@ -202,5 +281,28 @@
         </div>
         {% endif %}
     </div>
+    <script>
+        (function () {
+            const master = document.getElementById('select-all-visits');
+            if (!master) return;
+            const items = document.querySelectorAll('.visit-select');
+            master.addEventListener('change', function () {
+                items.forEach(function (item) {
+                    item.checked = master.checked;
+                });
+            });
+            items.forEach(function (item) {
+                item.addEventListener('change', function () {
+                    if (!item.checked) {
+                        master.checked = false;
+                        return;
+                    }
+                    master.checked = Array.from(items).every(function (checkbox) {
+                        return checkbox.checked;
+                    });
+                });
+            });
+        })();
+    </script>
 </body>
 </html>
