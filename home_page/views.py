@@ -236,6 +236,7 @@ def visits(request):
         if not iso2:
             iso2 = _extract_iso2_from_country_text(visit.country)
         visit.country_flag = _iso2_to_flag(iso2)
+        visit.country_iso2 = iso2.lower() if iso2 else ''
         visit.is_self = (
             bool(current_visitor_id and visit.visitor_id == current_visitor_id)
             or bool(current_ip and visit.ip_address == current_ip)
@@ -245,7 +246,7 @@ def visits(request):
     if 'page' in query_params:
         del query_params['page']
 
-    return render(request, 'visitas.html', {
+    return render(request, 'visits.html', {
         'page_obj': page_obj,
         'total_visits': visit_qs.count(),
         'current_ip': current_ip,
