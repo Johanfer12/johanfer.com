@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.http import HttpResponse
@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.utils import timezone as dj_timezone
 import json
 from datetime import datetime, timezone
+from urllib.parse import urlencode
 
 SESSION_VISITOR_KEY = 'visit_visitor_id'
 
@@ -188,33 +189,70 @@ def _parse_datetime_local(value):
     return dt
 
 
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
-def visits(request):
-    ip_filter = (request.GET.get('ip') or '').strip()
-    country_filter = (request.GET.get('country') or '').strip()
-    path_filter = (request.GET.get('path') or '').strip()
-    user_agent_filter = (request.GET.get('ua') or '').strip()
-    date_from_raw = (request.GET.get('from') or '').strip()
-    date_to_raw = (request.GET.get('to') or '').strip()
+def _get_visits_filters(request):
+    def _read_value(key):
+        get_value = (request.GET.get(key) or '').strip()
+        if get_value:
+            return get_value
+        if request.method == 'POST':
+            return (request.POST.get(key) or '').strip()
+        return ''
 
+    return {
+        'ip': _read_value('ip'),
+        'country': _read_value('country'),
+        'path': _read_value('path'),
+        'ua': _read_value('ua'),
+        'from': _read_value('from'),
+        'to': _read_value('to'),
+    }
+
+
+def _apply_visits_filters(filters):
     visit_qs = VisitLog.objects.all()
-    if ip_filter:
-        visit_qs = visit_qs.filter(ip_address__icontains=ip_filter)
-    if country_filter:
-        visit_qs = visit_qs.filter(country__icontains=country_filter)
-    if path_filter:
-        visit_qs = visit_qs.filter(path__icontains=path_filter)
-    if user_agent_filter:
-        visit_qs = visit_qs.filter(user_agent__icontains=user_agent_filter)
+    if filters['ip']:
+        visit_qs = visit_qs.filter(ip_address__icontains=filters['ip'])
+    if filters['country']:
+        visit_qs = visit_qs.filter(country__icontains=filters['country'])
+    if filters['path']:
+        visit_qs = visit_qs.filter(path__icontains=filters['path'])
+    if filters['ua']:
+        visit_qs = visit_qs.filter(user_agent__icontains=filters['ua'])
 
-    date_from = _parse_datetime_local(date_from_raw)
-    date_to = _parse_datetime_local(date_to_raw)
+    date_from = _parse_datetime_local(filters['from'])
+    date_to = _parse_datetime_local(filters['to'])
     if date_from:
         visit_qs = visit_qs.filter(visited_at__gte=date_from)
     if date_to:
         visit_qs = visit_qs.filter(visited_at__lte=date_to)
 
-    visit_qs = visit_qs.order_by('-visited_at')
+    return visit_qs
+
+
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+def visits(request):
+    filters = _get_visits_filters(request)
+    filtered_qs = _apply_visits_filters(filters)
+
+    if request.method == 'POST':
+        delete_one = (request.POST.get('delete_one') or '').strip()
+        action = (request.POST.get('action') or '').strip()
+
+        if delete_one.isdigit():
+            filtered_qs.filter(id=int(delete_one)).delete()
+        elif action == 'delete_selected':
+            selected_ids = [v for v in request.POST.getlist('selected_visits') if v.isdigit()]
+            if selected_ids:
+                filtered_qs.filter(id__in=selected_ids).delete()
+        elif action == 'delete_all_filtered':
+            filtered_qs.delete()
+
+        query_string = urlencode({k: v for k, v in filters.items() if v})
+        if query_string:
+            return redirect(f"{request.path}?{query_string}")
+        return redirect(request.path)
+
+    visit_qs = filtered_qs.order_by('-visited_at')
     paginator = Paginator(visit_qs, 100)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
@@ -238,14 +276,7 @@ def visits(request):
         'current_ip': current_ip,
         'current_visitor_id': current_visitor_id,
         'filter_query': query_params.urlencode(),
-        'filters': {
-            'ip': ip_filter,
-            'country': country_filter,
-            'path': path_filter,
-            'ua': user_agent_filter,
-            'from': date_from_raw,
-            'to': date_to_raw,
-        },
+        'filters': filters,
     })
 
 
