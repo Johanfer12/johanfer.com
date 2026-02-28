@@ -140,9 +140,13 @@ def custom_404_view(request, exception):
 
 
 def _get_client_ip(request):
+    real_ip = (request.headers.get('X-Real-IP') or '').strip()
+    if real_ip:
+        return real_ip
+
     forwarded = request.headers.get('X-Forwarded-For')
     if forwarded:
-        return forwarded.split(',')[0].strip()
+        return forwarded.split(',')[-1].strip()
     return (request.META.get('REMOTE_ADDR') or '').strip()
 
 
