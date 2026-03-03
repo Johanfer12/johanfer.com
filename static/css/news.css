@@ -120,6 +120,15 @@
     font-size: 1.05em;
     margin: 10px 15px 5px 15px;
     color: #f2f5fb;
+    line-height: 1.28;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 6;
+    line-clamp: 6;
+    text-overflow: ellipsis;
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .news-meta {
@@ -680,6 +689,14 @@
     margin: 0 15px 5px 15px;
     line-height: 1.4;
     font-style: italic;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    text-overflow: ellipsis;
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 /* Botón de modo lectura (encima del order-btn) */
