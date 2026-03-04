@@ -116,19 +116,18 @@
 }
 
 .news-title {
-    flex: 1;
+    flex: 0 0 auto;
     font-size: 1.05em;
     margin: 10px 15px 5px 15px;
     color: #f2f5fb;
     line-height: 1.28;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 6;
-    line-clamp: 6;
-    text-overflow: ellipsis;
     word-break: break-word;
     overflow-wrap: anywhere;
+}
+
+.news-title.is-title-overflow-4 {
+    font-size: 0.9em;
+    line-height: 1.22;
 }
 
 .news-meta {
@@ -686,7 +685,8 @@
 .short-answer {
     font-size: 0.8em;
     color: rgba(227, 233, 245, 0.68);
-    margin: 0 15px 5px 15px;
+    margin: 0 15px 6px 15px;
+    margin-top: auto;
     line-height: 1.4;
     font-style: italic;
     overflow: hidden;

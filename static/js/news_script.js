@@ -236,6 +236,31 @@
         img.src = url;
     });
 
+    const getLineHeight = (el) => {
+        if (!el) return 0;
+        const style = window.getComputedStyle(el);
+        const parsedLineHeight = parseFloat(style.lineHeight);
+        if (!Number.isNaN(parsedLineHeight)) return parsedLineHeight;
+        const fontSize = parseFloat(style.fontSize) || 16;
+        return fontSize * 1.2;
+    };
+
+    const applyAdaptiveTitleSize = (scope = document) => {
+        const titles = $$('.news-title', scope);
+        titles.forEach((titleEl) => {
+            titleEl.classList.remove('is-title-overflow-4');
+            const lineHeight = getLineHeight(titleEl);
+            if (!lineHeight) return;
+            const renderedLines = Math.round(titleEl.scrollHeight / lineHeight);
+            const cardFront = titleEl.closest('.card-front');
+            const shortAnswerText = normalizeText(cardFront?.querySelector('.short-answer')?.textContent || '');
+            const maxLines = shortAnswerText ? 4 : 6;
+            if (renderedLines > maxLines) {
+                titleEl.classList.add('is-title-overflow-4');
+            }
+        });
+    };
+
     const drawCenteredParagraph = (ctx, text, boxX, boxY, boxWidth, boxHeight, { font, color, lineHeight, maxLines, verticalAlign = 'center' }) => {
         ctx.save();
         ctx.font = font;
@@ -1211,6 +1236,9 @@
             const isSaved = saveBtn.dataset.saved === 'true' || saveBtn.classList.contains('is-saved');
             updateSaveButtonVisual(saveBtn, isSaved);
         }
+
+        // Solo reduce tamaño si el titulo realmente supera 4 lineas renderizadas.
+        requestAnimationFrame(() => applyAdaptiveTitleSize(container));
     };
 
     // Configurar tarjetas existentes al cargar
@@ -1480,11 +1508,16 @@
     // Inicializar noticias de respaldo y sincronizar con DB al abrir
     document.addEventListener('DOMContentLoaded', () => {
         initializeBackupCards();
+        applyAdaptiveTitleSize(document);
         syncCurrentPageFromDb({force: true})
             .catch(e => err('Error al cargar página inicial:', e));
         connectNewsStream();
         // Establecer icono inicial según orden actual
         setOrderIcon();
+    });
+
+    window.addEventListener('resize', () => {
+        applyAdaptiveTitleSize(document);
     });
     
     enforceCardLimit(); // Aplicar límite al cargar la página inicialmente
