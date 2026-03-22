@@ -13,8 +13,9 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.templatetags.static import static
 from django.core.cache import cache
+from datetime import datetime, time as datetime_time, timedelta
 import pytz
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Max
 from .tasks import purge_old_news, retry_summarize_pending
 import subprocess
 import platform
@@ -59,6 +60,23 @@ def _counts_cache_key(search_query, saved_only=False):
     query_hash = hashlib.md5((search_query or '').strip().lower().encode('utf-8')).hexdigest()
     saved_flag = '1' if saved_only else '0'
     return f"news:count:v{version}:q:{query_hash}:saved:{saved_flag}"
+
+
+def _day_bounds_local(target_date=None):
+    local_date = target_date or timezone.localdate()
+    current_tz = timezone.get_current_timezone()
+    start_dt = timezone.make_aware(datetime.combine(local_date, datetime_time.min), current_tz)
+    end_dt = start_dt + timedelta(days=1)
+    return local_date, start_dt, end_dt
+
+
+def _latest_public_day_bounds():
+    latest_published = News.objects.aggregate(latest=Max('published_date'))['latest']
+    if latest_published is None:
+        return None, None, None
+
+    latest_local_date = timezone.localtime(latest_published).date()
+    return _day_bounds_local(latest_local_date)
 
 
 def _get_total_news_and_pages(search_query=None, saved_only=False):
@@ -208,6 +226,7 @@ def _build_page_response(*, order, page, cursor, search_query, backup_only=False
     }
 
 @require_POST
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
 def delete_news(request, pk):
     try:
         current_page = _safe_page(request.POST.get('current_page', 1))
@@ -255,13 +274,31 @@ def superuser_required(view_func):
     decorated_view = user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')(view_func)
     return decorated_view
 
-@method_decorator(superuser_required, name='dispatch')
 class NewsListView(ListView):
     model = News
-    template_name = 'news_list.html'
     paginate_by = 25
 
+    def is_private_view(self):
+        user = self.request.user
+        return bool(user.is_authenticated and user.is_superuser)
+
+    def get_paginate_by(self, queryset):
+        return PAGE_SIZE if self.is_private_view() else None
+
+    def get_template_names(self):
+        return ['news_list.html'] if self.is_private_view() else ['news_public.html']
+
     def get_queryset(self):
+        if not self.is_private_view():
+            local_date, start_dt, end_dt = _latest_public_day_bounds()
+            self.public_news_date = local_date
+            if start_dt is None:
+                return News.objects.none()
+            return News.objects.select_related('source').filter(
+                published_date__gte=start_dt,
+                published_date__lt=end_dt,
+            ).order_by('-published_date', '-id')
+
         # Usar el manager optimizado + búsqueda y orden dinámico
         order = self.request.GET.get('order', 'desc')
         search_query = self.request.GET.get('q')
@@ -281,6 +318,17 @@ class NewsListView(ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+
+        if not self.is_private_view():
+            local_date = getattr(self, 'public_news_date', None)
+            total_news = context['object_list'].count() if hasattr(context['object_list'], 'count') else len(context['object_list'])
+            context.update({
+                'total_news': total_news,
+                'public_news_mode': True,
+                'public_news_date': local_date.strftime('%d/%m/%Y') if local_date else None,
+                'public_storage_key': f"public-news-hidden:{local_date.isoformat()}" if local_date else "public-news-hidden:empty",
+            })
+            return context
         
         # Reutilizar el count de paginación que ya calcula Django
         # En lugar de hacer self.get_queryset().count() duplicado
@@ -358,6 +406,7 @@ class SavedNewsListView(NewsListView):
         return context
 
 @require_GET
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
 def update_feed(request):
     try:
         # Reintentar completar resúmenes pendientes antes de buscar nuevas
@@ -379,6 +428,7 @@ def update_feed(request):
         return JsonResponse({'status': 'error', 'message': str(e)})
 
 @require_GET
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
 def check_new_news(request):
     try:
         cursor = request.GET.get('cursor')
@@ -426,6 +476,7 @@ def check_new_news(request):
         return JsonResponse({'status': 'error', 'message': str(e)})
 
 @require_GET
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
 def get_news_count(request):
     try:
         saved_only = request.GET.get('saved_only', 'false').lower() == 'true'
@@ -496,6 +547,7 @@ def retry_summaries(request):
 
 
 @require_GET
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
 def get_page(request):
     try:
         order = request.GET.get('order', 'desc')
@@ -527,6 +579,7 @@ def get_page(request):
 
 
 @require_POST
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
 def undo_delete(request, pk):
     try:
         saved_only = request.POST.get('saved_only', 'false').lower() == 'true'
@@ -635,6 +688,7 @@ def news_stream(request):
 
 
 @require_POST
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
 def toggle_save_news(request, pk):
     try:
         saved_only = request.POST.get('saved_only', 'false').lower() == 'true'

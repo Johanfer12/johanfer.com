@@ -50,6 +50,7 @@ class NewsFeedOrderingTests(TestCase):
         cache.clear()
 
     def test_get_page_orders_descending_with_id_tiebreaker(self):
+        self.client.force_login(self.superuser)
         same_time = timezone.now()
         older_time = same_time - timedelta(hours=1)
 
@@ -70,6 +71,7 @@ class NewsFeedOrderingTests(TestCase):
         self.assertEqual(returned_ids, expected_ids)
 
     def test_get_page_orders_ascending_with_id_tiebreaker(self):
+        self.client.force_login(self.superuser)
         same_time = timezone.now()
         newer_time = same_time + timedelta(hours=1)
 
@@ -90,6 +92,7 @@ class NewsFeedOrderingTests(TestCase):
         self.assertEqual(returned_ids, expected_ids)
 
     def test_delete_returns_actual_page_replacement_and_undo_restores_original_page(self):
+        self.client.force_login(self.superuser)
         self.create_news_batch(26, prefix='delete-flow')
         ordered_ids = list(
             News.visible.order_by('-published_date', '-id').values_list('id', flat=True)
@@ -165,3 +168,43 @@ class NewsFeedOrderingTests(TestCase):
 
         self.assertContains(response, '?page=2&order=asc')
         self.assertContains(response, 'q=foo-news')
+
+    def test_public_news_view_shows_latest_available_day_and_ignores_personal_delete_flag(self):
+        latest_time = timezone.now() - timedelta(days=38)
+        previous_time = latest_time - timedelta(days=1)
+        latest_date = timezone.localtime(latest_time).date()
+
+        latest_public_news = News.objects.create(
+            title='public latest',
+            description='Visible en la fecha mas reciente',
+            link='https://example.com/public-latest',
+            published_date=latest_time,
+            source=self.source,
+            guid=f'public-latest-{uuid.uuid4().hex}',
+            is_deleted=True,
+        )
+        News.objects.create(
+            title='public previous',
+            description='No visible porque es de un dia anterior',
+            link='https://example.com/public-previous',
+            published_date=previous_time,
+            source=self.source,
+            guid=f'public-previous-{uuid.uuid4().hex}',
+        )
+
+        response = self.client.get(reverse('my_news:news_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'news_public.html')
+        self.assertTrue(response.context['public_news_mode'])
+        self.assertContains(response, 'Noticias de Hoy')
+        self.assertContains(response, 'public latest')
+        self.assertNotContains(response, 'public previous')
+        self.assertEqual(list(response.context['object_list']), [latest_public_news])
+        self.assertEqual(response.context['public_news_date'], latest_date.strftime('%d/%m/%Y'))
+        self.assertEqual(response.context['public_storage_key'], f'public-news-hidden:{latest_date.isoformat()}')
+
+    def test_private_json_endpoint_requires_superuser(self):
+        response = self.client.get(reverse('my_news:get_page'), {'page': 1, 'order': 'desc'})
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/noticias/login/', response['Location'])
