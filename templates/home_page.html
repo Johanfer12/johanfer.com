@@ -5,18 +5,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rincón de Johan</title>
-    <meta name="description" content="Home personal de Johan: libros, música y noticias en un solo lugar.">
+    <title>Bitácora de Johan</title>
+    <meta name="description" content="Bitácora de Johan: lo que leo, escucho y descubro en un solo lugar.">
     <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
-    <meta property="og:site_name" content="Rincón de Johan">
+    <meta property="og:site_name" content="Bitácora de Johan">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Rincón de Johan">
-    <meta property="og:description" content="Home personal de Johan: libros, música y noticias en un solo lugar.">
+    <meta property="og:title" content="Bitácora de Johan">
+    <meta property="og:description" content="Bitácora de Johan: lo que leo, escucho y descubro en un solo lugar.">
     <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Rincón de Johan">
-    <meta name="twitter:description" content="Home personal de Johan: libros, música y noticias en un solo lugar.">
+    <meta name="twitter:title" content="Bitácora de Johan">
+    <meta name="twitter:description" content="Bitácora de Johan: lo que leo, escucho y descubro en un solo lugar.">
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     <link rel="stylesheet" href="{% static 'css/home.css' %}">
@@ -24,8 +24,8 @@
 <body>
     <div class="content-container">
         <div class="welcome-text">
-            <h1>El Rincón de Johan</h1>
-            <p>Un poco de mi mundo para el mundo.</p>
+            <h1>Bitácora de Johan</h1>
+            <p>Lo que leo, escucho y descubro.</p>
         </div>
         <div class="main-icons-container">
             <div class="main-icon">
@@ -40,14 +40,12 @@
                     <h2>Mi Música</h2>
                 </a>
             </div>
-            {% if user.is_authenticated and user.is_superuser %}
             <div class="main-icon">
                 <a href="/noticias/">
                     <img src="{% static 'Img/news-icon.svg' %}" alt="Noticias">
-                    <h2>Mis Noticias</h2>
+                    <h2>Noticias</h2>
                 </a>
             </div>
-            {% endif %}
         </div>
     </div>
     <script src="{% static 'js/gyro_parallax.js' %}"></script>

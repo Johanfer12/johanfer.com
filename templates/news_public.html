@@ -1,0 +1,78 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#000000">
+    <meta name="color-scheme" content="dark">
+    <title>Noticias de Hoy | Bitácora de Johan</title>
+    <meta name="description" content="Las noticias más recientes disponibles en Bitácora de Johan.">
+    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    <meta property="og:site_name" content="Bitácora de Johan">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Noticias de Hoy | Bitácora de Johan">
+    <meta property="og:description" content="Las noticias más recientes disponibles en Bitácora de Johan.">
+    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/news-icon.svg' %}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Noticias de Hoy | Bitácora de Johan">
+    <meta name="twitter:description" content="Las noticias más recientes disponibles en Bitácora de Johan.">
+    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/news-icon.svg' %}">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'css/header.css' %}">
+    <link rel="stylesheet" href="{% static 'css/news.css' %}">
+    <link rel="stylesheet" href="{% static 'css/news_public.css' %}">
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+</head>
+<body class="has-header">
+    <header class="header">
+        <div class="header-container">
+            <div class="header-title">
+                <h1>Noticias de Hoy</h1>
+                <p class="total">
+                    <span class="header-counter" id="public-news-counter">{{ total_news }}</span>
+                    {% if public_news_date %}
+                    noticias del {{ public_news_date }}
+                    {% else %}
+                    noticias disponibles
+                    {% endif %}
+                </p>
+            </div>
+            <nav class="header-nav">
+                {% if request.user.is_authenticated and request.user.is_superuser %}
+                <a href="/j_admin/" title="Administración">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16">
+                        <path d="M8 0a2 2 0 0 0-2 2v1.09a5.002 5.002 0 0 0-2.638 1.524l-.77-.445a2 2 0 1 0-2 3.464l.77.445A5.014 5.014 0 0 0 1 10c0 .523.08 1.027.23 1.5l-.77.445a2 2 0 1 0 2 3.464l.77-.445A5.002 5.002 0 0 0 6 16v-1.09a5.07 5.07 0 0 0 4 0V16a2 2 0 1 0 4 0v-1.09a5.002 5.002 0 0 0 2.638-1.524l.77.445a2 2 0 1 0 2-3.464l-.77-.445c.15-.473.23-.977.23-1.5s-.08-1.027-.23-1.5l.77-.445a2 2 0 1 0-2-3.464l-.77.445A5.002 5.002 0 0 0 10 1.09V0a2 2 0 0 0-2-2zm0 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6z" transform="scale(.5) translate(8 8)"/>
+                    </svg>
+                </a>
+                {% endif %}
+                <a href="/" title="Inicio">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16">
+                        <path d="M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5z"/>
+                    </svg>
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content public-news-page">
+        <div class="news-grid" id="public-news-grid">
+            {% for article in object_list %}
+                {% include 'news_public_card.html' with article=article %}
+            {% endfor %}
+        </div>
+
+        <div class="public-news-empty" id="public-news-empty" {% if object_list %}hidden{% endif %}>
+            {% if object_list %}
+            <button type="button" class="public-news-link public-news-reset-btn" id="public-news-reset-btn">Restablecer ocultas</button>
+            {% else %}
+            <h3>No hay noticias disponibles.</h3>
+            {% endif %}
+        </div>
+    </main>
+
+    {{ public_storage_key|json_script:"public-news-storage-key" }}
+    <script src="{% static 'js/news_public.js' %}"></script>
+</body>
+</html>

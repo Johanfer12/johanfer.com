@@ -1,0 +1,29 @@
+.public-news-page {
+    min-height: calc(100vh - 150px);
+    padding: 0 0 28px;
+}
+
+.news-card-container.is-hiding {
+    opacity: 0;
+    transform: scale(0.96);
+}
+
+.public-news-reset-btn {
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.public-news-empty {
+    width: fit-content;
+    max-width: calc(100% - 30px);
+    margin: 16px auto 0;
+    padding: 0;
+    text-align: center;
+}
+
+.public-news-empty h3 {
+    margin: 0;
+    color: rgba(238, 243, 251, 0.92);
+    font-size: 1rem;
+    font-weight: 700;
+}
