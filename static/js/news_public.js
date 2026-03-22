@@ -5,6 +5,7 @@
     const counter = document.querySelector('#public-news-counter');
     const emptyState = document.querySelector('#public-news-empty');
     const resetButton = document.querySelector('#public-news-reset-btn');
+    const isMobile = () => window.innerWidth <= 767;
 
     let storageKey = 'public-news-hidden';
     try {
@@ -31,6 +32,33 @@
     };
 
     const cards = () => Array.from(document.querySelectorAll('.news-card-container'));
+    const capturePositions = () => new Map(cards().map((card) => [card, card.getBoundingClientRect()]));
+
+    const animateReposition = (oldPositions, excludedIds = []) => {
+        if (isMobile() || !oldPositions.size) return;
+
+        window.requestAnimationFrame(() => {
+            oldPositions.forEach((rect, card) => {
+                if (!document.body.contains(card) || excludedIds.includes(card.id)) return;
+
+                const newRect = card.getBoundingClientRect();
+                const dx = rect.left - newRect.left;
+                const dy = rect.top - newRect.top;
+                if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+
+                card.style.transform = `translate(${dx}px, ${dy}px)`;
+                card.style.transition = 'none';
+
+                window.requestAnimationFrame(() => {
+                    card.style.transition = 'transform 0.4s ease-out';
+                    card.style.transform = '';
+                    card.addEventListener('transitionend', () => {
+                        card.style.transition = '';
+                    }, {once: true});
+                });
+            });
+        });
+    };
 
     const configureCard = (container) => {
         if (!container) return;
@@ -53,11 +81,13 @@
 
     const removeCard = (card, id) => {
         if (!card || !id) return;
+        const oldPositions = isMobile() ? null : capturePositions();
         hiddenIds.add(String(id));
         persistHiddenIds();
         card.classList.add('is-hiding');
         window.setTimeout(() => {
             card.remove();
+            if (oldPositions) animateReposition(oldPositions, [card.id]);
             updateCounter();
         }, 220);
     };
