@@ -218,11 +218,12 @@ def delete_news(request, pk):
         news.save(update_fields=['is_deleted'])
         _bump_cache_version()
         
-        # Obtener la siguiente noticia para reemplazar la eliminada
+        # Obtener la noticia que ahora ocupa el borde inferior de la pagina.
+        # La UI ya tiene el resto de tarjetas visibles; la unica "nueva" que debe
+        # llegar tras un borrado es el ultimo item de la pagina recalculada.
         next_news = None
         total_news, total_pages = _get_total_news_and_pages(saved_only=saved_only)
-        
-        # Buscar noticia de reemplazo por keyset para mantener orden estable (siempre, también en descendente página 1)
+
         base_qs = News.visible
         if saved_only:
             base_qs = base_qs.filter(is_saved=True)
@@ -231,26 +232,8 @@ def delete_news(request, pk):
         base_qs = base_qs.order_by('published_date', 'id') if order == 'asc' else base_qs.order_by('-published_date', '-id')
         page_start = (current_page - 1) * PAGE_SIZE
         page_qs = list(base_qs[page_start:page_start + PAGE_SIZE])
-        if page_qs:
-            anchor = page_qs[-1]
-            if order == 'asc':
-                keyset_q = (
-                    Q(published_date__gt=anchor.published_date) |
-                    (Q(published_date=anchor.published_date) & Q(id__gt=anchor.id))
-                )
-                ordering = ('published_date', 'id')
-            else:
-                keyset_q = (
-                    Q(published_date__lt=anchor.published_date) |
-                    (Q(published_date=anchor.published_date) & Q(id__lt=anchor.id))
-                )
-                ordering = '-published_date', '-id'
-            next_qs = News.visible
-            if saved_only:
-                next_qs = next_qs.filter(is_saved=True)
-            else:
-                next_qs = next_qs.filter(is_saved=False)
-            next_news = next_qs.filter(keyset_q).order_by(*ordering).first()
+        if len(page_qs) == PAGE_SIZE:
+            next_news = page_qs[-1]
         
         response_data = {
             'status': 'success',
@@ -313,7 +296,7 @@ class NewsListView(ListView):
             
         # Obtener noticias de respaldo (5 adicionales) por keyset (cursor) a partir del último ítem de la página
         order = self.request.GET.get('order', 'desc')
-        ordering = 'published_date' if order == 'asc' else '-published_date'
+        ordering = ('published_date', 'id') if order == 'asc' else ('-published_date', '-id')
         current_queryset = self.get_queryset()
         page_qs = list(current_queryset[(current_page - 1) * PAGE_SIZE: (current_page - 1) * PAGE_SIZE + PAGE_SIZE])
         last_item = page_qs[-1] if page_qs else None  # último en la página independientemente del orden
@@ -329,7 +312,7 @@ class NewsListView(ListView):
                     Q(published_date__lt=last_item.published_date) |
                     (Q(published_date=last_item.published_date) & Q(id__lt=last_item.id))
                 )
-            backup_news = current_queryset.filter(backup_q).order_by(ordering)[:5]
+            backup_news = current_queryset.filter(backup_q).order_by(*ordering)[:5]
         
         # Noticias de respaldo serializadas para JavaScript
         backup_cards = [_serialize_news_card(article) for article in backup_news]
