@@ -159,6 +159,10 @@
         if (item.data?.id != null) return normalizeId(item.data.id);
         return '';
     };
+    const shouldSkipServerCard = (newsId) => {
+        const normalizedId = normalizeId(newsId);
+        return !!normalizedId && (STATE.deletingNews.has(normalizedId) || isLocallyDeleted(normalizedId));
+    };
     const pruneNewsFromClientCaches = (newsId) => {
         const targetId = normalizeId(newsId);
         if (!targetId) return;
@@ -581,6 +585,8 @@
 
     const renderPageFromServerData = (data, {animateMerge = false} = {}) => {
         if (!data || data.status !== 'success') return;
+        const visibleCards = (data.cards || []).filter(item => !shouldSkipServerCard(extractPayloadId(item)));
+        const visibleBackupCards = (data.backup_cards || []).filter(item => !shouldSkipServerCard(extractPayloadId(item)));
         const shouldAnimateMerge = !!animateMerge && !!DOM.grid;
         const oldPositions = shouldAnimateMerge && !isMobile() ? capturePositions() : null;
         const existingCards = shouldAnimateMerge
@@ -589,7 +595,7 @@
         const insertedCards = [];
         const frag = document.createDocumentFragment();
 
-        (data.cards || []).forEach(item => {
+        visibleCards.forEach(item => {
             const payloadId = extractPayloadId(item);
             let card = null;
 
@@ -615,10 +621,10 @@
             if (oldPositions) animateReposition(oldPositions);
             insertedCards.forEach(el => animateScaleOpacity(el));
         }
-        STATE.backupCards = data.backup_cards || [];
+        STATE.backupCards = visibleBackupCards;
         STATE.nextCursor = data.next_cursor || null;
         STATE.backupCursor = data.backup_next_cursor || data.next_cursor || null;
-        const latestCard = (data.cards || []).reduce((acc, item) => {
+        const latestCard = visibleCards.reduce((acc, item) => {
             if (!item?.created_at) return acc;
             if (!acc || new Date(item.created_at) > new Date(acc.created_at)) return item;
             if (acc.created_at === item.created_at && Number(item.id || 0) > Number(acc.id || 0)) return item;
@@ -893,7 +899,6 @@
             removeFromDOM();
             if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
             enforceCardLimit();
-            STATE.deletingNews.delete(newsId); // Limpiar flag
         };
         container.addEventListener('transitionend', onAnimEnd, { once: true });
         const removeTimeout = setTimeout(() => {
@@ -903,7 +908,6 @@
             removeFromDOM();
             if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
             enforceCardLimit();
-            STATE.deletingNews.delete(newsId); // Limpiar flag
         }, animationDuration + 50);
 
         // Llamada al servidor en paralelo
@@ -926,6 +930,7 @@
                 // Si ya se eliminó del DOM por timeout, actualizar contadores
                 if (!document.body.contains(container)) {
                     STATE.locallyDeletedIds.add(normalizeId(newsId));
+                    STATE.deletingNews.delete(newsId);
                     pruneNewsFromClientCaches(newsId);
                     updateCounters(data.total_news, data.total_pages);
                     refreshCurrentPageFromDb('eliminar noticia');
