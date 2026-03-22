@@ -82,6 +82,46 @@ class VectorIndexService:
         point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, guid))
         self.client.delete(self.collection, points_selector=qm.PointIdsList(points=[point_id]))
 
+    def delete_many(self, guids: List[str]) -> int:
+        point_ids = [
+            str(uuid.uuid5(uuid.NAMESPACE_URL, guid))
+            for guid in guids
+            if guid
+        ]
+        if not point_ids:
+            return 0
+        self.client.delete(
+            self.collection,
+            points_selector=qm.PointIdsList(points=point_ids),
+        )
+        return len(point_ids)
+
+    def scroll_points(self, limit: int = 256):
+        offset = None
+        while True:
+            points, next_offset = self.client.scroll(
+                collection_name=self.collection,
+                limit=limit,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for point in points:
+                yield point
+            if next_offset is None:
+                break
+            offset = next_offset
+
+    def delete_point_ids(self, point_ids: List[str]) -> int:
+        cleaned_ids = [point_id for point_id in point_ids if point_id is not None]
+        if not cleaned_ids:
+            return 0
+        self.client.delete(
+            self.collection,
+            points_selector=qm.PointIdsList(points=cleaned_ids),
+        )
+        return len(cleaned_ids)
+
     def search(
         self,
         vector: List[float],
@@ -118,4 +158,3 @@ class VectorIndexService:
             query_filter=qfilter,
             limit=top_k,
         )
-

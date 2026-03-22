@@ -5,6 +5,45 @@ from .models import News
 from .models import GroqGlobalSetting
 from .models import AIFilterInstruction
 
+
+def purge_orphan_vectors(batch_size: int = 256):
+    """Elimina de Qdrant puntos cuyo news_id ya no existe en la base de datos."""
+    try:
+        vector_index = FeedService.initialize_vector_index()
+        if vector_index is None:
+            return 0
+
+        existing_news_ids = set(News.objects.values_list('id', flat=True))
+        orphan_point_ids = []
+
+        for point in vector_index.scroll_points(limit=batch_size):
+            payload = getattr(point, 'payload', {}) or {}
+            news_id = payload.get('news_id')
+            if news_id is None:
+                orphan_point_ids.append(point.id)
+                continue
+
+            try:
+                normalized_news_id = int(news_id)
+            except (TypeError, ValueError):
+                orphan_point_ids.append(point.id)
+                continue
+
+            if normalized_news_id not in existing_news_ids:
+                orphan_point_ids.append(point.id)
+
+        deleted_vectors = 0
+        for start in range(0, len(orphan_point_ids), batch_size):
+            deleted_vectors += vector_index.delete_point_ids(
+                orphan_point_ids[start:start + batch_size]
+            )
+
+        print(f"Limpieza Qdrant completada: {deleted_vectors} vectores huérfanos eliminados")
+        return deleted_vectors
+    except Exception as e:
+        print(f"Error limpiando vectores huérfanos en Qdrant: {str(e)}")
+        return 0
+
 def update_news_cron():
     try:
         # Completar pendientes antes de traer nuevas
@@ -26,8 +65,24 @@ def purge_old_news(days: int = 15):
     """
     try:
         cutoff = timezone.now() - timedelta(days=days)
+        stale_guids = list(
+            News.objects.filter(published_date__lt=cutoff).values_list('guid', flat=True)
+        )
         deleted_count, _ = News.objects.filter(published_date__lt=cutoff).delete()
+
+        deleted_vectors = 0
+        vector_index = FeedService.initialize_vector_index()
+        if vector_index is not None:
+            try:
+                deleted_vectors += vector_index.delete_many(stale_guids)
+            except Exception as e:
+                print(f"Error eliminando vectores antiguos en Qdrant: {str(e)}")
+
+            deleted_vectors += purge_orphan_vectors()
+
         print(f"Purga completada: {deleted_count} noticias eliminadas (> {days} días)")
+        if vector_index is not None:
+            print(f"Qdrant sincronizado: {deleted_vectors} vectores eliminados")
         return deleted_count
     except Exception as e:
         print(f"Error purgando noticias antiguas: {str(e)}")
