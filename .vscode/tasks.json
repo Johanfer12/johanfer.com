@@ -24,8 +24,11 @@
             "command": "powershell",
             "args": [
                 "-Command",
-                "Start-Sleep -Seconds 5; docker-compose up -d"
+                "Start-Sleep -Seconds 5; docker compose up -d"
             ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "presentation": {
                 "reveal": "silent",
                 "panel": "shared"
@@ -53,6 +56,9 @@
             "presentation": {
                 "reveal": "always",
                 "panel": "new"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
             },
             "runOptions": {
                 "runOn": "folderOpen"
