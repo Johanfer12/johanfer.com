@@ -24,7 +24,7 @@
         {% if is_paginated %}
         <div class="pagination">
             {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}">Anterior</a>
+            <a href="?page={{ page_obj.previous_page_number }}&order={{ order }}{% if request.GET.q %}&q={{ request.GET.q|urlencode }}{% endif %}">Anterior</a>
             {% endif %}
             
             <span class="active">
@@ -32,7 +32,7 @@
             </span>
 
             {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}">Siguiente</a>
+            <a href="?page={{ page_obj.next_page_number }}&order={{ order }}{% if request.GET.q %}&q={{ request.GET.q|urlencode }}{% endif %}">Siguiente</a>
             {% endif %}
         </div>
         {% endif %}
