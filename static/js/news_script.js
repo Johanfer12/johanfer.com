@@ -84,6 +84,7 @@
         backupController: null,
         syncController: null,
         locallyDeletedIds: new Set(), // IDs borrados localmente para evitar reinserciones desde cache cliente
+        cancelledDeletes: new Set(), // IDs cuyo borrado fue revertido antes de completar el flujo local
     };
 
     /* ---------------------------------------------------------------------
@@ -830,14 +831,16 @@
     };
 
     const deleteNews = (newsId) => {
+        const normalizedNewsId = normalizeId(newsId);
+        STATE.cancelledDeletes.delete(normalizedNewsId);
         // Protección contra eliminaciones simultáneas
-        if (STATE.deletingNews.has(newsId)) return;
-        STATE.deletingNews.add(newsId);
-        pruneNewsFromClientCaches(newsId);
+        if (STATE.deletingNews.has(normalizedNewsId)) return;
+        STATE.deletingNews.add(normalizedNewsId);
+        pruneNewsFromClientCaches(normalizedNewsId);
         
-        const container = $(`#news-${newsId}`);
+        const container = $(`#news-${normalizedNewsId}`);
         if (!container) {
-            STATE.deletingNews.delete(newsId);
+            STATE.deletingNews.delete(normalizedNewsId);
             return err(`Contenedor no encontrado (${newsId})`);
         }
         const currentPage = new URLSearchParams(location.search).get('page') || 1;
@@ -890,6 +893,26 @@
         // Eliminar por transitionend con fallback por tiempo
         const animationDuration = 500; // margen para height/opacity/transform
         let removed = false;
+        let pendingDeleteResponse = null;
+        const finalizeSuccessfulDelete = (data) => {
+            if (!data) return;
+            if (STATE.cancelledDeletes.has(normalizedNewsId)) {
+                STATE.cancelledDeletes.delete(normalizedNewsId);
+                STATE.deletingNews.delete(normalizedNewsId);
+                return;
+            }
+            STATE.locallyDeletedIds.add(normalizedNewsId);
+            STATE.deletingNews.delete(normalizedNewsId);
+            pruneNewsFromClientCaches(normalizedNewsId);
+            updateCounters(data.total_news, data.total_pages);
+            refreshCurrentPageFromDb('eliminar noticia');
+        };
+        const maybeFinalizeDelete = () => {
+            if (!pendingDeleteResponse) return;
+            const payload = pendingDeleteResponse;
+            pendingDeleteResponse = null;
+            finalizeSuccessfulDelete(payload);
+        };
         const onAnimEnd = (ev) => {
             const expectedProp = mobileView ? 'height' : 'width';
             if (ev.target !== container || ev.propertyName !== expectedProp) return;
@@ -897,8 +920,9 @@
             if (removed) return;
             removed = true;
             removeFromDOM();
-            if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
+            if (oldPositions) animateReposition(oldPositions, [`news-${normalizedNewsId}`]);
             enforceCardLimit();
+            maybeFinalizeDelete();
         };
         container.addEventListener('transitionend', onAnimEnd, { once: true });
         const removeTimeout = setTimeout(() => {
@@ -906,13 +930,19 @@
             removed = true;
             container.removeEventListener('transitionend', onAnimEnd);
             removeFromDOM();
-            if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
+            if (oldPositions) animateReposition(oldPositions, [`news-${normalizedNewsId}`]);
             enforceCardLimit();
+            maybeFinalizeDelete();
         }, animationDuration + 50);
 
         // Llamada al servidor en paralelo
-        serverDeleteNews(newsId, currentPage)
+        serverDeleteNews(normalizedNewsId, currentPage)
             .then(data => {
+                if (STATE.cancelledDeletes.has(normalizedNewsId)) {
+                    STATE.cancelledDeletes.delete(normalizedNewsId);
+                    STATE.deletingNews.delete(normalizedNewsId);
+                    return;
+                }
                 if (data.status !== 'success') {
                     clearTimeout(removeTimeout);
                     container.removeEventListener('transitionend', onAnimEnd);
@@ -922,36 +952,28 @@
                         window.location.reload();
                         return;
                     }
-                    STATE.deletingNews.delete(newsId);
+                    STATE.deletingNews.delete(normalizedNewsId);
                     err('Error del servidor al eliminar:', data.message);
                     return;
                 }
 
                 // Si ya se eliminó del DOM por timeout, actualizar contadores
                 if (!document.body.contains(container)) {
-                    STATE.locallyDeletedIds.add(normalizeId(newsId));
-                    STATE.deletingNews.delete(newsId);
-                    pruneNewsFromClientCaches(newsId);
-                    updateCounters(data.total_news, data.total_pages);
-                    refreshCurrentPageFromDb('eliminar noticia');
+                    finalizeSuccessfulDelete(data);
                     return;
                 }
 
-                // Si el servidor responde antes del timeout, cancelar timeout y proceder normalmente
-                clearTimeout(removeTimeout);
-                container.removeEventListener('transitionend', onAnimEnd);
-                removed = true;
-                removeFromDOM();
-                STATE.deletingNews.delete(newsId); // Liberar flag incluso si se elimina antes de la animación
-                STATE.locallyDeletedIds.add(normalizeId(newsId));
-                pruneNewsFromClientCaches(newsId);
-                updateCounters(data.total_news, data.total_pages);
-
-                if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
-                enforceCardLimit();
-                refreshCurrentPageFromDb('eliminar noticia');
+                // Si el servidor responde antes de que termine la animación,
+                // dejamos que el colapso visual acabe para evitar el "rebote"
+                // del resto de tarjetas.
+                pendingDeleteResponse = data;
             })
             .catch(e => {
+                if (STATE.cancelledDeletes.has(normalizedNewsId)) {
+                    STATE.cancelledDeletes.delete(normalizedNewsId);
+                    STATE.deletingNews.delete(normalizedNewsId);
+                    return;
+                }
                 // En caso de error de red o servidor, revertir la animación
                 clearTimeout(removeTimeout);
                 container.removeEventListener('transitionend', onAnimEnd);
@@ -964,11 +986,11 @@
 
                 err('Error al eliminar noticia:', e);
                 alert('Error al eliminar la noticia. Por favor, inténtalo de nuevo.');
-                STATE.deletingNews.delete(newsId); // Limpiar flag en error
+                STATE.deletingNews.delete(normalizedNewsId); // Limpiar flag en error
             });
 
         // Apilar para deshacer
-        STATE.deleteStack.unshift(newsId);
+        STATE.deleteStack.unshift(normalizedNewsId);
         if (STATE.deleteStack.length > 5) STATE.deleteStack.length = 5;
     };
 
@@ -1313,16 +1335,27 @@
     DOM.undoBtn?.addEventListener('click', () => {
         const last = STATE.deleteStack.shift();
         if (!last) return;
-        serverUndoNews(last)
+        const normalizedLast = normalizeId(last);
+        STATE.cancelledDeletes.add(normalizedLast);
+        STATE.deletingNews.delete(normalizedLast);
+        STATE.locallyDeletedIds.delete(normalizedLast);
+
+        serverUndoNews(normalizedLast)
             .then(data => {
                 if (data.status !== 'success') throw new Error(data.message);
                 if (data.card?.id != null) {
                     STATE.locallyDeletedIds.delete(normalizeId(data.card.id));
                 }
+                STATE.cancelledDeletes.delete(normalizedLast);
+                STATE.deletingNews.delete(normalizedLast);
                 updateCounters(data.total_news, data.total_pages);
                 refreshCurrentPageFromDb('restaurar noticia');
             })
-            .catch(e => { err('Deshacer:', e); alert('No se pudo deshacer'); });
+            .catch(e => {
+                STATE.cancelledDeletes.delete(normalizedLast);
+                err('Deshacer:', e);
+                alert('No se pudo deshacer');
+            });
     });
 
     // Botón cambiar orden
