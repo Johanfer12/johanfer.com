@@ -88,12 +88,14 @@ def bookshelf(request):
         })
 
 def about(request):
-    # Guardar la página de origen si viene de bookshelf o spotify
+    # Guardar la página de origen para decidir el botón de retorno en About
     referer = request.META.get('HTTP_REFERER', '')
     if 'bookshelf' in referer:
         request.session['about_source'] = 'bookshelf'
     elif 'spotify' in referer:
         request.session['about_source'] = 'spotify'
+    elif 'noticias' in referer:
+        request.session['about_source'] = 'news'
     
     return render(request, 'about.html')
 

@@ -5,17 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Acerca de</title>
-    <meta name="description" content="Acerca de {{ site_name }}: propósito del proyecto, stack técnico y enlaces.">
+    <meta name="description" content="Acerca de {{ site_name }}: libros, Spotify, noticias, filtros y resúmenes.">
     <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     <meta property="og:site_name" content="{{ site_name }}">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Acerca de | {{ site_name }}">
-    <meta property="og:description" content="Conoce el propósito, stack técnico y redes de {{ site_name }}.">
+    <meta property="og:description" content="Conoce el propósito, las secciones y la lógica detrás de libros, Spotify y noticias en {{ site_name }}.">
     <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Acerca de | {{ site_name }}">
-    <meta name="twitter:description" content="Conoce el propósito, stack técnico y redes de {{ site_name }}.">
+    <meta name="twitter:description" content="Conoce el propósito, las secciones y la lógica detrás de libros, Spotify y noticias en {{ site_name }}.">
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
@@ -28,19 +28,44 @@
     <div class="about-container">
         <div class="about-content">
             <h2>¿Por qué?</h2>
-            <p><strong>{{ site_name }}</strong> nace con la idea de llevar un recuento más visual y vistoso de los libros que he leído desde 2014, cuando retomé la lectura con la ayuda de mi recién adquirido Kindle, la música que escucho en Spotify y ahora también las noticias que sigo a diario.</p>
-            <p>Los datos son extraidos de la red social de lectores <a href="https://www.goodreads.com">Goodreads</a>, donde he llevado el recuento de los libros leídos y mis puntuaciones</p>
-            <p>¡Adicionalmente esto genera una motivación para seguir leyendo y ver como se va actualizando la lista!🦉</p>
-            
-            <h3>Datos técnicos</h3>
-            <p>Otro propósito es mantener frescas mis habilidades en programación. La página usa Django para crear la aplicación web y Python para el scraping de información a una base de datos.</p>
-            <p>Servidor casero montado en una  <a href="https://es.wikipedia.org/wiki/Raspberry_Pi">Raspberry Pi 3B</a></p>
-            <p>En caso de querer ver el código de la aplicación, se encuentra disponible en mi <a href="https://github.com/Johanfer12/johanfer.com">GitHub</a></p>
-            <p>¡Cualquier opinión o sugerencia será bien recibida!</p>
+            <p><strong>{{ site_name }}</strong> es mi espacio personal para organizar en un mismo lugar tres cosas que sigo con frecuencia: los libros que he leído, la música que escucho y las noticias que reviso a diario. Una forma más visual de volver sobre lo que voy leyendo y escuchando.</p>
 
-            <h3>Otras Páginas</h3>
-            <p><a href="https://johanfer.pythonanywhere.com/">Análisis de mis canciones de Spotify y estadísticas de Twitter (X)</a></p>
-            <p><a href="https://johanfer12.github.io/">Mi portafolio (En construcción)</a></p>
+            <section class="about-section">
+                <h3>Libros</h3>
+                <p>La sección de libros toma como base mi historial de <a href="https://www.goodreads.com">Goodreads</a>. Ahí he llevado durante años el registro de lecturas, calificaciones y fechas, y aquí lo presento de una forma más agradable visualmente, con portadas, mi calificación, datos del libro y estadísticas para ver cómo ha cambiado mi ritmo de lectura con el tiempo.</p>
+            </section>
+
+            <section class="about-section">
+                <h3>Mi música</h3>
+                <p>En la parte de música se muestran mis favoritas recientes y un resumen de lo que más he escuchado. Para convertir ese historial en algo más fácil de revisar y compartir, también ver cómo van cambiando mis hábitos de escucha.</p>
+                <p>Hay una vista de estadísticas donde se agrupan géneros, artistas y evolución mensual para tener una vista más clara de mi actividad musical sin depender de los respumenes anuales de Spotify.</p>
+            </section>
+
+            <section class="about-section">
+                <h3>Noticias</h3>
+                <p>La sección de noticias reúne artículos desde varias fuentes RSS y los ordena para poder revisar rápidamente. Se muestra un resumen de cada artículo para tener una idea general sin necesidad de abrir la fuente original. También se hace una revisión de redundancia para evitar mostrar múltiples versiones de la misma noticia. Se deja una respuesta rápida a títrulos con clickbait.</p>
+                <p>Cada tarjeta puede incluir un resumen corto para escanear la idea principal sin abrir de inmediato la nota original. Ese resumen busca dejar claro de qué trata el artículo antes de decidir si vale la pena leerlo completo.</p>
+            </section>
+
+            <section class="about-section">
+                <h3>Cómo se filtran las noticias</h3>
+                <p>El feed de noticias no se limita a guardar todo lo que llega. Primero existe un filtro por palabras clave para excluir temas o términos que no me interesa ver en la lista principal. Después se aplica una revisión de redundancia con análisis vectorial de similitud semántica para detectar artículos demasiado parecidos entre sí, de modo que el feed no se llene de varias versiones casi iguales de la misma noticia.</p>
+                <p>Además del filtro por palabras, también hay una capa de resumen y procesamiento para que la lectura sea más rápida y el listado quede más limpio. La combinación de esos pasos intenta mantener un feed breve, útil y menos repetitivo.</p>
+            </section>
+
+            <section class="about-section">
+                <h3>Datos técnicos</h3>
+                <p>Otro propósito del proyecto es mantener frescas mis habilidades en programación. La página usa Django para la aplicación web y Python para las tareas de scraping, actualización y procesamiento de datos.</p>
+                <p>Corre en un servidor casero montado sobre una <a href="https://es.wikipedia.org/wiki/Raspberry_Pi">Raspberry Pi 3B</a>, y el código del proyecto está disponible en mi <a href="https://github.com/Johanfer12/johanfer.com">GitHub</a>.</p>
+                <p>Si algo de la página te parece útil, raro, mejorable o simplemente curioso, cualquier opinión o sugerencia será bienvenida.</p>
+            </section>
+
+            <section class="about-section">
+                <h3>Otras Páginas</h3>
+                <p><a href="https://johanfer.pythonanywhere.com/">Análisis de mis canciones de Spotify y estadísticas de Twitter (X)</a></p>
+                <p><a href="https://mejorcuota.co/">Comparador de créditos hipotecarios (mejorcuota.co)</a></p>
+                <p><a href="https://johanfer12.github.io/">Mi portafolio (En construcción)</a></p>
+            </section>
 
             <div class="social-icons">
                 <a href="https://www.instagram.com/johanfer12/" target="_blank">
