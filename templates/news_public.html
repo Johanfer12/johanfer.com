@@ -6,18 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#000000">
     <meta name="color-scheme" content="dark">
-    <title>Noticias de Hoy | Bitácora de Johan</title>
-    <meta name="description" content="Las noticias más recientes disponibles en Bitácora de Johan.">
+    <title>Noticias de Hoy | {{ site_name }}</title>
+    <meta name="description" content="Las noticias más recientes disponibles en {{ site_name }}.">
     <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
-    <meta property="og:site_name" content="Bitácora de Johan">
+    <meta property="og:site_name" content="{{ site_name }}">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Noticias de Hoy | Bitácora de Johan">
-    <meta property="og:description" content="Las noticias más recientes disponibles en Bitácora de Johan.">
+    <meta property="og:title" content="Noticias de Hoy | {{ site_name }}">
+    <meta property="og:description" content="Las noticias más recientes disponibles en {{ site_name }}.">
     <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/news-icon.svg' %}">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Noticias de Hoy | Bitácora de Johan">
-    <meta name="twitter:description" content="Las noticias más recientes disponibles en Bitácora de Johan.">
+    <meta name="twitter:title" content="Noticias de Hoy | {{ site_name }}">
+    <meta name="twitter:description" content="Las noticias más recientes disponibles en {{ site_name }}.">
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/news-icon.svg' %}">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/header.css' %}">

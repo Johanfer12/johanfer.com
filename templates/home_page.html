@@ -5,18 +5,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bitácora de Johan</title>
-    <meta name="description" content="Bitácora de Johan: lo que leo, escucho y descubro en un solo lugar.">
+    <title>{{ site_name }}</title>
+    <meta name="description" content="{{ site_meta_description }}">
     <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
-    <meta property="og:site_name" content="Bitácora de Johan">
+    <meta property="og:site_name" content="{{ site_name }}">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Bitácora de Johan">
-    <meta property="og:description" content="Bitácora de Johan: lo que leo, escucho y descubro en un solo lugar.">
+    <meta property="og:title" content="{{ site_name }}">
+    <meta property="og:description" content="{{ site_meta_description }}">
     <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Bitácora de Johan">
-    <meta name="twitter:description" content="Bitácora de Johan: lo que leo, escucho y descubro en un solo lugar.">
+    <meta name="twitter:title" content="{{ site_name }}">
+    <meta name="twitter:description" content="{{ site_meta_description }}">
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     <link rel="stylesheet" href="{% static 'css/home.css' %}">
@@ -24,8 +24,8 @@
 <body>
     <div class="content-container">
         <div class="welcome-text">
-            <h1>Bitácora de Johan</h1>
-            <p>Lo que leo, escucho y descubro.</p>
+            <h1>{{ site_name }}</h1>
+            <p>{{ site_tagline }}</p>
         </div>
         <div class="main-icons-container">
             <div class="main-icon">

@@ -32,6 +32,10 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'raspberrypi.local', 'www.johanfer.com', 'johanfer.com', '192.168.1.7']
 
+SITE_NAME = 'Mi Bitácora'
+SITE_TAGLINE = 'Lo que leo, escucho y descubro.'
+SITE_META_DESCRIPTION = 'Mi Bitácora: lo que leo, escucho y descubro en un solo lugar.'
+
 
 # Application definition
 
@@ -96,6 +100,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.media',
+                'Bookshelf.context_processors.site_branding',
             ],
         },
     },
