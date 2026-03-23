@@ -14,7 +14,21 @@ class VisitLogMiddleware:
         '/static/',
         '/media/',
         '/j_admin/',
-        '/noticias/',
+    )
+    SKIP_NEWS_PREFIXES = (
+        '/noticias/save/',
+        '/noticias/delete/',
+        '/noticias/undo/',
+        '/noticias/update-feed/',
+        '/noticias/cleanup-old/',
+        '/noticias/retry-summaries/',
+        '/noticias/check-new-news/',
+        '/noticias/news-stream/',
+        '/noticias/get-news-count/',
+        '/noticias/get-page/',
+        '/noticias/generate-embeddings/',
+        '/noticias/check-redundancy/',
+        '/noticias/image-proxy/',
     )
     SKIP_PATHS = (
         '/favicon.ico',
@@ -45,6 +59,8 @@ class VisitLogMiddleware:
         if request.path in self.SKIP_PATHS:
             return
         if any(request.path.startswith(prefix) for prefix in self.SKIP_PREFIXES):
+            return
+        if any(request.path.startswith(prefix) for prefix in self.SKIP_NEWS_PREFIXES):
             return
 
         accept = (request.headers.get('Accept') or '').lower()
