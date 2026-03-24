@@ -584,13 +584,16 @@
         STATE.userInteracted = false;
     };
 
-    const renderPageFromServerData = (data, {animateMerge = false} = {}) => {
+    const renderPageFromServerData = (data, {animateMerge = false, animation = null} = {}) => {
         if (!data || data.status !== 'success') return;
         const visibleCards = (data.cards || []).filter(item => !shouldSkipServerCard(extractPayloadId(item)));
         const visibleBackupCards = (data.backup_cards || []).filter(item => !shouldSkipServerCard(extractPayloadId(item)));
-        const shouldAnimateMerge = !!animateMerge && !!DOM.grid;
-        const oldPositions = shouldAnimateMerge && !isMobile() ? capturePositions() : null;
-        const existingCards = shouldAnimateMerge
+        const renderAnimation = animation || (animateMerge ? 'merge' : 'none');
+        const shouldReuseExisting = renderAnimation !== 'none' && !!DOM.grid;
+        const shouldAnimateReposition = renderAnimation === 'merge';
+        const shouldAnimateInsertions = renderAnimation === 'merge' || renderAnimation === 'insert-only';
+        const oldPositions = shouldAnimateReposition && !isMobile() ? capturePositions() : null;
+        const existingCards = shouldReuseExisting
             ? new Map($$('.news-card-container', DOM.grid).map(el => [el.dataset.newsId || el.id.replace('news-', ''), el]))
             : new Map();
         const insertedCards = [];
@@ -600,14 +603,14 @@
             const payloadId = extractPayloadId(item);
             let card = null;
 
-            if (shouldAnimateMerge && payloadId && existingCards.has(payloadId)) {
+            if (shouldReuseExisting && payloadId && existingCards.has(payloadId)) {
                 card = refreshExistingCardFromPayload(existingCards.get(payloadId), item);
                 existingCards.delete(payloadId);
             } else {
                 const created = createCardFromPayload(item);
                 card = created.card;
                 if (!card) return;
-                if (shouldAnimateMerge) insertedCards.push(card);
+                if (shouldAnimateInsertions) insertedCards.push(card);
             }
 
             const id = card.id.replace('news-', '');
@@ -618,8 +621,10 @@
         DOM.grid.innerHTML = '';
         DOM.grid.appendChild(frag);
 
-        if (shouldAnimateMerge) {
+        if (shouldAnimateReposition) {
             if (oldPositions) animateReposition(oldPositions);
+        }
+        if (shouldAnimateInsertions) {
             insertedCards.forEach(el => animateScaleOpacity(el));
         }
         STATE.backupCards = visibleBackupCards;
@@ -638,7 +643,7 @@
         enforceCardLimit();
     };
 
-    const syncCurrentPageFromDb = async ({force = false} = {}) => {
+    const syncCurrentPageFromDb = async ({force = false, animation = 'merge'} = {}) => {
         const now = Date.now();
         // cooldown para evitar duplicados por focus + visibilitychange seguidos
         if (!force && (now - STATE.lastDbSyncAt) < 1500) return;
@@ -662,7 +667,7 @@
                 q,
                 signal: syncController.signal
             });
-            renderPageFromServerData(data, {animateMerge: true});
+            renderPageFromServerData(data, {animation});
             STATE.lastDbSyncAt = Date.now();
         } catch (e) {
             if (e.name === 'AbortError') return;
@@ -675,8 +680,8 @@
         }
     };
 
-    const refreshCurrentPageFromDb = (reason = 'sync') => (
-        syncCurrentPageFromDb({force: true}).catch((e) => {
+    const refreshCurrentPageFromDb = (reason = 'sync', options = {}) => (
+        syncCurrentPageFromDb({force: true, ...options}).catch((e) => {
             err(`Error reconciliando pagina actual (${reason}):`, e);
         })
     );
@@ -817,7 +822,7 @@
                     container.remove();
                     if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
                     updateCounters(data.total_news, data.total_pages);
-                    refreshCurrentPageFromDb('guardar/desguardar');
+                    refreshCurrentPageFromDb('guardar/desguardar', {animation: 'insert-only'});
                 }
             })
             .catch(e => {
@@ -905,7 +910,7 @@
             STATE.deletingNews.delete(normalizedNewsId);
             pruneNewsFromClientCaches(normalizedNewsId);
             updateCounters(data.total_news, data.total_pages);
-            refreshCurrentPageFromDb('eliminar noticia');
+            refreshCurrentPageFromDb('eliminar noticia', {animation: 'insert-only'});
         };
         const maybeFinalizeDelete = () => {
             if (!pendingDeleteResponse) return;
