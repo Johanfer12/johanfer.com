@@ -232,6 +232,7 @@ def delete_news(request, pk):
         current_page = _safe_page(request.POST.get('current_page', 1))
         order = request.POST.get('order', 'desc')
         saved_only = request.POST.get('saved_only', 'false').lower() == 'true'
+        search_query = (request.POST.get('q') or '').strip() or None
         news = News.objects.get(pk=pk)
         news.is_deleted = True
         news.save(update_fields=['is_deleted'])
@@ -241,13 +242,17 @@ def delete_news(request, pk):
         # La UI ya tiene el resto de tarjetas visibles; la unica "nueva" que debe
         # llegar tras un borrado es el ultimo item de la pagina recalculada.
         next_news = None
-        total_news, total_pages = _get_total_news_and_pages(saved_only=saved_only)
+        total_news, total_pages = _get_total_news_and_pages(search_query=search_query, saved_only=saved_only)
 
         base_qs = News.visible
         if saved_only:
             base_qs = base_qs.filter(is_saved=True)
         else:
             base_qs = base_qs.filter(is_saved=False)
+        if search_query:
+            base_qs = base_qs.filter(
+                Q(title__icontains=search_query) | Q(description__icontains=search_query)
+            )
         base_qs = base_qs.order_by('published_date', 'id') if order == 'asc' else base_qs.order_by('-published_date', '-id')
         page_start = (current_page - 1) * PAGE_SIZE
         page_qs = list(base_qs[page_start:page_start + PAGE_SIZE])

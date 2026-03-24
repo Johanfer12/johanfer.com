@@ -141,6 +141,48 @@ class NewsFeedOrderingTests(TestCase):
         ]
         self.assertEqual(restored_page_ids, ordered_ids[:25])
 
+    def test_delete_respects_search_filter_when_computing_replacement(self):
+        self.client.force_login(self.superuser)
+        base_time = timezone.now()
+        matching_dates = [base_time - timedelta(minutes=index) for index in range(26)]
+        non_matching_dates = [base_time - timedelta(days=1, minutes=index) for index in range(3)]
+
+        self.create_news_batch(26, prefix='query-hit', published_dates=matching_dates)
+        self.create_news_batch(3, prefix='query-miss', published_dates=non_matching_dates)
+
+        filtered_ids = list(
+            News.visible.filter(title__icontains='query-hit')
+            .order_by('-published_date', '-id')
+            .values_list('id', flat=True)
+        )
+        deleted_id = filtered_ids[5]
+        expected_replacement_id = filtered_ids[25]
+
+        delete_response = self.client.post(
+            reverse('my_news:delete_news', args=[deleted_id]),
+            {
+                'current_page': 1,
+                'order': 'desc',
+                'saved_only': 'false',
+                'q': 'query-hit',
+            },
+        )
+        delete_payload = delete_response.json()
+
+        self.assertEqual(delete_payload['status'], 'success')
+        self.assertEqual(delete_payload['total_news'], 25)
+        self.assertEqual(delete_payload['card']['id'], expected_replacement_id)
+
+        current_page_ids = [
+            card['id']
+            for card in self.client.get(
+                reverse('my_news:get_page'),
+                {'order': 'desc', 'page': 1, 'q': 'query-hit'},
+            ).json()['cards']
+        ]
+        expected_after_delete = [news_id for news_id in filtered_ids if news_id != deleted_id][:25]
+        self.assertEqual(current_page_ids, expected_after_delete)
+
     def test_initial_backup_cards_follow_same_ordering_rule(self):
         same_time = timezone.now()
         self.create_news_batch(30, prefix='backup-order', published_dates=[same_time] * 30)

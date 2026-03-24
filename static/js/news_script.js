@@ -85,6 +85,8 @@
         syncController: null,
         locallyDeletedIds: new Set(), // IDs borrados localmente para evitar reinserciones desde cache cliente
         cancelledDeletes: new Set(), // IDs cuyo borrado fue revertido antes de completar el flujo local
+        mutationVersion: 0, // invalida respuestas viejas del feed tras mutaciones locales
+        deferredSyncTimer: null,
     };
 
     /* ---------------------------------------------------------------------
@@ -169,6 +171,28 @@
         if (!targetId) return;
         STATE.pendingNews = STATE.pendingNews.filter(item => normalizeId(item?.id) !== targetId);
         STATE.backupCards = STATE.backupCards.filter(item => extractPayloadId(item) !== targetId);
+    };
+    const abortBackgroundReads = () => {
+        if (STATE.syncController) STATE.syncController.abort();
+        if (STATE.checkController) STATE.checkController.abort();
+    };
+    const beginUiMutation = () => {
+        STATE.mutationVersion += 1;
+        abortBackgroundReads();
+        return STATE.mutationVersion;
+    };
+    const isStaleUiRead = (version) => version !== STATE.mutationVersion;
+    const scheduleSilentSync = (reason, {delay = 900} = {}) => {
+        if (STATE.deferredSyncTimer) {
+            clearTimeout(STATE.deferredSyncTimer);
+            STATE.deferredSyncTimer = null;
+        }
+        const scheduledVersion = STATE.mutationVersion;
+        STATE.deferredSyncTimer = setTimeout(() => {
+            STATE.deferredSyncTimer = null;
+            if (isStaleUiRead(scheduledVersion)) return;
+            refreshCurrentPageFromDb(reason, {animation: 'silent'});
+        }, delay);
     };
 
     const buildShareCardData = (container) => {
@@ -538,6 +562,22 @@
         applyCardDataset(card, item?.data || item);
         return card;
     };
+    const appendReplacementCardFromPayload = (item) => {
+        if (!item || !DOM.grid) return null;
+        const payloadId = extractPayloadId(item);
+        if (!payloadId || shouldSkipServerCard(payloadId) || $(`#news-${payloadId}`, DOM.grid)) return null;
+
+        const { card } = createCardFromPayload(item);
+        if (!card) return null;
+
+        configureNewCard(card, payloadId);
+        DOM.grid.appendChild(card);
+        applyAdaptiveTitleSize(card);
+        animateScaleOpacity(card);
+        pruneNewsFromClientCaches(payloadId);
+        enforceCardLimit();
+        return card;
+    };
 
     /** Asegura que no haya más de MAX_NEWS tarjetas visibles eliminando las más antiguas */
     const enforceCardLimit = () => {
@@ -644,6 +684,7 @@
     };
 
     const syncCurrentPageFromDb = async ({force = false, animation = 'merge'} = {}) => {
+        const readVersion = STATE.mutationVersion;
         const now = Date.now();
         // cooldown para evitar duplicados por focus + visibilitychange seguidos
         if (!force && (now - STATE.lastDbSyncAt) < 1500) return;
@@ -667,6 +708,7 @@
                 q,
                 signal: syncController.signal
             });
+            if (isStaleUiRead(readVersion)) return;
             renderPageFromServerData(data, {animation});
             STATE.lastDbSyncAt = Date.now();
         } catch (e) {
@@ -706,14 +748,23 @@
     /* ---------------------------------------------------------------------
      *  Eliminación de noticias (móvil + escritorio fusionados)
      * ------------------------------------------------------------------ */
-    const serverDeleteNews = (newsId, currentPage) => fetchJson(`/noticias/delete/${newsId}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken'),
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-        body: `current_page=${currentPage}&order=${STATE.order}&saved_only=${isSavedView() ? 'true' : 'false'}`,
-    });
+    const serverDeleteNews = (newsId, currentPage) => {
+        const params = new URLSearchParams();
+        const q = new URLSearchParams(location.search).get('q') || '';
+        params.set('current_page', String(currentPage));
+        params.set('order', STATE.order);
+        params.set('saved_only', isSavedView() ? 'true' : 'false');
+        if (q) params.set('q', q);
+
+        return fetchJson(`/noticias/delete/${newsId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: params.toString(),
+        });
+    };
 
     const serverUndoNews = (newsId) => fetchJson(`/noticias/undo/${newsId}/`, {
         method: 'POST',
@@ -799,6 +850,7 @@
 
     const toggleSaveNews = (newsId) => {
         if (STATE.savingNews.has(newsId)) return;
+        beginUiMutation();
         STATE.savingNews.add(newsId);
 
         const container = $(`#news-${newsId}`);
@@ -840,6 +892,7 @@
         STATE.cancelledDeletes.delete(normalizedNewsId);
         // Protección contra eliminaciones simultáneas
         if (STATE.deletingNews.has(normalizedNewsId)) return;
+        beginUiMutation();
         STATE.deletingNews.add(normalizedNewsId);
         pruneNewsFromClientCaches(normalizedNewsId);
         
@@ -910,7 +963,9 @@
             STATE.deletingNews.delete(normalizedNewsId);
             pruneNewsFromClientCaches(normalizedNewsId);
             updateCounters(data.total_news, data.total_pages);
-            refreshCurrentPageFromDb('eliminar noticia', {animation: 'insert-only'});
+            appendReplacementCardFromPayload(data.card);
+            if (STATE.backupCards.length < 5) loadMoreBackupNews();
+            scheduleSilentSync('eliminar noticia');
         };
         const maybeFinalizeDelete = () => {
             if (!pendingDeleteResponse) return;
@@ -1030,6 +1085,7 @@
 
     const checkForNewNews = () => {
         if (isSavedView()) return Promise.resolve();
+        const readVersion = STATE.mutationVersion;
         if (STATE.checkController) STATE.checkController.abort();
         const checkController = new AbortController();
         STATE.checkController = checkController;
@@ -1043,6 +1099,7 @@
         return fetchJson(`/noticias/check-new-news/?${params.toString()}`, {signal: checkController.signal})
             .then(data => {
                 if (data.status !== 'success') throw new Error(data.message);
+                if (isStaleUiRead(readVersion)) return;
                 handleIncomingNewsPayload(data);
             })
             .catch(e => {
@@ -1340,6 +1397,7 @@
     DOM.undoBtn?.addEventListener('click', () => {
         const last = STATE.deleteStack.shift();
         if (!last) return;
+        beginUiMutation();
         const normalizedLast = normalizeId(last);
         STATE.cancelledDeletes.add(normalizedLast);
         STATE.deletingNews.delete(normalizedLast);
