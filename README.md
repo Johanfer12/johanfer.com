@@ -2,6 +2,8 @@
 
 Este proyecto Django incluye tres aplicaciones principales: un scraper web que extrae información de libros de Goodreads, una aplicación de noticias que recopila artículos de fuentes RSS y una aplicación que muestra datos de Spotify.
 
+Para operación del servidor Raspberry y el incidente post-backup del `2026-03-31`, ver `SERVER_INCIDENT_2026-03-31.md`. Las notas locales ampliadas siguen en `RASPBERRY_SERVER_REBUILD.md` y `ops_local/`.
+
 ## Aplicación de Libros
 
 Esta aplicación implementa un scraper web que extrae información detallada de libros de mi lista de lectura en Goodreads y la almacena en una base de datos, incluyendo procesamiento avanzado de imágenes y seguimiento de cambios.
