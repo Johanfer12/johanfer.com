@@ -51,8 +51,8 @@
     will-change: transform;
 }
 
-/* Modificamos este selector para excluir cuando el hover es sobre la imagen o el botón de eliminar */
-.news-card-container:hover .news-card:not(.image-hover):not(.delete-hover) {
+/* El giro se controla por JS para evitar que el borde del contenedor dispare el flip */
+.news-card.is-flipped:not(.image-hover):not(.delete-hover) {
     transform: rotateY(180deg);
 }
 
@@ -78,6 +78,13 @@
     display: flex;
     flex-direction: column;
     transform: rotateY(0deg);
+}
+
+.news-media-zone {
+    position: relative;
+    flex: 0 0 140px;
+    width: 100%;
+    overflow: hidden;
 }
 
 .card-back {
@@ -111,8 +118,9 @@
 /* Elementos de la tarjeta */
 .news-card .news-image {
     width: 100%;
-    height: 140px !important;
+    height: 100% !important;
     object-fit: cover;
+    display: block;
 }
 
 .news-title {

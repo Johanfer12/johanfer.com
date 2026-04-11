@@ -63,14 +63,15 @@
     const configureCard = (container) => {
         if (!container) return;
         const front = container.querySelector('.card-front');
-        if (!front || front.querySelector('.mobile-delete-btn') || !container.querySelector('.delete-btn')) return;
+        const mediaZone = front?.querySelector('.news-media-zone');
+        if (!mediaZone || mediaZone.querySelector('.mobile-delete-btn') || !container.querySelector('.delete-btn')) return;
 
         const id = String(container.dataset.newsId || '').trim();
         const button = document.createElement('button');
         button.className = 'mobile-delete-btn';
         button.type = 'button';
         button.dataset.id = id;
-        front.appendChild(button);
+        mediaZone.appendChild(button);
     };
 
     const updateCounter = () => {
@@ -111,39 +112,64 @@
         removeCard(card, id);
     });
 
-    grid?.addEventListener('mouseover', (event) => {
+    const isPointerInProtectedMediaZone = (container, pointerEvent) => {
+        if (!container || !pointerEvent) return false;
+        const mediaZone = container.querySelector('.news-media-zone');
+        if (!mediaZone) return false;
+
+        const containerRect = container.getBoundingClientRect();
+        const protectedHeight = mediaZone.offsetHeight;
+        const bleed = 3;
+        const x = pointerEvent.clientX;
+        const y = pointerEvent.clientY;
+
+        const withinHorizontalBounds = x >= (containerRect.left - bleed) && x <= (containerRect.right + bleed);
+        const withinProtectedHeight = y >= (containerRect.top - bleed) && y <= (containerRect.top + protectedHeight + bleed);
+        return withinHorizontalBounds && withinProtectedHeight;
+    };
+
+    const isPointerWithinCardBounds = (container, pointerEvent) => {
+        if (!container || !pointerEvent) return false;
+        const rect = container.getBoundingClientRect();
+        const bleed = 1;
+        const x = pointerEvent.clientX;
+        const y = pointerEvent.clientY;
+
+        return x >= (rect.left - bleed) &&
+            x <= (rect.right + bleed) &&
+            y >= (rect.top - bleed) &&
+            y <= (rect.bottom + bleed);
+    };
+
+    grid?.addEventListener('mousemove', (event) => {
         const container = event.target.closest('.news-card-container');
         if (!container) return;
         const cardElement = container.querySelector('.news-card');
         if (!cardElement) return;
 
-        const deleteButton = event.target.closest('.mobile-delete-btn');
-        if (deleteButton && !deleteButton.contains(event.relatedTarget)) {
-            cardElement.classList.add('delete-hover');
+        const withinCardBounds = isPointerWithinCardBounds(container, event);
+        if (!withinCardBounds) return;
+
+        if (cardElement.classList.contains('is-flipped')) {
+            return;
         }
 
-        const image = event.target.closest('.news-image');
-        if (image && !image.contains(event.relatedTarget)) {
-            cardElement.classList.add('image-hover');
-        }
+        const overMediaZone = isPointerInProtectedMediaZone(container, event);
+        const overDeleteButton = !!event.target.closest('.mobile-delete-btn');
+        const shouldFlip = !overMediaZone && !overDeleteButton;
+
+        cardElement.classList.toggle('is-flipped', shouldFlip);
+        cardElement.classList.toggle('image-hover', overMediaZone);
+        cardElement.classList.toggle('delete-hover', overDeleteButton);
     });
 
-    grid?.addEventListener('mouseout', (event) => {
+    grid?.addEventListener('mouseleave', (event) => {
         const container = event.target.closest('.news-card-container');
         if (!container) return;
         const cardElement = container.querySelector('.news-card');
         if (!cardElement) return;
-
-        const deleteButton = event.target.closest('.mobile-delete-btn');
-        if (deleteButton && !deleteButton.contains(event.relatedTarget)) {
-            cardElement.classList.remove('delete-hover');
-        }
-
-        const image = event.target.closest('.news-image');
-        if (image && !image.contains(event.relatedTarget)) {
-            cardElement.classList.remove('image-hover');
-        }
-    });
+        cardElement.classList.remove('is-flipped', 'image-hover', 'delete-hover');
+    }, true);
 
     resetButton?.addEventListener('click', () => {
         localStorage.removeItem(storageKey);

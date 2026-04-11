@@ -2,11 +2,13 @@
 <div class="news-card-container" id="public-news-{{ article.id }}" data-news-id="{{ article.id }}" data-published-at="{{ article.published_date|date:'c' }}">
     <div class="news-card">
         <div class="card-front">
-            {% if article.image_url %}
-            <img src="{{ article.image_url }}" alt="{{ article.title }}" class="news-image" loading="lazy" decoding="async">
-            {% else %}
-            <img src="{% static 'Img/News_Default.png' %}" alt="Imagen no disponible" class="news-image" loading="lazy" decoding="async">
-            {% endif %}
+            <div class="news-media-zone">
+                {% if article.image_url %}
+                <img src="{{ article.image_url }}" alt="{{ article.title }}" class="news-image" loading="lazy" decoding="async">
+                {% else %}
+                <img src="{% static 'Img/News_Default.png' %}" alt="Imagen no disponible" class="news-image" loading="lazy" decoding="async">
+                {% endif %}
+            </div>
             <h3 class="news-title">{{ article.title }}</h3>
             {% if article.short_answer %}
             <div class="short-answer">{{ article.short_answer }}</div>
