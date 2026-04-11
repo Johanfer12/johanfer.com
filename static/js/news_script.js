@@ -495,7 +495,9 @@
         return `<div class="news-card-container" id="news-${escapeHtml(data.id)}" data-news-id="${escapeHtml(data.id)}" data-published-at="${escapeHtml(data.published_at || '')}" data-created-at="${escapeHtml(data.created_at || '')}">
     <div class="news-card">
         <div class="card-front">
-            <img src="${escapeHtml(data.image_url || USER_FLAGS.default_image_url)}" alt="${escapeHtml(data.title)}" class="news-image" loading="lazy" decoding="async">
+            <div class="news-media-zone">
+                <img src="${escapeHtml(data.image_url || USER_FLAGS.default_image_url)}" alt="${escapeHtml(data.title)}" class="news-image" loading="lazy" decoding="async">
+            </div>
             <h3 class="news-title">${escapeHtml(data.title)}</h3>
             ${shortAnswer}
             <div class="news-meta">
@@ -1182,17 +1184,18 @@
         if (!container) return;
         applyCardDataset(container, {id});
         const front = container.querySelector('.card-front');
+        const mediaZone = front?.querySelector('.news-media-zone');
         const back = container.querySelector('.card-back');
         const links = back?.querySelector('.news-links');
         const saveBtn = container.querySelector('.save-btn');
 
         // Botón eliminar móvil ✕
-        if (front && !front.querySelector('.mobile-delete-btn') && container.querySelector('.delete-btn')) {
+        if (mediaZone && !mediaZone.querySelector('.mobile-delete-btn') && container.querySelector('.delete-btn')) {
             const mbBtn = document.createElement('button');
             mbBtn.className = 'mobile-delete-btn';
             mbBtn.type = 'button';
             mbBtn.dataset.id = id;
-            front.appendChild(mbBtn);
+            mediaZone.appendChild(mbBtn);
         }
 
         // Acción compartir para copiar tarjeta compacta al portapapeles
@@ -1253,41 +1256,64 @@
         }
     });
 
-    DOM.grid?.addEventListener('mouseover', (e) => {
+    const isPointerInProtectedMediaZone = (container, pointerEvent) => {
+        if (!container || !pointerEvent) return false;
+        const mediaZone = container.querySelector('.news-media-zone');
+        if (!mediaZone) return false;
+
+        const containerRect = container.getBoundingClientRect();
+        const protectedHeight = mediaZone.offsetHeight;
+        const bleed = 3;
+        const x = pointerEvent.clientX;
+        const y = pointerEvent.clientY;
+
+        const withinHorizontalBounds = x >= (containerRect.left - bleed) && x <= (containerRect.right + bleed);
+        const withinProtectedHeight = y >= (containerRect.top - bleed) && y <= (containerRect.top + protectedHeight + bleed);
+        return withinHorizontalBounds && withinProtectedHeight;
+    };
+
+    const isPointerWithinCardBounds = (container, pointerEvent) => {
+        if (!container || !pointerEvent) return false;
+        const rect = container.getBoundingClientRect();
+        const bleed = 1;
+        const x = pointerEvent.clientX;
+        const y = pointerEvent.clientY;
+
+        return x >= (rect.left - bleed) &&
+            x <= (rect.right + bleed) &&
+            y >= (rect.top - bleed) &&
+            y <= (rect.bottom + bleed);
+    };
+
+    DOM.grid?.addEventListener('mousemove', (e) => {
         const container = e.target.closest('.news-card-container');
         if (!container) return;
         const cardElement = container.querySelector('.news-card');
         if (!cardElement) return;
 
-        // Solo el boton movil (frente) debe bloquear el flip.
-        // El delete del reverso no debe forzar rotateY(0), porque devuelve la tarjeta.
-        const deleteBtn = e.target.closest('.mobile-delete-btn');
-        if (deleteBtn && !deleteBtn.contains(e.relatedTarget)) {
-            cardElement.classList.add('delete-hover');
+        const withinCardBounds = isPointerWithinCardBounds(container, e);
+        if (!withinCardBounds) return;
+
+        if (cardElement.classList.contains('is-flipped')) {
+            return;
         }
 
-        const image = e.target.closest('.news-image');
-        if (image && !image.contains(e.relatedTarget)) {
-            cardElement.classList.add('image-hover');
-        }
+        const overMediaZone = isPointerInProtectedMediaZone(container, e);
+        const overDeleteButton = !!e.target.closest('.mobile-delete-btn');
+        const shouldFlip = !overMediaZone && !overDeleteButton;
+
+        cardElement.classList.toggle('is-flipped', shouldFlip);
+        cardElement.classList.toggle('image-hover', overMediaZone);
+        cardElement.classList.toggle('delete-hover', overDeleteButton);
     });
 
-    DOM.grid?.addEventListener('mouseout', (e) => {
+    DOM.grid?.addEventListener('mouseleave', (e) => {
         const container = e.target.closest('.news-card-container');
         if (!container) return;
         const cardElement = container.querySelector('.news-card');
         if (!cardElement) return;
-
-        const deleteBtn = e.target.closest('.mobile-delete-btn');
-        if (deleteBtn && !deleteBtn.contains(e.relatedTarget)) {
-            cardElement.classList.remove('delete-hover');
-        }
-
-        const image = e.target.closest('.news-image');
-        if (image && !image.contains(e.relatedTarget)) {
-            cardElement.classList.remove('image-hover');
-        }
-    });
+        cardElement.classList.remove('is-flipped', 'image-hover', 'delete-hover');
+    }, true);
 
     const closeNewsStream = () => {
         if (STATE.sseRetryTimer) {
