@@ -21,18 +21,29 @@
     width: 100%;
     padding: 0 12px;
     box-sizing: border-box;
+    gap: 12px;
+}
+
+.header-title {
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
 .header-title h1 {
     font-size: 24px;
     margin: 0;
     letter-spacing: 0.015em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .header-nav {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex: 0 1 auto;
+    min-width: 0;
 }
 
 .header-nav a {
@@ -49,6 +60,7 @@
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(198, 214, 242, 0.16);
     transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+    flex: 0 0 auto;
 }
 
 .header-nav a:hover {
@@ -91,6 +103,79 @@
 
     .total {
         font-size: 14px;
+    }
+}
+
+@media (max-width: 720px) {
+    .header {
+        max-width: 96%;
+        padding: 10px 12px;
+    }
+
+    .header-container {
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .header-title {
+        flex: 1 1 120px;
+    }
+
+    .header-title h1 {
+        font-size: 17px;
+    }
+
+    .total {
+        font-size: 13px;
+    }
+
+    .header-nav {
+        flex: 1 1 auto;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 6px;
+        max-width: 56%;
+    }
+
+    .header-nav a {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+    }
+
+    .header-nav a svg {
+        width: 16px;
+        height: 16px;
+    }
+}
+
+@media (max-width: 520px) {
+    .header-container {
+        gap: 8px;
+    }
+
+    .header-title {
+        flex-basis: 104px;
+    }
+
+    .header-title h1 {
+        font-size: 16px;
+    }
+
+    .header-nav {
+        gap: 5px;
+        max-width: 60%;
+    }
+
+    .header-nav a {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+    }
+
+    .header-nav a svg {
+        width: 14px;
+        height: 14px;
     }
 }
 
