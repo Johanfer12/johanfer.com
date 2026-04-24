@@ -768,14 +768,21 @@
         });
     };
 
-    const serverUndoNews = (newsId) => fetchJson(`/noticias/undo/${newsId}/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken'),
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `saved_only=${isSavedView() ? 'true' : 'false'}`,
-    });
+    const serverUndoNews = (newsId) => {
+        const params = new URLSearchParams();
+        const q = new URLSearchParams(location.search).get('q') || '';
+        params.set('saved_only', isSavedView() ? 'true' : 'false');
+        if (q) params.set('q', q);
+
+        return fetchJson(`/noticias/undo/${newsId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: params.toString(),
+        });
+    };
 
     const serverGetPage = ({cursor, page, order, q, backupOnly = false, signal}) => {
         const params = new URLSearchParams();
@@ -963,6 +970,9 @@
             }
             STATE.locallyDeletedIds.add(normalizedNewsId);
             STATE.deletingNews.delete(normalizedNewsId);
+            STATE.deleteStack = STATE.deleteStack.filter(id => normalizeId(id) !== normalizedNewsId);
+            STATE.deleteStack.unshift(normalizedNewsId);
+            if (STATE.deleteStack.length > 5) STATE.deleteStack.length = 5;
             pruneNewsFromClientCaches(normalizedNewsId);
             updateCounters(data.total_news, data.total_pages);
             appendReplacementCardFromPayload(data.card);
@@ -1051,9 +1061,6 @@
                 STATE.deletingNews.delete(normalizedNewsId); // Limpiar flag en error
             });
 
-        // Apilar para deshacer
-        STATE.deleteStack.unshift(normalizedNewsId);
-        if (STATE.deleteStack.length > 5) STATE.deleteStack.length = 5;
     };
 
 
@@ -1285,35 +1292,90 @@
             y <= (rect.bottom + bleed);
     };
 
-    DOM.grid?.addEventListener('mousemove', (e) => {
-        const container = e.target.closest('.news-card-container');
-        if (!container) return;
+    const clearFlipLock = (cardElement) => {
+        if (!cardElement) return;
+        if (cardElement._flipUnlockTimer) {
+            clearTimeout(cardElement._flipUnlockTimer);
+            cardElement._flipUnlockTimer = null;
+        }
+        cardElement.dataset.flipLocked = 'false';
+    };
+
+    const lockFlipUntilTransitionEnds = (cardElement) => {
+        if (!cardElement) return;
+        clearFlipLock(cardElement);
+        cardElement.dataset.flipLocked = 'true';
+
+        const unlock = () => clearFlipLock(cardElement);
+        cardElement.addEventListener('transitionend', (ev) => {
+            if (ev.target === cardElement && ev.propertyName === 'transform') unlock();
+        }, {once: true});
+        cardElement._flipUnlockTimer = setTimeout(unlock, 640);
+    };
+
+    const setCardHoverMode = (container, pointerEvent, {force = false} = {}) => {
+        if (!container || !pointerEvent || pointerEvent.pointerType === 'touch') return;
         const cardElement = container.querySelector('.news-card');
         if (!cardElement) return;
+        if (container.classList.contains('collapsing') || container.classList.contains('deleting')) return;
+        if (!force && cardElement.dataset.flipLocked === 'true') return;
 
-        const withinCardBounds = isPointerWithinCardBounds(container, e);
+        const withinCardBounds = isPointerWithinCardBounds(container, pointerEvent);
         if (!withinCardBounds) return;
 
-        if (cardElement.classList.contains('is-flipped')) {
-            return;
-        }
+        const overMediaZone = isPointerInProtectedMediaZone(container, pointerEvent);
+        const overDeleteButton = !!pointerEvent.target.closest('.mobile-delete-btn');
+        const nextMode = overDeleteButton ? 'delete' : (overMediaZone ? 'image' : 'flipped');
+        if (cardElement.dataset.hoverMode === nextMode) return;
 
-        const overMediaZone = isPointerInProtectedMediaZone(container, e);
-        const overDeleteButton = !!e.target.closest('.mobile-delete-btn');
-        const shouldFlip = !overMediaZone && !overDeleteButton;
-
+        const wasFlipped = cardElement.classList.contains('is-flipped');
+        const shouldFlip = nextMode === 'flipped';
+        cardElement.dataset.hoverMode = nextMode;
         cardElement.classList.toggle('is-flipped', shouldFlip);
-        cardElement.classList.toggle('image-hover', overMediaZone);
-        cardElement.classList.toggle('delete-hover', overDeleteButton);
-    });
+        cardElement.classList.toggle('image-hover', nextMode === 'image');
+        cardElement.classList.toggle('delete-hover', nextMode === 'delete');
 
-    DOM.grid?.addEventListener('mouseleave', (e) => {
-        const container = e.target.closest('.news-card-container');
+        if (wasFlipped !== shouldFlip) {
+            lockFlipUntilTransitionEnds(cardElement);
+        }
+    };
+
+    const resetCardHoverMode = (container) => {
         if (!container) return;
         const cardElement = container.querySelector('.news-card');
         if (!cardElement) return;
+        const wasFlipped = cardElement.classList.contains('is-flipped');
         cardElement.classList.remove('is-flipped', 'image-hover', 'delete-hover');
-    }, true);
+        delete cardElement.dataset.hoverMode;
+        if (wasFlipped) {
+            lockFlipUntilTransitionEnds(cardElement);
+        } else {
+            clearFlipLock(cardElement);
+        }
+    };
+
+    DOM.grid?.addEventListener('pointerover', (e) => {
+        const container = e.target.closest('.news-card-container');
+        if (!container || (e.relatedTarget && container.contains(e.relatedTarget))) return;
+        setCardHoverMode(container, e);
+    });
+
+    DOM.grid?.addEventListener('pointermove', (e) => {
+        const container = e.target.closest('.news-card-container');
+        if (!container) return;
+        setCardHoverMode(container, e);
+    });
+
+    DOM.grid?.addEventListener('pointerout', (e) => {
+        const container = e.target.closest('.news-card-container');
+        if (!container || (e.relatedTarget && container.contains(e.relatedTarget))) return;
+        resetCardHoverMode(container);
+    });
+
+    DOM.grid?.addEventListener('pointercancel', (e) => {
+        const container = e.target.closest('.news-card-container');
+        if (container) resetCardHoverMode(container);
+    });
 
     const closeNewsStream = () => {
         if (STATE.sseRetryTimer) {
