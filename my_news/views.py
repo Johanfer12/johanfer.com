@@ -588,6 +588,7 @@ def get_page(request):
 def undo_delete(request, pk):
     try:
         saved_only = request.POST.get('saved_only', 'false').lower() == 'true'
+        search_query = (request.POST.get('q') or '').strip() or None
         news = News.objects.get(pk=pk)
         if news.is_deleted:
             news.is_deleted = False
@@ -598,7 +599,7 @@ def undo_delete(request, pk):
             news.save()
             _bump_cache_version()
 
-        total_news, total_pages = _get_total_news_and_pages(saved_only=saved_only)
+        total_news, total_pages = _get_total_news_and_pages(search_query, saved_only=saved_only)
 
         return JsonResponse({
             'status': 'success',
