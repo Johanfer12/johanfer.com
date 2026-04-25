@@ -128,7 +128,7 @@ h1, h3 {
 
     .content-container {
         width: 95%;
-        padding: 1rem;
+        padding: 1rem 0.75rem;
         margin: 0 auto;
     }
 
@@ -137,8 +137,8 @@ h1, h3 {
     }
 
     .music-section {
-        padding: 1rem;
-        width: 95%;
+        padding: 1rem 0.9rem;
+        width: 100%;
         margin: 0 auto;
         box-sizing: border-box;
     }
