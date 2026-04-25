@@ -684,6 +684,18 @@ a:hover {
     background: rgba(8, 16, 34, 0.72);
 }
 
+@media (max-width: 767px) {
+    .books-search-modal {
+        align-items: center;
+        justify-content: center;
+    }
+
+    .books-search-content {
+        width: min(560px, 92vw);
+        max-height: none;
+    }
+}
+
 @media (min-width: 1024px) {
     .modal {
         background-color: rgba(2, 10, 20, 0.72);

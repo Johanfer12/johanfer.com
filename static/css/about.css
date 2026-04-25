@@ -19,6 +19,10 @@
     -webkit-backdrop-filter: blur(16px) saturate(120%);
 }
 
+.about-content p {
+    line-height: 1.55;
+}
+
 .about-content h2,
 .about-content h3 {
     letter-spacing: 0.01em;
@@ -111,5 +115,56 @@
     .social-icons img {
         width: 30px;
         height: 30px;
+    }
+}
+
+@media (max-width: 767px) {
+    .about-container {
+        min-height: auto;
+        padding: 14px 8px 24px;
+    }
+
+    .about-content {
+        width: 100%;
+        max-width: calc(100dvw - 16px);
+        padding: 18px 14px;
+        border-radius: 14px;
+        font-size: clamp(0.9rem, 3.9vw, 1rem);
+        line-height: 1.45;
+        text-align: left;
+    }
+
+    .about-content h2 {
+        margin: 0 0 14px;
+        font-size: clamp(1.4rem, 7vw, 1.7rem);
+        line-height: 1.12;
+    }
+
+    .about-content h3 {
+        margin: 22px 0 10px;
+        font-size: clamp(1.08rem, 5.2vw, 1.28rem);
+        line-height: 1.18;
+    }
+
+    .about-content p {
+        margin: 8px 0 0;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+        hyphens: auto;
+    }
+
+    .about-section + .about-section {
+        margin-top: 20px;
+    }
+
+    .social-icons {
+        margin-top: 24px;
+    }
+}
+
+@media (max-width: 380px) {
+    .about-content {
+        padding: 16px 12px;
+        font-size: clamp(0.86rem, 3.8vw, 0.94rem);
     }
 }
