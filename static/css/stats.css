@@ -31,15 +31,28 @@
     border-radius: 14px;
     border: 1px solid rgba(198, 214, 242, 0.16);
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+    display: flex;
+    flex-direction: column;
 }
 
-.chart-container canvas {
+.chart-canvas-frame {
     position: relative;
-    top: -20px;
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+}
+
+.chart-canvas-frame canvas {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
 }
 
 .chart-container h3 {
     font-size: 1.2em;
+    flex: 0 0 auto;
+    margin: 0 0 10px;
 }
 
 @media (max-width: 1368px) {
@@ -84,5 +97,65 @@
 
     .chart-container h3 {
         font-size: 1.1em;
+    }
+}
+
+@media (max-width: 768px) {
+    .stats-page.has-header {
+        padding-top: 1rem;
+    }
+
+    .stats-page .statistics-container {
+        width: 95%;
+        font-size: 14px;
+    }
+
+    .stats-page .statistics-content {
+        padding: 18px 10px;
+    }
+
+    .stats-page .statistics-content h2 {
+        margin-top: 0;
+        margin-bottom: 1.2rem;
+        font-size: clamp(1.35rem, 5.8vw, 1.7rem);
+    }
+
+    .stats-page .charts-row {
+        width: 100%;
+        gap: 1rem;
+    }
+
+    .stats-page .chart-container {
+        flex: none;
+        width: 100%;
+        height: 320px;
+        margin: 0;
+        padding: 18px 10px 14px;
+    }
+
+    .stats-page .chart-container h3 {
+        font-size: clamp(1rem, 4.3vw, 1.15rem);
+        margin-bottom: 12px;
+    }
+
+    .stats-page .chart-container:nth-child(3) {
+        height: 340px;
+    }
+}
+
+@media (max-width: 380px) {
+    .stats-page .statistics-content {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .stats-page .chart-container {
+        height: 330px;
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .stats-page .chart-container:nth-child(3) {
+        height: 350px;
     }
 }

@@ -24,7 +24,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
 </head>
-<body class="has-header">
+<body class="has-header stats-page spotify-stats-page">
     {% include 'header.html' %}
     <div class="statistics-container">
         <div class="statistics-content">
@@ -32,15 +32,21 @@
             <div class="charts-row">
                 <div class="chart-container">
                     <h3>Top 5 Géneros</h3>
-                    <canvas id="genresChart"></canvas>
+                    <div class="chart-canvas-frame">
+                        <canvas id="genresChart"></canvas>
+                    </div>
                 </div>
                 <div class="chart-container">
                     <h3>Top 5 Artistas</h3>
-                    <canvas id="artistsChart"></canvas>
+                    <div class="chart-canvas-frame">
+                        <canvas id="artistsChart"></canvas>
+                    </div>
                 </div>
                 <div class="chart-container">
                     <h3>Canciones Añadidas por Mes</h3>
-                    <canvas id="monthlyChart"></canvas>
+                    <div class="chart-canvas-frame">
+                        <canvas id="monthlyChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>

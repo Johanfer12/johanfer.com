@@ -1,20 +1,37 @@
 Chart.register(ChartDataLabels);
 
+const isMobileChart = window.innerWidth < 768;
+const compactLabel = (label, maxLength = 16) => {
+    if (!isMobileChart || typeof label !== 'string' || label.length <= maxLength) {
+        return label;
+    }
+
+    return `${label.slice(0, maxLength - 1)}…`;
+};
+
 const chartDefaults = {
     devicePixelRatio: 2,
     animation: {
         duration: 0
+    },
+    layout: {
+        padding: isMobileChart ? 8 : 0
     }
 };
 
 const commonOptions = {
     ...chartDefaults,
     responsive: true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     plugins: {
         legend: {
             labels: {
-                color: 'white'
+                color: 'white',
+                boxWidth: isMobileChart ? 12 : 40,
+                padding: isMobileChart ? 10 : 12,
+                font: {
+                    size: isMobileChart ? 11 : 12
+                }
             }
         }
     },
@@ -48,19 +65,31 @@ new Chart(document.getElementById('genresChart'), {
     },
     options: {
         responsive: true,
-        maintainAspectRatio: true,
-        aspectRatio: 2,
+        maintainAspectRatio: false,
+        layout: {
+            padding: isMobileChart ? 10 : 4
+        },
         plugins: {
             legend: {
-                position: 'right',
+                position: isMobileChart ? 'bottom' : 'right',
                 labels: { 
                     color: 'white',
+                    boxWidth: isMobileChart ? 14 : 40,
+                    padding: isMobileChart ? 10 : 12,
                     font: {
-                        size: 12
+                        size: isMobileChart ? 11 : 12
+                    },
+                    generateLabels(chart) {
+                        const labels = Chart.overrides.pie.plugins.legend.labels.generateLabels(chart);
+                        return labels.map((item) => ({
+                            ...item,
+                            text: compactLabel(item.text || chart.data.labels[item.index] || '', 18)
+                        }));
                     }
                 }
             },
             datalabels: {
+                display: !isMobileChart,
                 color: 'white',
                 font: {
                     weight: 'bold'
@@ -95,14 +124,17 @@ new Chart(document.getElementById('artistsChart'), {
     },
     options: {
         ...commonOptions,
-        aspectRatio: 2,
         indexAxis: 'y',
         plugins: {
             legend: { display: false },
             datalabels: {
                 color: 'white',
-                anchor: 'center',
-                align: 'center'
+                anchor: 'end',
+                align: 'start',
+                clamp: true,
+                font: {
+                    size: isMobileChart ? 10 : 12
+                }
             }
         },
         scales: {
@@ -111,7 +143,10 @@ new Chart(document.getElementById('artistsChart'), {
                     display: false
                 },
                 ticks: {
-                    color: 'white'
+                    color: 'white',
+                    font: {
+                        size: isMobileChart ? 11 : 12
+                    }
                 }
             },
             y: {
@@ -119,7 +154,13 @@ new Chart(document.getElementById('artistsChart'), {
                     display: false
                 },
                 ticks: {
-                    color: 'white'
+                    color: 'white',
+                    font: {
+                        size: isMobileChart ? 11 : 12
+                    },
+                    callback(value) {
+                        return compactLabel(this.getLabelForValue(value), 15);
+                    }
                 }
             }
         },
@@ -147,11 +188,43 @@ new Chart(document.getElementById('monthlyChart'), {
     },
     options: {
         ...commonOptions,
-        aspectRatio: window.innerWidth < 768 ? 1.6 : 2,
         plugins: {
             legend: { display: false },
             datalabels: {
                 display: false
+            }
+        },
+        elements: {
+            point: {
+                radius: isMobileChart ? 2 : 3,
+                hitRadius: 8
+            },
+            line: {
+                tension: 0.28
+            }
+        },
+        scales: {
+            y: {
+                ticks: {
+                    color: 'white',
+                    font: {
+                        size: isMobileChart ? 11 : 12
+                    }
+                },
+                grid: { color: 'rgba(255, 255, 255, 0.1)' }
+            },
+            x: {
+                ticks: {
+                    color: 'white',
+                    autoSkip: true,
+                    maxTicksLimit: isMobileChart ? 6 : 10,
+                    maxRotation: isMobileChart ? 45 : 0,
+                    minRotation: isMobileChart ? 45 : 0,
+                    font: {
+                        size: isMobileChart ? 10 : 12
+                    }
+                },
+                grid: { color: 'rgba(255, 255, 255, 0.1)' }
             }
         },
         animation: {

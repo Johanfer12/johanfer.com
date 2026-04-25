@@ -1,11 +1,23 @@
 // Al inicio del archivo
 Chart.register(ChartDataLabels);
 
+const isMobileChart = window.innerWidth < 768;
+const compactLabel = (label, maxLength = 16) => {
+    if (!isMobileChart || typeof label !== 'string' || label.length <= maxLength) {
+        return label;
+    }
+
+    return `${label.slice(0, maxLength - 1)}…`;
+};
+
 // Al inicio del archivo, antes de commonOptions
 const chartDefaults = {
     devicePixelRatio: 2,
     animation: {
         duration: 0 // Desactiva las animaciones que pueden causar problemas
+    },
+    layout: {
+        padding: isMobileChart ? 8 : 0
     }
 };
 
@@ -13,11 +25,16 @@ const chartDefaults = {
 const commonOptions = {
     ...chartDefaults,
     responsive: true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     plugins: {
         legend: {
             labels: {
-                color: 'white'
+                color: 'white',
+                boxWidth: isMobileChart ? 12 : 40,
+                padding: isMobileChart ? 10 : 12,
+                font: {
+                    size: isMobileChart ? 11 : 12
+                }
             }
         }
     },
@@ -56,7 +73,6 @@ new Chart(document.getElementById('booksPerYearChart'), {
     },
     options: {
         ...commonOptions,
-        aspectRatio: window.innerWidth < 768 ? 1 : 2,
         plugins: {
             legend: {
                 labels: {
@@ -65,10 +81,12 @@ new Chart(document.getElementById('booksPerYearChart'), {
             },
             datalabels: {
                 color: 'white',
-                anchor: 'center',
-                align: 'center',
+                anchor: 'end',
+                align: 'start',
+                clamp: true,
                 font: {
-                    weight: 'bold'
+                    weight: 'bold',
+                    size: isMobileChart ? 10 : 12
                 },
                 formatter: (value) => value
             }
@@ -109,15 +127,26 @@ new Chart(document.getElementById('starsChart'), {
         },
         plugins: {
             legend: {
-                position: 'right',
+                position: isMobileChart ? 'bottom' : 'right',
                 align: 'center',
                 labels: {
                     color: 'white',
-                    padding: 10,
-                    boxWidth: 15
+                    padding: isMobileChart ? 10 : 12,
+                    boxWidth: isMobileChart ? 14 : 15,
+                    font: {
+                        size: isMobileChart ? 11 : 12
+                    },
+                    generateLabels(chart) {
+                        const labels = Chart.overrides.pie.plugins.legend.labels.generateLabels(chart);
+                        return labels.map((item) => ({
+                            ...item,
+                            text: compactLabel(item.text || chart.data.labels[item.index] || '', 18)
+                        }));
+                    }
                 }
             },
             datalabels: {
+                display: !isMobileChart,
                 color: 'white',
                 font: {
                     weight: 'bold',
@@ -172,7 +201,10 @@ new Chart(document.getElementById('topGenresChart'), {
             x: {
                 beginAtZero: true,
                 ticks: {
-                    color: 'white'
+                    color: 'white',
+                    font: {
+                        size: isMobileChart ? 11 : 12
+                    }
                 },
                 grid: {
                     color: 'rgba(255, 255, 255, 0.1)'
@@ -182,7 +214,10 @@ new Chart(document.getElementById('topGenresChart'), {
                 ticks: {
                     color: 'white',
                     font: {
-                        size: 12
+                        size: isMobileChart ? 11 : 12
+                    },
+                    callback(value) {
+                        return compactLabel(this.getLabelForValue(value), 15);
                     }
                 },
                 grid: {
@@ -196,18 +231,18 @@ new Chart(document.getElementById('topGenresChart'), {
             },
             datalabels: {
                 color: 'white',
-                anchor: 'center',
-                align: 'center',
+                anchor: 'end',
+                align: 'start',
+                clamp: true,
                 offset: 0,
                 font: {
                     weight: 'bold',
-                    size: 14
+                    size: isMobileChart ? 10 : 14
                 },
                 formatter: (value) => value
             }
         },
-        maintainAspectRatio: true,
-        aspectRatio: 1.5,
+        maintainAspectRatio: false,
         animation: {
             x: {
                 duration: 2000,
