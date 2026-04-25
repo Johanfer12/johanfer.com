@@ -665,7 +665,8 @@
         transition: opacity 0.3s ease, transform 0.2s ease;
     }
     
-    .news-card-container:hover .mobile-delete-btn {
+    .news-card-container:hover .mobile-delete-btn,
+    .news-card-container.pointer-delete-hover .mobile-delete-btn {
         display: flex;
         opacity: 0.9;
     }

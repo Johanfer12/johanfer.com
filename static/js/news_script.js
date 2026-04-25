@@ -87,6 +87,7 @@
         cancelledDeletes: new Set(), // IDs cuyo borrado fue revertido antes de completar el flujo local
         mutationVersion: 0, // invalida respuestas viejas del feed tras mutaciones locales
         deferredSyncTimer: null,
+        lastPointer: null,
     };
 
     /* ---------------------------------------------------------------------
@@ -118,12 +119,14 @@
     const animateReposition = (oldPos, excludedIds = []) => {
         if (isMobile() || !oldPos.size) return;
         requestAnimationFrame(() => {
+            let hasMovingCards = false;
             oldPos.forEach((rect, el) => {
                 if (!document.body.contains(el) || excludedIds.includes(el.id)) return;
                 const newRect = el.getBoundingClientRect();
                 const dx = rect.left - newRect.left;
                 const dy = rect.top - newRect.top;
                 if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+                hasMovingCards = true;
                 el.style.transform = `translate(${dx}px,${dy}px)`;
                 el.style.transition = 'none';
                 requestAnimationFrame(() => {
@@ -131,9 +134,14 @@
                     el.style.transform = '';
                     el.addEventListener('transitionend', () => {
                         el.style.transition = '';
+                        refreshHoverUnderPointer();
                     }, {once: true});
                 });
             });
+            if (hasMovingCards) {
+                requestAnimationFrame(refreshHoverUnderPointer);
+                setTimeout(refreshHoverUnderPointer, 430);
+            }
         });
     };
 
@@ -578,6 +586,7 @@
         animateScaleOpacity(card);
         pruneNewsFromClientCaches(payloadId);
         enforceCardLimit();
+        refreshHoverUnderPointer();
         return card;
     };
 
@@ -977,6 +986,7 @@
             updateCounters(data.total_news, data.total_pages);
             appendReplacementCardFromPayload(data.card);
             if (STATE.backupCards.length < 5) loadMoreBackupNews();
+            refreshHoverUnderPointer();
             scheduleSilentSync('eliminar noticia');
         };
         const maybeFinalizeDelete = () => {
@@ -994,6 +1004,7 @@
             removeFromDOM();
             if (oldPositions) animateReposition(oldPositions, [`news-${normalizedNewsId}`]);
             enforceCardLimit();
+            refreshHoverUnderPointer();
             maybeFinalizeDelete();
         };
         container.addEventListener('transitionend', onAnimEnd, { once: true });
@@ -1004,6 +1015,7 @@
             removeFromDOM();
             if (oldPositions) animateReposition(oldPositions, [`news-${normalizedNewsId}`]);
             enforceCardLimit();
+            refreshHoverUnderPointer();
             maybeFinalizeDelete();
         }, animationDuration + 50);
 
@@ -1279,6 +1291,27 @@
         return withinHorizontalBounds && withinProtectedHeight;
     };
 
+    const isPointerInDeleteButtonZone = (container, pointerEvent) => {
+        if (!container || !pointerEvent || isMobile()) return false;
+        const mediaZone = container.querySelector('.news-media-zone');
+        const deleteBtn = container.querySelector('.mobile-delete-btn');
+        if (!mediaZone || !deleteBtn) return false;
+
+        const mediaRect = mediaZone.getBoundingClientRect();
+        const buttonSize = deleteBtn.offsetWidth || 36;
+        const topOffset = 10;
+        const rightOffset = 10;
+        const bleed = 4;
+        const left = mediaRect.right - rightOffset - buttonSize - bleed;
+        const right = mediaRect.right - rightOffset + bleed;
+        const top = mediaRect.top + topOffset - bleed;
+        const bottom = mediaRect.top + topOffset + buttonSize + bleed;
+        const x = pointerEvent.clientX;
+        const y = pointerEvent.clientY;
+
+        return x >= left && x <= right && y >= top && y <= bottom;
+    };
+
     const isPointerWithinCardBounds = (container, pointerEvent) => {
         if (!container || !pointerEvent) return false;
         const rect = container.getBoundingClientRect();
@@ -1324,7 +1357,8 @@
         if (!withinCardBounds) return;
 
         const overMediaZone = isPointerInProtectedMediaZone(container, pointerEvent);
-        const overDeleteButton = !!pointerEvent.target.closest('.mobile-delete-btn');
+        const overDeleteButton = !!pointerEvent.target?.closest?.('.mobile-delete-btn') ||
+            isPointerInDeleteButtonZone(container, pointerEvent);
         const nextMode = overDeleteButton ? 'delete' : (overMediaZone ? 'image' : 'flipped');
         if (cardElement.dataset.hoverMode === nextMode) return;
 
@@ -1334,6 +1368,7 @@
         cardElement.classList.toggle('is-flipped', shouldFlip);
         cardElement.classList.toggle('image-hover', nextMode === 'image');
         cardElement.classList.toggle('delete-hover', nextMode === 'delete');
+        container.classList.toggle('pointer-delete-hover', nextMode === 'delete');
 
         if (wasFlipped !== shouldFlip) {
             lockFlipUntilTransitionEnds(cardElement);
@@ -1346,6 +1381,7 @@
         if (!cardElement) return;
         const wasFlipped = cardElement.classList.contains('is-flipped');
         cardElement.classList.remove('is-flipped', 'image-hover', 'delete-hover');
+        container.classList.remove('pointer-delete-hover');
         delete cardElement.dataset.hoverMode;
         if (wasFlipped) {
             lockFlipUntilTransitionEnds(cardElement);
@@ -1354,13 +1390,40 @@
         }
     };
 
+    const makePointerSnapshot = (event) => ({
+        clientX: event.clientX,
+        clientY: event.clientY,
+        pointerType: event.pointerType || 'mouse',
+        target: event.target,
+    });
+
+    const refreshHoverUnderPointer = () => {
+        const pointer = STATE.lastPointer;
+        if (!pointer || pointer.pointerType === 'touch' || isMobile()) return;
+
+        const target = document.elementFromPoint(pointer.clientX, pointer.clientY);
+        const container = target?.closest?.('.news-card-container');
+
+        $$('.news-card-container.pointer-delete-hover', DOM.grid).forEach((card) => {
+            if (card !== container) card.classList.remove('pointer-delete-hover');
+        });
+
+        if (!container) return;
+        setCardHoverMode(container, {
+            ...pointer,
+            target,
+        }, {force: true});
+    };
+
     DOM.grid?.addEventListener('pointerover', (e) => {
+        STATE.lastPointer = makePointerSnapshot(e);
         const container = e.target.closest('.news-card-container');
         if (!container || (e.relatedTarget && container.contains(e.relatedTarget))) return;
         setCardHoverMode(container, e);
     });
 
     DOM.grid?.addEventListener('pointermove', (e) => {
+        STATE.lastPointer = makePointerSnapshot(e);
         const container = e.target.closest('.news-card-container');
         if (!container) return;
         setCardHoverMode(container, e);
