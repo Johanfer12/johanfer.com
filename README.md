@@ -20,7 +20,7 @@ Esta aplicación implementa un scraper web que extrae información detallada de 
   - Modifica los enlaces de portadas para obtener la máxima resolución disponible (700px).
   - Convierte automáticamente las imágenes JPG a formato WebP para optimizar almacenamiento y rendimiento.
   - Redimensiona las portadas a un tamaño óptimo (300x450) conservando la calidad.
-  - Organiza las imágenes por ID en la carpeta `static/Img/Covers`.
+  - Organiza las imágenes por ID en la carpeta `media/Covers`.
 
 - Extracción de contenido enriquecido:
   - Obtiene descripciones HTML completas de cada libro mediante peticiones adicionales.
@@ -247,7 +247,7 @@ En ambientes de desarrollo local, puede ser más conveniente ejecutar estos coma
 2. Ejecuta el scraper: `python manage.py scrap_books`.
 3. El scraper comenzará a extraer la información de los libros de Goodreads y a descargar las portadas correspondientes.
 4. Los datos de los libros se almacenarán en la base de datos.
-5. Las portadas de los libros se guardarán en la carpeta `static/Img/Covers`.
+5. Las portadas de los libros se guardarán en la carpeta `media/Covers`.
 
 ### Aplicación de Noticias
 
