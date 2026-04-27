@@ -98,9 +98,9 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
     try:
         groq_client = FeedService.initialize_groq()
         try:
-            global_model_name = (GroqGlobalSetting.objects.first() or GroqGlobalSetting(model_name='llama-3.3-70b-versatile')).model_name
+            global_model_name = (GroqGlobalSetting.objects.first() or GroqGlobalSetting(model_name='qwen/qwen3-32b')).model_name
         except Exception:
-            global_model_name = 'llama-3.3-70b-versatile'
+            global_model_name = 'qwen/qwen3-32b'
 
         try:
             filter_instructions_text = FeedService.build_filter_instructions_text(

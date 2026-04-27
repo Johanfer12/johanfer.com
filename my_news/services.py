@@ -204,16 +204,18 @@ class FeedService:
 
         Realiza las siguientes tareas y devuelve el resultado EXACTAMENTE en formato JSON:
         1.  **summary**: Genera un resumen conciso y objetivo del contenido completo, en español, de aproximadamente 60 a 70 palabras. Explica qué ocurrió, quiénes participaron, dónde/cuándo, causas, consecuencias o cifras relevantes. El summary debe añadir contexto nuevo respecto al titular y al short_answer, evitando cualquier tono de clickbait. NO apliques formato HTML aquí, solo texto plano.
-        2.  **short_answer**: Analiza el titular. Si el titular:
+        2.  **short_answer**: Analiza el titular. Este campo NO es un resumen decorativo; es una respuesta anti-clickbait. Si el titular:
             (a) Es una pregunta directa (ej: '¿Por qué deberías...?', '¿Cuál es...?').
             O (b) NO es una pregunta directa PERO crea una fuerte expectativa de una respuesta concreta, revelación, explicación, lista, o 'secreto' que se encuentra en el contenido (ej: 'El truco definitivo para...', 'Así es como funciona X cosa...', 'La razón por la que Y sucede...', 'Descubren el motivo de Z...', 'Cinco claves para entender...', 'Lo que nadie te contó sobre...', 'Este juego me envició todo el día').
-            Si se cumple (a) o (b), extrae o resume la respuesta/punto clave del contenido original de forma EXTREMADAMENTE CONCISA (máximo 15 palabras) y DIRECTA. Menciona explícitamente el dato, nombre, lugar o cifra que el titular deja sin revelar. Nunca repitas ni parafrasees el titular; revela la información concreta (por ejemplo: "Terraria se convirtió en el juego favorito del autor"). Si el titular NO cumple estas condiciones, el valor de 'short_answer' debe ser null (JSON null).
+            Si se cumple (a) o (b), extrae la respuesta/punto clave del contenido original de forma EXTREMADAMENTE CONCISA (máximo 15 palabras) y DIRECTA. Menciona explícitamente el dato, nombre, lugar o cifra que el titular deja sin revelar. Nunca repitas ni parafrasees el titular; revela la información concreta (por ejemplo: "Terraria se convirtió en el juego favorito del autor"). Si el titular ya entrega el hecho principal, lugar, cifra o conclusión, el valor de 'short_answer' debe ser null (JSON null). Si solo puedes escribir una frase que repite, resume o reordena el titular, el valor de 'short_answer' debe ser null.
         3.  **ai_filter**: Basándote en las siguientes instrucciones de filtrado, determina si esta noticia DEBE SER ELIMINADA. Si coincide con ALGUNA instrucción, el valor debe ser EXACTAMENTE EL TEXTO LITERAL de la instrucción que coincidió (solo una, la primera que coincida si hay varias). Si NO coincide con ninguna, el valor debe ser null (JSON null).
             Instrucciones de Filtrado:
             {instructions}
 
         REGLAS CLAVE PARA RESUMEN Y SHORT_ANSWER:
         - Ni el summary ni el short_answer pueden repetir literal el titular; cada uno debe aportar información nueva.
+        - Genera short_answer SOLO cuando el titular oculte una respuesta concreta. Titulares descriptivos o informativos NO deben tener short_answer.
+        - No uses short_answer para añadir un dato menor si el titular no es clickbait. En ese caso debe ser null.
         - Si generas un short_answer, el summary DEBE contener información adicional y diferente (contexto, causas, efectos, antecedentes, reacciones, cifras, etc.).
         - El short_answer siempre debe revelar el elemento que el titular oculta o promete, mencionando explícitamente nombres, resultados o respuestas concretas.
         - Ambos campos deben ser complementarios y libres de relleno o frases ambiguas; evita cualquier forma de clickbait.
@@ -492,11 +494,11 @@ class FeedService:
             groq_setting = GroqGlobalSetting.objects.first()
             if not groq_setting:
                 print("Advertencia: No se encontró configuración global de Groq. Creando con modelo predeterminado.")
-                groq_setting = GroqGlobalSetting.objects.create(model_name='llama-3.3-70b-versatile')
+                groq_setting = GroqGlobalSetting.objects.create(model_name='qwen/qwen3-32b')
             groq_model = groq_setting.model_name
         except Exception as e:
             print(f"Error al obtener configuración de Groq: {e}. Usando default.")
-            groq_model = 'llama-3.3-70b-versatile'
+            groq_model = 'qwen/qwen3-32b'
         
         filter_word_patterns = FeedService.build_filter_word_patterns(
             FilterWord.objects.filter(active=True)
