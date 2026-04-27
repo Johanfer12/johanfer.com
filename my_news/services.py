@@ -32,6 +32,7 @@ class GroqRateLimiter:
     DEFAULT_TPM = 250_000
     SAFETY_FACTOR = 0.75
     SAFE_RPM_CAP = 1
+    MAX_RETRY_SLEEP_SECONDS = 90
     MODEL_LIMITS = {
         'llama-3.1-8b-instant': {'tpm': 6_000, 'rpm': 30},
         'llama-3.3-70b-versatile': {'tpm': 12_000, 'rpm': 30},
@@ -511,6 +512,12 @@ class FeedService:
                 if ("429" in error_str or "rate_limit" in error_str.lower()) and attempt < max_retries - 1:
                     retry_after = FeedService._extract_retry_after_seconds(e)
                     wait_time = retry_after or max(FeedService._GROQ_RATE_LIMITER.seconds_until_next_window() + 1, 120)
+                    if wait_time > FeedService._GROQ_RATE_LIMITER.MAX_RETRY_SLEEP_SECONDS:
+                        print(
+                            f"Groq pidió esperar {wait_time}s por rate limit; "
+                            "se pospone esta noticia para una próxima actualización."
+                        )
+                        return None, None, None
                     print(f"Límite de peticiones Groq (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
                     time.sleep(wait_time)
                     continue
