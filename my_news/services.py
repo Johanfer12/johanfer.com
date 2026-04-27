@@ -418,7 +418,7 @@ class FeedService:
         return (model_name or '').startswith('openai/gpt-oss-')
 
     @staticmethod
-    def process_content_with_groq(title, original_content, groq_client, model_name, filter_instructions_text, max_retries=3):
+    def process_content_with_groq(title, original_content, groq_client, model_name, filter_instructions_text, max_retries=2):
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
         instructions_section = (filter_instructions_text or FeedService._DEFAULT_FILTER_INSTRUCTIONS)
@@ -819,7 +819,10 @@ class FeedService:
                     print(f"  - DescripciÃ³n: {original_description[:100] if original_description else 'None'}... (longitud: {len(original_description) if original_description else 0})")
                     print("SALTANDO esta noticia problemÃ¡tica...")
                     continue
-                    
+
+                if max_ai_items is not None and ai_attempts >= max_ai_items:
+                    print(f"Presupuesto de IA completado ({max_ai_items}); se dejan noticias para la próxima actualización.")
+                    break
                 continue # Pasar a la siguiente noticia
             # <<<<< FIN FILTRO PALABRA CLAVE >>>>>
 
@@ -959,6 +962,10 @@ class FeedService:
                         vector_index.upsert(news_item.guid, news_item.embedding, payload)
                     except Exception:
                         pass
+
+            if max_ai_items is not None and ai_attempts >= max_ai_items:
+                print(f"Presupuesto de IA completado ({max_ai_items}); se dejan noticias para la próxima actualización.")
+                break
 
         
         # Actualizar la fecha de última obtención para todas las fuentes con una sola escritura
