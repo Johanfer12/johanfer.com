@@ -73,6 +73,50 @@ class GroqRateLimiterTests(SimpleTestCase):
         self.assertIsNone(short_answer)
         self.assertIsNone(ai_filter)
 
+    def test_json_validation_error_retries_without_response_format(self):
+        class Message:
+            content = '{"summary": "Resumen procesado.", "short_answer": null, "ai_filter": null}'
+
+        class Choice:
+            message = Message()
+
+        class Response:
+            choices = [Choice()]
+
+        class Completions:
+            def __init__(self):
+                self.calls = []
+
+            def create(self, **kwargs):
+                self.calls.append(kwargs)
+                if len(self.calls) == 1:
+                    raise Exception('Error code: 400 - json_validate_failed')
+                return Response()
+
+        class Chat:
+            def __init__(self):
+                self.completions = Completions()
+
+        class Client:
+            def __init__(self):
+                self.chat = Chat()
+
+        client = Client()
+        description, short_answer, ai_filter = FeedService.process_content_with_groq(
+            'Titulo',
+            'Descripcion original',
+            client,
+            'openai/gpt-oss-120b',
+            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
+            max_retries=2,
+        )
+
+        self.assertEqual(description, 'Resumen procesado.')
+        self.assertIsNone(short_answer)
+        self.assertIsNone(ai_filter)
+        self.assertIn('response_format', client.chat.completions.calls[0])
+        self.assertNotIn('response_format', client.chat.completions.calls[1])
+
 
 class NewsFeedOrderingTests(TestCase):
     @classmethod
