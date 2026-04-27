@@ -200,6 +200,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Groq API (para procesamiento de noticias)
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
 GROQ_MODEL = os.getenv('GROQ_MODEL', 'qwen/qwen3-32b')
+GROQ_RATE_LIMIT_TPM = int(os.getenv('GROQ_RATE_LIMIT_TPM', '0') or 0)
+GROQ_RATE_LIMIT_RPM = int(os.getenv('GROQ_RATE_LIMIT_RPM', '0') or 0)
+GROQ_RATE_LIMIT_SAFETY_FACTOR = float(os.getenv('GROQ_RATE_LIMIT_SAFETY_FACTOR', '0.8'))
 
 # Gemini Embeddings
 GEMINI_EMBEDDING_MODEL = os.getenv('GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001')

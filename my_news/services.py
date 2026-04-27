@@ -24,6 +24,83 @@ except Exception:
     VectorIndexService = None  # type: ignore
     VectorIndexUnavailable = Exception  # type: ignore
 
+
+class GroqRateLimiter:
+    """Rate limiter simple por proceso para no superar TPM/RPM de Groq."""
+
+    DEFAULT_RPM = 1000
+    DEFAULT_TPM = 250_000
+    MODEL_LIMITS = {
+        'llama-3.1-8b-instant': {'tpm': 250_000, 'rpm': 1000},
+        'llama-3.3-70b-versatile': {'tpm': 300_000, 'rpm': 1000},
+        'openai/gpt-oss-120b': {'tpm': 250_000, 'rpm': 1000},
+        'openai/gpt-oss-20b': {'tpm': 250_000, 'rpm': 1000},
+        'qwen/qwen3-32b': {'tpm': 300_000, 'rpm': 1000},
+        'groq/compound': {'tpm': 200_000, 'rpm': 200},
+        'groq/compound-mini': {'tpm': 200_000, 'rpm': 200},
+    }
+
+    def __init__(self):
+        self.window_seconds = 60.0
+        self.window_start = time.monotonic()
+        self.used_tokens = 0
+        self.used_requests = 0
+
+    def get_limits(self, model_name):
+        model_limits = self.MODEL_LIMITS.get(model_name or '', {})
+        tpm = int(getattr(settings, 'GROQ_RATE_LIMIT_TPM', 0) or model_limits.get('tpm') or self.DEFAULT_TPM)
+        rpm = int(getattr(settings, 'GROQ_RATE_LIMIT_RPM', 0) or model_limits.get('rpm') or self.DEFAULT_RPM)
+        safety_factor = float(getattr(settings, 'GROQ_RATE_LIMIT_SAFETY_FACTOR', 0.8) or 0.8)
+        safety_factor = min(max(safety_factor, 0.1), 1.0)
+        return max(1, int(tpm * safety_factor)), max(1, int(rpm * safety_factor))
+
+    def estimate_tokens(self, prompt, max_completion_tokens=1024):
+        prompt_text = prompt or ''
+        prompt_tokens = max(1, len(prompt_text) // 4)
+        return prompt_tokens + int(max_completion_tokens or 0)
+
+    def seconds_until_next_window(self):
+        elapsed = time.monotonic() - self.window_start
+        return max(0.0, self.window_seconds - elapsed)
+
+    def reset_if_needed(self):
+        if time.monotonic() - self.window_start >= self.window_seconds:
+            self.window_start = time.monotonic()
+            self.used_tokens = 0
+            self.used_requests = 0
+
+    def acquire(self, model_name, prompt, max_completion_tokens=1024):
+        estimated_tokens = self.estimate_tokens(prompt, max_completion_tokens)
+        token_limit, request_limit = self.get_limits(model_name)
+
+        while True:
+            self.reset_if_needed()
+            would_exceed_tokens = self.used_tokens + estimated_tokens > token_limit
+            would_exceed_requests = self.used_requests + 1 > request_limit
+
+            if not would_exceed_tokens and not would_exceed_requests:
+                self.used_tokens += estimated_tokens
+                self.used_requests += 1
+                return estimated_tokens
+
+            if estimated_tokens > token_limit and self.used_tokens == 0 and self.used_requests == 0:
+                print(
+                    f"Rate limit Groq local: una petición estimada en {estimated_tokens} tokens "
+                    f"supera el límite seguro de {token_limit}; se enviará una sola petición."
+                )
+                self.used_tokens = estimated_tokens
+                self.used_requests = 1
+                return estimated_tokens
+
+            wait_time = self.seconds_until_next_window() + 1
+            print(
+                f"Rate limit Groq local: esperando {wait_time:.1f}s "
+                f"(modelo={model_name}, estimado={estimated_tokens} tokens, "
+                f"usados={self.used_tokens}/{token_limit})."
+            )
+            time.sleep(wait_time)
+
+
 class EmbeddingService:
     @staticmethod
     def initialize_embedding_model():
@@ -247,6 +324,7 @@ class FeedService:
     _GEMINI_CLIENT = None
     _GROQ_CLIENT = None
     _VECTOR_INDEX = None
+    _GROQ_RATE_LIMITER = GroqRateLimiter()
 
     @staticmethod
     def initialize_gemini():
@@ -308,6 +386,27 @@ class FeedService:
         return patterns
 
     @staticmethod
+    def _extract_retry_after_seconds(error):
+        response = getattr(error, 'response', None)
+        headers = getattr(response, 'headers', None)
+        if headers:
+            retry_after = headers.get('retry-after') or headers.get('Retry-After')
+            if retry_after:
+                try:
+                    return max(1, int(float(retry_after)))
+                except (TypeError, ValueError):
+                    pass
+
+        match = re.search(r'try again in ([0-9.]+)s', str(error), re.IGNORECASE)
+        if match:
+            try:
+                return max(1, int(float(match.group(1))) + 1)
+            except (TypeError, ValueError):
+                pass
+
+        return None
+
+    @staticmethod
     def process_content_with_groq(title, original_content, groq_client, model_name, filter_instructions_text, max_retries=3):
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
@@ -325,9 +424,11 @@ class FeedService:
             content=safe_content,
             instructions=safe_instructions
         )
+        max_completion_tokens = 1024
 
         for attempt in range(max_retries):
             try:
+                FeedService._GROQ_RATE_LIMITER.acquire(model_name, prompt, max_completion_tokens)
                 response = groq_client.chat.completions.create(
                     model=model_name,
                     messages=[
@@ -342,7 +443,7 @@ class FeedService:
                     ],
                     response_format={"type": "json_object"},
                     temperature=0.3,
-                    max_tokens=1024
+                    max_tokens=max_completion_tokens
                 )
                 response_text = response.choices[0].message.content
                 try:
@@ -381,7 +482,8 @@ class FeedService:
             except Exception as e:
                 error_str = str(e)
                 if ("429" in error_str or "rate_limit" in error_str.lower()) and attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 10
+                    retry_after = FeedService._extract_retry_after_seconds(e)
+                    wait_time = retry_after or max(FeedService._GROQ_RATE_LIMITER.seconds_until_next_window() + 1, (attempt + 1) * 30)
                     print(f"Límite de peticiones Groq (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
                     time.sleep(wait_time)
                     continue

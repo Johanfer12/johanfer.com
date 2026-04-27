@@ -3,11 +3,51 @@ import uuid
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.test import SimpleTestCase
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from .models import FeedSource, News
+from .services import FeedService, GroqRateLimiter
+
+
+class GroqRateLimiterTests(SimpleTestCase):
+    def test_model_limits_can_be_overridden_from_settings(self):
+        with self.settings(
+            GROQ_RATE_LIMIT_TPM=1000,
+            GROQ_RATE_LIMIT_RPM=20,
+            GROQ_RATE_LIMIT_SAFETY_FACTOR=0.5,
+        ):
+            limiter = GroqRateLimiter()
+
+            self.assertEqual(limiter.get_limits('openai/gpt-oss-120b'), (500, 10))
+
+    def test_retry_after_is_read_from_response_headers(self):
+        class Response:
+            headers = {'Retry-After': '42'}
+
+        error = Exception('429 rate limit exceeded')
+        error.response = Response()
+
+        self.assertEqual(FeedService._extract_retry_after_seconds(error), 42)
+
+    def test_retry_after_is_read_from_error_message(self):
+        error = Exception('Rate limit reached. Please try again in 12.4s.')
+
+        self.assertEqual(FeedService._extract_retry_after_seconds(error), 13)
+
+    def test_single_large_request_does_not_wait_forever(self):
+        with self.settings(
+            GROQ_RATE_LIMIT_TPM=100,
+            GROQ_RATE_LIMIT_RPM=20,
+            GROQ_RATE_LIMIT_SAFETY_FACTOR=1.0,
+        ):
+            limiter = GroqRateLimiter()
+
+            estimated_tokens = limiter.acquire('openai/gpt-oss-120b', 'x' * 1000, 1024)
+
+            self.assertGreater(estimated_tokens, 100)
 
 
 class NewsFeedOrderingTests(TestCase):
