@@ -49,6 +49,30 @@ class GroqRateLimiterTests(SimpleTestCase):
 
             self.assertGreater(estimated_tokens, 100)
 
+    def test_groq_failure_returns_empty_result_instead_of_original_content(self):
+        class Completions:
+            def create(self, **kwargs):
+                raise Exception('429 rate limit exceeded')
+
+        class Chat:
+            completions = Completions()
+
+        class Client:
+            chat = Chat()
+
+        description, short_answer, ai_filter = FeedService.process_content_with_groq(
+            'Titulo',
+            'Descripcion original sin procesar',
+            Client(),
+            'openai/gpt-oss-120b',
+            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
+            max_retries=1,
+        )
+
+        self.assertIsNone(description)
+        self.assertIsNone(short_answer)
+        self.assertIsNone(ai_filter)
+
 
 class NewsFeedOrderingTests(TestCase):
     @classmethod

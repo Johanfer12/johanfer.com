@@ -493,10 +493,10 @@ class FeedService:
                     time.sleep(wait_time)
                     continue
                 print(f"Error procesando contenido con Groq: {error_str}")
-                return original_content, None, None
+                return None, None, None
 
         print("Se agotaron los reintentos para procesar contenido con Groq.")
-        return original_content, None, None
+        return None, None, None
 
     @staticmethod
     def extract_image_from_description(description):
@@ -812,6 +812,9 @@ class FeedService:
                 groq_model,
                 filter_instructions_text
             )
+            if not processed_description:
+                print("SALTANDO noticia: Groq no generó resumen; se reintentará en una próxima actualización.")
+                continue
 
             # >>>>> LÃGICA DE FILTRADO IA (despuÃ©s de palabra clave) <<<<<
             # Asegurarnos que ai_filter_reason es un string no vacÃ­o antes de usarlo
