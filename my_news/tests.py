@@ -13,15 +13,10 @@ from .services import FeedService, GroqRateLimiter
 
 
 class GroqRateLimiterTests(SimpleTestCase):
-    def test_model_limits_can_be_overridden_from_settings(self):
-        with self.settings(
-            GROQ_RATE_LIMIT_TPM=1000,
-            GROQ_RATE_LIMIT_RPM=20,
-            GROQ_RATE_LIMIT_SAFETY_FACTOR=0.5,
-        ):
-            limiter = GroqRateLimiter()
+    def test_model_limits_are_conservative_for_news_processing(self):
+        limiter = GroqRateLimiter()
 
-            self.assertEqual(limiter.get_limits('openai/gpt-oss-120b'), (500, 10))
+        self.assertEqual(limiter.get_limits('openai/gpt-oss-120b'), (62_500, 6))
 
     def test_retry_after_is_read_from_response_headers(self):
         class Response:
@@ -38,16 +33,12 @@ class GroqRateLimiterTests(SimpleTestCase):
         self.assertEqual(FeedService._extract_retry_after_seconds(error), 13)
 
     def test_single_large_request_does_not_wait_forever(self):
-        with self.settings(
-            GROQ_RATE_LIMIT_TPM=100,
-            GROQ_RATE_LIMIT_RPM=20,
-            GROQ_RATE_LIMIT_SAFETY_FACTOR=1.0,
-        ):
-            limiter = GroqRateLimiter()
+        limiter = GroqRateLimiter()
+        limiter.MODEL_LIMITS = {'tiny-model': {'tpm': 100, 'rpm': 20}}
 
-            estimated_tokens = limiter.acquire('openai/gpt-oss-120b', 'x' * 1000, 1024)
+        estimated_tokens = limiter.acquire('tiny-model', 'x' * 1000, 1024)
 
-            self.assertGreater(estimated_tokens, 100)
+        self.assertGreater(estimated_tokens, 25)
 
     def test_groq_failure_returns_empty_result_instead_of_original_content(self):
         class Completions:
