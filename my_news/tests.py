@@ -116,6 +116,40 @@ class GroqRateLimiterTests(SimpleTestCase):
         self.assertIsNone(ai_filter)
         self.assertIn('response_format', client.chat.completions.calls[0])
         self.assertNotIn('response_format', client.chat.completions.calls[1])
+        self.assertEqual(client.chat.completions.calls[1]['reasoning_effort'], 'low')
+
+    def test_empty_groq_response_is_not_saved_as_summary(self):
+        class Message:
+            content = ''
+
+        class Choice:
+            message = Message()
+
+        class Response:
+            choices = [Choice()]
+
+        class Completions:
+            def create(self, **kwargs):
+                return Response()
+
+        class Chat:
+            completions = Completions()
+
+        class Client:
+            chat = Chat()
+
+        description, short_answer, ai_filter = FeedService.process_content_with_groq(
+            'Titulo',
+            'Descripcion original',
+            Client(),
+            'openai/gpt-oss-120b',
+            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
+            max_retries=1,
+        )
+
+        self.assertIsNone(description)
+        self.assertIsNone(short_answer)
+        self.assertIsNone(ai_filter)
 
 
 class NewsFeedOrderingTests(TestCase):
