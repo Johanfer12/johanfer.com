@@ -416,10 +416,10 @@ def update_feed(request):
     try:
         # Reintentar completar resúmenes pendientes antes de buscar nuevas
         try:
-            retry_summarize_pending(limit=50, days=15)
+            retry_summarize_pending(limit=5, days=15)
         except Exception as _:
             pass
-        new_articles = FeedService.fetch_and_save_news()
+        new_articles = FeedService.fetch_and_save_news(max_ai_items=10)
         _bump_cache_version()
         total_news, total_pages = _get_total_news_and_pages()
         
