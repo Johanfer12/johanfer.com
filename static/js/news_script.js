@@ -1356,13 +1356,15 @@
         const withinCardBounds = isPointerWithinCardBounds(container, pointerEvent);
         if (!withinCardBounds) return;
 
+        const wasFlipped = cardElement.classList.contains('is-flipped');
         const overMediaZone = isPointerInProtectedMediaZone(container, pointerEvent);
         const overDeleteButton = !!pointerEvent.target?.closest?.('.mobile-delete-btn') ||
             isPointerInDeleteButtonZone(container, pointerEvent);
-        const nextMode = overDeleteButton ? 'delete' : (overMediaZone ? 'image' : 'flipped');
+        const nextMode = wasFlipped
+            ? 'flipped'
+            : (overDeleteButton ? 'delete' : (overMediaZone ? 'image' : 'flipped'));
         if (cardElement.dataset.hoverMode === nextMode) return;
 
-        const wasFlipped = cardElement.classList.contains('is-flipped');
         const shouldFlip = nextMode === 'flipped';
         cardElement.dataset.hoverMode = nextMode;
         cardElement.classList.toggle('is-flipped', shouldFlip);

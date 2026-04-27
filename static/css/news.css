@@ -45,7 +45,6 @@
     height: 100%;
     transition: transform 0.56s cubic-bezier(0.22, 0.61, 0.36, 1);
     transform-style: preserve-3d;
-    cursor: pointer;
     transform: translateZ(0);
     -webkit-font-smoothing: subpixel-antialiased;
     will-change: transform;
@@ -218,6 +217,7 @@
     border: 1px solid #c6d6f5;
     border-radius: 15px;
     transition: all 0.3s ease;
+    cursor: pointer;
 }
 
 .news-link.icon-only {
