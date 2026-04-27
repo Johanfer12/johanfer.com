@@ -4,6 +4,7 @@ from datetime import timedelta
 from .models import News
 from .models import GroqGlobalSetting
 from .models import AIFilterInstruction
+import portalocker
 
 
 def purge_orphan_vectors(batch_size: int = 256):
@@ -45,16 +46,20 @@ def purge_orphan_vectors(batch_size: int = 256):
         return 0
 
 def update_news_cron():
+    lock_path = '/tmp/my_news_update.lock'
     try:
-        # Completar pendientes antes de traer nuevas
-        try:
-            retry_summarize_pending(limit=50, days=15)
-        except Exception:
-            pass
-        FeedService.fetch_and_save_news()
-        print("News data updated successfully")
-        # Ejecutar limpieza tras actualizaciÃ³n
-        purge_old_news(15)
+        with portalocker.Lock(lock_path, timeout=0):
+            # Completar algunas pendientes antes de traer nuevas, sin solapar el siguiente cron.
+            try:
+                retry_summarize_pending(limit=5, days=15)
+            except Exception:
+                pass
+            FeedService.fetch_and_save_news(max_ai_items=10)
+            print("News data updated successfully")
+            # Ejecutar limpieza tras actualizaciÃ³n
+            purge_old_news(15)
+    except portalocker.exceptions.LockException:
+        print("Actualización de noticias omitida: ya hay otra ejecución en curso.")
     except Exception as e:
         print(f"Error updating news data: {str(e)}") 
 

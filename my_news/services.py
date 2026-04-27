@@ -607,7 +607,7 @@ class FeedService:
         return False, None
 
     @staticmethod
-    def fetch_and_save_news():
+    def fetch_and_save_news(max_ai_items=None):
         print("Iniciando proceso de obtenciÃ³n de noticias...")
         start_time = time.time()
         
@@ -726,6 +726,7 @@ class FeedService:
 
         # Contador para noticias redundantes
         redundant_count = 0
+        ai_attempts = 0
         
         # Procesar todas las entradas en orden (de mÃ¡s antigua a mÃ¡s reciente)
         for item in all_entries:
@@ -830,6 +831,11 @@ class FeedService:
                 # Solo usar la imagen del contenido si no se encontró una en el feed
                 if not image_url and full_content['image_url']:
                     image_url = full_content['image_url']
+
+            if max_ai_items is not None and ai_attempts >= max_ai_items:
+                print(f"Presupuesto de IA agotado ({max_ai_items}); se dejan noticias para la próxima actualización.")
+                break
+            ai_attempts += 1
 
             # Si no se filtró por palabra clave, procesar con IA (Groq)
             processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_groq(
