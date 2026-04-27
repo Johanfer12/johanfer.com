@@ -181,6 +181,13 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+if not DEBUG:
+    STORAGES = {
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
+        },
+    }
+
 # Media files (User uploads, dynamically generated content)
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
