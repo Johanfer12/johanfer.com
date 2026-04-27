@@ -407,6 +407,11 @@ class FeedService:
         return None
 
     @staticmethod
+    def _is_groq_json_validation_error(error):
+        error_text = str(error).lower()
+        return 'json_validate_failed' in error_text or 'failed to validate json' in error_text
+
+    @staticmethod
     def process_content_with_groq(title, original_content, groq_client, model_name, filter_instructions_text, max_retries=3):
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
@@ -425,13 +430,14 @@ class FeedService:
             instructions=safe_instructions
         )
         max_completion_tokens = 1024
+        use_response_format = True
 
         for attempt in range(max_retries):
             try:
                 FeedService._GROQ_RATE_LIMITER.acquire(model_name, prompt, max_completion_tokens)
-                response = groq_client.chat.completions.create(
-                    model=model_name,
-                    messages=[
+                request_kwargs = {
+                    "model": model_name,
+                    "messages": [
                         {
                             "role": "system",
                             "content": "Eres un asistente que analiza noticias y responde ÚNICAMENTE con JSON válido."
@@ -441,10 +447,13 @@ class FeedService:
                             "content": prompt
                         }
                     ],
-                    response_format={"type": "json_object"},
-                    temperature=0.3,
-                    max_tokens=max_completion_tokens
-                )
+                    "temperature": 0.3,
+                    "max_tokens": max_completion_tokens,
+                }
+                if use_response_format:
+                    request_kwargs["response_format"] = {"type": "json_object"}
+
+                response = groq_client.chat.completions.create(**request_kwargs)
                 response_text = response.choices[0].message.content
                 try:
                     result_json = json.loads(response_text)
@@ -481,6 +490,10 @@ class FeedService:
 
             except Exception as e:
                 error_str = str(e)
+                if FeedService._is_groq_json_validation_error(e) and use_response_format:
+                    use_response_format = False
+                    print("Groq rechazó el modo JSON estricto; reintentando sin response_format.")
+                    continue
                 if ("429" in error_str or "rate_limit" in error_str.lower()) and attempt < max_retries - 1:
                     retry_after = FeedService._extract_retry_after_seconds(e)
                     wait_time = retry_after or max(FeedService._GROQ_RATE_LIMITER.seconds_until_next_window() + 1, (attempt + 1) * 30)
