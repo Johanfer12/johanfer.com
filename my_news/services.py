@@ -30,6 +30,8 @@ class GroqRateLimiter:
 
     DEFAULT_RPM = 1000
     DEFAULT_TPM = 250_000
+    SAFETY_FACTOR = 0.25
+    SAFE_RPM_CAP = 6
     MODEL_LIMITS = {
         'llama-3.1-8b-instant': {'tpm': 250_000, 'rpm': 1000},
         'llama-3.3-70b-versatile': {'tpm': 300_000, 'rpm': 1000},
@@ -48,11 +50,11 @@ class GroqRateLimiter:
 
     def get_limits(self, model_name):
         model_limits = self.MODEL_LIMITS.get(model_name or '', {})
-        tpm = int(getattr(settings, 'GROQ_RATE_LIMIT_TPM', 0) or model_limits.get('tpm') or self.DEFAULT_TPM)
-        rpm = int(getattr(settings, 'GROQ_RATE_LIMIT_RPM', 0) or model_limits.get('rpm') or self.DEFAULT_RPM)
-        safety_factor = float(getattr(settings, 'GROQ_RATE_LIMIT_SAFETY_FACTOR', 0.8) or 0.8)
-        safety_factor = min(max(safety_factor, 0.1), 1.0)
-        return max(1, int(tpm * safety_factor)), max(1, int(rpm * safety_factor))
+        tpm = int(model_limits.get('tpm') or self.DEFAULT_TPM)
+        rpm = int(model_limits.get('rpm') or self.DEFAULT_RPM)
+        safe_tpm = max(1, int(tpm * self.SAFETY_FACTOR))
+        safe_rpm = max(1, min(int(rpm * self.SAFETY_FACTOR), self.SAFE_RPM_CAP))
+        return safe_tpm, safe_rpm
 
     def estimate_tokens(self, prompt, max_completion_tokens=1024):
         prompt_text = prompt or ''
@@ -508,7 +510,7 @@ class FeedService:
                     continue
                 if ("429" in error_str or "rate_limit" in error_str.lower()) and attempt < max_retries - 1:
                     retry_after = FeedService._extract_retry_after_seconds(e)
-                    wait_time = retry_after or max(FeedService._GROQ_RATE_LIMITER.seconds_until_next_window() + 1, (attempt + 1) * 30)
+                    wait_time = retry_after or max(FeedService._GROQ_RATE_LIMITER.seconds_until_next_window() + 1, 120)
                     print(f"Límite de peticiones Groq (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
                     time.sleep(wait_time)
                     continue
