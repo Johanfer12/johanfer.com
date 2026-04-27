@@ -412,6 +412,10 @@ class FeedService:
         return 'json_validate_failed' in error_text or 'failed to validate json' in error_text
 
     @staticmethod
+    def _uses_gpt_oss_reasoning(model_name):
+        return (model_name or '').startswith('openai/gpt-oss-')
+
+    @staticmethod
     def process_content_with_groq(title, original_content, groq_client, model_name, filter_instructions_text, max_retries=3):
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
@@ -450,11 +454,19 @@ class FeedService:
                     "temperature": 0.3,
                     "max_tokens": max_completion_tokens,
                 }
+                if FeedService._uses_gpt_oss_reasoning(model_name):
+                    request_kwargs["reasoning_effort"] = "low"
                 if use_response_format:
                     request_kwargs["response_format"] = {"type": "json_object"}
 
                 response = groq_client.chat.completions.create(**request_kwargs)
-                response_text = response.choices[0].message.content
+                response_text = response.choices[0].message.content or ''
+                if not response_text.strip():
+                    print(f"Groq devolvió contenido vacío (intento {attempt + 1}/{max_retries}).")
+                    if attempt == max_retries - 1:
+                        return None, None, None
+                    time.sleep(5)
+                    continue
                 try:
                     result_json = json.loads(response_text)
                     summary_text = result_json.get('summary')
