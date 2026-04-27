@@ -30,16 +30,16 @@ class GroqRateLimiter:
 
     DEFAULT_RPM = 1000
     DEFAULT_TPM = 250_000
-    SAFETY_FACTOR = 0.25
-    SAFE_RPM_CAP = 6
+    SAFETY_FACTOR = 0.75
+    SAFE_RPM_CAP = 3
     MODEL_LIMITS = {
-        'llama-3.1-8b-instant': {'tpm': 250_000, 'rpm': 1000},
-        'llama-3.3-70b-versatile': {'tpm': 300_000, 'rpm': 1000},
-        'openai/gpt-oss-120b': {'tpm': 250_000, 'rpm': 1000},
-        'openai/gpt-oss-20b': {'tpm': 250_000, 'rpm': 1000},
-        'qwen/qwen3-32b': {'tpm': 300_000, 'rpm': 1000},
-        'groq/compound': {'tpm': 200_000, 'rpm': 200},
-        'groq/compound-mini': {'tpm': 200_000, 'rpm': 200},
+        'llama-3.1-8b-instant': {'tpm': 6_000, 'rpm': 30},
+        'llama-3.3-70b-versatile': {'tpm': 12_000, 'rpm': 30},
+        'openai/gpt-oss-120b': {'tpm': 8_000, 'rpm': 30},
+        'openai/gpt-oss-20b': {'tpm': 8_000, 'rpm': 30},
+        'qwen/qwen3-32b': {'tpm': 6_000, 'rpm': 60},
+        'groq/compound': {'tpm': 70_000, 'rpm': 30},
+        'groq/compound-mini': {'tpm': 70_000, 'rpm': 30},
     }
 
     def __init__(self):
@@ -422,7 +422,7 @@ class FeedService:
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
         instructions_section = (filter_instructions_text or FeedService._DEFAULT_FILTER_INSTRUCTIONS)
-        content_limit = 4000
+        content_limit = 2500
         base_content = (original_content or "")[:content_limit]
         plain_content = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', base_content)).strip()
 
@@ -435,7 +435,7 @@ class FeedService:
             content=safe_content,
             instructions=safe_instructions
         )
-        max_completion_tokens = 1024
+        max_completion_tokens = 512
         use_response_format = True
 
         for attempt in range(max_retries):
