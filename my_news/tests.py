@@ -37,6 +37,35 @@ class GroqRateLimiterTests(SimpleTestCase):
 
         self.assertEqual(FeedService._extract_retry_after_seconds(error), 13)
 
+    def test_long_retry_after_postpones_news_instead_of_sleeping(self):
+        class Response:
+            headers = {'Retry-After': '600'}
+
+        class Completions:
+            def create(self, **kwargs):
+                error = Exception('429 rate limit exceeded')
+                error.response = Response()
+                raise error
+
+        class Chat:
+            completions = Completions()
+
+        class Client:
+            chat = Chat()
+
+        description, short_answer, ai_filter = FeedService.process_content_with_groq(
+            'Titulo',
+            'Descripcion original',
+            Client(),
+            'openai/gpt-oss-120b',
+            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
+            max_retries=2,
+        )
+
+        self.assertIsNone(description)
+        self.assertIsNone(short_answer)
+        self.assertIsNone(ai_filter)
+
     def test_single_large_request_does_not_wait_forever(self):
         limiter = GroqRateLimiter()
         limiter.MODEL_LIMITS = {'tiny-model': {'tpm': 100, 'rpm': 20}}
