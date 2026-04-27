@@ -31,7 +31,7 @@ class GroqRateLimiter:
     DEFAULT_RPM = 1000
     DEFAULT_TPM = 250_000
     SAFETY_FACTOR = 0.75
-    SAFE_RPM_CAP = 3
+    SAFE_RPM_CAP = 1
     MODEL_LIMITS = {
         'llama-3.1-8b-instant': {'tpm': 6_000, 'rpm': 30},
         'llama-3.3-70b-versatile': {'tpm': 12_000, 'rpm': 30},
@@ -422,7 +422,7 @@ class FeedService:
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
         instructions_section = (filter_instructions_text or FeedService._DEFAULT_FILTER_INSTRUCTIONS)
-        content_limit = 2500
+        content_limit = 4000
         base_content = (original_content or "")[:content_limit]
         plain_content = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', base_content)).strip()
 
@@ -435,7 +435,7 @@ class FeedService:
             content=safe_content,
             instructions=safe_instructions
         )
-        max_completion_tokens = 512
+        max_completion_tokens = 1024
         use_response_format = True
 
         for attempt in range(max_retries):

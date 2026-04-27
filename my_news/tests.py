@@ -15,12 +15,13 @@ from .services import FeedService, GroqRateLimiter
 class GroqRateLimiterTests(SimpleTestCase):
     def setUp(self):
         FeedService._GROQ_RATE_LIMITER = GroqRateLimiter()
+        FeedService._GROQ_RATE_LIMITER.SAFE_RPM_CAP = 100
 
     def test_model_limits_are_conservative_for_news_processing(self):
         limiter = GroqRateLimiter()
 
-        self.assertEqual(limiter.get_limits('openai/gpt-oss-120b'), (6_000, 3))
-        self.assertEqual(limiter.get_limits('qwen/qwen3-32b'), (4_500, 3))
+        self.assertEqual(limiter.get_limits('openai/gpt-oss-120b'), (6_000, 1))
+        self.assertEqual(limiter.get_limits('qwen/qwen3-32b'), (4_500, 1))
 
     def test_retry_after_is_read_from_response_headers(self):
         class Response:
