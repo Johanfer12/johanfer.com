@@ -10,6 +10,7 @@ urlpatterns = [
     path('save/<int:pk>/', views.toggle_save_news, name='toggle_save_news'),
     path('delete/<int:pk>/', views.delete_news, name='delete_news'),
     path('undo/<int:pk>/', views.undo_delete, name='undo_delete'),
+    path('latest-deleted/', views.latest_deleted_news, name='latest_deleted_news'),
     path('update-feed/', views.update_feed, name='update_feed'),
     path('cleanup-old/', views.cleanup_old_news, name='cleanup_old_news'),
     path('retry-summaries/', views.retry_summaries, name='retry_summaries'),

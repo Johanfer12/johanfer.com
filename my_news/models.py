@@ -45,6 +45,7 @@ class News(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     image_url = models.URLField(null=True, blank=True)
     is_deleted = models.BooleanField(default=False, verbose_name="Eliminada")
+    deleted_at = models.DateTimeField(null=True, blank=True, verbose_name="Eliminada en")
     is_saved = models.BooleanField(default=False, verbose_name="Guardada")
     is_filtered = models.BooleanField(default=False, verbose_name="Filtro Aut.")
     filtered_by = models.ForeignKey('FilterWord', null=True, blank=True, on_delete=models.SET_NULL,
@@ -75,6 +76,7 @@ class News(models.Model):
                 name='news_visible_pub_id_idx'
             ),
             models.Index(fields=['created_at', 'id'], name='news_created_id_idx'),
+            models.Index(fields=['is_deleted', 'deleted_at', 'id'], name='news_deleted_at_idx'),
         ]
     
     def __str__(self):

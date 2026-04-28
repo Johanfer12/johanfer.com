@@ -75,6 +75,7 @@
         backupCursor: null, // Cursor para las siguientes noticias de respaldo
         deletingNews: new Set(), // IDs de noticias siendo eliminadas
         savingNews: new Set(), // IDs de noticias siendo guardadas/desguardadas
+        restoringNews: false,
         syncingFromDb: false, // evita refrescos simultaneos al recuperar foco/conexion
         lastDbSyncAt: 0, // timestamp del ultimo sync fuerte con DB
         sse: null,
@@ -817,6 +818,14 @@
             },
             body: params.toString(),
         });
+    };
+
+    const serverGetLatestDeletedNews = () => {
+        const params = new URLSearchParams();
+        const q = new URLSearchParams(location.search).get('q') || '';
+        params.set('saved_only', isSavedView() ? 'true' : 'false');
+        if (q) params.set('q', q);
+        return fetchJson(`/noticias/latest-deleted/?${params.toString()}`);
     };
 
     const serverGetPage = ({cursor, page, order, q, backupOnly = false, signal}) => {
@@ -1611,9 +1620,34 @@
     });
 
     // Botón deshacer
-    DOM.undoBtn?.addEventListener('click', () => {
-        const last = STATE.deleteStack.shift();
-        if (!last) return;
+    DOM.undoBtn?.addEventListener('click', async () => {
+        if (STATE.restoringNews) return;
+        STATE.restoringNews = true;
+        DOM.undoBtn.disabled = true;
+        let last = STATE.deleteStack.shift();
+        if (!last) {
+            try {
+                const latest = await serverGetLatestDeletedNews();
+                if (latest.status === 'empty') {
+                    STATE.restoringNews = false;
+                    DOM.undoBtn.disabled = false;
+                    return;
+                }
+                if (latest.status !== 'success') throw new Error(latest.message || 'No se pudo consultar la última eliminada');
+                last = latest.news_id || latest.card?.id;
+            } catch (e) {
+                err('Consultar última eliminada:', e);
+                alert('No se pudo consultar la última noticia eliminada');
+                STATE.restoringNews = false;
+                DOM.undoBtn.disabled = false;
+                return;
+            }
+        }
+        if (!last) {
+            STATE.restoringNews = false;
+            DOM.undoBtn.disabled = false;
+            return;
+        }
         beginUiMutation();
         const normalizedLast = normalizeId(last);
         STATE.cancelledDeletes.add(normalizedLast);
@@ -1635,6 +1669,10 @@
                 STATE.cancelledDeletes.delete(normalizedLast);
                 err('Deshacer:', e);
                 alert('No se pudo deshacer');
+            })
+            .finally(() => {
+                STATE.restoringNews = false;
+                DOM.undoBtn.disabled = false;
             });
     });
 

@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django import forms
+from django.utils import timezone
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources
 from .models import FeedSource, News, FilterWord, AIFilterInstruction, GroqGlobalSetting
@@ -59,7 +60,7 @@ class FeedSourceAdmin(ImportExportModelAdmin):
 
 @admin.register(News)
 class NewsAdmin(admin.ModelAdmin):
-    list_display = ('title', 'source', 'published_date', 'created_at', 'is_deleted', 'is_filtered', 'is_ai_filtered', 'is_redundant', 'filtered_by', 'similarity_score', 'ai_filter_reason')
+    list_display = ('title', 'source', 'published_date', 'created_at', 'is_deleted', 'deleted_at', 'is_filtered', 'is_ai_filtered', 'is_redundant', 'filtered_by', 'similarity_score', 'ai_filter_reason')
     list_filter = ('source', 'published_date', 'is_deleted', 'is_filtered', 'is_ai_filtered', 'is_redundant', 'filtered_by')
     search_fields = ('title', 'description')
     date_hierarchy = 'published_date'
@@ -67,12 +68,12 @@ class NewsAdmin(admin.ModelAdmin):
     actions = ['mark_as_deleted_by_user', 'restore_news']
 
     def mark_as_deleted_by_user(self, request, queryset):
-        queryset.update(is_deleted=True, is_filtered=False)  # Aseguramos que no esté marcada como filtrada
+        queryset.update(is_deleted=True, deleted_at=timezone.now(), is_filtered=False)  # Aseguramos que no esté marcada como filtrada
     mark_as_deleted_by_user.short_description = "Marcar como eliminadas por usuario"
 
     def restore_news(self, request, queryset):
         # Restauramos quitando todas las marcas de filtro/eliminación
-        queryset.update(is_deleted=False, is_filtered=False, is_ai_filtered=False, is_redundant=False)
+        queryset.update(is_deleted=False, deleted_at=None, is_filtered=False, is_ai_filtered=False, is_redundant=False)
     restore_news.short_description = "Restaurar noticias"
 
 @admin.register(FilterWord)
