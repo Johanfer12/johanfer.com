@@ -1,0 +1,5 @@
+<div class="news-grid" id="{{ grid_id }}">
+    {% for article in articles %}
+        {% include 'news_card.html' with article=article card_id_prefix=card_id_prefix show_save_button=show_save_button show_delete_button=show_delete_button show_similarity_score=show_similarity_score %}
+    {% endfor %}
+</div>

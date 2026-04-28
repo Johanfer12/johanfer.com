@@ -15,11 +15,7 @@
     {% include 'header.html' %}
     
     <div class="main-content">
-        <div class="news-grid" id="news-grid">
-            {% for article in page_obj %}
-                {% include 'news_card.html' with article=article %}
-            {% endfor %}
-        </div>
+        {% include 'news_grid.html' with grid_id='news-grid' articles=page_obj card_id_prefix='news' show_save_button=True show_delete_button=user.is_staff show_similarity_score=True %}
 
         {% if is_paginated %}
         <div class="pagination">
