@@ -461,6 +461,7 @@
         -moz-user-select: none; /* Firefox */
         -ms-user-select: none; /* Internet Explorer/Edge */
         user-select: none; /* Standard */
+        touch-action: manipulation;
         contain: layout paint style;
     }
     .news-card .news-image { filter: saturate(0.95) contrast(0.98); }
@@ -513,6 +514,18 @@
 .news-card-container.inserting {
     animation: insertCard 0.6s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
     z-index: 5;
+}
+
+@media (max-width: 767px) {
+    .news-card-container.collapsing {
+        will-change: height, opacity;
+        transition: height 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.22s ease;
+        transform: none !important;
+    }
+
+    .news-card-container.inserting {
+        animation-duration: 0.38s;
+    }
 }
 
 /* Notificación de nuevas noticias */

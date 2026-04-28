@@ -935,7 +935,6 @@
             requestAnimationFrame(() => {
                 container.style.height = '0px';
                 container.style.opacity = '0';
-                container.style.transform = 'scale(0.85)';
             });
         } else {
             container.style.width = initialWidth + 'px';
@@ -1244,6 +1243,18 @@
         configureNewCard(el, id);
     });
 
+    const isCardActionTarget = (target) => !!target?.closest?.([
+        'a',
+        'button',
+        'input',
+        'textarea',
+        'select',
+        '[role="button"]',
+        '.news-link',
+        '.news-links',
+        '.mobile-delete-btn',
+    ].join(', '));
+
     // Delegación de eventos para reducir listeners por tarjeta
     DOM.grid?.addEventListener('click', (e) => {
         const shareBtn = e.target.closest('.share-opener');
@@ -1272,6 +1283,23 @@
             const container = saveBtn.closest('.news-card-container');
             const id = saveBtn.dataset.id || container?.id?.replace('news-', '');
             if (id) toggleSaveNews(id);
+            return;
+        }
+
+        if (isMobile()) {
+            const container = e.target.closest('.news-card-container');
+            if (!container || container.classList.contains('collapsing') || container.classList.contains('deleting')) return;
+            if (isCardActionTarget(e.target)) return;
+
+            const cardElement = container.querySelector('.news-card');
+            if (!cardElement || cardElement.dataset.flipLocked === 'true') return;
+
+            const shouldFlip = !cardElement.classList.contains('is-flipped');
+            cardElement.classList.toggle('is-flipped', shouldFlip);
+            cardElement.classList.remove('image-hover', 'delete-hover');
+            container.classList.remove('pointer-delete-hover');
+            cardElement.dataset.hoverMode = shouldFlip ? 'flipped' : 'front';
+            lockFlipUntilTransitionEnds(cardElement);
         }
     });
 
@@ -1347,7 +1375,7 @@
     };
 
     const setCardHoverMode = (container, pointerEvent, {force = false} = {}) => {
-        if (!container || !pointerEvent || pointerEvent.pointerType === 'touch') return;
+        if (!container || !pointerEvent || pointerEvent.pointerType === 'touch' || isMobile()) return;
         const cardElement = container.querySelector('.news-card');
         if (!cardElement) return;
         if (container.classList.contains('collapsing') || container.classList.contains('deleting')) return;
