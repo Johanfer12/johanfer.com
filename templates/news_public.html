@@ -62,11 +62,7 @@
     </header>
 
     <main class="main-content public-news-page">
-        <div class="news-grid" id="public-news-grid">
-            {% for article in object_list %}
-                {% include 'news_public_card.html' with article=article %}
-            {% endfor %}
-        </div>
+        {% include 'news_grid.html' with grid_id='public-news-grid' articles=object_list card_id_prefix='public-news' show_save_button=False show_delete_button=True show_similarity_score=False %}
 
         <div class="public-news-empty" id="public-news-empty" {% if object_list %}hidden{% endif %}>
             {% if object_list %}
