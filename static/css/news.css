@@ -454,6 +454,10 @@
         min-height: calc(100vh - 100px);
     }
 
+    .news-grid {
+        gap: 0;
+    }
+
     /* Deshabilitar resaltado azul al tocar en móviles */
     .news-card-container {
         -webkit-tap-highlight-color: transparent; /* iOS/Safari */
@@ -463,6 +467,7 @@
         user-select: none; /* Standard */
         touch-action: manipulation;
         contain: layout paint style;
+        margin-bottom: 15px;
     }
     .news-card .news-image { filter: saturate(0.95) contrast(0.98); }
     .card-front, .card-back { box-shadow: 0 4px 8px rgba(0,0,0,0.22), 0 6px 14px rgba(0,0,0,0.18); }
@@ -518,8 +523,8 @@
 
 @media (max-width: 767px) {
     .news-card-container.collapsing {
-        will-change: height, opacity;
-        transition: height 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.22s ease;
+        will-change: height, margin-bottom, opacity;
+        transition: height 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), margin-bottom 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.22s ease;
         transform: none !important;
     }
 

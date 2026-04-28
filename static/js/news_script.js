@@ -931,9 +931,11 @@
         
         if (mobileView) {
             container.style.height = initialHeight + 'px';
+            container.style.marginBottom = getComputedStyle(container).marginBottom;
             void container.offsetHeight;
             requestAnimationFrame(() => {
                 container.style.height = '0px';
+                container.style.marginBottom = '0px';
                 container.style.opacity = '0';
             });
         } else {
@@ -958,6 +960,7 @@
             container.style.transition = 'none';
             container.style.height = '';
             container.style.width = '';
+            container.style.marginBottom = '';
             container.style.marginRight = '';
             container.style.opacity = '';
             container.style.transform = '';
