@@ -26,40 +26,7 @@
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
 </head>
 <body class="has-header">
-    <header class="header">
-        <div class="header-container">
-            <div class="header-title">
-                <h1>Noticias de Hoy</h1>
-                <p class="total">
-                    <span class="header-counter" id="public-news-counter">{{ total_news }}</span>
-                    {% if public_news_date %}
-                    noticias del {{ public_news_date }}
-                    {% else %}
-                    noticias disponibles
-                    {% endif %}
-                </p>
-            </div>
-            <nav class="header-nav">
-                {% if request.user.is_authenticated and request.user.is_superuser %}
-                <a href="/j_admin/" title="Administración">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16">
-                        <path d="M8 0a2 2 0 0 0-2 2v1.09a5.002 5.002 0 0 0-2.638 1.524l-.77-.445a2 2 0 1 0-2 3.464l.77.445A5.014 5.014 0 0 0 1 10c0 .523.08 1.027.23 1.5l-.77.445a2 2 0 1 0 2 3.464l.77-.445A5.002 5.002 0 0 0 6 16v-1.09a5.07 5.07 0 0 0 4 0V16a2 2 0 1 0 4 0v-1.09a5.002 5.002 0 0 0 2.638-1.524l.77.445a2 2 0 1 0 2-3.464l-.77-.445c.15-.473.23-.977.23-1.5s-.08-1.027-.23-1.5l.77-.445a2 2 0 1 0-2-3.464l-.77.445A5.002 5.002 0 0 0 10 1.09V0a2 2 0 0 0-2-2zm0 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6z" transform="scale(.5) translate(8 8)"/>
-                    </svg>
-                </a>
-                {% endif %}
-                <a href="/about/" title="Información">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
-                        <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-11v6h2v-6h-2zm0-4v2h2V7h-2z" fill="white"/>
-                    </svg>
-                </a>
-                <a href="/" title="Inicio">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16">
-                        <path d="M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5z"/>
-                    </svg>
-                </a>
-            </nav>
-        </div>
-    </header>
+    {% include 'news_public_header.html' %}
 
     <main class="main-content public-news-page">
         {% include 'news_grid.html' with grid_id='public-news-grid' articles=object_list card_id_prefix='public-news' show_save_button=False show_delete_button=True show_similarity_score=False %}
@@ -74,6 +41,7 @@
     </main>
 
     {{ public_storage_key|json_script:"public-news-storage-key" }}
+    <script src="{% static 'js/news_cards_common.js' %}"></script>
     <script src="{% static 'js/news_public.js' %}"></script>
 </body>
 </html>

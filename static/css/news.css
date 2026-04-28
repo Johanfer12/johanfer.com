@@ -276,6 +276,11 @@
     color: #06101f;
 }
 
+.news-link:disabled {
+    cursor: wait;
+    opacity: 0.68;
+}
+
 /* Estilo específico para el botón eliminar */
 .news-link.delete-btn {
     border: 1px solid #ff4444;
@@ -707,6 +712,10 @@
 }
 
 .mobile-delete-btn.pulse {
+    animation: pulse 0.3s ease-in-out;
+}
+
+.undo-btn.pulse {
     animation: pulse 0.3s ease-in-out;
 }
 
