@@ -145,6 +145,32 @@
         });
     };
 
+    const createDesktopDeleteClone = (container) => {
+        const rect = container.getBoundingClientRect();
+        const clone = container.cloneNode(true);
+        clone.id = '';
+        clone.removeAttribute('data-news-id');
+        clone.classList.add('collapsing');
+        clone.style.position = 'fixed';
+        clone.style.left = `${rect.left}px`;
+        clone.style.top = `${rect.top}px`;
+        clone.style.width = `${rect.width}px`;
+        clone.style.height = `${rect.height}px`;
+        clone.style.margin = '0';
+        clone.style.pointerEvents = 'none';
+        clone.style.zIndex = '1000';
+        clone.style.transformOrigin = 'center center';
+        clone.style.transition = 'opacity 0.34s ease, transform 0.44s cubic-bezier(0.22, 0.61, 0.36, 1)';
+        document.body.appendChild(clone);
+
+        requestAnimationFrame(() => {
+            clone.style.opacity = '0';
+            clone.style.transform = 'scale(0.86)';
+        });
+
+        return clone;
+    };
+
     /** Pequeña animación de fade/scale */
     const animateScaleOpacity = (el, {fromScale = 0.9, toScale = 1, duration = 400} = {}) => {
         el.style.opacity = '0';
@@ -924,12 +950,12 @@
         const mobileView = isMobile();
         const oldPositions = mobileView ? null : capturePositions();
 
-        // Ejecutar animación de salida: móvil (height) vs escritorio (width)
+        // Ejecutar animación de salida: móvil colapsa en flujo; escritorio usa clon flotante + FLIP.
         const initialHeight = container.offsetHeight;
-        const initialWidth = container.offsetWidth;
-        container.classList.add('collapsing');
+        let desktopExitClone = null;
         
         if (mobileView) {
+            container.classList.add('collapsing');
             container.style.height = initialHeight + 'px';
             container.style.marginBottom = getComputedStyle(container).marginBottom;
             void container.offsetHeight;
@@ -939,15 +965,11 @@
                 container.style.opacity = '0';
             });
         } else {
-            container.style.width = initialWidth + 'px';
-            container.style.marginRight = '0px';
-            void container.offsetWidth;
-            requestAnimationFrame(() => {
-                container.style.width = '0px';
-                container.style.marginRight = '-20px'; // Ayuda a que las tarjetas se muevan antes
-                container.style.opacity = '0';
-                container.style.transform = 'scale(0.85)';
-            });
+            desktopExitClone = createDesktopDeleteClone(container);
+            container.remove();
+            if (oldPositions) animateReposition(oldPositions, [`news-${normalizedNewsId}`]);
+            enforceCardLimit();
+            refreshHoverUnderPointer();
         }
         
         // No usar respaldo precargado para evitar problemas de orden cronológico
@@ -969,8 +991,8 @@
         };
 
         // Eliminar por transitionend con fallback por tiempo
-        const animationDuration = 500; // margen para height/opacity/transform
-        let removed = false;
+        const animationDuration = mobileView ? 500 : 460; // margen para height/opacity/transform
+        let removed = !mobileView;
         let pendingDeleteResponse = null;
         const finalizeSuccessfulDelete = (data) => {
             if (!data) return;
@@ -1009,14 +1031,21 @@
             refreshHoverUnderPointer();
             maybeFinalizeDelete();
         };
-        container.addEventListener('transitionend', onAnimEnd, { once: true });
+        if (mobileView) container.addEventListener('transitionend', onAnimEnd, { once: true });
         const removeTimeout = setTimeout(() => {
-            if (removed) return;
-            removed = true;
-            container.removeEventListener('transitionend', onAnimEnd);
-            removeFromDOM();
-            if (oldPositions) animateReposition(oldPositions, [`news-${normalizedNewsId}`]);
-            enforceCardLimit();
+            if (desktopExitClone) {
+                desktopExitClone.remove();
+                desktopExitClone = null;
+                maybeFinalizeDelete();
+                return;
+            }
+            if (!removed) {
+                removed = true;
+                container.removeEventListener('transitionend', onAnimEnd);
+                removeFromDOM();
+                if (oldPositions) animateReposition(oldPositions, [`news-${normalizedNewsId}`]);
+                enforceCardLimit();
+            }
             refreshHoverUnderPointer();
             maybeFinalizeDelete();
         }, animationDuration + 50);
@@ -1045,6 +1074,10 @@
 
                 // Si ya se eliminó del DOM por timeout, actualizar contadores
                 if (!document.body.contains(container)) {
+                    if (!mobileView && desktopExitClone?.isConnected) {
+                        pendingDeleteResponse = data;
+                        return;
+                    }
                     finalizeSuccessfulDelete(data);
                     return;
                 }
