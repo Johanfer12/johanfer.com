@@ -18,6 +18,10 @@
 
     const MAX_NEWS = 25;
     const NOTIF_DURATION = 10_000;         // 10 s
+    const DELETE_ANIMATION_MS = {
+        mobile: 500,
+        desktop: 460,
+    };
 
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
@@ -84,6 +88,7 @@
         checkController: null,
         backupController: null,
         syncController: null,
+        lifecycleSyncTimer: null,
         locallyDeletedIds: new Set(), // IDs borrados localmente para evitar reinserciones desde cache cliente
         cancelledDeletes: new Set(), // IDs cuyo borrado fue revertido antes de completar el flujo local
         mutationVersion: 0, // invalida respuestas viejas del feed tras mutaciones locales
@@ -172,6 +177,27 @@
         return clone;
     };
 
+    const startMobileDeleteCollapse = (container) => {
+        container.classList.add('collapsing');
+        container.style.height = `${container.offsetHeight}px`;
+        container.style.marginBottom = getComputedStyle(container).marginBottom;
+        void container.offsetHeight;
+        requestAnimationFrame(() => {
+            container.style.height = '0px';
+            container.style.marginBottom = '0px';
+            container.style.opacity = '0';
+        });
+    };
+
+    const startDesktopDeleteCollapse = (container, oldPositions, excludedId) => {
+        const clone = createDesktopDeleteClone(container);
+        container.remove();
+        if (oldPositions) animateReposition(oldPositions, [excludedId]);
+        enforceCardLimit();
+        refreshHoverUnderPointer();
+        return clone;
+    };
+
     /** Pequeña animación de fade/scale */
     const animateScaleOpacity = (el, {fromScale = 0.9, toScale = 1, duration = 400} = {}) => {
         el.style.opacity = '0';
@@ -201,6 +227,7 @@
         const normalizedId = normalizeId(newsId);
         return !!normalizedId && (STATE.deletingNews.has(normalizedId) || isLocallyDeleted(normalizedId));
     };
+    const hasActiveUiMutation = () => STATE.deletingNews.size > 0 || STATE.savingNews.size > 0 || STATE.restoringNews;
     const pruneNewsFromClientCaches = (newsId) => {
         const targetId = normalizeId(newsId);
         if (!targetId) return;
@@ -228,6 +255,18 @@
             if (isStaleUiRead(scheduledVersion)) return;
             refreshCurrentPageFromDb(reason, {animation: 'silent'});
         }, delay);
+    };
+
+    const clearCollapsedCardStyles = (container) => {
+        container.style.transition = 'none';
+        container.style.height = '';
+        container.style.width = '';
+        container.style.marginBottom = '';
+        container.style.marginRight = '';
+        container.style.opacity = '';
+        container.style.transform = '';
+        container.classList.remove('collapsing');
+        void container.offsetHeight;
     };
 
     const buildShareCardData = (container) => {
@@ -748,6 +787,7 @@
             });
             if (isStaleUiRead(readVersion)) return;
             renderPageFromServerData(data, {animation});
+            STATE.pendingNews.length = 0;
             STATE.lastDbSyncAt = Date.now();
         } catch (e) {
             if (e.name === 'AbortError') return;
@@ -765,6 +805,15 @@
             err(`Error reconciliando pagina actual (${reason}):`, e);
         })
     );
+
+    const resumeLiveUpdates = ({force = false, delay = 120} = {}) => {
+        if (STATE.lifecycleSyncTimer) clearTimeout(STATE.lifecycleSyncTimer);
+        STATE.lifecycleSyncTimer = setTimeout(async () => {
+            STATE.lifecycleSyncTimer = null;
+            await syncCurrentPageFromDb({force});
+            connectNewsStream();
+        }, delay);
+    };
 
     /* ---------------------------------------------------------------------
      *  Carga inicial y precarga de noticias de respaldo
@@ -958,27 +1007,12 @@
 
         const mobileView = isMobile();
         const oldPositions = mobileView ? null : capturePositions();
-
-        // Ejecutar animación de salida: móvil colapsa en flujo; escritorio usa clon flotante + FLIP.
-        const initialHeight = container.offsetHeight;
         let desktopExitClone = null;
         
         if (mobileView) {
-            container.classList.add('collapsing');
-            container.style.height = initialHeight + 'px';
-            container.style.marginBottom = getComputedStyle(container).marginBottom;
-            void container.offsetHeight;
-            requestAnimationFrame(() => {
-                container.style.height = '0px';
-                container.style.marginBottom = '0px';
-                container.style.opacity = '0';
-            });
+            startMobileDeleteCollapse(container);
         } else {
-            desktopExitClone = createDesktopDeleteClone(container);
-            container.remove();
-            if (oldPositions) animateReposition(oldPositions, [`news-${normalizedNewsId}`]);
-            enforceCardLimit();
-            refreshHoverUnderPointer();
+            desktopExitClone = startDesktopDeleteCollapse(container, oldPositions, `news-${normalizedNewsId}`);
         }
         
         // No usar respaldo precargado para evitar problemas de orden cronológico
@@ -988,19 +1022,11 @@
             container.remove();
         };
         const restoreCollapsedCard = () => {
-            container.style.transition = 'none';
-            container.style.height = '';
-            container.style.width = '';
-            container.style.marginBottom = '';
-            container.style.marginRight = '';
-            container.style.opacity = '';
-            container.style.transform = '';
-            container.classList.remove('collapsing');
-            void container.offsetHeight;
+            clearCollapsedCardStyles(container);
         };
 
         // Eliminar por transitionend con fallback por tiempo
-        const animationDuration = mobileView ? 500 : 460; // margen para height/opacity/transform
+        const animationDuration = mobileView ? DELETE_ANIMATION_MS.mobile : DELETE_ANIMATION_MS.desktop;
         let removed = !mobileView;
         let pendingDeleteResponse = null;
         const finalizeSuccessfulDelete = (data) => {
@@ -1140,6 +1166,10 @@
             STATE.pendingNews.push(...data.news_cards);
             updateCounters(data.total_news, data.total_pages);
             showNotification(data.news_cards.length);
+            if (hasActiveUiMutation()) {
+                scheduleSilentSync('nuevas noticias durante mutacion', {delay: 1200});
+                return;
+            }
             loadNewNews();
 
             if (STATE.backupCards.length < 5) {
@@ -1516,6 +1546,10 @@
     });
 
     const closeNewsStream = () => {
+        if (STATE.lifecycleSyncTimer) {
+            clearTimeout(STATE.lifecycleSyncTimer);
+            STATE.lifecycleSyncTimer = null;
+        }
         if (STATE.sseRetryTimer) {
             clearTimeout(STATE.sseRetryTimer);
             STATE.sseRetryTimer = null;
@@ -1581,15 +1615,14 @@
             STATE.notifTimer = setTimeout(hideNotification, STATE.notifRemaining);
         }
         if (STATE.pageVisible) {
-            syncCurrentPageFromDb();
-            connectNewsStream();
+            resumeLiveUpdates();
         } else {
             closeNewsStream();
         }
     });
-    window.addEventListener('focus', () => { syncCurrentPageFromDb(); connectNewsStream(); });
-    window.addEventListener('pageshow', () => { syncCurrentPageFromDb({force: true}); connectNewsStream(); });
-    window.addEventListener('online', () => { syncCurrentPageFromDb({force: true}); connectNewsStream(); });
+    window.addEventListener('focus', () => resumeLiveUpdates());
+    window.addEventListener('pageshow', () => resumeLiveUpdates({force: true}));
+    window.addEventListener('online', () => resumeLiveUpdates({force: true}));
     window.addEventListener('beforeunload', closeNewsStream);
 
     // Interacción del usuario → reset userInteracted para unir notificaciones
