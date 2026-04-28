@@ -25,7 +25,8 @@
 
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
-    const isMobile = () => window.innerWidth <= 767;
+    const CardUi = window.NewsCards;
+    const isMobile = CardUi?.isMobile || (() => window.innerWidth <= 767);
     
     const DOM = Object.fromEntries(Object.entries(SELECTORS).map(([k, v]) => [k, $(v)]));
     const USER_FLAGS = (() => {
@@ -118,37 +119,30 @@
     const fetchJson = (url, options = {}) => fetch(url, options)
         .then(r => r.ok ? r.json() : Promise.reject(new Error(r.statusText)));
 
+    const setButtonBusy = (button, busy, {loadingClass = 'loading'} = {}) => {
+        if (!button) return;
+        button.disabled = busy;
+        button.classList.toggle(loadingClass, busy);
+        button.setAttribute('aria-busy', busy ? 'true' : 'false');
+    };
+
+    const flashButtonTitle = (button, message, duration = 1400) => {
+        if (!button) return;
+        const previous = button.title;
+        button.title = message;
+        button.classList.add('pulse');
+        setTimeout(() => {
+            button.title = previous;
+            button.classList.remove('pulse');
+        }, duration);
+    };
+
     /** Devuelve posiciones (DOMRect) de cada contenedor de tarjeta */
-    const capturePositions = () => new Map($$('.news-grid .news-card-container').map(el => [el, el.getBoundingClientRect()]));
+    const capturePositions = () => CardUi.capturePositions(DOM.grid || document);
 
     /** Animación FLIP (First‑Last Invert Play) para re‑posicionamiento */
     const animateReposition = (oldPos, excludedIds = []) => {
-        if (isMobile() || !oldPos.size) return;
-        requestAnimationFrame(() => {
-            let hasMovingCards = false;
-            oldPos.forEach((rect, el) => {
-                if (!document.body.contains(el) || excludedIds.includes(el.id)) return;
-                const newRect = el.getBoundingClientRect();
-                const dx = rect.left - newRect.left;
-                const dy = rect.top - newRect.top;
-                if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
-                hasMovingCards = true;
-                el.style.transform = `translate(${dx}px,${dy}px)`;
-                el.style.transition = 'none';
-                requestAnimationFrame(() => {
-                    el.style.transition = 'transform 0.4s ease-out';
-                    el.style.transform = '';
-                    el.addEventListener('transitionend', () => {
-                        el.style.transition = '';
-                        refreshHoverUnderPointer();
-                    }, {once: true});
-                });
-            });
-            if (hasMovingCards) {
-                requestAnimationFrame(refreshHoverUnderPointer);
-                setTimeout(refreshHoverUnderPointer, 430);
-            }
-        });
+        CardUi.animateReposition(oldPos, {excludedIds, onSettled: refreshHoverUnderPointer});
     };
 
     const createDesktopDeleteClone = (container) => {
@@ -962,7 +956,7 @@
             return;
         }
 
-        saveBtn.disabled = true;
+        setButtonBusy(saveBtn, true);
         serverToggleSaveNews(newsId)
             .then(data => {
                 if (data.status !== 'success') throw new Error(data.message || 'Error al guardar');
@@ -984,23 +978,25 @@
                 alert('No se pudo guardar la noticia.');
             })
             .finally(() => {
-                saveBtn.disabled = false;
+                setButtonBusy(saveBtn, false);
                 STATE.savingNews.delete(newsId);
             });
     };
 
-    const deleteNews = (newsId) => {
+    const deleteNews = (newsId, triggerButton = null) => {
         const normalizedNewsId = normalizeId(newsId);
         STATE.cancelledDeletes.delete(normalizedNewsId);
         // Protección contra eliminaciones simultáneas
         if (STATE.deletingNews.has(normalizedNewsId)) return;
         beginUiMutation();
         STATE.deletingNews.add(normalizedNewsId);
+        setButtonBusy(triggerButton, true);
         pruneNewsFromClientCaches(normalizedNewsId);
         
         const container = $(`#news-${normalizedNewsId}`);
         if (!container) {
             STATE.deletingNews.delete(normalizedNewsId);
+            setButtonBusy(triggerButton, false);
             return err(`Contenedor no encontrado (${newsId})`);
         }
         const currentPage = new URLSearchParams(location.search).get('page') || 1;
@@ -1038,6 +1034,7 @@
             }
             STATE.locallyDeletedIds.add(normalizedNewsId);
             STATE.deletingNews.delete(normalizedNewsId);
+            setButtonBusy(triggerButton, false);
             STATE.deleteStack = STATE.deleteStack.filter(id => normalizeId(id) !== normalizedNewsId);
             STATE.deleteStack.unshift(normalizedNewsId);
             if (STATE.deleteStack.length > 5) STATE.deleteStack.length = 5;
@@ -1090,9 +1087,10 @@
             .then(data => {
                 if (STATE.cancelledDeletes.has(normalizedNewsId)) {
                     STATE.cancelledDeletes.delete(normalizedNewsId);
-                    STATE.deletingNews.delete(normalizedNewsId);
-                    return;
-                }
+                STATE.deletingNews.delete(normalizedNewsId);
+                setButtonBusy(triggerButton, false);
+                return;
+            }
                 if (data.status !== 'success') {
                     clearTimeout(removeTimeout);
                     container.removeEventListener('transitionend', onAnimEnd);
@@ -1103,6 +1101,7 @@
                         return;
                     }
                     STATE.deletingNews.delete(normalizedNewsId);
+                    setButtonBusy(triggerButton, false);
                     err('Error del servidor al eliminar:', data.message);
                     return;
                 }
@@ -1126,6 +1125,7 @@
                 if (STATE.cancelledDeletes.has(normalizedNewsId)) {
                     STATE.cancelledDeletes.delete(normalizedNewsId);
                     STATE.deletingNews.delete(normalizedNewsId);
+                    setButtonBusy(triggerButton, false);
                     return;
                 }
                 // En caso de error de red o servidor, revertir la animación
@@ -1141,6 +1141,7 @@
                 err('Error al eliminar noticia:', e);
                 alert('Error al eliminar la noticia. Por favor, inténtalo de nuevo.');
                 STATE.deletingNews.delete(normalizedNewsId); // Limpiar flag en error
+                setButtonBusy(triggerButton, false);
             });
 
     };
@@ -1276,20 +1277,11 @@
     const configureNewCard = (container, id) => {
         if (!container) return;
         applyCardDataset(container, {id});
-        const front = container.querySelector('.card-front');
-        const mediaZone = front?.querySelector('.news-media-zone');
         const back = container.querySelector('.card-back');
         const links = back?.querySelector('.news-links');
         const saveBtn = container.querySelector('.save-btn');
 
-        // Botón eliminar móvil ✕
-        if (mediaZone && !mediaZone.querySelector('.mobile-delete-btn') && container.querySelector('.delete-btn')) {
-            const mbBtn = document.createElement('button');
-            mbBtn.className = 'mobile-delete-btn';
-            mbBtn.type = 'button';
-            mbBtn.dataset.id = id;
-            mediaZone.appendChild(mbBtn);
-        }
+        CardUi.addMobileDeleteButton(container, id);
 
         // Acción compartir para copiar tarjeta compacta al portapapeles
         if (links && !links.querySelector('.share-opener')) {
@@ -1318,17 +1310,7 @@
         configureNewCard(el, id);
     });
 
-    const isCardActionTarget = (target) => !!target?.closest?.([
-        'a',
-        'button',
-        'input',
-        'textarea',
-        'select',
-        '[role="button"]',
-        '.news-link',
-        '.news-links',
-        '.mobile-delete-btn',
-    ].join(', '));
+    const isCardActionTarget = CardUi.isCardActionTarget;
 
     // Delegación de eventos para reducir listeners por tarjeta
     DOM.grid?.addEventListener('click', (e) => {
@@ -1348,7 +1330,7 @@
             setTimeout(() => deleteBtn.classList.remove('pulse'), 300);
             const container = deleteBtn.closest('.news-card-container');
             const id = deleteBtn.dataset.id || container?.id?.replace('news-', '');
-            if (id) deleteNews(id);
+            if (id) deleteNews(id, deleteBtn);
             return;
         }
 
@@ -1378,21 +1360,7 @@
         }
     });
 
-    const isPointerInProtectedMediaZone = (container, pointerEvent) => {
-        if (!container || !pointerEvent) return false;
-        const mediaZone = container.querySelector('.news-media-zone');
-        if (!mediaZone) return false;
-
-        const containerRect = container.getBoundingClientRect();
-        const protectedHeight = mediaZone.offsetHeight;
-        const bleed = 3;
-        const x = pointerEvent.clientX;
-        const y = pointerEvent.clientY;
-
-        const withinHorizontalBounds = x >= (containerRect.left - bleed) && x <= (containerRect.right + bleed);
-        const withinProtectedHeight = y >= (containerRect.top - bleed) && y <= (containerRect.top + protectedHeight + bleed);
-        return withinHorizontalBounds && withinProtectedHeight;
-    };
+    const isPointerInProtectedMediaZone = CardUi.isPointerInProtectedMediaZone;
 
     const isPointerInDeleteButtonZone = (container, pointerEvent) => {
         if (!container || !pointerEvent || isMobile()) return false;
@@ -1415,18 +1383,7 @@
         return x >= left && x <= right && y >= top && y <= bottom;
     };
 
-    const isPointerWithinCardBounds = (container, pointerEvent) => {
-        if (!container || !pointerEvent) return false;
-        const rect = container.getBoundingClientRect();
-        const bleed = 1;
-        const x = pointerEvent.clientX;
-        const y = pointerEvent.clientY;
-
-        return x >= (rect.left - bleed) &&
-            x <= (rect.right + bleed) &&
-            y >= (rect.top - bleed) &&
-            y <= (rect.bottom + bleed);
-    };
+    const isPointerWithinCardBounds = CardUi.isPointerWithinCardBounds;
 
     const clearFlipLock = (cardElement) => {
         if (!cardElement) return;
@@ -1635,8 +1592,7 @@
     DOM.updateFeedBtn?.addEventListener('click', function () {
         if (isSavedView()) return;
         const btn = this;
-        btn.disabled = true;
-        btn.classList.add('loading');
+        setButtonBusy(btn, true);
         fetchJson('/noticias/update-feed/', {headers: {'X-CSRFToken': getCookie('csrftoken')}})
             .then(data => {
                 if (data.status !== 'success') throw new Error(data.message);
@@ -1649,21 +1605,22 @@
                 }
             })
             .catch(e => { err('Actualizar feed:', e); alert('Error al actualizar el feed: ' + e.message); })
-            .finally(() => { btn.disabled = false; btn.classList.remove('loading'); });
+            .finally(() => { setButtonBusy(btn, false); });
     });
 
     // Botón deshacer
     DOM.undoBtn?.addEventListener('click', async () => {
         if (STATE.restoringNews) return;
         STATE.restoringNews = true;
-        DOM.undoBtn.disabled = true;
+        setButtonBusy(DOM.undoBtn, true);
         let last = STATE.deleteStack.shift();
         if (!last) {
             try {
                 const latest = await serverGetLatestDeletedNews();
                 if (latest.status === 'empty') {
+                    flashButtonTitle(DOM.undoBtn, 'Nada para deshacer');
                     STATE.restoringNews = false;
-                    DOM.undoBtn.disabled = false;
+                    setButtonBusy(DOM.undoBtn, false);
                     return;
                 }
                 if (latest.status !== 'success') throw new Error(latest.message || 'No se pudo consultar la última eliminada');
@@ -1672,13 +1629,13 @@
                 err('Consultar última eliminada:', e);
                 alert('No se pudo consultar la última noticia eliminada');
                 STATE.restoringNews = false;
-                DOM.undoBtn.disabled = false;
+                setButtonBusy(DOM.undoBtn, false);
                 return;
             }
         }
         if (!last) {
             STATE.restoringNews = false;
-            DOM.undoBtn.disabled = false;
+            setButtonBusy(DOM.undoBtn, false);
             return;
         }
         beginUiMutation();
@@ -1705,7 +1662,7 @@
             })
             .finally(() => {
                 STATE.restoringNews = false;
-                DOM.undoBtn.disabled = false;
+                setButtonBusy(DOM.undoBtn, false);
             });
     });
 
