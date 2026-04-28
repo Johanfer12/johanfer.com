@@ -308,6 +308,53 @@ class NewsFeedOrderingTests(TestCase):
         ]
         self.assertEqual(restored_page_ids, ordered_ids[:25])
 
+    def test_latest_deleted_endpoint_recovers_undo_after_page_reload(self):
+        self.client.force_login(self.superuser)
+        self.create_news_batch(26, prefix='latest-deleted-flow')
+        ordered_ids = list(
+            News.visible.order_by('-published_date', '-id').values_list('id', flat=True)
+        )
+        deleted_id = ordered_ids[8]
+
+        delete_response = self.client.post(
+            reverse('my_news:delete_news', args=[deleted_id]),
+            {
+                'current_page': 1,
+                'order': 'desc',
+                'saved_only': 'false',
+            },
+        )
+        self.assertEqual(delete_response.json()['status'], 'success')
+
+        latest_response = self.client.get(
+            reverse('my_news:latest_deleted_news'),
+            {'saved_only': 'false'},
+        )
+        latest_payload = latest_response.json()
+
+        self.assertEqual(latest_payload['status'], 'success')
+        self.assertEqual(latest_payload['news_id'], deleted_id)
+        self.assertEqual(latest_payload['card']['id'], deleted_id)
+
+        undo_response = self.client.post(
+            reverse('my_news:undo_delete', args=[latest_payload['news_id']]),
+            {'saved_only': 'false'},
+        )
+        self.assertEqual(undo_response.json()['status'], 'success')
+        self.assertFalse(News.objects.get(pk=deleted_id).is_deleted)
+        self.assertIsNone(News.objects.get(pk=deleted_id).deleted_at)
+
+    def test_latest_deleted_endpoint_returns_empty_without_deleted_news(self):
+        self.client.force_login(self.superuser)
+        self.create_news_batch(2, prefix='no-deleted-flow')
+
+        response = self.client.get(
+            reverse('my_news:latest_deleted_news'),
+            {'saved_only': 'false'},
+        )
+
+        self.assertEqual(response.json()['status'], 'empty')
+
     def test_delete_respects_search_filter_when_computing_replacement(self):
         self.client.force_login(self.superuser)
         base_time = timezone.now()

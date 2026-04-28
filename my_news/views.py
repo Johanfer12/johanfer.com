@@ -235,7 +235,8 @@ def delete_news(request, pk):
         search_query = (request.POST.get('q') or '').strip() or None
         news = News.objects.get(pk=pk)
         news.is_deleted = True
-        news.save(update_fields=['is_deleted'])
+        news.deleted_at = timezone.now()
+        news.save(update_fields=['is_deleted', 'deleted_at'])
         _bump_cache_version()
         
         # Obtener la noticia que ahora ocupa el borde inferior de la pagina.
@@ -592,6 +593,7 @@ def undo_delete(request, pk):
         news = News.objects.get(pk=pk)
         if news.is_deleted:
             news.is_deleted = False
+            news.deleted_at = None
             # Restauramos cualquier marca de filtrado manual
             news.is_filtered = False
             news.is_ai_filtered = False
@@ -609,6 +611,38 @@ def undo_delete(request, pk):
         })
     except News.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Noticia no encontrada'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+
+@require_GET
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+def latest_deleted_news(request):
+    try:
+        saved_only = request.GET.get('saved_only', 'false').lower() == 'true'
+        search_query = (request.GET.get('q') or '').strip() or None
+
+        deleted_qs = News.objects.select_related('source').filter(
+            is_deleted=True,
+            is_saved=saved_only,
+            is_filtered=False,
+            is_ai_filtered=False,
+            is_redundant=False,
+        )
+        if search_query:
+            deleted_qs = deleted_qs.filter(
+                Q(title__icontains=search_query) | Q(description__icontains=search_query)
+            )
+
+        latest = deleted_qs.order_by('-deleted_at', '-id').first()
+        if not latest:
+            return JsonResponse({'status': 'empty'})
+
+        return JsonResponse({
+            'status': 'success',
+            'news_id': latest.id,
+            'card': _serialize_news_card(latest),
+        })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
 
