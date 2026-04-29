@@ -1608,6 +1608,7 @@
     DOM.grid?.addEventListener('pointerout', (e) => {
         const container = e.target.closest('.news-card-container');
         if (!container || (e.relatedTarget && container.contains(e.relatedTarget))) return;
+        if (isPointerWithinCardBounds(container, e)) return;
         resetCardHoverMode(container);
     });
 
