@@ -206,6 +206,7 @@
             el.style.transform = `scale(${toScale})`;
             el.addEventListener('transitionend', () => {
                 el.style.transition = el.style.opacity = el.style.transform = '';
+                el.classList.remove('is-inserting');
             }, {once: true});
         });
     };
@@ -261,9 +262,13 @@
         container.style.marginRight = '';
         container.style.opacity = '';
         container.style.transform = '';
-        container.classList.remove('collapsing');
+        container.classList.remove('collapsing', 'deleting', 'is-inserting');
         void container.offsetHeight;
     };
+
+    const resetCardFlipState = (container) => CardUi.resetFlipState(container);
+    const resetGridFlipState = () => $$('.news-card-container', DOM.grid)
+        .forEach(container => resetCardFlipState(container));
 
     const buildShareCardData = (container) => {
         const front = container?.querySelector('.card-front');
@@ -710,9 +715,10 @@
         if (!card) return null;
 
         configureNewCard(card, payloadId);
+        prepareCardInsertion(card);
         DOM.grid.appendChild(card);
         applyAdaptiveTitleSize(card);
-        animateScaleOpacity(card);
+        animateCardInsertion(card);
         pruneNewsFromClientCaches(payloadId);
         enforceCardLimit();
         refreshHoverUnderPointer();
@@ -808,7 +814,7 @@
             if (oldPositions) animateReposition(oldPositions);
         }
         if (shouldAnimateInsertions) {
-            insertedCards.forEach(el => animateCardInsertion(el));
+            insertedCards.forEach((el, index) => animateCardInsertion(el, {delay: Math.min(index * 55, 220)}));
         }
         STATE.backupCards = visibleBackupCards;
         STATE.nextCursor = data.next_cursor || null;
@@ -921,6 +927,7 @@
 
     const prepareCardInsertion = (el) => {
         if (!el) return;
+        el.classList.add('is-inserting');
         el.style.opacity = '0';
         el.style.transition = 'none';
         if (isMobile()) {
@@ -933,32 +940,41 @@
         }
     };
 
-    const animateCardInsertion = (el) => {
+    const animateCardInsertion = (el, {delay = 0} = {}) => {
         if (!el) return;
-        if (!isMobile()) {
-            animateScaleOpacity(el, {prepared: true});
-            return;
-        }
+        const start = () => {
+            if (!isMobile()) {
+                animateScaleOpacity(el, {prepared: true});
+                return;
+            }
 
-        const finalHeight = el.dataset.insertHeight || '350';
-        void el.offsetHeight; // re-flow para que el estado colapsado sea visible
-        requestAnimationFrame(() => {
-            el.style.transition = 'height 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), margin-bottom 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.24s ease';
-            el.style.height = `${finalHeight}px`;
-            el.style.marginBottom = '15px';
-            el.style.opacity = '1';
-            const onInsertionEnd = (event) => {
-                if (event.propertyName !== 'height') return;
-                el.style.transition = '';
-                el.style.height = '';
-                el.style.marginBottom = '';
-                el.style.overflow = '';
-                el.style.opacity = '';
-                delete el.dataset.insertHeight;
-                el.removeEventListener('transitionend', onInsertionEnd);
-            };
-            el.addEventListener('transitionend', onInsertionEnd);
-        });
+            const finalHeight = el.dataset.insertHeight || '350';
+            void el.offsetHeight; // re-flow para que el estado colapsado sea visible
+            requestAnimationFrame(() => {
+                el.style.transition = 'height 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), margin-bottom 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.24s ease';
+                el.style.height = `${finalHeight}px`;
+                el.style.marginBottom = '15px';
+                el.style.opacity = '1';
+                const onInsertionEnd = (event) => {
+                    if (event.propertyName !== 'height') return;
+                    el.style.transition = '';
+                    el.style.height = '';
+                    el.style.marginBottom = '';
+                    el.style.overflow = '';
+                    el.style.opacity = '';
+                    el.classList.remove('is-inserting');
+                    delete el.dataset.insertHeight;
+                    el.removeEventListener('transitionend', onInsertionEnd);
+                };
+                el.addEventListener('transitionend', onInsertionEnd);
+            });
+        };
+
+        if (delay > 0) {
+            setTimeout(start, delay);
+        } else {
+            start();
+        }
     };
 
     const serverUndoNews = (newsId) => {
@@ -1113,6 +1129,8 @@
             setButtonBusy(triggerButton, false);
             return err(`Contenedor no encontrado (${newsId})`);
         }
+        resetCardFlipState(container);
+        container.classList.add('deleting');
         const currentPage = new URLSearchParams(location.search).get('page') || 1;
 
         const mobileView = isMobile();
@@ -1459,7 +1477,10 @@
 
         if (isMobile()) {
             const container = e.target.closest('.news-card-container');
-            if (!container || container.classList.contains('collapsing') || container.classList.contains('deleting')) return;
+            if (!container ||
+                container.classList.contains('collapsing') ||
+                container.classList.contains('deleting') ||
+                container.classList.contains('is-inserting')) return;
             if (isCardActionTarget(e.target)) return;
 
             const cardElement = container.querySelector('.news-card');
@@ -1524,7 +1545,9 @@
         if (!container || !pointerEvent || pointerEvent.pointerType === 'touch' || isMobile()) return;
         const cardElement = container.querySelector('.news-card');
         if (!cardElement) return;
-        if (container.classList.contains('collapsing') || container.classList.contains('deleting')) return;
+        if (container.classList.contains('collapsing') ||
+            container.classList.contains('deleting') ||
+            container.classList.contains('is-inserting')) return;
         if (!force && cardElement.dataset.flipLocked === 'true') return;
 
         const withinCardBounds = isPointerWithinCardBounds(container, pointerEvent);
@@ -1755,6 +1778,7 @@
         }
         beginUiMutation();
         const normalizedLast = normalizeId(last);
+        resetGridFlipState();
         STATE.cancelledDeletes.add(normalizedLast);
         STATE.deletingNews.delete(normalizedLast);
         STATE.locallyDeletedIds.delete(normalizedLast);
