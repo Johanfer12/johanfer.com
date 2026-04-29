@@ -143,6 +143,95 @@ class GroqRateLimiterTests(SimpleTestCase):
         self.assertNotIn('response_format', client.chat.completions.calls[1])
         self.assertEqual(client.chat.completions.calls[1]['reasoning_effort'], 'low')
 
+    def test_reasoning_wrapped_json_is_extracted(self):
+        class Message:
+            content = '''
+Okay, primero razono sobre la noticia.
+
+{
+  "summary": "Motorola presento tres plegables con diferencias internas de procesador, pantalla y camaras.",
+  "short_answer": null,
+  "ai_filter": null
+}
+'''
+
+        class Choice:
+            message = Message()
+
+        class Response:
+            choices = [Choice()]
+
+        class Completions:
+            def create(self, **kwargs):
+                return Response()
+
+        class Chat:
+            completions = Completions()
+
+        class Client:
+            chat = Chat()
+
+        description, short_answer, ai_filter = FeedService.process_content_with_groq(
+            'Motorola Razr 70',
+            'Descripcion original',
+            Client(),
+            'openai/gpt-oss-120b',
+            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
+            max_retries=1,
+        )
+
+        self.assertEqual(
+            description,
+            'Motorola presento tres plegables con diferencias internas de procesador, pantalla y camaras.'
+        )
+        self.assertIsNone(short_answer)
+        self.assertIsNone(ai_filter)
+
+    def test_html_converted_reasoning_json_is_extracted(self):
+        response = '''<think><br>Okay, razono.<br></think><br>{<br>
+  "summary": "Resumen limpio.",
+  "short_answer": null,
+  "ai_filter": null<br>}'''
+
+        parsed = FeedService._parse_model_json(response)
+
+        self.assertEqual(parsed['summary'], 'Resumen limpio.')
+        self.assertIsNone(parsed['short_answer'])
+        self.assertIsNone(parsed['ai_filter'])
+
+    def test_invalid_non_json_response_is_not_saved_as_summary(self):
+        class Message:
+            content = 'Okay, voy a razonar pero nunca devuelvo JSON valido.'
+
+        class Choice:
+            message = Message()
+
+        class Response:
+            choices = [Choice()]
+
+        class Completions:
+            def create(self, **kwargs):
+                return Response()
+
+        class Chat:
+            completions = Completions()
+
+        class Client:
+            chat = Chat()
+
+        description, short_answer, ai_filter = FeedService.process_content_with_groq(
+            'Titulo',
+            'Descripcion original',
+            Client(),
+            'openai/gpt-oss-120b',
+            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
+            max_retries=1,
+        )
+
+        self.assertIsNone(description)
+        self.assertIsNone(short_answer)
+        self.assertIsNone(ai_filter)
+
     def test_empty_groq_response_is_not_saved_as_summary(self):
         class Message:
             content = ''

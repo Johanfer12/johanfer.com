@@ -16,6 +16,7 @@ import numpy as np
 from django.db.models import Q, Max
 import json
 import textwrap
+import html
 from django.conf import settings
 
 try:
@@ -419,6 +420,48 @@ class FeedService:
         return (model_name or '').startswith('openai/gpt-oss-')
 
     @staticmethod
+    def _parse_model_json(response_text):
+        """Parsea JSON aunque el modelo haya agregado texto antes o despues."""
+        def scan(text):
+            try:
+                result = json.loads(text)
+                if isinstance(result, dict):
+                    return [result]
+            except json.JSONDecodeError:
+                pass
+
+            decoder = json.JSONDecoder()
+            found = []
+            for match in re.finditer(r'\{', text):
+                try:
+                    result, _ = decoder.raw_decode(text, match.start())
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(result, dict) and {'summary', 'short_answer', 'ai_filter'} & set(result):
+                    found.append(result)
+            return found
+
+        text = response_text or ''
+        candidates = scan(text)
+        if not candidates and '<br' in text.lower():
+            normalized = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+            normalized = re.sub(r'</?think>', '', normalized, flags=re.IGNORECASE)
+            normalized = html.unescape(normalized)
+            candidates = scan(normalized)
+
+        if candidates:
+            return candidates[-1]
+
+        raise json.JSONDecodeError("No JSON object found in model response", text, 0)
+
+    @staticmethod
+    def _clean_optional_text(value):
+        if not isinstance(value, str):
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    @staticmethod
     def process_content_with_groq(title, original_content, groq_client, model_name, filter_instructions_text, max_retries=2):
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
@@ -471,10 +514,10 @@ class FeedService:
                     time.sleep(5)
                     continue
                 try:
-                    result_json = json.loads(response_text)
-                    summary_text = result_json.get('summary')
-                    short_answer = result_json.get('short_answer')
-                    ai_filter_reason = result_json.get('ai_filter')
+                    result_json = FeedService._parse_model_json(response_text)
+                    summary_text = FeedService._clean_optional_text(result_json.get('summary'))
+                    short_answer = FeedService._clean_optional_text(result_json.get('short_answer'))
+                    ai_filter_reason = FeedService._clean_optional_text(result_json.get('ai_filter'))
 
                     if not summary_text:
                         if plain_content:
@@ -497,9 +540,8 @@ class FeedService:
                     print(f"Error decodificando JSON de Groq (intento {attempt + 1}): {json_e}")
                     print(f"Texto recibido: {response_text[:200]}...")
                     if attempt == max_retries - 1:
-                        print("Fallo de JSON en último intento, usando texto como resumen simple.")
-                        fallback_summary = response_text.strip().replace('\n\n', '<br><br>').replace('\n', '<br>')
-                        return fallback_summary, None, None
+                        print("Fallo de JSON en último intento; no se guardará respuesta cruda del modelo.")
+                        return None, None, None
                     time.sleep(5)
                     continue
 
