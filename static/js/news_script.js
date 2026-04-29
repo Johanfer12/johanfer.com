@@ -271,8 +271,13 @@
         const summary = normalizeText(back?.querySelector('.news-description')?.textContent) || 'Sin resumen disponible';
         const imageEl = front?.querySelector('.news-image');
         const imageUrl = imageEl?.currentSrc || imageEl?.src || '';
-        return { header, title, summary, imageUrl };
+        const link = container?.querySelector('.source-link')?.href || window.location.href;
+        return { header, title, summary, imageUrl, link };
     };
+
+    const buildShareText = ({ header, title, summary, link }) => (
+        [title, summary, header, link].filter(Boolean).join('\n\n')
+    );
 
     const wrapText = (ctx, text, maxWidth, maxLines) => {
         const words = (text || '').split(' ');
@@ -501,23 +506,85 @@
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
     };
 
+    const copyTextToClipboard = async (shareData) => {
+        if (!navigator.clipboard?.writeText) {
+            throw new Error('El navegador no soporta copiar texto al portapapeles');
+        }
+        await navigator.clipboard.writeText(buildShareText(shareData));
+    };
+
+    const tryNativeShare = async (blob, shareData) => {
+        if (!navigator.share) return false;
+
+        const textPayload = {
+            title: shareData.title,
+            text: buildShareText(shareData),
+            url: shareData.link,
+        };
+
+        if (typeof File === 'undefined') {
+            await navigator.share(textPayload);
+            return true;
+        }
+
+        const file = new File([blob], 'noticia.png', {type: 'image/png'});
+        const filePayload = {
+            title: shareData.title,
+            text: shareData.summary || shareData.header,
+            url: shareData.link,
+            files: [file],
+        };
+
+        if (!navigator.canShare || navigator.canShare({files: [file]})) {
+            await navigator.share(filePayload);
+            return true;
+        }
+
+        await navigator.share(textPayload);
+        return true;
+    };
+
+    const showShareSuccess = (actionButton) => {
+        if (!actionButton) return;
+        const previousHTML = actionButton.innerHTML;
+        actionButton.innerHTML = SHARE_CHECK_HTML;
+        actionButton.classList.add('copied');
+        flashButtonTitle(actionButton, 'Compartida');
+        setTimeout(() => {
+            actionButton.innerHTML = previousHTML || SHARE_ICON_HTML;
+            actionButton.classList.remove('copied');
+        }, 1100);
+    };
+
     const shareNewsCard = async (container, id, actionButton) => {
         const shareData = buildShareCardData(container);
+        setButtonBusy(actionButton, true);
         try {
             const imageBlob = await createShareCardBlob(shareData);
-            await copyImageToClipboard(imageBlob);
-            if (actionButton) {
-                const previousHTML = actionButton.innerHTML;
-                actionButton.innerHTML = SHARE_CHECK_HTML;
-                actionButton.classList.add('copied');
-                setTimeout(() => {
-                    actionButton.innerHTML = previousHTML || SHARE_ICON_HTML;
-                    actionButton.classList.remove('copied');
-                }, 1100);
+            if (isMobile()) {
+                try {
+                    if (await tryNativeShare(imageBlob, shareData)) {
+                        showShareSuccess(actionButton);
+                        return;
+                    }
+                } catch (shareError) {
+                    if (shareError?.name === 'AbortError') return;
+                    err(`No se pudo abrir compartir nativo para noticia ${id}:`, shareError);
+                }
             }
+
+            try {
+                await copyImageToClipboard(imageBlob);
+            } catch (clipboardError) {
+                err(`No se pudo copiar imagen de noticia ${id}:`, clipboardError);
+                await copyTextToClipboard(shareData);
+            }
+            showShareSuccess(actionButton);
         } catch (e) {
-            err(`No se pudo copiar la noticia ${id}:`, e);
-            alert('No se pudo copiar la imagen al portapapeles en este navegador.');
+            err(`No se pudo compartir la noticia ${id}:`, e);
+            alert('No se pudo compartir la noticia en este navegador.');
+        } finally {
+            setButtonBusy(actionButton, false);
         }
     };
 
