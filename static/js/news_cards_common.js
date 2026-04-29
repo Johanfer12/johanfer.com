@@ -99,9 +99,14 @@
     const resetFlipState = (container) => {
         const card = container?.querySelector('.news-card');
         if (!card) return;
+        if (card._flipUnlockTimer) {
+            clearTimeout(card._flipUnlockTimer);
+            card._flipUnlockTimer = null;
+        }
         card.classList.remove('is-flipped', 'image-hover', 'delete-hover');
         container.classList.remove('pointer-delete-hover');
         delete card.dataset.hoverMode;
+        delete card.dataset.flipLocked;
     };
 
     window.NewsCards = {
