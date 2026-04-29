@@ -698,12 +698,34 @@
         const { card: freshCard } = createCardFromPayload(item);
         if (!freshCard) return card;
 
+        const currentInnerCard = card.querySelector('.news-card');
+        const visualState = currentInnerCard ? {
+            flipped: currentInnerCard.classList.contains('is-flipped'),
+            imageHover: currentInnerCard.classList.contains('image-hover'),
+            deleteHover: currentInnerCard.classList.contains('delete-hover'),
+            hoverMode: currentInnerCard.dataset.hoverMode || '',
+            flipLocked: currentInnerCard.dataset.flipLocked || '',
+            pointerDeleteHover: card.classList.contains('pointer-delete-hover'),
+        } : null;
+
         card.className = freshCard.className;
         card.id = freshCard.id;
         card.innerHTML = freshCard.innerHTML;
         card.removeAttribute('style');
         card.classList.remove('collapsing');
         applyCardDataset(card, item?.data || item);
+
+        if (visualState) {
+            const freshInnerCard = card.querySelector('.news-card');
+            if (freshInnerCard) {
+                freshInnerCard.classList.toggle('is-flipped', visualState.flipped);
+                freshInnerCard.classList.toggle('image-hover', visualState.imageHover);
+                freshInnerCard.classList.toggle('delete-hover', visualState.deleteHover);
+                if (visualState.hoverMode) freshInnerCard.dataset.hoverMode = visualState.hoverMode;
+                if (visualState.flipLocked) freshInnerCard.dataset.flipLocked = visualState.flipLocked;
+            }
+            card.classList.toggle('pointer-delete-hover', visualState.pointerDeleteHover);
+        }
         return card;
     };
     const appendReplacementCardFromPayload = (item) => {
@@ -1129,7 +1151,6 @@
             setButtonBusy(triggerButton, false);
             return err(`Contenedor no encontrado (${newsId})`);
         }
-        resetCardFlipState(container);
         container.classList.add('deleting');
         const currentPage = new URLSearchParams(location.search).get('page') || 1;
 
