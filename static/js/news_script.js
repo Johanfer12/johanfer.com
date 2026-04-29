@@ -193,11 +193,13 @@
     };
 
     /** Pequeña animación de fade/scale */
-    const animateScaleOpacity = (el, {fromScale = 0.9, toScale = 1, duration = 400} = {}) => {
-        el.style.opacity = '0';
-        el.style.transform = `scale(${fromScale})`;
-        el.style.transition = 'none';
-        void el.offsetWidth; // re‑flow
+    const animateScaleOpacity = (el, {fromScale = 0.9, toScale = 1, duration = 400, prepared = false} = {}) => {
+        if (!prepared) {
+            el.style.opacity = '0';
+            el.style.transform = `scale(${fromScale})`;
+            el.style.transition = 'none';
+            void el.offsetWidth; // re‑flow
+        }
         requestAnimationFrame(() => {
             el.style.transition = `opacity ${duration}ms ease, transform ${duration}ms cubic-bezier(0.25,0.1,0.25,1)`;
             el.style.opacity = '1';
@@ -788,7 +790,10 @@
                 const created = createCardFromPayload(item);
                 card = created.card;
                 if (!card) return;
-                if (shouldAnimateInsertions) insertedCards.push(card);
+                if (shouldAnimateInsertions) {
+                    prepareCardInsertion(card);
+                    insertedCards.push(card);
+                }
             }
 
             const id = card.id.replace('news-', '');
@@ -803,7 +808,7 @@
             if (oldPositions) animateReposition(oldPositions);
         }
         if (shouldAnimateInsertions) {
-            insertedCards.forEach(el => animateScaleOpacity(el));
+            insertedCards.forEach(el => animateCardInsertion(el));
         }
         STATE.backupCards = visibleBackupCards;
         STATE.nextCursor = data.next_cursor || null;
@@ -911,6 +916,48 @@
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
             body: params.toString(),
+        });
+    };
+
+    const prepareCardInsertion = (el) => {
+        if (!el) return;
+        el.style.opacity = '0';
+        el.style.transition = 'none';
+        if (isMobile()) {
+            el.dataset.insertHeight = String(el.offsetHeight || 350);
+            el.style.height = '0px';
+            el.style.marginBottom = '0px';
+            el.style.overflow = 'hidden';
+        } else {
+            el.style.transform = 'scale(0.9)';
+        }
+    };
+
+    const animateCardInsertion = (el) => {
+        if (!el) return;
+        if (!isMobile()) {
+            animateScaleOpacity(el, {prepared: true});
+            return;
+        }
+
+        const finalHeight = el.dataset.insertHeight || '350';
+        void el.offsetHeight; // re-flow para que el estado colapsado sea visible
+        requestAnimationFrame(() => {
+            el.style.transition = 'height 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), margin-bottom 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.24s ease';
+            el.style.height = `${finalHeight}px`;
+            el.style.marginBottom = '15px';
+            el.style.opacity = '1';
+            const onInsertionEnd = (event) => {
+                if (event.propertyName !== 'height') return;
+                el.style.transition = '';
+                el.style.height = '';
+                el.style.marginBottom = '';
+                el.style.overflow = '';
+                el.style.opacity = '';
+                delete el.dataset.insertHeight;
+                el.removeEventListener('transitionend', onInsertionEnd);
+            };
+            el.addEventListener('transitionend', onInsertionEnd);
         });
     };
 
@@ -1223,7 +1270,7 @@
         const newsToAdd = [...STATE.pendingNews];
         STATE.pendingNews.length = 0;
         log(`Reconciliando ${newsToAdd.length} noticias nuevas desde DB`);
-        refreshCurrentPageFromDb('nuevas noticias');
+        refreshCurrentPageFromDb('nuevas noticias', {animation: 'merge'});
     };
 
     const handleIncomingNewsPayload = (data) => {
