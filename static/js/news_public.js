@@ -26,6 +26,10 @@
 
     const hiddenIds = readHiddenIds();
     const cards = () => CardUi.cards(grid || document);
+    const resetAllDesktopHoverCards = () => {
+        if (CardUi.isMobile()) return;
+        cards().forEach(CardUi.resetFlipState);
+    };
 
     const persistHiddenIds = () => {
         localStorage.setItem(storageKey, JSON.stringify([...hiddenIds]));
@@ -81,9 +85,22 @@
         card.classList.toggle('delete-hover', overDeleteButton);
     });
 
-    grid?.addEventListener('mouseleave', (event) => {
-        CardUi.resetFlipState(event.target.closest('.news-card-container'));
+    grid?.addEventListener('pointerout', (event) => {
+        const container = event.target.closest('.news-card-container');
+        if (!container || (event.relatedTarget && container.contains(event.relatedTarget))) return;
+        if (CardUi.isPointerWithinCardBounds(container, event)) return;
+        CardUi.resetFlipState(container);
+    });
+
+    document.addEventListener('mousemove', (event) => {
+        const container = event.target.closest?.('.news-card-container');
+        cards().forEach((card) => {
+            if (card !== container) CardUi.resetFlipState(card);
+        });
     }, true);
+
+    document.addEventListener('mouseleave', resetAllDesktopHoverCards);
+    window.addEventListener('blur', resetAllDesktopHoverCards);
 
     resetButton?.addEventListener('click', () => {
         resetButton.disabled = true;
