@@ -95,6 +95,7 @@
         mutationVersion: 0, // invalida respuestas viejas del feed tras mutaciones locales
         deferredSyncTimer: null,
         lastPointer: null,
+        activeHoverCardId: null,
     };
 
     /* ---------------------------------------------------------------------
@@ -698,13 +699,18 @@
         const { card: freshCard } = createCardFromPayload(item);
         if (!freshCard) return card;
 
+        const cardId = card.dataset.newsId || card.id.replace('news-', '');
+        const pointer = STATE.lastPointer;
+        const shouldPreserveHoverState = pointer &&
+            pointer.pointerType !== 'touch' &&
+            !isMobile() &&
+            STATE.activeHoverCardId === normalizeId(cardId);
         const currentInnerCard = card.querySelector('.news-card');
-        const visualState = currentInnerCard ? {
+        const visualState = shouldPreserveHoverState && currentInnerCard ? {
             flipped: currentInnerCard.classList.contains('is-flipped'),
             imageHover: currentInnerCard.classList.contains('image-hover'),
             deleteHover: currentInnerCard.classList.contains('delete-hover'),
             hoverMode: currentInnerCard.dataset.hoverMode || '',
-            flipLocked: currentInnerCard.dataset.flipLocked || '',
             pointerDeleteHover: card.classList.contains('pointer-delete-hover'),
         } : null;
 
@@ -722,7 +728,7 @@
                 freshInnerCard.classList.toggle('image-hover', visualState.imageHover);
                 freshInnerCard.classList.toggle('delete-hover', visualState.deleteHover);
                 if (visualState.hoverMode) freshInnerCard.dataset.hoverMode = visualState.hoverMode;
-                if (visualState.flipLocked) freshInnerCard.dataset.flipLocked = visualState.flipLocked;
+                freshInnerCard.dataset.flipLocked = 'false';
             }
             card.classList.toggle('pointer-delete-hover', visualState.pointerDeleteHover);
         }
@@ -792,11 +798,40 @@
         STATE.userInteracted = false;
     };
 
+    const getCurrentCardIds = () => $$('.news-card-container', DOM.grid)
+        .map(card => normalizeId(card.dataset.newsId || card.id.replace('news-', '')));
+
+    const sameCardSequence = (left, right) => (
+        left.length === right.length && left.every((id, index) => id === right[index])
+    );
+
+    const applyPageMetadata = (data, visibleCards, visibleBackupCards) => {
+        STATE.backupCards = visibleBackupCards;
+        STATE.nextCursor = data.next_cursor || null;
+        STATE.backupCursor = data.backup_next_cursor || data.next_cursor || null;
+        const latestCard = visibleCards.reduce((acc, item) => {
+            if (!item?.created_at) return acc;
+            if (!acc || new Date(item.created_at) > new Date(acc.created_at)) return item;
+            if (acc.created_at === item.created_at && Number(item.id || 0) > Number(acc.id || 0)) return item;
+            return acc;
+        }, null);
+        if (latestCard?.created_cursor) STATE.latestNewsCursor = latestCard.created_cursor;
+        log(`Inicializadas ${STATE.backupCards.length} noticias de respaldo`);
+        updateCounters(data.total_news, data.total_pages);
+        updatePagination(data.total_pages);
+    };
+
     const renderPageFromServerData = (data, {animateMerge = false, animation = null} = {}) => {
         if (!data || data.status !== 'success') return;
         const visibleCards = (data.cards || []).filter(item => !shouldSkipServerCard(extractPayloadId(item)));
         const visibleBackupCards = (data.backup_cards || []).filter(item => !shouldSkipServerCard(extractPayloadId(item)));
         const renderAnimation = animation || (animateMerge ? 'merge' : 'none');
+        const serverIds = visibleCards.map(item => normalizeId(extractPayloadId(item)));
+        if (renderAnimation === 'silent' && sameCardSequence(getCurrentCardIds(), serverIds)) {
+            applyPageMetadata(data, visibleCards, visibleBackupCards);
+            enforceCardLimit();
+            return;
+        }
         const shouldReuseExisting = renderAnimation !== 'none' && !!DOM.grid;
         const shouldAnimateReposition = renderAnimation === 'merge';
         const shouldAnimateInsertions = renderAnimation === 'merge' || renderAnimation === 'insert-only';
@@ -838,19 +873,7 @@
         if (shouldAnimateInsertions) {
             insertedCards.forEach((el, index) => animateCardInsertion(el, {delay: Math.min(index * 55, 220)}));
         }
-        STATE.backupCards = visibleBackupCards;
-        STATE.nextCursor = data.next_cursor || null;
-        STATE.backupCursor = data.backup_next_cursor || data.next_cursor || null;
-        const latestCard = visibleCards.reduce((acc, item) => {
-            if (!item?.created_at) return acc;
-            if (!acc || new Date(item.created_at) > new Date(acc.created_at)) return item;
-            if (acc.created_at === item.created_at && Number(item.id || 0) > Number(acc.id || 0)) return item;
-            return acc;
-        }, null);
-        if (latestCard?.created_cursor) STATE.latestNewsCursor = latestCard.created_cursor;
-        log(`Inicializadas ${STATE.backupCards.length} noticias de respaldo`);
-        updateCounters(data.total_news, data.total_pages);
-        updatePagination(data.total_pages);
+        applyPageMetadata(data, visibleCards, visibleBackupCards);
         enforceCardLimit();
     };
 
@@ -900,11 +923,11 @@
         })
     );
 
-    const resumeLiveUpdates = ({force = false, delay = 120} = {}) => {
+    const resumeLiveUpdates = ({force = false, delay = 120, animation = 'silent'} = {}) => {
         if (STATE.lifecycleSyncTimer) clearTimeout(STATE.lifecycleSyncTimer);
         STATE.lifecycleSyncTimer = setTimeout(async () => {
             STATE.lifecycleSyncTimer = null;
-            await syncCurrentPageFromDb({force});
+            await syncCurrentPageFromDb({force, animation});
             connectNewsStream();
         }, delay);
     };
@@ -1498,8 +1521,11 @@
 
         if (isMobile()) {
             const container = e.target.closest('.news-card-container');
-            if (!container ||
-                container.classList.contains('collapsing') ||
+            if (!container) {
+                resetAllMobileTapCards();
+                return;
+            }
+            if (container.classList.contains('collapsing') ||
                 container.classList.contains('deleting') ||
                 container.classList.contains('is-inserting')) return;
             if (isCardActionTarget(e.target)) return;
@@ -1508,6 +1534,9 @@
             if (!cardElement || cardElement.dataset.flipLocked === 'true') return;
 
             const shouldFlip = !cardElement.classList.contains('is-flipped');
+            $$('.news-card-container', DOM.grid).forEach((card) => {
+                if (card !== container) resetCardHoverMode(card);
+            });
             cardElement.classList.toggle('is-flipped', shouldFlip);
             cardElement.classList.remove('image-hover', 'delete-hover');
             container.classList.remove('pointer-delete-hover');
@@ -1589,6 +1618,9 @@
         cardElement.classList.toggle('image-hover', nextMode === 'image');
         cardElement.classList.toggle('delete-hover', nextMode === 'delete');
         container.classList.toggle('pointer-delete-hover', nextMode === 'delete');
+        STATE.activeHoverCardId = shouldFlip
+            ? normalizeId(container.dataset.newsId || container.id.replace('news-', ''))
+            : null;
 
         if (wasFlipped !== shouldFlip) {
             lockFlipUntilTransitionEnds(cardElement);
@@ -1603,11 +1635,23 @@
         cardElement.classList.remove('is-flipped', 'image-hover', 'delete-hover');
         container.classList.remove('pointer-delete-hover');
         delete cardElement.dataset.hoverMode;
+        const cardId = normalizeId(container.dataset.newsId || container.id.replace('news-', ''));
+        if (STATE.activeHoverCardId === cardId) STATE.activeHoverCardId = null;
         if (wasFlipped) {
             lockFlipUntilTransitionEnds(cardElement);
         } else {
             clearFlipLock(cardElement);
         }
+    };
+
+    const resetAllDesktopHoverCards = () => {
+        if (isMobile()) return;
+        $$('.news-card-container', DOM.grid).forEach(resetCardHoverMode);
+    };
+
+    const resetAllMobileTapCards = () => {
+        if (!isMobile()) return;
+        $$('.news-card-container', DOM.grid).forEach(resetCardHoverMode);
     };
 
     const makePointerSnapshot = (event) => ({
@@ -1624,11 +1668,11 @@
         const target = document.elementFromPoint(pointer.clientX, pointer.clientY);
         const container = target?.closest?.('.news-card-container');
 
-        $$('.news-card-container.pointer-delete-hover', DOM.grid).forEach((card) => {
-            if (card !== container) card.classList.remove('pointer-delete-hover');
+        $$('.news-card-container', DOM.grid).forEach((card) => {
+            if (card !== container) resetCardHoverMode(card);
         });
 
-        if (!container) return;
+        if (!container || !isPointerWithinCardBounds(container, pointer)) return;
         setCardHoverMode(container, {
             ...pointer,
             target,
@@ -1660,6 +1704,30 @@
         const container = e.target.closest('.news-card-container');
         if (container) resetCardHoverMode(container);
     });
+
+    document.addEventListener('pointermove', (e) => {
+        if (e.pointerType === 'touch' || isMobile()) return;
+        const container = e.target.closest?.('.news-card-container');
+        $$('.news-card-container', DOM.grid).forEach((card) => {
+            if (card !== container) resetCardHoverMode(card);
+        });
+    }, true);
+
+    document.addEventListener('mouseleave', resetAllDesktopHoverCards);
+    window.addEventListener('blur', resetAllDesktopHoverCards);
+    document.addEventListener('click', (e) => {
+        if (!isMobile()) return;
+        if (!e.target.closest?.('.news-card-container')) resetAllMobileTapCards();
+    });
+
+    let mobileScrollResetTimer = null;
+    window.addEventListener('scroll', () => {
+        if (!isMobile() || mobileScrollResetTimer) return;
+        mobileScrollResetTimer = setTimeout(() => {
+            mobileScrollResetTimer = null;
+            resetAllMobileTapCards();
+        }, 80);
+    }, {passive: true});
 
     const closeNewsStream = () => {
         if (STATE.lifecycleSyncTimer) {
@@ -1724,6 +1792,7 @@
     document.addEventListener('visibilitychange', () => {
         STATE.pageVisible = !document.hidden;
         if (!STATE.pageVisible) {
+            resetAllDesktopHoverCards();
             clearTimeout(STATE.notifTimer);
             STATE.notifRemaining -= Date.now() - STATE.notifStart;
         } else if (STATE.notifRemaining > 0 && DOM.notification.classList.contains('show')) {
