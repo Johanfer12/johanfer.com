@@ -825,12 +825,15 @@
         if (!data || data.status !== 'success') return;
         const visibleCards = (data.cards || []).filter(item => !shouldSkipServerCard(extractPayloadId(item)));
         const visibleBackupCards = (data.backup_cards || []).filter(item => !shouldSkipServerCard(extractPayloadId(item)));
-        const renderAnimation = animation || (animateMerge ? 'merge' : 'none');
+        let renderAnimation = animation || (animateMerge ? 'merge' : 'none');
         const serverIds = visibleCards.map(item => normalizeId(extractPayloadId(item)));
-        if (renderAnimation === 'silent' && sameCardSequence(getCurrentCardIds(), serverIds)) {
-            applyPageMetadata(data, visibleCards, visibleBackupCards);
-            enforceCardLimit();
-            return;
+        if (renderAnimation === 'silent') {
+            if (sameCardSequence(getCurrentCardIds(), serverIds)) {
+                applyPageMetadata(data, visibleCards, visibleBackupCards);
+                enforceCardLimit();
+                return;
+            }
+            renderAnimation = 'merge';
         }
         const shouldReuseExisting = renderAnimation !== 'none' && !!DOM.grid;
         const shouldAnimateReposition = renderAnimation === 'merge';

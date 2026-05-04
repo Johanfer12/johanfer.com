@@ -60,6 +60,7 @@
         const topGenresValues = JSON.parse('{{ top_genres_values|escapejs }}');
     </script>
     <script src="{% static 'js/stats.js' %}"></script>
+    <script src="{% static 'js/background_motion.js' %}"></script>
     <script>
         window.addEventListener('resize', function() {
             Chart.instances.forEach(chart => {

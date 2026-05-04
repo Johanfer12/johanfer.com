@@ -130,6 +130,13 @@ body::after {
     animation: nebulaMove 20s ease-in-out infinite alternate-reverse, starPulse 14s ease-in-out infinite alternate;
 }
 
+html.background-motion-paused::before,
+html.background-motion-paused::after,
+html.background-motion-paused body::before,
+html.background-motion-paused body::after {
+    animation-play-state: paused !important;
+}
+
 .content-container {
     position: relative;
     overflow: hidden;

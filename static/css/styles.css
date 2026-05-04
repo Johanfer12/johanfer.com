@@ -130,6 +130,13 @@ body::after {
     animation: starDrift 70s linear infinite, starTwinkle 14s ease-in-out infinite alternate;
 }
 
+html.background-motion-paused::before,
+html.background-motion-paused::after,
+html.background-motion-paused body::before,
+html.background-motion-paused body::after {
+    animation-play-state: paused !important;
+}
+
 body.has-header {
     padding-top: 20px;
 }
