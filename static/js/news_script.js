@@ -214,6 +214,27 @@
 
     const normalizeText = (value) => (value || '').replace(/\s+/g, ' ').trim();
     const normalizeId = (value) => String(value ?? '').trim();
+    const parseCreatedCursor = (cursor) => {
+        if (!cursor) return null;
+        const [createdAt, id] = String(cursor).split('|');
+        const createdTime = Date.parse(createdAt);
+        const numericId = Number(id);
+        if (!Number.isFinite(createdTime) || !Number.isFinite(numericId)) return null;
+        return {createdTime, id: numericId};
+    };
+    const isNewerCreatedCursor = (candidate, current) => {
+        const next = parseCreatedCursor(candidate);
+        if (!next) return false;
+        const prev = parseCreatedCursor(current);
+        if (!prev) return true;
+        return next.createdTime > prev.createdTime ||
+            (next.createdTime === prev.createdTime && next.id > prev.id);
+    };
+    const setLatestNewsCursor = (candidate) => {
+        if (isNewerCreatedCursor(candidate, STATE.latestNewsCursor)) {
+            STATE.latestNewsCursor = candidate;
+        }
+    };
     const isLocallyDeleted = (newsId) => STATE.locallyDeletedIds.has(normalizeId(newsId));
     const extractPayloadId = (item) => {
         if (!item) return '';
@@ -815,7 +836,7 @@
             if (acc.created_at === item.created_at && Number(item.id || 0) > Number(acc.id || 0)) return item;
             return acc;
         }, null);
-        if (latestCard?.created_cursor) STATE.latestNewsCursor = latestCard.created_cursor;
+        if (latestCard?.created_cursor) setLatestNewsCursor(latestCard.created_cursor);
         log(`Inicializadas ${STATE.backupCards.length} noticias de respaldo`);
         updateCounters(data.total_news, data.total_pages);
         updatePagination(data.total_pages);
@@ -1341,7 +1362,7 @@
     const handleIncomingNewsPayload = (data) => {
         if (!data || data.status !== 'success') return;
         STATE.lastChecked = data.current_time || new Date().toISOString();
-        if (data.cursor) STATE.latestNewsCursor = data.cursor;
+        if (data.cursor) setLatestNewsCursor(data.cursor);
         if (data.news_cards?.length) {
             STATE.pendingNews.push(...data.news_cards);
             updateCounters(data.total_news, data.total_pages);

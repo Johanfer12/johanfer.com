@@ -30,6 +30,7 @@ PAGE_SIZE = 25
 COUNT_CACHE_TTL = 20
 PAGE_CACHE_TTL = 20
 CACHE_VERSION_KEY = 'news_feed_cache_version'
+NEWS_NOTIFICATION_SETTLE_DELAY = timedelta(seconds=60)
 
 
 def _get_cache_version():
@@ -133,6 +134,10 @@ def _parse_created_cursor(cursor):
         return dt, int(id_str)
     except Exception:
         return None, None
+
+
+def _news_notification_cutoff():
+    return timezone.now() - NEWS_NOTIFICATION_SETTLE_DELAY
 
 
 def _build_page_response(*, order, page, cursor, search_query, backup_only=False, saved_only=False):
@@ -439,8 +444,15 @@ def check_new_news(request):
     try:
         cursor = request.GET.get('cursor')
         last_checked = request.GET.get('last_checked')
-        current_time = timezone.now().isoformat()
+        saved_only = request.GET.get('saved_only', 'false').lower() == 'true'
+        notification_cutoff = _news_notification_cutoff()
+        current_time = notification_cutoff.isoformat()
         news_qs = News.visible.select_related('source')
+        if saved_only:
+            news_qs = news_qs.filter(is_saved=True)
+        else:
+            news_qs = news_qs.filter(is_saved=False)
+        news_qs = news_qs.filter(created_at__lte=notification_cutoff)
         created_dt, created_id = _parse_created_cursor(cursor)
 
         if created_dt and created_id is not None:
@@ -468,7 +480,7 @@ def check_new_news(request):
         elif cursor:
             latest_cursor = cursor
 
-        total_news, total_pages = _get_total_news_and_pages()
+        total_news, total_pages = _get_total_news_and_pages(saved_only=saved_only)
         
         return JsonResponse({
             'status': 'success',
@@ -679,6 +691,7 @@ def news_stream(request):
                     news_qs = news_qs.filter(is_saved=True)
                 else:
                     news_qs = news_qs.filter(is_saved=False)
+                news_qs = news_qs.filter(created_at__lte=_news_notification_cutoff())
 
                 if created_dt is not None and created_id is not None:
                     news_qs = news_qs.filter(
