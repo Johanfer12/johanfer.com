@@ -830,13 +830,6 @@
         STATE.backupCards = visibleBackupCards;
         STATE.nextCursor = data.next_cursor || null;
         STATE.backupCursor = data.backup_next_cursor || data.next_cursor || null;
-        const latestCard = visibleCards.reduce((acc, item) => {
-            if (!item?.created_at) return acc;
-            if (!acc || new Date(item.created_at) > new Date(acc.created_at)) return item;
-            if (acc.created_at === item.created_at && Number(item.id || 0) > Number(acc.id || 0)) return item;
-            return acc;
-        }, null);
-        if (latestCard?.created_cursor) setLatestNewsCursor(latestCard.created_cursor);
         log(`Inicializadas ${STATE.backupCards.length} noticias de respaldo`);
         updateCounters(data.total_news, data.total_pages);
         updatePagination(data.total_pages);
