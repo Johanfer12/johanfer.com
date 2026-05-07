@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from .models import FeedSource, News
 from .services import FeedService, GroqRateLimiter
+from .views import NEWS_NOTIFICATION_SETTLE_DELAY
 
 
 class GroqRateLimiterTests(SimpleTestCase):
@@ -556,3 +557,62 @@ class NewsFeedOrderingTests(TestCase):
         response = self.client.get(reverse('my_news:get_page'), {'page': 1, 'order': 'desc'})
         self.assertEqual(response.status_code, 302)
         self.assertIn('/noticias/login/', response['Location'])
+
+    def test_check_new_news_waits_until_news_is_settled(self):
+        self.client.force_login(self.superuser)
+        baseline = self.create_news_batch(1, prefix='baseline')[0]
+        settled_time = timezone.now() - NEWS_NOTIFICATION_SETTLE_DELAY - timedelta(seconds=5)
+        News.objects.filter(pk=baseline.pk).update(created_at=settled_time)
+        cursor = f'{settled_time.isoformat()}|{baseline.id}'
+
+        fresh = News.objects.create(
+            title='fresh visible',
+            description='Not ready for notification yet',
+            link='https://example.com/fresh-visible',
+            published_date=timezone.now(),
+            source=self.source,
+            guid=f'fresh-visible-{uuid.uuid4().hex}',
+        )
+
+        response = self.client.get(reverse('my_news:check_new_news'), {'cursor': cursor})
+        payload = response.json()
+
+        self.assertEqual(payload['status'], 'success')
+        self.assertEqual(payload['news_cards'], [])
+        self.assertEqual(payload['cursor'], cursor)
+
+        fresh_settled_time = timezone.now() - NEWS_NOTIFICATION_SETTLE_DELAY - timedelta(seconds=1)
+        News.objects.filter(pk=fresh.pk).update(created_at=fresh_settled_time)
+
+        response = self.client.get(reverse('my_news:check_new_news'), {'cursor': cursor})
+        payload = response.json()
+
+        self.assertEqual([card['id'] for card in payload['news_cards']], [fresh.id])
+        self.assertEqual(payload['cursor'], f'{fresh_settled_time.isoformat()}|{fresh.id}')
+
+    def test_check_new_news_does_not_notify_filtered_news(self):
+        self.client.force_login(self.superuser)
+        baseline = self.create_news_batch(1, prefix='filtered-baseline')[0]
+        settled_time = timezone.now() - NEWS_NOTIFICATION_SETTLE_DELAY - timedelta(seconds=5)
+        News.objects.filter(pk=baseline.pk).update(created_at=settled_time)
+        cursor = f'{settled_time.isoformat()}|{baseline.id}'
+
+        filtered = News.objects.create(
+            title='filtered new item',
+            description='Should never be notified',
+            link='https://example.com/filtered-new-item',
+            published_date=timezone.now(),
+            source=self.source,
+            guid=f'filtered-new-item-{uuid.uuid4().hex}',
+            is_filtered=True,
+        )
+        News.objects.filter(pk=filtered.pk).update(
+            created_at=timezone.now() - NEWS_NOTIFICATION_SETTLE_DELAY - timedelta(seconds=1)
+        )
+
+        response = self.client.get(reverse('my_news:check_new_news'), {'cursor': cursor})
+        payload = response.json()
+
+        self.assertEqual(payload['status'], 'success')
+        self.assertEqual(payload['news_cards'], [])
+        self.assertEqual(payload['cursor'], cursor)
