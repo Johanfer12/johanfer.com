@@ -24,8 +24,10 @@ class SpotifyTopSongs(models.Model):
     song_url = models.URLField()
     album_cover = models.URLField(max_length=300, null=True, blank=True)
     preview_url = models.URLField(max_length=300, null=True, blank=True)
+    rank = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
+        ordering = ['rank', 'id']
         verbose_name = 'Canción Top'
         verbose_name_plural = 'Canciones Top'
 

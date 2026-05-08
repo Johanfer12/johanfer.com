@@ -5,20 +5,32 @@ from django.contrib import messages
 from django.db.models import Count
 from django.db.models.functions import TruncMonth
 import json
+import logging
+
+
+logger = logging.getLogger(__name__)
+
+TOP_PLAYLIST_ID = '1sZ3u7s7hpzjTc9I5BgwEb'
+TOP_PLAYLIST_URL = f'https://open.spotify.com/playlist/{TOP_PLAYLIST_ID}'
+TOP_PLAYLIST_EMBED_URL = f'https://open.spotify.com/embed/playlist/{TOP_PLAYLIST_ID}?utm_source=generator'
+
 
 def spotify_dashboard(request):
     if request.method == 'POST' and 'update_spotify' in request.POST:  # Verificar si el botón fue presionado
         try:
-            refresh_spotify_data()
-            messages.success(request, '¡Datos de Spotify actualizados correctamente!')
+            refreshed = refresh_spotify_data()
+            if refreshed:
+                messages.success(request, '¡Datos de Spotify actualizados correctamente!')
+            else:
+                messages.warning(request, 'No se actualizaron datos de Spotify; se mantiene la información guardada.')
         except Exception as e:
+            logger.exception("Error actualizando datos de Spotify desde la vista")
             messages.error(request, f'Error al actualizar datos: {str(e)}')
     
-    favorite_songs = SpotifyFavorites.objects.all()
     context = {
-        'favorite_songs': favorite_songs[:10],  # últimas 10 canciones
-        'top_songs': SpotifyTopSongs.objects.all(),
-        'total_songs': favorite_songs.count()  #Conteo de canciones
+        'spotify_playlist_url': TOP_PLAYLIST_URL,
+        'spotify_playlist_embed_url': TOP_PLAYLIST_EMBED_URL,
+        'spotify_playlist_title': 'Mis Top Canciones',
     }
     return render(request, 'dashboard.html', context)
 

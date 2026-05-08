@@ -20,6 +20,11 @@
     box-sizing: border-box;
 }
 
+.music-playlist-page .content-container {
+    width: min(1040px, 92%);
+    padding: 1.4rem;
+}
+
 h1, h3 {
     color: #f2f5fb;
     margin-bottom: 1rem;
@@ -38,6 +43,27 @@ h1, h3 {
     display: grid;
     grid-template-columns: 1fr 2fr;
     gap: 1rem;
+}
+
+.playlist-layout {
+    display: block;
+}
+
+.music-section.playlist-section {
+    width: 100%;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+
+.spotify-playlist-frame {
+    display: block;
+    width: 100%;
+    height: clamp(520px, calc(100svh - 213px), 860px);
+    border: 0;
+    border-radius: 12px;
+    background: #121212;
 }
 
 .music-section {
@@ -133,6 +159,11 @@ h1, h3 {
         margin: 0 auto;
     }
 
+    .music-playlist-page .content-container {
+        width: 94%;
+        padding: 1rem;
+    }
+
     .music-grid {
         grid-template-columns: 1fr;
     }
@@ -142,6 +173,16 @@ h1, h3 {
         width: 100%;
         margin: 0 auto;
         box-sizing: border-box;
+    }
+
+    .music-section.playlist-section {
+        padding: 0;
+        background: transparent;
+        border: 0;
+    }
+
+    .spotify-playlist-frame {
+        height: clamp(540px, calc(100svh - 145px), 760px);
     }
 
     .music-section:last-child .song-list {

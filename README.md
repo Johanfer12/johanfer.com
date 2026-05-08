@@ -259,11 +259,11 @@ En ambientes de desarrollo local, puede ser más conveniente ejecutar estos coma
 
 ### Aplicación de Spotify
 
-1. Configura tus credenciales de la API de Spotify (CLIENT_ID, CLIENT_SECRET) en el archivo de configuración.
+1. Configura tus credenciales en `.env`: `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_USERNAME` y, si quieres mover canciones eliminadas a una playlist, `SPOTIFY_OLVIDADAS_PLAYLIST_ID`.
 2. Accede a la ruta `/spotify/` para ver el dashboard con tus canciones favoritas y top 5.
 3. Utiliza el reproductor integrado para escuchar previsualizaciones de 30 segundos.
 4. Visita `/spotify/stats/` para ver las estadísticas y gráficos de tu música.
 5. Consulta `/spotify/deleted/` para ver un historial de las canciones eliminadas.
-6. Actualiza los datos haciendo clic en el botón de actualización en el dashboard.
+6. Actualiza los datos haciendo clic en el botón de actualización en el dashboard. Si quieres conservar la información guardada sin llamar a la API de Spotify, usa `SPOTIFY_REFRESH_ENABLED=false`.
 
 Siéntete libre de personalizar y adaptar este proyecto según tus necesidades. Si tienes alguna pregunta o sugerencia, no dudes en abrir un issue en el repositorio.

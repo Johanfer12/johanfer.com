@@ -1,9 +1,9 @@
 import spotipy
 import spotipy.util as util
 from datetime import datetime
-from config import CLIENT_ID, CLIENT_SECRET, USERNAME
 from .models import SpotifyFavorites, SpotifyTopSongs, DeletedSongs
 from django.utils import timezone
+from django.conf import settings
 import pytz
 import requests
 from bs4 import BeautifulSoup
@@ -15,16 +15,70 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+def _get_spotify_setting(name):
+    value = getattr(settings, name, "")
+    return (value or "").strip()
+
+
+def _upsert_top_song(rank, track, preview_url):
+    song_url = track['external_urls']['spotify']
+    defaults = {
+        'rank': rank,
+        'song_name': track['name'],
+        'artist_name': track['artists'][0]['name'],
+        'album_cover': track['album']['images'][0]['url'] if track['album']['images'] else None,
+        'preview_url': preview_url,
+    }
+    matches = SpotifyTopSongs.objects.filter(song_url=song_url).order_by('id')
+    top_song = matches.first()
+    if top_song:
+        matches.exclude(id=top_song.id).delete()
+        for field, value in defaults.items():
+            setattr(top_song, field, value)
+        top_song.save(update_fields=[*defaults.keys()])
+        return top_song
+    return SpotifyTopSongs.objects.create(song_url=song_url, **defaults)
+
+
+def add_tracks_to_playlist(token, playlist_id, track_uris):
+    if not playlist_id or not track_uris:
+        return False
+
+    response = requests.post(
+        f"https://api.spotify.com/v1/playlists/{playlist_id}/items",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        json={"uris": track_uris},
+        timeout=20,
+    )
+    response.raise_for_status()
+    return True
+
+
 def refresh_spotify_data():
+    if not getattr(settings, 'SPOTIFY_REFRESH_ENABLED', True):
+        logger.warning("Refresh de Spotify deshabilitado por SPOTIFY_REFRESH_ENABLED")
+        return False
+
+    client_id = _get_spotify_setting('SPOTIFY_CLIENT_ID')
+    client_secret = _get_spotify_setting('SPOTIFY_CLIENT_SECRET')
+    username = _get_spotify_setting('SPOTIFY_USERNAME')
+    if not client_id or not client_secret or not username:
+        logger.error("Faltan SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET o SPOTIFY_USERNAME")
+        return False
+
     # Obtener el token de acceso
     scope = "user-library-read user-top-read playlist-modify-public playlist-modify-private playlist-read-private"
     redirect_uri = "http://localhost:8888/callback"
     try:
         token = util.prompt_for_user_token(
-            USERNAME,
+            username,
             scope,
-            client_id=CLIENT_ID,
-            client_secret=CLIENT_SECRET,
+            client_id=client_id,
+            client_secret=client_secret,
             redirect_uri=redirect_uri
         )
         if not token:
@@ -37,30 +91,24 @@ def refresh_spotify_data():
     # Aumentar el timeout para las solicitudes
     sp = spotipy.Spotify(auth=token, requests_timeout=15)
 
-    # Usar directamente el ID de la playlist "Olvidadas"
-    olvidadas_playlist_id = "1ktjWnNpAeK5N7s6UEdRif" 
-    logger.info(f"Usando ID de playlist 'Olvidadas' hardcodeado: {olvidadas_playlist_id}")
+    olvidadas_playlist_id = _get_spotify_setting('SPOTIFY_OLVIDADAS_PLAYLIST_ID')
+    if olvidadas_playlist_id:
+        logger.info(f"Usando playlist 'Olvidadas': {olvidadas_playlist_id}")
 
     # Optimización para canciones top
     top_tracks = sp.current_user_top_tracks(limit=5, time_range='short_term')
-    
-    # Reiniciamos las canciones top existentes
-    SpotifyTopSongs.objects.all().delete()
-    
-    # Crear los nuevos registros para las 5 canciones top actuales
-    for track in top_tracks['items']:
+
+    # Actualizar el Top 5 sin borrar y recrear toda la lista.
+    current_top_urls = []
+    for rank, track in enumerate(top_tracks['items'], start=1):
         song_url = track['external_urls']['spotify']
-        album_cover = track['album']['images'][0]['url'] if track['album']['images'] else None
         track_id = extract_track_id(song_url)
         preview_url = get_preview_url(track_id)
-        
-        SpotifyTopSongs.objects.create(
-            song_name=track['name'],
-            artist_name=track['artists'][0]['name'],
-            song_url=song_url,
-            album_cover=album_cover,
-            preview_url=preview_url
-        )
+        _upsert_top_song(rank, track, preview_url)
+        current_top_urls.append(song_url)
+
+    if current_top_urls:
+        SpotifyTopSongs.objects.exclude(song_url__in=current_top_urls).delete()
 
     # Optimización para favoritos
     results = sp.current_user_saved_tracks(limit=50)
@@ -113,7 +161,7 @@ def refresh_spotify_data():
                 if track_id:
                     track_uri = f"spotify:track:{track_id}"
                     logger.info(f"Añadiendo '{favorite.song_name}' a playlist '{olvidadas_playlist_id}'...")
-                    sp.playlist_add_items(olvidadas_playlist_id, [track_uri])
+                    add_tracks_to_playlist(token, olvidadas_playlist_id, [track_uri])
                     logger.info(f"  -> Añadido '{favorite.song_name}' exitosamente.")
                 else:
                     logger.warning(f"No se pudo extraer track_id para {favorite.song_name}, no se añade a playlist.")
@@ -137,10 +185,14 @@ def refresh_spotify_data():
         )
         favorite.delete() 
 
+    return True
+
 def get_preview_url(track_id):
+    if not track_id:
+        return None
     try:
         embed_url = f"https://open.spotify.com/embed/track/{track_id}"
-        response = requests.get(embed_url)
+        response = requests.get(embed_url, timeout=10)
         
         if not response.ok:
             return None
@@ -156,7 +208,7 @@ def get_preview_url(track_id):
                     matches = [match.value for match in jsonpath_expr.find(json.loads(script.string))]
                     if matches:
                         return matches[0]
-                except:
+                except (TypeError, ValueError, json.JSONDecodeError):
                     continue
                     
         return None
