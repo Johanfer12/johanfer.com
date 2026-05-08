@@ -17,6 +17,7 @@ from django.db.models import Q, Max
 import json
 import textwrap
 import html
+import logging
 from django.conf import settings
 
 try:
@@ -24,6 +25,9 @@ try:
 except Exception:
     VectorIndexService = None  # type: ignore
     VectorIndexUnavailable = Exception  # type: ignore
+
+
+logger = logging.getLogger(__name__)
 
 
 class GroqRateLimiter:
@@ -88,7 +92,7 @@ class GroqRateLimiter:
                 return estimated_tokens
 
             if estimated_tokens > token_limit and self.used_tokens == 0 and self.used_requests == 0:
-                print(
+                logger.warning(
                     f"Rate limit Groq local: una petición estimada en {estimated_tokens} tokens "
                     f"supera el límite seguro de {token_limit}; se enviará una sola petición."
                 )
@@ -97,7 +101,7 @@ class GroqRateLimiter:
                 return estimated_tokens
 
             wait_time = self.seconds_until_next_window() + 1
-            print(
+            logger.warning(
                 f"Rate limit Groq local: esperando {wait_time:.1f}s "
                 f"(modelo={model_name}, estimado={estimated_tokens} tokens, "
                 f"usados={self.used_tokens}/{token_limit})."
@@ -115,9 +119,9 @@ class EmbeddingService:
     @staticmethod
     # Cambiado: Aceptar client en lugar de model_name
     def generate_embedding(text, client, max_retries=3):
-        """Genera embeddings para un texto usando la API de Gemini a travÃ©s del cliente."""
+        """Genera embeddings para un texto usando la API de Gemini a través del cliente."""
         
-        # Preprocesar el texto para tener un contenido mÃ¡s limpio
+        # Preprocesar el texto para tener un contenido más limpio
         clean_text = re.sub(r'<.*?>', ' ', text)  # Eliminar etiquetas HTML
         clean_text = re.sub(r'\s+', ' ', clean_text).strip()  # Normalizar espacios
         
@@ -155,19 +159,19 @@ class EmbeddingService:
                     
                     # Fallback seguro
                     return []
-                except Exception as e:
-                    print(f"Error al extraer valores del embedding: {str(e)}")
+                except Exception:
+                    logger.exception("Error al extraer valores del embedding")
                     return []
             except Exception as e:
                 if "429" in str(e) and attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 5  # Backoff exponencial
-                    print(f"LÃ­mite de peticiones alcanzado. Esperando {wait_time} segundos...")
+                    logger.warning(f"Límite de peticiones alcanzado. Esperando {wait_time} segundos...")
                     time.sleep(wait_time)
                     continue
-                print(f"Error generando embedding: {str(e)}")
+                logger.exception("Error generando embedding")
                 return None
         
-        print("Se agotaron los reintentos para generar embedding.")
+        logger.warning("Se agotaron los reintentos para generar embedding.")
         return None
 
     @staticmethod
@@ -176,7 +180,7 @@ class EmbeddingService:
         if not embedding1 or not embedding2:
             return 0.0
             
-        # Convertir a numpy arrays para cÃ¡lculos eficientes
+        # Convertir a numpy arrays para cálculos eficientes
         vec1 = np.array(embedding1, dtype=np.float32)
         vec2 = np.array(embedding2, dtype=np.float32)
         
@@ -508,7 +512,7 @@ class FeedService:
                 response = groq_client.chat.completions.create(**request_kwargs)
                 response_text = response.choices[0].message.content or ''
                 if not response_text.strip():
-                    print(f"Groq devolvió contenido vacío (intento {attempt + 1}/{max_retries}).")
+                    logger.warning(f"Groq devolvió contenido vacío (intento {attempt + 1}/{max_retries}).")
                     if attempt == max_retries - 1:
                         return None, None, None
                     time.sleep(5)
@@ -525,7 +529,7 @@ class FeedService:
                         elif short_answer:
                             summary_text = short_answer
                         else:
-                            print("Error: JSON recibido no contiene 'summary' ni 'short_answer' válidos.")
+                            logger.warning("JSON recibido no contiene 'summary' ni 'short_answer' válidos.")
                             continue
 
                     processed_summary = summary_text
@@ -537,10 +541,10 @@ class FeedService:
                     return processed_summary, short_answer, ai_filter_reason
 
                 except json.JSONDecodeError as json_e:
-                    print(f"Error decodificando JSON de Groq (intento {attempt + 1}): {json_e}")
-                    print(f"Texto recibido: {response_text[:200]}...")
+                    logger.warning(f"Error decodificando JSON de Groq (intento {attempt + 1}): {json_e}")
+                    logger.debug(f"Texto recibido: {response_text[:200]}...")
                     if attempt == max_retries - 1:
-                        print("Fallo de JSON en último intento; no se guardará respuesta cruda del modelo.")
+                        logger.warning("Fallo de JSON en último intento; no se guardará respuesta cruda del modelo.")
                         return None, None, None
                     time.sleep(5)
                     continue
@@ -549,34 +553,34 @@ class FeedService:
                 error_str = str(e)
                 if FeedService._is_groq_json_validation_error(e) and use_response_format:
                     use_response_format = False
-                    print("Groq rechazó el modo JSON estricto; reintentando sin response_format.")
+                    logger.warning("Groq rechazó el modo JSON estricto; reintentando sin response_format.")
                     continue
                 if ("429" in error_str or "rate_limit" in error_str.lower()) and attempt < max_retries - 1:
                     retry_after = FeedService._extract_retry_after_seconds(e)
                     wait_time = retry_after or max(FeedService._GROQ_RATE_LIMITER.seconds_until_next_window() + 1, 120)
                     if wait_time > FeedService._GROQ_RATE_LIMITER.MAX_RETRY_SLEEP_SECONDS:
-                        print(
+                        logger.warning(
                             f"Groq pidió esperar {wait_time}s por rate limit; "
                             "se pospone esta noticia para una próxima actualización."
                         )
                         return None, None, None
-                    print(f"Límite de peticiones Groq (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
+                    logger.warning(f"Límite de peticiones Groq (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
                     time.sleep(wait_time)
                     continue
                 elif "500" in error_str and attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 5
-                    print(f"Error interno de Groq (500) (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
+                    logger.warning(f"Error interno de Groq (500) (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
                     time.sleep(wait_time)
                     continue
-                print(f"Error procesando contenido con Groq: {error_str}")
+                logger.exception("Error procesando contenido con Groq: %s", error_str)
                 return None, None, None
 
-        print("Se agotaron los reintentos para procesar contenido con Groq.")
+        logger.warning("Se agotaron los reintentos para procesar contenido con Groq.")
         return None, None, None
 
     @staticmethod
     def extract_image_from_description(description):
-        # Buscar una URL de imagen en el HTML de la descripciÃ³n
+        # Buscar una URL de imagen en el HTML de la descripción
         img_pattern = r'<img[^>]+src="([^">]+)"'
         match = re.search(img_pattern, description)
         return match.group(1) if match else None
@@ -590,11 +594,11 @@ class FeedService:
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
             
-            # Intentar decodificar explÃ­citamente como UTF-8
+            # Intentar decodificar explícitamente como UTF-8
             try:
                 content_text = response.content.decode('utf-8')
             except UnicodeDecodeError:
-                # Si UTF-8 falla, intentar con la codificaciÃ³n detectada por requests
+                # Si UTF-8 falla, intentar con la codificación detectada por requests
                 content_text = response.text 
 
             soup = BeautifulSoup(content_text, 'html.parser')
@@ -620,7 +624,7 @@ class FeedService:
                 if img_tag and img_tag.get('src'):
                     image_url = urljoin(url, img_tag['src'])
                 
-                # Si no encontramos imagen en el contenido principal, buscar en todo el artÃ­culo
+                # Si no encontramos imagen en el contenido principal, buscar en todo el artículo
                 if not image_url:
                     img_tag = soup.find('img', {'class': ['featured-image', 'wp-post-image', 'article-image']})
                     if img_tag and img_tag.get('src'):
@@ -633,8 +637,8 @@ class FeedService:
                 'text': text_content,
                 'image_url': image_url
             }
-        except Exception as e:
-            print(f"Error obteniendo contenido completo: {str(e)}")
+        except Exception:
+            logger.exception("Error obteniendo contenido completo")
             return {'text': None, 'image_url': None}
 
     @staticmethod
@@ -657,10 +661,10 @@ class FeedService:
 
     @staticmethod
     def fetch_and_save_news(max_ai_items=None):
-        print("Iniciando proceso de obtenciÃ³n de noticias...")
+        logger.info("Iniciando proceso de obtención de noticias...")
         start_time = time.time()
         
-        print("Inicializando modelos...")
+        logger.info("Inicializando modelos...")
         # Cliente Gemini solo para embeddings
         gemini_client = FeedService.initialize_gemini()
         # Cliente Groq para procesamiento de contenido (resúmenes)
@@ -671,11 +675,11 @@ class FeedService:
         try:
             groq_setting = GroqGlobalSetting.objects.first()
             if not groq_setting:
-                print("Advertencia: No se encontró configuración global de Groq. Creando con modelo predeterminado.")
+                logger.warning("No se encontró configuración global de Groq. Creando con modelo predeterminado.")
                 groq_setting = GroqGlobalSetting.objects.create(model_name='qwen/qwen3-32b')
             groq_model = groq_setting.model_name
-        except Exception as e:
-            print(f"Error al obtener configuración de Groq: {e}. Usando default.")
+        except Exception:
+            logger.exception("Error al obtener configuración de Groq. Usando default.")
             groq_model = 'qwen/qwen3-32b'
         
         filter_word_patterns = FeedService.build_filter_word_patterns(
@@ -686,10 +690,10 @@ class FeedService:
         )
 
         sources = list(FeedSource.objects.filter(active=True))
-        print(f"Procesando {len(sources)} fuentes activas con Groq ({groq_model})")
+        logger.info(f"Procesando {len(sources)} fuentes activas con Groq ({groq_model})")
         new_articles_count = 0
         
-        # Calcular la fecha lÃ­mite (15 dÃ­as atrÃ¡s)
+        # Calcular la fecha límite (15 días atrás)
         fifteen_days_ago = timezone.now() - timedelta(days=15)
         redundancy_window = timezone.now() - timedelta(days=14)
         recent_news_cache = list(
@@ -725,22 +729,22 @@ class FeedService:
         
         # Primero, recolectar todas las entradas de todas las fuentes
         for source in sources:
-            print(f"\nRecolectando entradas de fuente: {source.name}")
+            logger.info(f"\nRecolectando entradas de fuente: {source.name}")
             
             # Obtener la fecha de la última noticia visible por fuente (cacheada en memoria)
             latest_date = latest_by_source.get(source.id) or fifteen_days_ago
             
-            # Usar la fecha mÃ¡s reciente entre la Ãºltima noticia y hace 15 dÃ­as
+            # Usar la fecha más reciente entre la última noticia y hace 15 días
             cutoff_date = max(latest_date, fifteen_days_ago)
             
             feed = feedparser.parse(source.url)
-            print(f"Encontradas {len(feed.entries)} entradas en el feed")
+            logger.info(f"Encontradas {len(feed.entries)} entradas en el feed")
             
-            # Recolectar entradas vÃ¡lidas
+            # Recolectar entradas válidas
             for entry in feed.entries:
-                # Convertir la fecha de publicaciÃ³n
+                # Convertir la fecha de publicación
                 if hasattr(entry, 'published_parsed') and entry.published_parsed:
-                    # Crear fecha en UTC (los feeds generalmente usan UTC como estÃ¡ndar)
+                    # Crear fecha en UTC (los feeds generalmente usan UTC como estándar)
                     published_utc = datetime(*entry.published_parsed[:6])
                     if timezone.is_naive(published_utc):
                         published_utc = timezone.make_aware(published_utc, timezone=pytz.UTC)
@@ -750,7 +754,7 @@ class FeedService:
                 else:
                     published = timezone.now()
                 
-                # Si la noticia es mÃ¡s antigua que el lÃ­mite, la saltamos
+                # Si la noticia es más antigua que el límite, la saltamos
                 if published < cutoff_date:
                     continue
                 
@@ -771,29 +775,29 @@ class FeedService:
         
                 # Ordenar todas las entradas de más antigua a más reciente para procesamiento estable
         all_entries.sort(key=lambda x: x['published'])
-        print(f"\nSe recolectaron {len(all_entries)} nuevas entradas de todas las fuentes")
+        logger.info(f"\nSe recolectaron {len(all_entries)} nuevas entradas de todas las fuentes")
 
         # Contador para noticias redundantes
         redundant_count = 0
         ai_attempts = 0
         
-        # Procesar todas las entradas en orden (de mÃ¡s antigua a mÃ¡s reciente)
+        # Procesar todas las entradas en orden (de más antigua a más reciente)
         for item in all_entries:
             entry = item['entry']
             source = item['source']
             published = item['published']
             guid = item['guid']
             
-            print(f"\nProcesando entrada: {entry.title} ({published})")
+            logger.info(f"\nProcesando entrada: {entry.title} ({published})")
             
-            # ValidaciÃ³n: Saltar noticias con tÃ­tulos anormalmente largos
+            # Validación: Saltar noticias con títulos anormalmente largos
             if len(entry.title) > 200:
-                print(f"SALTANDO noticia con tÃ­tulo muy largo ({len(entry.title)} caracteres): {entry.title[:100]}...")
+                logger.info(f"SALTANDO noticia con título muy largo ({len(entry.title)} caracteres): {entry.title[:100]}...")
                 continue
                 
-            # ValidaciÃ³n: Saltar noticias con GUID muy largo
+            # Validación: Saltar noticias con GUID muy largo
             if len(guid) > 400:
-                print(f"SALTANDO noticia con GUID muy largo ({len(guid)} caracteres)")
+                logger.info(f"SALTANDO noticia con GUID muy largo ({len(guid)} caracteres)")
                 continue
             
             # Primero intentar obtener la imagen del feed
@@ -810,7 +814,7 @@ class FeedService:
                         image_url = enclosure.get('href')
                         break
 
-            # 3. Buscar en la descripciÃ³n
+            # 3. Buscar en la descripción
             if not image_url and hasattr(entry, 'description'):
                 image_url = FeedService.extract_image_from_description(entry.description)
 
@@ -824,25 +828,25 @@ class FeedService:
                             break
 
             # Obtener el contenido original para procesar
-            # Intentar obtener descripciÃ³n del feed, asegurando UTF-8 si es posible
+            # Intentar obtener descripción del feed, asegurando UTF-8 si es posible
             original_description = entry.get('description', '')
             if isinstance(original_description, bytes):
                 try:
                     original_description = original_description.decode('utf-8')
                 except UnicodeDecodeError:
-                     # Si falla, usar una decodificaciÃ³n con reemplazo
+                     # Si falla, usar una decodificación con reemplazo
                     original_description = original_description.decode('utf-8', 'replace')
             
             # >>>>> ORDEN CAMBIADO: Primero filtro por PALABRA CLAVE <<<<<
             should_filter, filter_word = FeedService.should_filter_news(entry.title, original_description, filter_word_patterns)
             if should_filter:
-                print(f"Noticia FILTRADA por palabra clave: {filter_word.word}")
+                logger.info(f"Noticia FILTRADA por palabra clave: {filter_word.word}")
                 
-                # Validaciones adicionales para campos que podrÃ­an ser muy largos
-                print(f"DEBUG - Longitudes: tÃ­tulo={len(entry.title)}, guid={len(guid)}, link={len(entry.link)}")
+                # Validaciones adicionales para campos que podrían ser muy largos
+                logger.debug(f"Longitudes: título={len(entry.title)}, guid={len(guid)}, link={len(entry.link)}")
                 if hasattr(entry, 'description') and entry.description:
-                    print(f"DEBUG - descripciÃ³n original: {len(entry.description)} caracteres")
-                print(f"DEBUG - descripciÃ³n procesada: {len(original_description)} caracteres")
+                    logger.debug(f"Descripción original: {len(entry.description)} caracteres")
+                logger.debug(f"Descripción procesada: {len(original_description)} caracteres")
                 
                 try:
                     News.objects.create(
@@ -859,18 +863,18 @@ class FeedService:
                         is_ai_processed=True
                     )
                     new_articles_count += 1
-                except Exception as e:
-                    print(f"ERROR al guardar noticia filtrada por keyword: {str(e)}")
-                    print(f"Datos problemÃ¡ticos:")
-                    print(f"  - GUID: {guid[:100]}... (longitud: {len(guid)})")
-                    print(f"  - TÃ­tulo: {entry.title[:100]}... (longitud: {len(entry.title)})")
-                    print(f"  - Link: {entry.link[:100]}... (longitud: {len(entry.link)})")
-                    print(f"  - DescripciÃ³n: {original_description[:100] if original_description else 'None'}... (longitud: {len(original_description) if original_description else 0})")
-                    print("SALTANDO esta noticia problemÃ¡tica...")
+                except Exception:
+                    logger.exception(
+                        "Error al guardar noticia filtrada por keyword. GUID=%s título=%s link=%s descripción_len=%s",
+                        guid[:100],
+                        entry.title[:100],
+                        entry.link[:100],
+                        len(original_description) if original_description else 0,
+                    )
                     continue
 
                 if max_ai_items is not None and ai_attempts >= max_ai_items:
-                    print(f"Presupuesto de IA completado ({max_ai_items}); se dejan noticias para la próxima actualización.")
+                    logger.info(f"Presupuesto de IA completado ({max_ai_items}); se dejan noticias para la próxima actualización.")
                     break
                 continue # Pasar a la siguiente noticia
             # <<<<< FIN FILTRO PALABRA CLAVE >>>>>
@@ -885,7 +889,7 @@ class FeedService:
                     image_url = full_content['image_url']
 
             if max_ai_items is not None and ai_attempts >= max_ai_items:
-                print(f"Presupuesto de IA agotado ({max_ai_items}); se dejan noticias para la próxima actualización.")
+                logger.info(f"Presupuesto de IA agotado ({max_ai_items}); se dejan noticias para la próxima actualización.")
                 break
             ai_attempts += 1
 
@@ -898,13 +902,13 @@ class FeedService:
                 filter_instructions_text
             )
             if not processed_description:
-                print("SALTANDO noticia: Groq no generó resumen; se reintentará en una próxima actualización.")
+                logger.warning("Saltando noticia: Groq no generó resumen; se reintentará en una próxima actualización.")
                 continue
 
-            # >>>>> LÃGICA DE FILTRADO IA (despuÃ©s de palabra clave) <<<<<
-            # Asegurarnos que ai_filter_reason es un string no vacÃ­o antes de usarlo
+            # >>>>> LÓGICA DE FILTRADO IA (después de palabra clave) <<<<<
+            # Asegurarnos que ai_filter_reason es un string no vacío antes de usarlo
             if ai_filter_reason and isinstance(ai_filter_reason, str) and ai_filter_reason.strip():
-                print(f"Noticia marcada para FILTRAR por IA. RazÃ³n: {ai_filter_reason}")
+                logger.info(f"Noticia marcada para FILTRAR por IA. Razón: {ai_filter_reason}")
                 
                 try:
                     News.objects.create(
@@ -922,22 +926,22 @@ class FeedService:
                         is_ai_processed=True
                     )
                     new_articles_count += 1
-                except Exception as e:
-                    print(f"ERROR al guardar noticia filtrada por IA: {str(e)}")
-                    print(f"Datos problemÃ¡ticos:")
-                    print(f"  - GUID: {guid[:100]}... (longitud: {len(guid)})")
-                    print(f"  - TÃ­tulo: {entry.title[:100]}... (longitud: {len(entry.title)})")
-                    print(f"  - Link: {entry.link[:100]}... (longitud: {len(entry.link)})")
-                    print(f"  - AI Filter Reason: {ai_filter_reason[:100]}... (longitud: {len(ai_filter_reason)})")
-                    print("SALTANDO esta noticia problemÃ¡tica...")
+                except Exception:
+                    logger.exception(
+                        "Error al guardar noticia filtrada por IA. GUID=%s título=%s link=%s ai_filter_reason=%s",
+                        guid[:100],
+                        entry.title[:100],
+                        entry.link[:100],
+                        ai_filter_reason[:100],
+                    )
                     continue
                     
                 continue # Pasar a la siguiente noticia
-            elif ai_filter_reason: # Si Gemini devolviÃ³ algo pero no es un string vÃ¡lido
-                print(f"Advertencia: Gemini devolviÃ³ un valor para ai_filter ({ai_filter_reason}) pero no es la instrucciÃ³n esperada. No se filtrarÃ¡.")
-            # <<<<< FIN LÃGICA FILTRADO IA >>>>>
+            elif ai_filter_reason: # Si Gemini devolvió algo pero no es un string válido
+                logger.warning(f"Gemini devolvió un valor para ai_filter ({ai_filter_reason}) pero no es la instrucción esperada. No se filtrará.")
+            # <<<<< FIN LÓGICA FILTRADO IA >>>>>
 
-            # Guard extra: nunca crear noticias anteriores a 15 dÃ­as
+            # Guard extra: nunca crear noticias anteriores a 15 días
             if published < fifteen_days_ago:
                 continue
 
@@ -955,16 +959,16 @@ class FeedService:
                     is_ai_processed=bool(processed_description and processed_description != original_description)
                 )
                 new_articles_count += 1
-            except Exception as e:
-                print(f"ERROR al guardar noticia normal: {str(e)}")
-                print(f"Datos problemÃ¡ticos:")
-                print(f"  - GUID: {guid[:100]}... (longitud: {len(guid)})")
-                print(f"  - TÃ­tulo: {entry.title[:100]}... (longitud: {len(entry.title)})")
-                print(f"  - Link: {entry.link[:100]}... (longitud: {len(entry.link)})")
-                print("SALTANDO esta noticia problemÃ¡tica...")
+            except Exception:
+                logger.exception(
+                    "Error al guardar noticia normal. GUID=%s título=%s link=%s",
+                    guid[:100],
+                    entry.title[:100],
+                    entry.link[:100],
+                )
                 continue
             
-            # Verificar redundancia (esto generarÃ¡ el embedding internamente si no existe)
+            # Verificar redundancia (esto generará el embedding internamente si no existe)
             is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
                 news_item, gemini_client, recent_news_cache, vector_index
             )
@@ -979,8 +983,8 @@ class FeedService:
                 update_fields.extend(['similar_to', 'similarity_score'])
 
             if is_redundant and similar_news:
-                print(f"Â¡Noticia redundante detectada! Similar a: {similar_news.title}")
-                print(f"PuntuaciÃ³n de similitud: {similarity_score:.4f} (Umbral: {news_item.source.similarity_threshold})")
+                logger.info(f"¡Noticia redundante detectada! Similar a: {similar_news.title}")
+                logger.info(f"Puntuación de similitud: {similarity_score:.4f} (Umbral: {news_item.source.similarity_threshold})")
                 
                 # Marcar como redundante y filtrada (ya hemos guardado similar_to y score)
                 news_item.is_redundant = True
@@ -1013,7 +1017,7 @@ class FeedService:
                         pass
 
             if max_ai_items is not None and ai_attempts >= max_ai_items:
-                print(f"Presupuesto de IA completado ({max_ai_items}); se dejan noticias para la próxima actualización.")
+                logger.info(f"Presupuesto de IA completado ({max_ai_items}); se dejan noticias para la próxima actualización.")
                 break
 
         
@@ -1024,11 +1028,11 @@ class FeedService:
         if sources:
             FeedSource.objects.bulk_update(sources, ['last_fetch'])
             for source in sources:
-                print(f"Actualizada fecha de última obtención para {source.name}")
+                logger.info(f"Actualizada fecha de última obtención para {source.name}")
         
         total_time = time.time() - start_time
-        print(f"\nProceso completado en {total_time:.2f} segundos")
-        print(f"Total de nuevas noticias: {new_articles_count}")
-        print(f"Noticias redundantes eliminadas: {redundant_count}")
+        logger.info(f"\nProceso completado en {total_time:.2f} segundos")
+        logger.info(f"Total de nuevas noticias: {new_articles_count}")
+        logger.info(f"Noticias redundantes eliminadas: {redundant_count}")
         
         return new_articles_count 

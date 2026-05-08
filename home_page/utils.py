@@ -4,9 +4,12 @@ import os
 from datetime import datetime
 from PIL import Image
 import re
+import logging
 from django.utils import timezone
 from django.conf import settings
 from .models import Book, DeletedBook
+
+logger = logging.getLogger(__name__)
 
 _GOODREADS_GENRES_CACHE = {}
 
@@ -87,8 +90,8 @@ def convert_to_webp(source_path, destination_path):
             if img.mode in ("RGBA", "P"):
                 img = img.convert("RGB")
             img.save(destination_path, 'WEBP')
-    except Exception as e:
-        print(f"Error al convertir la imagen: {e}")
+    except Exception:
+        logger.exception("Error al convertir la imagen")
 
 def get_book_description(book_url, headers):
     try:
@@ -99,8 +102,8 @@ def get_book_description(book_url, headers):
             description_span = soup.find('span', class_='Formatted')
             if description_span:
                 return str(description_span)
-    except Exception as e:
-        print(f"Error al obtener descripción: {e}")
+    except Exception:
+        logger.exception("Error al obtener descripción")
     return None
 
 def process_rating(rating_element):
@@ -157,7 +160,7 @@ def refresh_books_data():
     if goodreads_cookie:
         headers['Cookie'] = goodreads_cookie
     else:
-        print("GOODREADS_COOKIE no configurada. No se puede actualizar Goodreads.")
+        logger.warning("GOODREADS_COOKIE no configurada. No se puede actualizar Goodreads.")
         return
 
     response = requests.get(base_url, headers=headers)
@@ -167,9 +170,9 @@ def refresh_books_data():
         pagination_div = soup.find("div", id="reviewPagination")
         
         if not pagination_div:
-            print(f"Error: No se encontró la paginación. Posible redirección a login o cambio de estructura.")
+            logger.warning("No se encontró la paginación. Posible redirección a login o cambio de estructura.")
             # Opcional: imprimir título para depuración
-            print(f"Título de la página: {soup.title.string if soup.title else 'No title'}")
+            logger.info(f"Título de la página: {soup.title.string if soup.title else 'No title'}")
             return
 
         last_page_link = pagination_div.find_all("a")[-2]
@@ -186,7 +189,7 @@ def refresh_books_data():
         total_libros_db = Book.objects.count()
 
         if total_libros_db == total_libros_goodreads:
-            print("No hay nuevos libros para actualizar")
+            logger.info("No hay nuevos libros para actualizar")
             return
 
         # Obtener todos los book_links existentes y extraer sus IDs
@@ -267,9 +270,9 @@ def refresh_books_data():
                         description=description,
                         genres=genres
                     )
-                    print(f"Libro creado: {title}")
+                    logger.info(f"Libro creado: {title}")
                 except Exception as e:
-                    print(f"Error procesando libro en página {page_number}: {e}")
+                    logger.exception("Error procesando libro en página %s", page_number)
                     continue
 
                 # Procesar y guardar la imagen de la portada
@@ -286,5 +289,5 @@ def refresh_books_data():
                                 f.write(response.content)
                             convert_to_webp(temp_jpg_path, file_path)
                             os.remove(temp_jpg_path)
-                        except Exception as e:
-                            print(f"Error al procesar imagen: {e}")
+                        except Exception:
+                            logger.exception("Error al procesar imagen")

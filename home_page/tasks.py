@@ -1,8 +1,12 @@
 from .utils import refresh_books_data
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 def update_books_cron():
     try:
         refresh_books_data()
-        print("Books data updated successfully")
-    except Exception as e:
-        print(f"Error updating books data: {str(e)}")
+        logger.info("Libros actualizados correctamente")
+    except Exception:
+        logger.exception("Error actualizando libros")

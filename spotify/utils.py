@@ -10,6 +10,10 @@ from bs4 import BeautifulSoup
 import json
 from jsonpath_ng import parse
 import time
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 def refresh_spotify_data():
     # Obtener el token de acceso
@@ -24,10 +28,10 @@ def refresh_spotify_data():
             redirect_uri=redirect_uri
         )
         if not token:
-             print("Error: No se pudo obtener el token de Spotify. Abortando refresh.")
+             logger.error("No se pudo obtener el token de Spotify. Abortando refresh.")
              return
-    except Exception as e:
-        print(f"Error durante la obtención del token: {e}")
+    except Exception:
+        logger.exception("Error durante la obtención del token")
         return
 
     # Aumentar el timeout para las solicitudes
@@ -35,7 +39,7 @@ def refresh_spotify_data():
 
     # Usar directamente el ID de la playlist "Olvidadas"
     olvidadas_playlist_id = "1ktjWnNpAeK5N7s6UEdRif" 
-    print(f"Usando ID de playlist 'Olvidadas' hardcodeado: {olvidadas_playlist_id}")
+    logger.info(f"Usando ID de playlist 'Olvidadas' hardcodeado: {olvidadas_playlist_id}")
 
     # Optimización para canciones top
     top_tracks = sp.current_user_top_tracks(limit=5, time_range='short_term')
@@ -108,15 +112,15 @@ def refresh_spotify_data():
                 track_id = extract_track_id(favorite.song_url)
                 if track_id:
                     track_uri = f"spotify:track:{track_id}"
-                    print(f"Añadiendo '{favorite.song_name}' a playlist '{olvidadas_playlist_id}'...")
+                    logger.info(f"Añadiendo '{favorite.song_name}' a playlist '{olvidadas_playlist_id}'...")
                     sp.playlist_add_items(olvidadas_playlist_id, [track_uri])
-                    print(f"  -> Añadido '{favorite.song_name}' exitosamente.")
+                    logger.info(f"  -> Añadido '{favorite.song_name}' exitosamente.")
                 else:
-                    print(f"  -> No se pudo extraer track_id para {favorite.song_name}, no se añade a playlist.")
+                    logger.warning(f"No se pudo extraer track_id para {favorite.song_name}, no se añade a playlist.")
             except spotipy.exceptions.SpotifyException as e:
-                 print(f"  -> Error de API Spotify al añadir track {favorite.song_name} (URI: {track_uri}): {e.http_status} - {e.msg}")
-            except Exception as e:
-                 print(f"  -> Error inesperado al añadir track {favorite.song_name}: {e}")
+                 logger.error(f"Error de API Spotify al añadir track {favorite.song_name} (URI: {track_uri}): {e.http_status} - {e.msg}")
+            except Exception:
+                 logger.exception("Error inesperado al añadir track %s", favorite.song_name)
         # --- Fin: Añadir a Playlist "Olvidadas" ---
 
         # Crear registro local en DeletedSongs
@@ -156,8 +160,8 @@ def get_preview_url(track_id):
                     continue
                     
         return None
-    except Exception as e:
-        print(f"Error getting preview URL: {e}")
+    except Exception:
+        logger.exception("Error getting preview URL")
         return None
 
 def extract_track_id(spotify_url):
