@@ -213,6 +213,13 @@ QDRANT_COLLECTION = os.getenv('QDRANT_COLLECTION', 'news_embeddings_gemini001_d7
 GOODREADS_USER_ID = os.getenv('GOODREADS_USER_ID', '27786474-johan-gonzalez')
 GOODREADS_COOKIE = os.getenv('GOODREADS_COOKIE', '')
 
+# Spotify
+SPOTIFY_REFRESH_ENABLED = os.getenv('SPOTIFY_REFRESH_ENABLED', 'true').lower() in ('true', '1', 'yes')
+SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID', '')
+SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET', '')
+SPOTIFY_USERNAME = os.getenv('SPOTIFY_USERNAME', '')
+SPOTIFY_OLVIDADAS_PLAYLIST_ID = os.getenv('SPOTIFY_OLVIDADAS_PLAYLIST_ID', '')
+
 # Logging
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 

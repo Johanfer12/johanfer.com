@@ -5,23 +5,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mi Música</title>
-    <meta name="description" content="Dashboard de música de Johan: top canciones del mes y últimas favoritas en Spotify.">
+    <meta name="description" content="Playlist de música de Johan en Spotify.">
     <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     <meta property="og:site_name" content="{{ site_name }}">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Mi Música | {{ site_name }}">
-    <meta property="og:description" content="Top canciones del mes y últimas favoritas en Spotify.">
+    <meta property="og:description" content="Playlist de música de Johan en Spotify.">
     <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/spotify-icon.svg' %}">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Mi Música | {{ site_name }}">
-    <meta name="twitter:description" content="Top canciones del mes y últimas favoritas en Spotify.">
+    <meta name="twitter:description" content="Playlist de música de Johan en Spotify.">
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/spotify-icon.svg' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 </head>
-<body class="has-header">
+<body class="has-header music-playlist-page">
     {% include 'header.html' %}
     
     <div class="content-container">
@@ -34,75 +34,18 @@
             {% endfor %}
         {% endif %}
 
-        <div class="music-grid">
-            <!-- Top canciones -->
-            <div class="music-section">
-                <h3>Top 5 Canciones este Mes</h3>
-                <div class="song-list">
-                    {% for song in top_songs %}
-                        <div class="song-item">
-                            <a href="{{ song.song_url }}" target="_blank" class="album-link">
-                                <img src="{{ song.album_cover }}" alt="{{ song.song_name }}" class="album-cover">
-                            </a>
-                            <div class="song-details">
-                                <a href="{{ song.song_url }}" target="_blank">
-                                    {{ song.song_name }}
-                                    <span class="artist-name">{{ song.artist_name }}</span>
-                                </a>
-                            </div>
-                            {% if song.preview_url %}
-                            <button class="play-button" data-preview-url="{{ song.preview_url }}">
-                                <svg class="play-icon" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z"/>
-                                </svg>
-                                <svg class="pause-icon" viewBox="0 0 24 24">
-                                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                                </svg>
-                            </button>
-                            <audio class="audio-preview" src="{{ song.preview_url }}"></audio>
-                            {% endif %}
-                        </div>
-                    {% empty %}
-                        <div class="empty-message">No hay canciones top</div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <!-- Últimas favoritas -->
-            <div class="music-section">
-                <h3>Últimas Favoritas Agregadas</h3>
-                <div class="song-list">
-                    {% for song in favorite_songs|slice:":10" %}
-                        <div class="song-item">
-                            <a href="{{ song.song_url }}" target="_blank" class="album-link">
-                                <img src="{{ song.album_cover }}" alt="{{ song.song_name }}" class="album-cover">
-                            </a>
-                            <div class="song-details">
-                                <a href="{{ song.song_url }}" target="_blank">
-                                    {{ song.song_name }}
-                                    <span class="artist-name">{{ song.artist_name }}</span>
-                                </a>
-                            </div>
-                            {% if song.preview_url %}
-                            <button class="play-button" data-preview-url="{{ song.preview_url }}">
-                                <svg class="play-icon" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z"/>
-                                </svg>
-                                <svg class="pause-icon" viewBox="0 0 24 24">
-                                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                                </svg>
-                            </button>
-                            <audio class="audio-preview" src="{{ song.preview_url }}"></audio>
-                            {% endif %}
-                        </div>
-                    {% empty %}
-                        <div class="empty-message">No hay canciones favoritas</div>
-                    {% endfor %}
-                </div>
+        <div class="playlist-layout">
+            <div class="music-section playlist-section">
+                <iframe
+                    class="spotify-playlist-frame"
+                    title="{{ spotify_playlist_title }}"
+                    src="{{ spotify_playlist_embed_url }}"
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    loading="lazy">
+                </iframe>
             </div>
         </div>
     </div>
-    <script src="{% static 'js/audio-player.js' %}"></script>
     <script src="{% static 'js/background_motion.js' %}"></script>
 </body>
 </html>
