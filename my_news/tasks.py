@@ -5,6 +5,10 @@ from .models import News
 from .models import GroqGlobalSetting
 from .models import AIFilterInstruction
 import portalocker
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 def purge_orphan_vectors(batch_size: int = 256):
@@ -39,10 +43,10 @@ def purge_orphan_vectors(batch_size: int = 256):
                 orphan_point_ids[start:start + batch_size]
             )
 
-        print(f"Limpieza Qdrant completada: {deleted_vectors} vectores huérfanos eliminados")
+        logger.info(f"Limpieza Qdrant completada: {deleted_vectors} vectores huérfanos eliminados")
         return deleted_vectors
-    except Exception as e:
-        print(f"Error limpiando vectores huérfanos en Qdrant: {str(e)}")
+    except Exception:
+        logger.exception("Error limpiando vectores huérfanos en Qdrant")
         return 0
 
 def update_news_cron():
@@ -53,15 +57,15 @@ def update_news_cron():
             try:
                 retry_summarize_pending(limit=5, days=15)
             except Exception:
-                pass
+                logger.exception("Error reintentando resúmenes pendientes antes del cron")
             FeedService.fetch_and_save_news(max_ai_items=10)
-            print("News data updated successfully")
-            # Ejecutar limpieza tras actualizaciÃ³n
+            logger.info("Noticias actualizadas correctamente")
+            # Ejecutar limpieza tras actualización
             purge_old_news(15)
     except portalocker.exceptions.LockException:
-        print("Actualización de noticias omitida: ya hay otra ejecución en curso.")
-    except Exception as e:
-        print(f"Error updating news data: {str(e)}") 
+        logger.warning("Actualización de noticias omitida: ya hay otra ejecución en curso.")
+    except Exception:
+        logger.exception("Error actualizando noticias")
 
 
 def purge_old_news(days: int = 15):
@@ -80,17 +84,17 @@ def purge_old_news(days: int = 15):
         if vector_index is not None:
             try:
                 deleted_vectors += vector_index.delete_many(stale_guids)
-            except Exception as e:
-                print(f"Error eliminando vectores antiguos en Qdrant: {str(e)}")
+            except Exception:
+                logger.exception("Error eliminando vectores antiguos en Qdrant")
 
             deleted_vectors += purge_orphan_vectors()
 
-        print(f"Purga completada: {deleted_count} noticias eliminadas (> {days} días)")
+        logger.info(f"Purga completada: {deleted_count} noticias eliminadas (> {days} días)")
         if vector_index is not None:
-            print(f"Qdrant sincronizado: {deleted_vectors} vectores eliminados")
+            logger.info(f"Qdrant sincronizado: {deleted_vectors} vectores eliminados")
         return deleted_count
-    except Exception as e:
-        print(f"Error purgando noticias antiguas: {str(e)}")
+    except Exception:
+        logger.exception("Error purgando noticias antiguas")
         return 0
 
 
@@ -154,8 +158,8 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
                 news.save()
                 processed += 1
 
-        print(f"Reintento resÃºmenes completado. Noticias procesadas: {processed}")
+        logger.info(f"Reintento resúmenes completado. Noticias procesadas: {processed}")
         return processed
-    except Exception as e:
-        print(f"Error en retry_summarize_pending: {str(e)}")
+    except Exception:
+        logger.exception("Error en retry_summarize_pending")
         return 0

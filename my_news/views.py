@@ -22,10 +22,13 @@ import platform
 import hashlib
 import json
 import time
+import logging
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 # Create your views here.
+logger = logging.getLogger(__name__)
+
 PAGE_SIZE = 25
 COUNT_CACHE_TTL = 20
 PAGE_CACHE_TTL = 20
@@ -842,7 +845,7 @@ def test_redundancy(request):
             calculated_total = visible_today_count + filtered_keyword_today_count + filtered_ai_today_count + redundant_today_count
             if calculated_total != total_today:
                  # Si esto sigue ocurriendo, hay un estado de noticia no contemplado
-                 print(f"Advertencia [LOGICA EXCLUSIVA]: Suma ({calculated_total}) no coincide con total ({total_today}).")
+                 logger.warning(f"[LOGICA EXCLUSIVA] Suma ({calculated_total}) no coincide con total ({total_today}).")
                  # Como fallback, ajustamos visibles para cuadrar, aunque indica un problema subyacente
                  visible_today_count = total_today - filtered_keyword_today_count - filtered_ai_today_count - redundant_today_count
                  visible_today_count = max(0, visible_today_count)
@@ -915,8 +918,7 @@ def test_redundancy(request):
 
         return render(request, 'redundancy_test.html', context)
     except Exception as e:
-        # Considera loguear el error aquí para depuración
-        print(f"Error en test_redundancy: {str(e)}") # Log simple
+        logger.exception("Error en test_redundancy")
         # Podrías devolver una página de error o un JsonResponse
         # Para mantener la consistencia con la plantilla, podrías renderizarla con un mensaje de error
         return render(request, 'redundancy_test.html', {'error_message': f'Ocurrió un error: {str(e)}'})
