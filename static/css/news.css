@@ -83,8 +83,13 @@
 .news-media-zone {
     position: relative;
     flex: 0 0 140px;
+    height: 140px;
     width: 100%;
     overflow: hidden;
+    background-image: var(--news-fallback-image);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
 }
 
 .card-back {
@@ -474,6 +479,13 @@
         contain: layout paint style;
         margin-bottom: 15px;
     }
+    .news-media-zone {
+        flex: 0 0 140px;
+        height: 140px;
+        min-height: 140px;
+        max-height: 140px;
+    }
+
     .news-card .news-image { filter: saturate(0.95) contrast(0.98); }
     .card-front, .card-back { box-shadow: 0 4px 8px rgba(0,0,0,0.22), 0 6px 14px rgba(0,0,0,0.18); }
 }

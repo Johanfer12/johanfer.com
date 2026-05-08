@@ -656,11 +656,12 @@
                         <path d="M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5V7H9V5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
                     </svg>
                 </button>` : '';
+        const fallbackImage = USER_FLAGS.default_image_url;
         return `<div class="news-card-container" id="news-${escapeHtml(data.id)}" data-news-id="${escapeHtml(data.id)}" data-published-at="${escapeHtml(data.published_at || '')}" data-created-at="${escapeHtml(data.created_at || '')}">
     <div class="news-card">
         <div class="card-front">
-            <div class="news-media-zone">
-                <img src="${escapeHtml(data.image_url || USER_FLAGS.default_image_url)}" alt="${escapeHtml(data.title)}" class="news-image" loading="lazy" decoding="async">
+            <div class="news-media-zone" style="--news-fallback-image: url('${escapeHtml(fallbackImage)}');">
+                <img src="${escapeHtml(data.image_url || fallbackImage)}" data-fallback-src="${escapeHtml(fallbackImage)}" alt="${escapeHtml(data.title)}" class="news-image" loading="lazy" decoding="async">
             </div>
             <h3 class="news-title">${escapeHtml(data.title)}</h3>
             ${shortAnswer}

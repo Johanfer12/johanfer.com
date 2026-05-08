@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from .models import FeedSource, News
 from .services import FeedService, GroqRateLimiter
-from .views import NEWS_NOTIFICATION_SETTLE_DELAY
+from .views import NEWS_NOTIFICATION_SETTLE_DELAY, PAGE_SIZE
 
 
 class GroqRateLimiterTests(SimpleTestCase):
@@ -552,6 +552,32 @@ class NewsFeedOrderingTests(TestCase):
         self.assertEqual(list(response.context['object_list']), [latest_public_news])
         self.assertEqual(response.context['public_news_date'], latest_date.strftime('%d/%m/%Y'))
         self.assertEqual(response.context['public_storage_key'], f'public-news-hidden:{latest_date.isoformat()}')
+
+    def test_public_news_view_uses_private_page_size_pagination(self):
+        base_time = timezone.now()
+        published_dates = [base_time - timedelta(minutes=index) for index in range(PAGE_SIZE + 1)]
+        public_news = self.create_news_batch(
+            PAGE_SIZE + 1,
+            prefix='public-page',
+            published_dates=published_dates,
+        )
+
+        response = self.client.get(reverse('my_news:news_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['is_paginated'])
+        self.assertEqual(len(response.context['page_obj']), PAGE_SIZE)
+        self.assertContains(response, f'data-total-news="{PAGE_SIZE + 1}"')
+        self.assertContains(response, '?page=2')
+        self.assertContains(response, f'id="public-news-{public_news[0].id}"')
+        self.assertNotContains(response, f'id="public-news-{public_news[-1].id}"')
+        self.assertEqual(response.context['total_news'], PAGE_SIZE + 1)
+
+        page_two_response = self.client.get(reverse('my_news:news_list'), {'page': 2})
+
+        self.assertEqual(len(page_two_response.context['page_obj']), 1)
+        self.assertContains(page_two_response, f'id="public-news-{public_news[-1].id}"')
+        self.assertContains(page_two_response, '?page=1')
 
     def test_private_json_endpoint_requires_superuser(self):
         response = self.client.get(reverse('my_news:get_page'), {'page': 1, 'order': 'desc'})
