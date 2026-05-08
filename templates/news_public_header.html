@@ -3,7 +3,7 @@
         <div class="header-title">
             <h1>Noticias de Hoy</h1>
             <p class="total">
-                <span class="header-counter" id="public-news-counter">{{ total_news }}</span>
+                <span class="header-counter" id="public-news-counter" data-total-news="{{ total_news }}">{{ total_news }}</span>
                 {% if public_news_date %}
                 noticias del {{ public_news_date }}
                 {% else %}

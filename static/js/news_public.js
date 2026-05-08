@@ -15,6 +15,15 @@
         storageKey = 'public-news-hidden';
     }
 
+    const readPageData = () => {
+        try {
+            const raw = document.querySelector('#public-news-page-data')?.textContent;
+            return raw ? JSON.parse(raw) : {};
+        } catch (_) {
+            return {};
+        }
+    };
+
     const readHiddenIds = () => {
         try {
             const raw = localStorage.getItem(storageKey);
@@ -25,7 +34,18 @@
     };
 
     const hiddenIds = readHiddenIds();
+    const totalNews = Number.parseInt(
+        counter?.dataset.totalNews || counter?.textContent || '0',
+        10
+    ) || 0;
     const cards = () => CardUi.cards(grid || document);
+    const pageData = readPageData();
+    const pageSize = Number.parseInt(pageData.page_size || '0', 10) || cards().length || 25;
+    let nextRefillPage = (Number.parseInt(pageData.current_page || '1', 10) || 1) + 1;
+    const totalPages = Number.parseInt(pageData.total_pages || '1', 10) || 1;
+    const refillQueue = [];
+    let refillInFlight = false;
+
     const resetAllDesktopHoverCards = () => {
         if (CardUi.isMobile()) return;
         cards().forEach(CardUi.resetFlipState);
@@ -37,8 +57,71 @@
 
     const updateCounter = () => {
         const visibleCards = cards();
-        if (counter) counter.textContent = String(visibleCards.length);
+        if (counter) counter.textContent = String(Math.max(totalNews - hiddenIds.size, 0));
         if (emptyState) emptyState.hidden = visibleCards.length !== 0;
+    };
+
+    const getCardId = (card) => String(card?.dataset.newsId || '').trim();
+    const currentCardIds = () => new Set(cards().map(getCardId).filter(Boolean));
+
+    const pageUrl = (pageNumber) => {
+        const url = new URL(window.location.href);
+        url.searchParams.set('page', String(pageNumber));
+        return url.toString();
+    };
+
+    const prepareIncomingCard = (card) => {
+        card.classList.remove('is-hiding');
+        CardUi.addMobileDeleteButton(card);
+        card.querySelectorAll('.news-image').forEach((image) => {
+            image.loading = 'eager';
+        });
+        return card;
+    };
+
+    const drainRefillQueue = () => {
+        if (!grid) return;
+        while (cards().length < pageSize && refillQueue.length) {
+            const card = refillQueue.shift();
+            const id = getCardId(card);
+            if (!id || hiddenIds.has(id) || currentCardIds().has(id)) continue;
+            card.classList.add('inserting');
+            grid.appendChild(prepareIncomingCard(card));
+            CardUi.bindImageFallbacks(card);
+            setTimeout(() => card.classList.remove('inserting'), 450);
+        }
+    };
+
+    const fetchRefillPage = async (pageNumber) => {
+        const response = await fetch(pageUrl(pageNumber), {
+            credentials: 'same-origin',
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+        });
+        if (!response.ok) return;
+        const html = await response.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        doc.querySelectorAll('#public-news-grid .news-card-container').forEach((card) => {
+            const id = getCardId(card);
+            if (id && !hiddenIds.has(id) && !currentCardIds().has(id)) refillQueue.push(card);
+        });
+    };
+
+    const refillCards = async () => {
+        if (!grid || refillInFlight || cards().length >= pageSize) return;
+        refillInFlight = true;
+        try {
+            drainRefillQueue();
+            while (cards().length < pageSize && nextRefillPage <= totalPages) {
+                await fetchRefillPage(nextRefillPage);
+                nextRefillPage += 1;
+                drainRefillQueue();
+            }
+        } catch (error) {
+            console.warn('No se pudieron cargar tarjetas adicionales.', error);
+        } finally {
+            refillInFlight = false;
+            updateCounter();
+        }
     };
 
     const removeCard = (card, id) => {
@@ -51,6 +134,7 @@
             card.remove();
             if (oldPositions) CardUi.animateReposition(oldPositions, {excludedIds: [card.id]});
             updateCounter();
+            refillCards();
         }, 220);
     };
 
@@ -59,6 +143,7 @@
         if (hiddenIds.has(String(card.dataset.newsId || ''))) card.remove();
     });
     updateCounter();
+    refillCards();
 
     grid?.addEventListener('click', (event) => {
         const button = event.target.closest('.delete-btn, .mobile-delete-btn');

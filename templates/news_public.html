@@ -29,18 +29,35 @@
     {% include 'news_public_header.html' %}
 
     <main class="main-content public-news-page">
-        {% include 'news_grid.html' with grid_id='public-news-grid' articles=object_list card_id_prefix='public-news' show_save_button=False show_delete_button=True show_similarity_score=False %}
+        {% include 'news_grid.html' with grid_id='public-news-grid' articles=page_obj card_id_prefix='public-news' show_save_button=False show_delete_button=True show_similarity_score=False %}
 
-        <div class="public-news-empty" id="public-news-empty" {% if object_list %}hidden{% endif %}>
-            {% if object_list %}
+        <div class="public-news-empty" id="public-news-empty" {% if page_obj %}hidden{% endif %}>
+            {% if page_obj %}
             <button type="button" class="public-news-link public-news-reset-btn" id="public-news-reset-btn">Restablecer ocultas</button>
             {% else %}
             <h3>No hay noticias disponibles.</h3>
             {% endif %}
         </div>
+
+        {% if is_paginated %}
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}">Anterior</a>
+            {% endif %}
+
+            <span class="active">
+                {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+            </span>
+
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}">Siguiente</a>
+            {% endif %}
+        </div>
+        {% endif %}
     </main>
 
     {{ public_storage_key|json_script:"public-news-storage-key" }}
+    {{ public_page_data|json_script:"public-news-page-data" }}
     <script src="{% static 'js/news_cards_common.js' %}"></script>
     <script src="{% static 'js/news_public.js' %}"></script>
     <script src="{% static 'js/background_motion.js' %}"></script>

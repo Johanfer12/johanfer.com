@@ -109,6 +109,30 @@
         delete card.dataset.flipLocked;
     };
 
+    const useFallbackImage = (image) => {
+        const fallbackSrc = image?.dataset?.fallbackSrc;
+        if (!image || !fallbackSrc || image.dataset.fallbackApplied === 'true') return;
+        image.dataset.fallbackApplied = 'true';
+        image.src = fallbackSrc;
+    };
+
+    const bindImageFallbacks = (root = document) => {
+        root.querySelectorAll?.('.news-image').forEach((image) => {
+            if (!image.isConnected) return;
+            if (image.complete && image.naturalWidth === 0) useFallbackImage(image);
+        });
+    };
+
+    document.addEventListener('error', (event) => {
+        if (event.target?.matches?.('.news-image')) useFallbackImage(event.target);
+    }, true);
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => bindImageFallbacks());
+    } else {
+        bindImageFallbacks();
+    }
+
     window.NewsCards = {
         isMobile,
         cards,
@@ -119,5 +143,6 @@
         isPointerWithinCardBounds,
         isCardActionTarget,
         resetFlipState,
+        bindImageFallbacks,
     };
 })();

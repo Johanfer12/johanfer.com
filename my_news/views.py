@@ -297,7 +297,7 @@ class NewsListView(ListView):
         return bool(user.is_authenticated and user.is_superuser)
 
     def get_paginate_by(self, queryset):
-        return PAGE_SIZE if self.is_private_view() else None
+        return PAGE_SIZE
 
     def get_template_names(self):
         return ['news_list.html'] if self.is_private_view() else ['news_public.html']
@@ -335,12 +335,20 @@ class NewsListView(ListView):
 
         if not self.is_private_view():
             local_date = getattr(self, 'public_news_date', None)
-            total_news = context['object_list'].count() if hasattr(context['object_list'], 'count') else len(context['object_list'])
+            if context.get('is_paginated'):
+                total_news = context['paginator'].count
+            else:
+                total_news = context['object_list'].count() if hasattr(context['object_list'], 'count') else len(context['object_list'])
             context.update({
                 'total_news': total_news,
                 'public_news_mode': True,
                 'public_news_date': local_date.strftime('%d/%m/%Y') if local_date else None,
                 'public_storage_key': f"public-news-hidden:{local_date.isoformat()}" if local_date else "public-news-hidden:empty",
+                'public_page_data': {
+                    'current_page': context['page_obj'].number,
+                    'total_pages': context['paginator'].num_pages,
+                    'page_size': PAGE_SIZE,
+                },
             })
             return context
         

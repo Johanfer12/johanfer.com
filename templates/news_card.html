@@ -2,11 +2,11 @@
 <div class="news-card-container" id="{{ card_id_prefix|default:'news' }}-{{ article.id }}" data-news-id="{{ article.id }}" data-published-at="{{ article.published_date|date:'c' }}" data-created-at="{{ article.created_at|date:'c' }}">
     <div class="news-card">
         <div class="card-front">
-            <div class="news-media-zone">
+            <div class="news-media-zone" style="--news-fallback-image: url('{% static 'Img/News_Default.png' %}');">
                 {% if article.image_url %}
-                <img src="{{ article.image_url }}" alt="{{ article.title }}" class="news-image" loading="lazy" decoding="async">
+                <img src="{{ article.image_url }}" data-fallback-src="{% static 'Img/News_Default.png' %}" alt="{{ article.title }}" class="news-image" loading="lazy" decoding="async">
                 {% else %}
-                <img src="{% static 'Img/News_Default.png' %}" alt="Imagen no disponible" class="news-image" loading="lazy" decoding="async">
+                <img src="{% static 'Img/News_Default.png' %}" data-fallback-src="{% static 'Img/News_Default.png' %}" alt="Imagen no disponible" class="news-image" loading="lazy" decoding="async">
                 {% endif %}
             </div>
             <h3 class="news-title">{{ article.title }}</h3>
