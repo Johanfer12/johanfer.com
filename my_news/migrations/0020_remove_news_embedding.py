@@ -8,10 +8,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveIndex(
-            model_name="news",
-            name="news_redundancy_idx",
-        ),
         migrations.RemoveField(
             model_name="news",
             name="embedding",
