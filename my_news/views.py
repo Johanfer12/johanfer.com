@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.templatetags.static import static
 from django.core.cache import cache
+from django.conf import settings
 from datetime import datetime, time as datetime_time, timedelta
 import pytz
 from django.db.models import Q, Count, Max
@@ -933,51 +934,55 @@ def test_redundancy(request):
 
 @require_GET
 def generate_embeddings(request):
-    """Vista para generar embeddings para noticias existentes"""
+    """Indexa noticias visibles recientes en Qdrant sin guardar vectores en SQLite."""
     try:
-        # Inicializar modelo
-        embedding_model_name = EmbeddingService.initialize_embedding_model()
-        
-        # Obtener noticias sin embedding usando el manager visible
-        news_without_embedding = News.visible.filter(
-            embedding__isnull=True
-        ).order_by('-published_date')[:50]  # Limitar a 50 para evitar sobrecarga
-        
+        gemini_client = FeedService.initialize_gemini()
+        vector_index = FeedService.initialize_vector_index()
+        if vector_index is None:
+            return JsonResponse({'status': 'error', 'message': 'Qdrant no disponible'})
+
+        news_to_index = News.visible.order_by('-published_date')[:50]
+
         processed_count = 0
-        for news in news_without_embedding:
-            # Combinar título y descripción para el embedding
+        for news in news_to_index:
             content = f"{news.title} {news.description}"
-            embedding = EmbeddingService.generate_embedding(content, embedding_model_name)
-            
-            if embedding:
-                news.embedding = embedding
-                news.save(update_fields=['embedding'])
-                processed_count += 1
+            embedding = EmbeddingService.generate_embedding(content, gemini_client)
+            if not embedding:
+                continue
+
+            vector_index.ensure_collection(len(embedding))
+            payload = {
+                'news_id': news.id,
+                'source_id': news.source_id,
+                'published_ts': int(news.published_date.timestamp()) if news.published_date else int(time.time()),
+                'is_filtered': False,
+                'is_redundant': False,
+                'model_version': getattr(settings, 'GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001'),
+            }
+            vector_index.upsert(news.guid, embedding, payload)
+            processed_count += 1
         
         return JsonResponse({
             'status': 'success',
             'processed_count': processed_count,
-            'remaining': News.visible.filter(embedding__isnull=True).count()
+            'remaining': None
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
 
 @require_GET
 def check_all_redundancy(request):
-    """Vista para verificar redundancia en todas las noticias con embeddings"""
+    """Verifica redundancia en noticias visibles usando Qdrant."""
     try:
-        # Inicializar modelo
-        embedding_model_name = EmbeddingService.initialize_embedding_model()
-        
-        # Obtener noticias no marcadas como redundantes usando el manager visible
-        news_to_check = News.visible.filter(
-            embedding__isnull=False
-        ).order_by('-published_date')[:100]  # Limitar a 100 para evitar sobrecarga
+        gemini_client = FeedService.initialize_gemini()
+        vector_index = FeedService.initialize_vector_index()
+
+        news_to_check = News.visible.order_by('-published_date')[:100]
         
         redundant_count = 0
         for news in news_to_check:
             is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
-                news, embedding_model_name
+                news, gemini_client, vector_index=vector_index
             )
             
             if is_redundant and similar_news:

@@ -64,7 +64,7 @@ class NewsAdmin(admin.ModelAdmin):
     list_filter = ('source', 'published_date', 'is_deleted', 'is_filtered', 'is_ai_filtered', 'is_redundant', 'filtered_by')
     search_fields = ('title', 'description')
     date_hierarchy = 'published_date'
-    readonly_fields = ('embedding', 'similar_to', 'similarity_score', 'is_redundant', 'filtered_by', 'ai_filter_reason', 'is_ai_filtered')
+    readonly_fields = ('similar_to', 'similarity_score', 'is_redundant', 'filtered_by', 'ai_filter_reason', 'is_ai_filtered')
     actions = ['mark_as_deleted_by_user', 'restore_news']
 
     def mark_as_deleted_by_user(self, request, queryset):
