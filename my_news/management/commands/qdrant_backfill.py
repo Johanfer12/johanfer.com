@@ -9,7 +9,7 @@ from my_news.services import FeedService, EmbeddingService
 
 
 class Command(BaseCommand):
-    help = "Indexa en Qdrant las noticias de los últimos N días, generando embeddings con Gemini si faltan o la dimensión no coincide."
+    help = "Indexa en Qdrant las noticias de los últimos N días, generando embeddings transitorios con Gemini."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -33,7 +33,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--force",
             action="store_true",
-            help="Recalcula el embedding aunque exista",
+            help="Conservado por compatibilidad; los embeddings ya no se guardan en SQLite.",
         )
 
     def handle(self, *args, **options):
@@ -74,26 +74,16 @@ class Command(BaseCommand):
 
         target_dim = int(getattr(settings, "GEMINI_EMBEDDING_DIM", 768))
 
-        # Asegurar colección: si la primera noticia no tiene embedding o es otra dimensión, se corrige en el loop
         vector_index.ensure_collection(target_dim)
 
         start = time.time()
         for news in qs.iterator():
             processed += 1
             text = f"{news.title} {news.description or ''}".strip()
-            emb = news.embedding
-            needs_reembed = force or (not emb) or (isinstance(emb, list) and len(emb) != target_dim)
-            if needs_reembed:
-                emb = EmbeddingService.generate_embedding(text, gemini_client)
-                if not emb:
-                    skipped += 1
-                    continue
-                try:
-                    news.embedding = emb
-                    news.save(update_fields=["embedding"])
-                except Exception:
-                    # Si el modelo News no soporta actualizar embedding aquí, continuar solo con Qdrant
-                    pass
+            emb = EmbeddingService.generate_embedding(text, gemini_client)
+            if not emb:
+                skipped += 1
+                continue
 
             try:
                 vector_index.ensure_collection(len(emb))
@@ -121,4 +111,3 @@ class Command(BaseCommand):
                 f"Backfill completado en {elapsed:.1f}s. Procesadas={processed}, Indexadas={indexed}, Omitidas={skipped}"
             )
         )
-

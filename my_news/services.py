@@ -212,21 +212,23 @@ class EmbeddingService:
         """
         threshold = news_item.source.similarity_threshold
 
-        if not news_item.embedding:
+        embedding = getattr(news_item, "_embedding_vector", None)
+        if not embedding:
             content_for_embedding = f"{news_item.title} {news_item.description}"
-            news_item.embedding = EmbeddingService.generate_embedding(content_for_embedding, client)
+            embedding = EmbeddingService.generate_embedding(content_for_embedding, client)
+            news_item._embedding_vector = embedding
 
-        if not news_item.embedding:
+        if not embedding:
             return False, None, 0.0
 
         # Intentar vector DB (Qdrant) con ventana de 14 días
         try:
             if vector_index is not None and hasattr(vector_index, 'search'):
-                vector_index.ensure_collection(len(news_item.embedding))
+                vector_index.ensure_collection(len(embedding))
                 now_ts = int(time.time())
                 min_ts = now_ts - 14 * 24 * 3600
                 hits = vector_index.search(
-                    vector=news_item.embedding,
+                    vector=embedding,
                     top_k=5,
                     min_published_ts=min_ts,
                     exclude_guid=getattr(news_item, 'guid', None),
@@ -252,22 +254,17 @@ class EmbeddingService:
             candidates = [
                 cached_news
                 for cached_news in recent_news_cache
-                if cached_news.id != getattr(news_item, 'id', None) and cached_news.embedding
+                if cached_news.id != getattr(news_item, 'id', None)
+                and getattr(cached_news, "_embedding_vector", None)
             ]
         else:
-            time_threshold = timezone.now() - timedelta(days=14)
-            candidates = list(News.objects.filter(
-                created_at__gte=time_threshold,
-                is_redundant=False,
-                is_filtered=False,
-                embedding__isnull=False
-            ).exclude(id=news_item.id))
+            candidates = []
         highest_similarity = 0.0
         most_similar_news = None
 
         for existing_news in candidates:
             similarity = EmbeddingService.cosine_similarity(
-                news_item.embedding, existing_news.embedding
+                embedding, getattr(existing_news, "_embedding_vector", None)
             )
             if similarity > highest_similarity:
                 highest_similarity = similarity
@@ -695,15 +692,7 @@ class FeedService:
         
         # Calcular la fecha límite (15 días atrás)
         fifteen_days_ago = timezone.now() - timedelta(days=15)
-        redundancy_window = timezone.now() - timedelta(days=14)
-        recent_news_cache = list(
-            News.objects.filter(
-                created_at__gte=redundancy_window,
-                is_redundant=False,
-                is_filtered=False,
-                embedding__isnull=False
-            ).select_related('source')
-        )
+        recent_news_cache = []
 
         existing_guids = set(
             News.objects.filter(published_date__gte=fifteen_days_ago).values_list('guid', flat=True)
@@ -968,15 +957,14 @@ class FeedService:
                 )
                 continue
             
-            # Verificar redundancia (esto generará el embedding internamente si no existe)
+            # Verificar redundancia (esto genera un embedding transitorio; Qdrant lo persiste)
             is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
                 news_item, gemini_client, recent_news_cache, vector_index
             )
+            embedding = getattr(news_item, "_embedding_vector", None)
 
             # Consolidar en una sola escritura posterior al create()
             update_fields = []
-            if news_item.embedding:
-                update_fields.append('embedding')
             if similar_news:
                 news_item.similar_to = similar_news
                 news_item.similarity_score = similarity_score
@@ -997,12 +985,12 @@ class FeedService:
                 # de-duplicar campos para evitar SQL redundante
                 news_item.save(update_fields=list(dict.fromkeys(update_fields)))
 
-            if not is_redundant and news_item.embedding:
+            if not is_redundant and embedding:
                 recent_news_cache.append(news_item)
                 # Indexar en Qdrant (si está disponible) para futuras búsquedas
                 if vector_index is not None:
                     try:
-                        vector_index.ensure_collection(len(news_item.embedding))
+                        vector_index.ensure_collection(len(embedding))
                         published_ts = int(news_item.published_date.timestamp()) if news_item.published_date else int(time.time())
                         payload = {
                             'news_id': news_item.id,
@@ -1012,7 +1000,7 @@ class FeedService:
                             'is_redundant': False,
                             'model_version': getattr(settings, 'GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001'),
                         }
-                        vector_index.upsert(news_item.guid, news_item.embedding, payload)
+                        vector_index.upsert(news_item.guid, embedding, payload)
                     except Exception:
                         pass
 

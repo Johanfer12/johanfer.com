@@ -51,8 +51,7 @@ class News(models.Model):
     filtered_by = models.ForeignKey('FilterWord', null=True, blank=True, on_delete=models.SET_NULL,
                                   verbose_name="Palabra Filtro", related_name="filtered_news")
     
-    # Nuevos campos para embeddings y detección de redundancia
-    embedding = models.JSONField(null=True, blank=True, verbose_name="Embedding del contenido")
+    # Campos para detección de redundancia; los vectores viven en Qdrant.
     similar_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, 
                                   verbose_name="Noticia similar", related_name="similar_news")
     similarity_score = models.FloatField(null=True, blank=True, verbose_name="% Similitud")
