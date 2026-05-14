@@ -4,7 +4,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("my_news", "0019_add_db_indexes"),
+        ("my_news", "0028_news_deleted_at_news_news_deleted_at_idx"),
     ]
 
     operations = [
