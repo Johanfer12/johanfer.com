@@ -356,6 +356,20 @@ a:hover {
     overflow: hidden;
 }
 
+.modal.modal-open {
+    animation: modalFadeIn 0.22s ease-out;
+}
+
+.modal.modal-closing {
+    display: flex !important;
+    pointer-events: none;
+    animation: modalFadeOut 0.22s ease-in forwards;
+}
+
+.modal.modal-closing .modal-content {
+    animation: zoomOut 0.22s ease-in forwards;
+}
+
 .modal-content h2 {
     margin: 20px 0 10px;
     line-height: 1.15;
@@ -730,6 +744,35 @@ a:hover {
     to {
         transform: scale(1);
         opacity: 1;
+    }
+}
+
+@keyframes zoomOut {
+    from {
+        transform: scale(1);
+        opacity: 1;
+    }
+    to {
+        transform: scale(0.92);
+        opacity: 0;
+    }
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes modalFadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
     }
 }
 
