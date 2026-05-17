@@ -86,10 +86,7 @@
     height: 140px;
     width: 100%;
     overflow: hidden;
-    background-image: var(--news-fallback-image);
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+    background: rgba(9, 16, 28, 0.54);
 }
 
 .card-back {
