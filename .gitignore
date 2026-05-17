@@ -8,6 +8,8 @@ CLAUDE.md
 /ops_local/
 RASPBERRY_SERVER_REBUILD.md
 AGENTS.md
+/scripts/
+/docs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
