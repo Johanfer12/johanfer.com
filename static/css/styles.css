@@ -75,6 +75,7 @@ html::after {
 
 body {
     font-family: 'Ubuntu', sans-serif;
+    font-synthesis-weight: auto;
     color: var(--text-primary);
     background-color: var(--bg-1);
     background-image:

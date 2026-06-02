@@ -6,6 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#000000">
     <meta name="color-scheme" content="dark">
+    <script>
+        if (/Instagram/i.test(navigator.userAgent || '')) {
+            document.documentElement.classList.add('instagram-webview');
+        }
+    </script>
     <title>Noticias</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/news.css' %}">

@@ -377,19 +377,7 @@
     };
 
     const applyAdaptiveTitleSize = (scope = document) => {
-        const titles = $$('.news-title', scope);
-        titles.forEach((titleEl) => {
-            titleEl.classList.remove('is-title-overflow-4');
-            const lineHeight = getLineHeight(titleEl);
-            if (!lineHeight) return;
-            const renderedLines = Math.round(titleEl.scrollHeight / lineHeight);
-            const cardFront = titleEl.closest('.card-front');
-            const shortAnswerText = normalizeText(cardFront?.querySelector('.short-answer')?.textContent || '');
-            const maxLines = shortAnswerText ? 4 : 6;
-            if (renderedLines > maxLines) {
-                titleEl.classList.add('is-title-overflow-4');
-            }
-        });
+        CardUi.fitTitleToSummary?.(scope);
     };
 
     const drawCenteredParagraph = (ctx, text, boxX, boxY, boxWidth, boxHeight, { font, color, lineHeight, maxLines, verticalAlign = 'center' }) => {
@@ -1505,6 +1493,25 @@
     });
 
     const isCardActionTarget = CardUi.isCardActionTarget;
+    const mobileTapState = {
+        startX: 0,
+        startY: 0,
+        moved: false,
+    };
+
+    DOM.grid?.addEventListener('pointerdown', (e) => {
+        if (!isMobile() || e.pointerType !== 'touch') return;
+        mobileTapState.startX = e.clientX;
+        mobileTapState.startY = e.clientY;
+        mobileTapState.moved = false;
+    }, {passive: true});
+
+    DOM.grid?.addEventListener('pointermove', (e) => {
+        if (!isMobile() || e.pointerType !== 'touch') return;
+        const dx = Math.abs(e.clientX - mobileTapState.startX);
+        const dy = Math.abs(e.clientY - mobileTapState.startY);
+        if (dx > 8 || dy > 8) mobileTapState.moved = true;
+    }, {passive: true});
 
     // Delegación de eventos para reducir listeners por tarjeta
     DOM.grid?.addEventListener('click', (e) => {
@@ -1550,6 +1557,8 @@
 
             const cardElement = container.querySelector('.news-card');
             if (!cardElement || cardElement.dataset.flipLocked === 'true') return;
+            if (mobileTapState.moved) return;
+            if (cardElement.classList.contains('is-flipped') && e.target.closest('.news-description')) return;
 
             const shouldFlip = !cardElement.classList.contains('is-flipped');
             $$('.news-card-container', DOM.grid).forEach((card) => {

@@ -6,6 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#000000">
     <meta name="color-scheme" content="dark">
+    <script>
+        if (/Instagram/i.test(navigator.userAgent || '')) {
+            document.documentElement.classList.add('instagram-webview');
+        }
+    </script>
     <title>Noticias de Hoy | {{ site_name }}</title>
     <meta name="description" content="Las noticias más recientes disponibles en {{ site_name }}.">
     <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">

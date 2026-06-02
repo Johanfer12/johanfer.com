@@ -3,6 +3,16 @@
     box-sizing: border-box;
 }
 
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+html.instagram-webview {
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
+}
+
 /* Contenedor principal */
 .main-content {
     min-height: calc(100vh - 150px);
@@ -98,6 +108,7 @@
     justify-content: space-between;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
     contain: content;
 }
 
@@ -128,6 +139,7 @@
 .news-title {
     flex: 0 0 auto;
     font-size: 1.05em;
+    font-weight: 700;
     margin: 10px 15px 5px 15px;
     color: #f2f5fb;
     line-height: 1.28;
@@ -138,6 +150,20 @@
 .news-title.is-title-overflow-4 {
     font-size: 0.9em;
     line-height: 1.22;
+}
+
+.news-title.is-title-clamped {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--title-lines, 4);
+    line-clamp: var(--title-lines, 4);
+}
+
+.news-title,
+.meta-info,
+.short-answer {
+    font-synthesis-weight: auto;
 }
 
 .news-meta {
@@ -172,6 +198,7 @@
     hyphens: auto;
     word-break: break-word;
     overscroll-behavior: contain;
+    touch-action: pan-y;
 }
 
 .news-description br {
@@ -463,10 +490,15 @@
 
     .news-grid {
         gap: 0;
+        grid-template-columns: minmax(0, min(330px, 96%));
+        padding: 0 0 18px;
     }
 
     /* Deshabilitar resaltado azul al tocar en móviles */
     .news-card-container {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 33 / 40;
         -webkit-tap-highlight-color: transparent; /* iOS/Safari */
         -webkit-user-select: none; /* Safari */
         -moz-user-select: none; /* Firefox */
@@ -477,10 +509,38 @@
         margin-bottom: 15px;
     }
     .news-media-zone {
-        flex: 0 0 140px;
-        height: 140px;
+        flex: 0 0 clamp(140px, 42.8vw, 154px);
+        height: clamp(140px, 42.8vw, 154px);
         min-height: 140px;
-        max-height: 140px;
+        max-height: 154px;
+    }
+
+    .news-title {
+        font-size: clamp(1.08rem, 4.65vw, 1.2rem);
+    }
+
+    .card-front .short-answer {
+        font-size: clamp(0.84rem, 3.55vw, 0.94rem);
+    }
+
+    .news-meta {
+        font-size: clamp(0.86rem, 3.25vw, 0.94rem);
+    }
+
+    html.instagram-webview .news-title,
+    html.instagram-webview .short-answer,
+    html.instagram-webview .news-meta {
+        max-height: 999999px;
+    }
+
+    html.instagram-webview .news-title {
+        font-size: 0.96em;
+        line-height: 1.24;
+    }
+
+    html.instagram-webview .short-answer {
+        font-size: 0.76em;
+        line-height: 1.35;
     }
 
     .news-card .news-image { filter: saturate(0.95) contrast(0.98); }
@@ -731,16 +791,11 @@
 .short-answer {
     font-size: 0.8em;
     color: rgba(227, 233, 245, 0.68);
+    font-weight: 500;
     margin: 0 15px 6px 15px;
     margin-top: auto;
     line-height: 1.4;
     font-style: italic;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    text-overflow: ellipsis;
     word-break: break-word;
     overflow-wrap: anywhere;
 }

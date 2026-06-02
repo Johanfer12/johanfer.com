@@ -120,6 +120,38 @@
         root.querySelectorAll?.('.news-image').forEach((image) => {
             if (!image.isConnected) return;
             if (image.complete && image.naturalWidth === 0) useFallbackImage(image);
+            image.addEventListener('load', () => fitTitleToSummary(image.closest('.news-card-container') || document), {once: true});
+        });
+    };
+
+    const getLineHeight = (element) => {
+        if (!element) return 0;
+        const style = window.getComputedStyle(element);
+        const lineHeight = Number.parseFloat(style.lineHeight);
+        if (!Number.isNaN(lineHeight)) return lineHeight;
+        const fontSize = Number.parseFloat(style.fontSize) || 16;
+        return fontSize * 1.2;
+    };
+
+    const fitTitleToSummary = (scope = document) => {
+        scope.querySelectorAll?.('.card-front').forEach((front) => {
+            const title = front.querySelector('.news-title');
+            if (!title) return;
+
+            title.classList.remove('is-title-overflow-4', 'is-title-clamped');
+            title.style.removeProperty('--title-lines');
+
+            const lineHeight = getLineHeight(title);
+            if (!lineHeight) return;
+
+            if (front.scrollHeight <= front.clientHeight + 1) return;
+
+            const naturalTitleLines = Math.max(1, Math.ceil(title.scrollHeight / lineHeight));
+            for (let titleLines = naturalTitleLines - 1; titleLines >= 1; titleLines -= 1) {
+                title.style.setProperty('--title-lines', String(titleLines));
+                title.classList.add('is-title-clamped');
+                if (front.scrollHeight <= front.clientHeight + 1) break;
+            }
         });
     };
 
@@ -128,10 +160,23 @@
     }, true);
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => bindImageFallbacks());
+        document.addEventListener('DOMContentLoaded', () => {
+            bindImageFallbacks();
+            fitTitleToSummary();
+        });
     } else {
         bindImageFallbacks();
+        fitTitleToSummary();
     }
+
+    const scheduleTitleFit = () => {
+        fitTitleToSummary();
+        window.setTimeout(fitTitleToSummary, 80);
+        window.setTimeout(fitTitleToSummary, 240);
+    };
+
+    window.addEventListener('load', scheduleTitleFit);
+    window.addEventListener('resize', scheduleTitleFit);
 
     window.NewsCards = {
         isMobile,
@@ -144,5 +189,6 @@
         isCardActionTarget,
         resetFlipState,
         bindImageFallbacks,
+        fitTitleToSummary,
     };
 })();

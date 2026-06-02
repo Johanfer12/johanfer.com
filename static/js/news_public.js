@@ -88,6 +88,7 @@
             card.classList.add('inserting');
             grid.appendChild(prepareIncomingCard(card));
             CardUi.bindImageFallbacks(card);
+            CardUi.fitTitleToSummary?.(card);
             setTimeout(() => card.classList.remove('inserting'), 450);
         }
     };
