@@ -10,6 +10,19 @@ class Book(models.Model):
     book_link = models.TextField(unique=True)
     description = models.TextField(null=True, blank=True)
     genres = models.TextField(null=True, blank=True)
+    goodreads_id = models.CharField(max_length=32, null=True, blank=True, unique=True)
+    isbn = models.CharField(max_length=32, null=True, blank=True)
+    num_pages = models.PositiveIntegerField(null=True, blank=True)
+    published_year = models.PositiveIntegerField(null=True, blank=True)
+    goodreads_date_added = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def goodreads_url(self):
+        if not self.book_link:
+            return ""
+        if self.book_link.startswith("http://") or self.book_link.startswith("https://"):
+            return self.book_link
+        return f"https://www.goodreads.com{self.book_link}"
 
     class Meta:
         ordering = ['-date_read']
@@ -29,6 +42,11 @@ class DeletedBook(models.Model):
     book_link = models.TextField()
     description = models.TextField(null=True, blank=True)
     genres = models.TextField(null=True, blank=True)
+    goodreads_id = models.CharField(max_length=32, null=True, blank=True)
+    isbn = models.CharField(max_length=32, null=True, blank=True)
+    num_pages = models.PositiveIntegerField(null=True, blank=True)
+    published_year = models.PositiveIntegerField(null=True, blank=True)
+    goodreads_date_added = models.DateTimeField(null=True, blank=True)
     deleted_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -23,7 +23,7 @@ const createBookItem = (book) => {
                 <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(book.title)}">
             </div>
             <div class="book-info">
-                <a href="https://www.goodreads.com${escapeHtml(book.book_link)}" class="book-title" target="_blank">${escapeHtml(book.title)}</a>
+            <a href="${escapeHtml(book.book_link)}" class="book-title" target="_blank">${escapeHtml(book.title)}</a>
                 <p><strong>Autor</strong><br>${escapeHtml(book.author)}</p>
                 <p><strong>Mi Calificación</strong><br>${'★'.repeat(book.my_rating)}</p>
                 <p><strong>Calificación General</strong><br>${escapeHtml(book.public_rating)}</p>
@@ -46,7 +46,8 @@ const createBookModal = (book) => {
             <p><strong>Autor:</strong> ${escapeHtml(book.author)}</p>
             <p><strong>Mi Calificación</strong> ${'★'.repeat(book.my_rating)}</p>
             <p><strong>Calificación General:</strong> ${escapeHtml(book.public_rating)}</p>
-            <p><strong>Géneros:</strong> ${escapeHtml(book.genres || 'Sin género')}</p>
+            ${book.num_pages ? `<p><strong>Páginas:</strong> ${escapeHtml(String(book.num_pages))}</p>` : ''}
+            ${book.published_year ? `<p><strong>Publicado:</strong> ${escapeHtml(String(book.published_year))}</p>` : ''}
             <p><strong>Lo leí el...</strong> ${escapeHtml(book.date_read)}</p>
             <div class="book-description">
                 <strong>Descripción</strong><br><br>

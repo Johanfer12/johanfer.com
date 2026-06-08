@@ -212,6 +212,8 @@ QDRANT_COLLECTION = os.getenv('QDRANT_COLLECTION', 'news_embeddings_gemini001_d7
 # Goodreads
 GOODREADS_USER_ID = os.getenv('GOODREADS_USER_ID', '27786474-johan-gonzalez')
 GOODREADS_COOKIE = os.getenv('GOODREADS_COOKIE', '')
+GOODREADS_RSS_URL = os.getenv('GOODREADS_RSS_URL', 'https://www.goodreads.com/review/list_rss/27786474?shelf=read')
+GOODREADS_RSS_PER_PAGE = int(os.getenv('GOODREADS_RSS_PER_PAGE', 200))
 
 # Spotify
 SPOTIFY_REFRESH_ENABLED = os.getenv('SPOTIFY_REFRESH_ENABLED', 'true').lower() in ('true', '1', 'yes')

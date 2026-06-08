@@ -3,8 +3,8 @@ from .models import Book, DeletedBook, VisitLog
 
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
-    list_display = ('title', 'author', 'my_rating', 'date_read')
-    search_fields = ('title', 'author')
+    list_display = ('title', 'author', 'my_rating', 'date_read', 'num_pages', 'published_year')
+    search_fields = ('title', 'author', 'goodreads_id', 'isbn')
 
 
 @admin.register(DeletedBook)

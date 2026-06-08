@@ -1,12 +1,16 @@
 from bs4 import BeautifulSoup
+import feedparser
 import requests
 import os
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
+from email.utils import parsedate_to_datetime
 from PIL import Image
 import re
 import logging
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from django.utils import timezone
 from django.conf import settings
+from django.db.models import Q
 from .models import Book, DeletedBook
 
 logger = logging.getLogger(__name__)
@@ -143,7 +147,185 @@ def extract_goodreads_id(url):
     match = re.search(r'/show/(\d+)', url)
     return match.group(1) if match else None
 
+def parse_rss_datetime(value):
+    if not value:
+        return None
+    try:
+        parsed = parsedate_to_datetime(value)
+        if parsed and timezone.is_naive(parsed):
+            parsed = timezone.make_aware(parsed, dt_timezone.utc)
+        return parsed
+    except Exception:
+        return None
+
+
+def parse_rss_date(value):
+    parsed = parse_rss_datetime(value)
+    return parsed.date() if parsed else None
+
+
+def parse_positive_int(value):
+    try:
+        parsed = int(str(value or "").strip())
+        return parsed if parsed > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def normalize_goodreads_book_link(entry):
+    summary = entry.get("summary") or ""
+    if summary:
+        soup = BeautifulSoup(summary, "html.parser")
+        link = soup.find("a", href=re.compile(r"/book/show/"))
+        if link and link.get("href"):
+            href = link["href"].split("?", 1)[0]
+            match = re.search(r"https?://www\.goodreads\.com(?P<path>/book/show/[^\"'#?]+)", href)
+            if match:
+                return match.group("path")
+            if href.startswith("/book/show/"):
+                return href
+
+    book_id = (entry.get("book_id") or "").strip()
+    if book_id:
+        return f"/book/show/{book_id}"
+
+    return (entry.get("link") or "").split("?", 1)[0]
+
+
+def find_existing_book(goodreads_id, book_link):
+    query = Q()
+    if goodreads_id:
+        query |= Q(goodreads_id=goodreads_id)
+        query |= Q(book_link__contains=f"/show/{goodreads_id}")
+    if book_link:
+        query |= Q(book_link=book_link)
+    if not query:
+        return None
+    return Book.objects.filter(query).first()
+
+
+def build_rss_page_url(rss_url, page_number, per_page):
+    parts = urlsplit(rss_url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query["page"] = str(page_number)
+    query["per_page"] = str(per_page)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
+def fetch_goodreads_rss_entries(rss_url):
+    per_page = max(1, min(int(getattr(settings, "GOODREADS_RSS_PER_PAGE", 200) or 200), 200))
+    entries = []
+    seen_ids = set()
+
+    for page_number in range(1, 100):
+        page_url = build_rss_page_url(rss_url, page_number, per_page)
+        feed = feedparser.parse(page_url)
+        if getattr(feed, "bozo", False):
+            logger.warning("Goodreads RSS no pudo parsearse correctamente: %s", getattr(feed, "bozo_exception", ""))
+
+        page_entries = getattr(feed, "entries", []) or []
+        if not page_entries:
+            break
+
+        new_entries = []
+        for entry in page_entries:
+            entry_key = (entry.get("book_id") or entry.get("id") or entry.get("link") or "").strip()
+            if entry_key and entry_key in seen_ids:
+                continue
+            if entry_key:
+                seen_ids.add(entry_key)
+            new_entries.append(entry)
+
+        if not new_entries:
+            break
+
+        entries.extend(new_entries)
+        if len(page_entries) < per_page:
+            break
+
+    return entries
+
+
+def download_cover_as_webp(cover_url, book_id, folder_path):
+    if not cover_url or not book_id:
+        return
+
+    file_path = os.path.join(folder_path, f"{book_id}.webp")
+    temp_path = os.path.join(folder_path, f"temp_{book_id}.jpg")
+    try:
+        response = requests.get(modify_cover_url(cover_url), timeout=30)
+        response.raise_for_status()
+        with open(temp_path, "wb") as f:
+            f.write(response.content)
+        convert_to_webp(temp_path, file_path)
+    except Exception:
+        logger.exception("Error al procesar portada RSS para libro %s", book_id)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
 def refresh_books_data():
+    folder_path = os.path.join(settings.MEDIA_ROOT, "Covers")
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+
+    rss_url = getattr(settings, "GOODREADS_RSS_URL", "https://www.goodreads.com/review/list_rss/27786474?shelf=read")
+    entries = fetch_goodreads_rss_entries(rss_url)
+    if not entries:
+        logger.warning("Goodreads RSS no devolvió libros. Se intenta scraper legacy.")
+        refresh_books_data_scraper()
+        return
+
+    created = 0
+    updated = 0
+
+    for entry in reversed(entries):
+        goodreads_id = (entry.get("book_id") or "").strip() or None
+        book_link = normalize_goodreads_book_link(entry)
+        title = (entry.get("title") or "").strip()
+        author = (entry.get("author_name") or "").strip() or "Unknown Author"
+        date_read = parse_rss_date(entry.get("user_read_at"))
+
+        if not title or not date_read:
+            logger.warning("Libro RSS omitido por falta de título o fecha: %s", title or goodreads_id)
+            continue
+
+        book = find_existing_book(goodreads_id, book_link)
+        is_new = book is None
+        if is_new:
+            book = Book()
+
+        book.title = title
+        book.author = author
+        book.cover_link = (entry.get("book_large_image_url") or entry.get("book_medium_image_url") or entry.get("book_image_url") or "").strip()
+        book.my_rating = parse_positive_int(entry.get("user_rating")) or 0
+        book.public_rating = (entry.get("average_rating") or "0.0").strip()
+        book.date_read = date_read
+        book.book_link = book_link
+        book.description = entry.get("book_description") or book.description
+        book.goodreads_id = goodreads_id or book.goodreads_id
+        book.isbn = (entry.get("isbn") or "").strip() or book.isbn
+        book.num_pages = parse_positive_int(entry.get("num_pages")) or book.num_pages
+        book.published_year = parse_positive_int(entry.get("book_published")) or book.published_year
+        book.goodreads_date_added = parse_rss_datetime(entry.get("user_date_added")) or book.goodreads_date_added
+        book.save()
+
+        if book.cover_link:
+            cover_path = os.path.join(folder_path, f"{book.id}.webp")
+            if is_new or not os.path.exists(cover_path):
+                download_cover_as_webp(book.cover_link, book.id, folder_path)
+
+        if is_new:
+            created += 1
+            logger.info("Libro creado desde RSS: %s", title)
+        else:
+            updated += 1
+
+    logger.info("Goodreads RSS procesado: creados=%s, actualizados=%s, items=%s", created, updated, len(entries))
+
+
+def refresh_books_data_scraper():
     folder_path = os.path.join(settings.MEDIA_ROOT, "Covers")
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)

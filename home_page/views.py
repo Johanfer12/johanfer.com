@@ -5,7 +5,7 @@ from django.http import HttpResponse
 from django.contrib.auth.decorators import user_passes_test
 from .models import Book
 from .models import VisitLog
-from django.db.models import Count
+from django.db.models import Count, Sum
 from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone as dj_timezone
@@ -67,11 +67,13 @@ def bookshelf(request):
                 'my_rating': book.my_rating,
                 'public_rating': book.public_rating,
                 'date_read': book.date_read.strftime('%Y-%m-%d'),
-                'book_link': book.book_link,
+                'book_link': book.goodreads_url,
                 'cover_image': f"{settings.MEDIA_URL}Covers/{book.id}.webp",
                 'id': book.id,
                 'description': book.description,
-                'genres': book.genres or ''
+                'genres': book.genres or '',
+                'num_pages': book.num_pages,
+                'published_year': book.published_year,
             })
         return JsonResponse({
             'books': book_data,
@@ -111,28 +113,23 @@ def stats(request):
     stars_labels = ['1 Estrella', '2 Estrellas', '3 Estrellas', '4 Estrellas', '5 Estrellas']
     stars_values = [books.filter(my_rating=i).count() for i in range(1, 6)]
 
-    # Top generos mas leidos (maximo 5)
-    genre_counter = {}
-    for raw_genres in books.values_list('genres', flat=True):
-        if not raw_genres:
-            continue
-        for part in raw_genres.split(','):
-            genre = part.strip()
-            if not genre:
-                continue
-            genre_counter[genre] = genre_counter.get(genre, 0) + 1
-
-    top_genres = sorted(genre_counter.items(), key=lambda x: x[1], reverse=True)[:5]
-    top_genres_labels = [entry[0] for entry in top_genres]
-    top_genres_values = [entry[1] for entry in top_genres]
+    # Paginas leidas por año, usando el dato que entrega el RSS de Goodreads.
+    pages_per_year = (
+        books.exclude(num_pages__isnull=True)
+        .values('date_read__year')
+        .annotate(total=Sum('num_pages'))
+        .order_by('date_read__year')
+    )
+    pages_per_year_labels = [entry['date_read__year'] for entry in pages_per_year]
+    pages_per_year_values = [entry['total'] for entry in pages_per_year]
 
     context = {
         'books_per_year_labels': json.dumps(books_per_year_labels),
         'books_per_year_values': json.dumps(books_per_year_values),
         'stars_labels': json.dumps(stars_labels),
         'stars_values': json.dumps(stars_values),
-        'top_genres_labels': json.dumps(top_genres_labels),
-        'top_genres_values': json.dumps(top_genres_values)
+        'pages_per_year_labels': json.dumps(pages_per_year_labels),
+        'pages_per_year_values': json.dumps(pages_per_year_values)
     }
 
     return render(request, 'stats.html', context)

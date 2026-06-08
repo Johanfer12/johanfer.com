@@ -5,17 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Estadísticas de Lectura</title>
-    <meta name="description" content="Estadísticas de lectura: libros por año, calificaciones y géneros más leídos.">
+    <meta name="description" content="Estadísticas de lectura: libros por año, calificaciones y páginas leídas.">
     <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     <meta property="og:site_name" content="{{ site_name }}">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Estadísticas de Lectura | {{ site_name }}">
-    <meta property="og:description" content="Libros por año, calificaciones y géneros más leídos.">
+    <meta property="og:description" content="Libros por año, calificaciones y páginas leídas.">
     <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Estadísticas de Lectura | {{ site_name }}">
-    <meta name="twitter:description" content="Libros por año, calificaciones y géneros más leídos.">
+    <meta name="twitter:description" content="Libros por año, calificaciones y páginas leídas.">
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/stats.css' %}">
@@ -42,9 +42,9 @@
                     </div>
                 </div>
                 <div class="chart-container">
-                    <h3>Top Géneros Más Leídos</h3>
+                    <h3>Páginas Leídas por Año</h3>
                     <div class="chart-canvas-frame">
-                        <canvas id="topGenresChart"></canvas>
+                        <canvas id="pagesPerYearChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -56,8 +56,8 @@
         const booksPerYearValues = JSON.parse('{{ books_per_year_values|escapejs }}');
         const starsLabels = JSON.parse('{{ stars_labels|escapejs }}');
         const starsValues = JSON.parse('{{ stars_values|escapejs }}');
-        const topGenresLabels = JSON.parse('{{ top_genres_labels|escapejs }}');
-        const topGenresValues = JSON.parse('{{ top_genres_values|escapejs }}');
+        const pagesPerYearLabels = JSON.parse('{{ pages_per_year_labels|escapejs }}');
+        const pagesPerYearValues = JSON.parse('{{ pages_per_year_values|escapejs }}');
     </script>
     <script src="{% static 'js/stats.js' %}"></script>
     <script src="{% static 'js/background_motion.js' %}"></script>
