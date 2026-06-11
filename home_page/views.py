@@ -10,6 +10,7 @@ from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone as dj_timezone
 from django.conf import settings
+from Bookshelf.html_sanitizer import sanitize_html
 import json
 from datetime import datetime, timezone
 from urllib.parse import urlencode
@@ -70,7 +71,7 @@ def bookshelf(request):
                 'book_link': book.goodreads_url,
                 'cover_image': f"{settings.MEDIA_URL}Covers/{book.id}.webp",
                 'id': book.id,
-                'description': book.description,
+                'description': sanitize_html(book.description),
                 'genres': book.genres or '',
                 'num_pages': book.num_pages,
                 'published_year': book.published_year,

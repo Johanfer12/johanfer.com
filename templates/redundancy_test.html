@@ -1,4 +1,4 @@
-{% load static %}
+{% load static sanitizers %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -542,7 +542,7 @@
                         {% for news in keyword_filtered_news %}
                         <div class="single-news-item keyword-filtered-item">
                             <h3 class="news-title">{{ news.title }}</h3>
-                            <div class="news-description">{{ news.description|safe }}</div>
+                            <div class="news-description">{{ news.description|sanitize }}</div>
                             <div class="news-meta">
                                 <span class="news-source">{{ news.source.name }}</span> - 
                                 {{ news.published_date|date:"d/m/Y H:i" }}
@@ -565,7 +565,7 @@
                         {% for news in ai_filtered_news %}
                         <div class="single-news-item ai-filtered-item">
                             <h3 class="news-title">{{ news.title }}</h3>
-                            <div class="news-description">{{ news.description|safe }}</div>
+                            <div class="news-description">{{ news.description|sanitize }}</div>
                             <div class="news-meta">
                                 <span class="news-source">{{ news.source.name }}</span> - 
                                 {{ news.published_date|date:"d/m/Y H:i" }}
@@ -591,7 +591,7 @@
                             
                             <div class="news-item original">
                                 <h3 class="news-title">{{ news.similar_to.title }}</h3>
-                                <div class="news-description">{{ news.similar_to.description|safe }}</div>
+                                <div class="news-description">{{ news.similar_to.description|sanitize }}</div>
                                 <div class="news-meta">
                                     <span class="news-source">{{ news.similar_to.source.name }}</span> - 
                                     {{ news.similar_to.published_date|date:"d/m/Y H:i" }}
@@ -600,7 +600,7 @@
                             
                             <div class="news-item redundant-item">
                                 <h3 class="news-title">{{ news.title }}</h3>
-                                <div class="news-description">{{ news.description|safe }}</div>
+                                <div class="news-description">{{ news.description|sanitize }}</div>
                                 <div class="news-meta">
                                     <span class="news-source">{{ news.source.name }}</span> - 
                                     {{ news.published_date|date:"d/m/Y H:i" }}

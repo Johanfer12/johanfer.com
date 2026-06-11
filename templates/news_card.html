@@ -1,4 +1,4 @@
-{% load static %}
+{% load static sanitizers %}
 <div class="news-card-container" id="{{ card_id_prefix|default:'news' }}-{{ article.id }}" data-news-id="{{ article.id }}" data-published-at="{{ article.published_date|date:'c' }}" data-created-at="{{ article.created_at|date:'c' }}">
     <div class="news-card">
         <div class="card-front">
@@ -22,7 +22,7 @@
         </div>
         <div class="card-back">
             <div class="news-description">
-                {{ article.description|safe }}
+                {{ article.description|sanitize }}
             </div>
             <div class="news-links">
                 <a href="{{ article.link }}" target="_blank" rel="noopener noreferrer" class="news-link icon-only source-link" title="Fuente" aria-label="Fuente">

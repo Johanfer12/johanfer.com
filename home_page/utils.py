@@ -11,6 +11,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from django.utils import timezone
 from django.conf import settings
 from django.db.models import Q
+from Bookshelf.html_sanitizer import sanitize_html
 from .models import Book
 
 logger = logging.getLogger(__name__)
@@ -184,7 +185,8 @@ def refresh_books_data():
         book.public_rating = (entry.get("average_rating") or "0.0").strip()
         book.date_read = date_read
         book.book_link = book_link
-        book.description = entry.get("book_description") or book.description
+        rss_description = entry.get("book_description")
+        book.description = sanitize_html(rss_description) if rss_description else book.description
         book.goodreads_id = goodreads_id or book.goodreads_id
         book.isbn = (entry.get("isbn") or "").strip() or book.isbn
         book.num_pages = parse_positive_int(entry.get("num_pages")) or book.num_pages

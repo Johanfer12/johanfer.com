@@ -19,6 +19,7 @@ import textwrap
 import html
 import logging
 from django.conf import settings
+from Bookshelf.html_sanitizer import sanitize_html
 
 try:
     from .vector_index import VectorIndexService, VectorIndexUnavailable
@@ -535,7 +536,7 @@ class FeedService:
                     processed_summary = processed_summary.replace('\n\n', '<br><br>').replace('\n', '<br>')
                     processed_summary = processed_summary.replace('', '<br>')
 
-                    return processed_summary, short_answer, ai_filter_reason
+                    return sanitize_html(processed_summary), short_answer, ai_filter_reason
 
                 except json.JSONDecodeError as json_e:
                     logger.warning(f"Error decodificando JSON de Groq (intento {attempt + 1}): {json_e}")
@@ -842,7 +843,7 @@ class FeedService:
                         guid=guid,
                         title=entry.title,
                         short_answer=None,
-                        description=original_description,
+                        description=sanitize_html(original_description),
                         link=entry.link,
                         published_date=published,
                         source=source,

@@ -15,6 +15,7 @@ from django.templatetags.static import static
 from django.core.cache import cache
 from django.conf import settings
 from datetime import datetime, time as datetime_time, timedelta
+from Bookshelf.html_sanitizer import sanitize_html
 import pytz
 from django.db.models import Q, Count, Max
 from .tasks import purge_old_news, retry_summarize_pending
@@ -110,7 +111,7 @@ def _serialize_news_card(article):
     return {
         'id': article.id,
         'title': article.title or '',
-        'description_html': article.description or '',
+        'description_html': sanitize_html(article.description),
         'link': article.link or '',
         'image_url': article.image_url or static('Img/News_Default.png'),
         'short_answer': article.short_answer or '',
