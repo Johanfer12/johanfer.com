@@ -39,7 +39,8 @@ html.instagram-webview {
     position: relative;
     z-index: 1;
     transform-origin: top left;
-    will-change: transform;
+    /* will-change solo durante animaciones (.inserting/.collapsing); dejarlo
+       permanente mantiene una capa GPU viva por tarjeta en reposo. */
     perspective: 1000px; /* Mejora el efecto 3D */
     transition: transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
 }

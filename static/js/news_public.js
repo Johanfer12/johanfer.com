@@ -89,7 +89,9 @@
             grid.appendChild(prepareIncomingCard(card));
             CardUi.bindImageFallbacks(card);
             CardUi.fitTitleToSummary?.(card);
-            setTimeout(() => card.classList.remove('inserting'), 450);
+            // 600ms = duración de la animación insertCard en desktop (0.38s en
+            // móvil); quitar la clase antes cortaba la animación con un salto.
+            setTimeout(() => card.classList.remove('inserting'), 600);
         }
     };
 

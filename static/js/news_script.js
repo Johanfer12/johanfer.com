@@ -83,9 +83,7 @@
         restoringNews: false,
         syncingFromDb: false, // evita refrescos simultaneos al recuperar foco/conexion
         lastDbSyncAt: 0, // timestamp del ultimo sync fuerte con DB
-        sse: null,
-        sseConnected: false,
-        sseRetryTimer: null,
+        newsPollTimer: null, // intervalo de sondeo de noticias nuevas
         checkController: null,
         backupController: null,
         syncController: null,
@@ -1234,8 +1232,10 @@
             finalizeSuccessfulDelete(payload);
         };
         const onAnimEnd = (ev) => {
-            const expectedProp = mobileView ? 'height' : 'width';
-            if (ev.target !== container || ev.propertyName !== expectedProp) return;
+            // Solo nos interesa el fin de la transición de height (la más larga
+            // del colapso móvil). Sin {once: true}: la transición de opacity
+            // termina antes y consumiría el listener sin llegar nunca aquí.
+            if (ev.target !== container || ev.propertyName !== 'height') return;
             container.removeEventListener('transitionend', onAnimEnd);
             if (removed) return;
             removed = true;
@@ -1245,7 +1245,7 @@
             refreshHoverUnderPointer();
             maybeFinalizeDelete();
         };
-        if (mobileView) container.addEventListener('transitionend', onAnimEnd, { once: true });
+        if (mobileView) container.addEventListener('transitionend', onAnimEnd);
         const removeTimeout = setTimeout(() => {
             if (desktopExitClone) {
                 desktopExitClone.remove();
@@ -1346,9 +1346,20 @@
         STATE.lastChecked = data.current_time || new Date().toISOString();
         if (data.cursor) setLatestNewsCursor(data.cursor);
         if (data.news_cards?.length) {
-            STATE.pendingNews.push(...data.news_cards);
+            // Deduplicar contra lo ya visible/pendiente para que el contador de
+            // la notificación no se infle con payloads repetidos entre sondeos.
+            const knownIds = new Set([
+                ...getCurrentCardIds(),
+                ...STATE.pendingNews.map(item => normalizeId(extractPayloadId(item))),
+            ]);
+            const freshCards = data.news_cards.filter(item => {
+                const id = normalizeId(extractPayloadId(item));
+                return id && !knownIds.has(id) && !STATE.locallyDeletedIds.has(id);
+            });
+            if (!freshCards.length) return;
+            STATE.pendingNews.push(...freshCards);
             updateCounters(data.total_news, data.total_pages);
-            showNotification(data.news_cards.length);
+            showNotification(freshCards.length);
             if (hasActiveUiMutation()) {
                 scheduleSilentSync('nuevas noticias durante mutacion', {delay: 1200});
                 return;
@@ -1756,60 +1767,33 @@
         }, 80);
     }, {passive: true});
 
+    // Sondeo de noticias nuevas. Antes era una conexión SSE permanente, pero
+    // cada conexión ocupaba un worker síncrono de gunicorn de forma indefinida
+    // (3 pestañas abiertas = sitio sin workers). El polling corto usa el mismo
+    // endpoint de chequeo y libera el worker en milisegundos.
+    const NEWS_POLL_INTERVAL_MS = 15_000;
+
     const closeNewsStream = () => {
         if (STATE.lifecycleSyncTimer) {
             clearTimeout(STATE.lifecycleSyncTimer);
             STATE.lifecycleSyncTimer = null;
         }
-        if (STATE.sseRetryTimer) {
-            clearTimeout(STATE.sseRetryTimer);
-            STATE.sseRetryTimer = null;
+        if (STATE.newsPollTimer) {
+            clearInterval(STATE.newsPollTimer);
+            STATE.newsPollTimer = null;
         }
-        if (STATE.sse) {
-            STATE.sse.close();
-            STATE.sse = null;
+        if (STATE.checkController) {
+            STATE.checkController.abort();
+            STATE.checkController = null;
         }
-        STATE.sseConnected = false;
     };
 
     const connectNewsStream = () => {
-        if (isSavedView() || !window.EventSource) return;
+        if (isSavedView()) return;
         closeNewsStream();
-
-        const params = new URLSearchParams();
-        if (STATE.latestNewsCursor) params.set('cursor', STATE.latestNewsCursor);
-        if (isSavedView()) params.set('saved_only', 'true');
-        const streamUrl = `/noticias/news-stream/?${params.toString()}`;
-        const sse = new EventSource(streamUrl);
-        STATE.sse = sse;
-
-        sse.addEventListener('open', () => {
-            STATE.sseConnected = true;
-            log('SSE conectado');
-        });
-
-        sse.addEventListener('news', (event) => {
-            try {
-                const payload = JSON.parse(event.data);
-                handleIncomingNewsPayload(payload);
-            } catch (e) {
-                err('Error parseando SSE:', e);
-            }
-        });
-
-        sse.onerror = () => {
-            STATE.sseConnected = false;
-            if (STATE.sse) {
-                STATE.sse.close();
-                STATE.sse = null;
-            }
-            if (!STATE.sseRetryTimer) {
-                STATE.sseRetryTimer = setTimeout(() => {
-                    STATE.sseRetryTimer = null;
-                    connectNewsStream();
-                }, 5_000);
-            }
-        };
+        checkForNewNews();
+        STATE.newsPollTimer = setInterval(checkForNewNews, NEWS_POLL_INTERVAL_MS);
+        log('Sondeo de noticias activo');
     };
 
     /* ---------------------------------------------------------------------
@@ -1965,8 +1949,13 @@
         setOrderIcon();
     });
 
+    let resizeTitleTimer = null;
     window.addEventListener('resize', () => {
-        applyAdaptiveTitleSize(document);
+        if (resizeTitleTimer) clearTimeout(resizeTitleTimer);
+        resizeTitleTimer = setTimeout(() => {
+            resizeTitleTimer = null;
+            applyAdaptiveTitleSize(document);
+        }, 200);
     });
     
     enforceCardLimit(); // Aplicar límite al cargar la página inicialmente

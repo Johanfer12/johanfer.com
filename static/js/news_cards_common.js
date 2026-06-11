@@ -169,10 +169,17 @@
         fitTitleToSummary();
     }
 
+    // Coalescar pasadas de ajuste de títulos: cada pasada fuerza reflows por
+    // tarjeta, así que múltiples llamadas seguidas (load + resize) se agrupan
+    // en una sola. Las imágenes que cargan tarde ya re-ajustan su propia
+    // tarjeta vía bindImageFallbacks.
+    let titleFitTimer = null;
     const scheduleTitleFit = () => {
-        fitTitleToSummary();
-        window.setTimeout(fitTitleToSummary, 80);
-        window.setTimeout(fitTitleToSummary, 240);
+        if (titleFitTimer) clearTimeout(titleFitTimer);
+        titleFitTimer = window.setTimeout(() => {
+            titleFitTimer = null;
+            fitTitleToSummary();
+        }, 120);
     };
 
     window.addEventListener('load', scheduleTitleFit);
