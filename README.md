@@ -2,8 +2,6 @@
 
 Este proyecto Django incluye tres aplicaciones principales: una biblioteca que se sincroniza con la lista de lectura de Goodreads vía RSS, una aplicación de noticias que recopila artículos de fuentes RSS y una aplicación que muestra datos archivados de Spotify.
 
-Para operación del servidor Raspberry y el incidente post-backup del `2026-03-31`, ver `SERVER_INCIDENT_2026-03-31.md`. Las notas locales ampliadas siguen en `RASPBERRY_SERVER_REBUILD.md` y `ops_local/`.
-
 ## Aplicación de Libros
 
 Esta aplicación sincroniza la lista de lectura de Goodreads a través de su feed RSS oficial y la almacena en una base de datos, incluyendo procesamiento de imágenes y seguimiento de cambios.
