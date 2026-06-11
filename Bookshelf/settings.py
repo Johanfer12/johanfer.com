@@ -80,7 +80,6 @@ AXES_ONLY_ADMIN_SITE = True
 
 CRONJOBS = [
     ('55 12 * * *', 'home_page.tasks.update_books_cron'),
-    ('0 */6 * * *', 'spotify.tasks.update_spotify_cron'),
     ('*/30 * * * *', 'my_news.tasks.update_news_cron'),
 ]
 
@@ -209,18 +208,9 @@ GEMINI_EMBEDDING_DIM = int(os.getenv('GEMINI_EMBEDDING_DIM', 768))
 QDRANT_URL = os.getenv('QDRANT_URL', 'http://localhost:6333')
 QDRANT_COLLECTION = os.getenv('QDRANT_COLLECTION', 'news_embeddings_gemini001_d768_v1')
 
-# Goodreads
-GOODREADS_USER_ID = os.getenv('GOODREADS_USER_ID', '27786474-johan-gonzalez')
-GOODREADS_COOKIE = os.getenv('GOODREADS_COOKIE', '')
+# Goodreads (sincronización vía RSS)
 GOODREADS_RSS_URL = os.getenv('GOODREADS_RSS_URL', 'https://www.goodreads.com/review/list_rss/27786474?shelf=read')
 GOODREADS_RSS_PER_PAGE = int(os.getenv('GOODREADS_RSS_PER_PAGE', 200))
-
-# Spotify
-SPOTIFY_REFRESH_ENABLED = os.getenv('SPOTIFY_REFRESH_ENABLED', 'true').lower() in ('true', '1', 'yes')
-SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID', '')
-SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET', '')
-SPOTIFY_USERNAME = os.getenv('SPOTIFY_USERNAME', '')
-SPOTIFY_OLVIDADAS_PLAYLIST_ID = os.getenv('SPOTIFY_OLVIDADAS_PLAYLIST_ID', '')
 
 # Logging
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')

@@ -1,20 +1,20 @@
 # Mi Biblioteca, Noticias y Música: Aplicaciones Django para Libros, Noticias RSS y Spotify
 
-Este proyecto Django incluye tres aplicaciones principales: un scraper web que extrae información de libros de Goodreads, una aplicación de noticias que recopila artículos de fuentes RSS y una aplicación que muestra datos de Spotify.
+Este proyecto Django incluye tres aplicaciones principales: una biblioteca que se sincroniza con la lista de lectura de Goodreads vía RSS, una aplicación de noticias que recopila artículos de fuentes RSS y una aplicación que muestra datos archivados de Spotify.
 
 Para operación del servidor Raspberry y el incidente post-backup del `2026-03-31`, ver `SERVER_INCIDENT_2026-03-31.md`. Las notas locales ampliadas siguen en `RASPBERRY_SERVER_REBUILD.md` y `ops_local/`.
 
 ## Aplicación de Libros
 
-Esta aplicación implementa un scraper web que extrae información detallada de libros de mi lista de lectura en Goodreads y la almacena en una base de datos, incluyendo procesamiento avanzado de imágenes y seguimiento de cambios.
+Esta aplicación sincroniza la lista de lectura de Goodreads a través de su feed RSS oficial y la almacena en una base de datos, incluyendo procesamiento de imágenes y seguimiento de cambios.
 
 ### Características
 
-- Sistema de scraping inteligente:
-  - Extrae datos completos: título, autor, portada, calificaciones, fecha de lectura, enlaces y descripciones.
-  - Compara el número de libros en Goodreads con la base de datos para determinar si hay actualizaciones.
-  - Optimiza el proceso según sea una carga inicial (todas las páginas) o una actualización (solo primera página).
-  - Evita duplicados verificando los enlaces de libros existentes.
+- Sincronización vía RSS de Goodreads:
+  - Extrae datos completos: título, autor, portada, calificaciones, fecha de lectura, enlaces, descripción, ISBN, páginas y año de publicación.
+  - Pagina el feed RSS automáticamente para cargas iniciales grandes.
+  - Evita duplicados identificando los libros por su ID de Goodreads.
+  - No requiere cookies de sesión ni scraping de HTML.
 
 - Procesamiento avanzado de imágenes:
   - Modifica los enlaces de portadas para obtener la máxima resolución disponible (700px).
@@ -22,21 +22,9 @@ Esta aplicación implementa un scraper web que extrae información detallada de 
   - Redimensiona las portadas a un tamaño óptimo (300x450) conservando la calidad.
   - Organiza las imágenes por ID en la carpeta `media/Covers`.
 
-- Extracción de contenido enriquecido:
-  - Obtiene descripciones HTML completas de cada libro mediante peticiones adicionales.
-  - Procesa y preserva el formato HTML de las descripciones para su visualización.
-  - Maneja diferentes formatos de calificación (1-5 estrellas) con interpretación de texto.
-  - Normaliza diferentes formatos de fecha (con/sin día específico).
-
 - Seguimiento de cambios:
   - Registra libros eliminados de la lista de lectura para análisis histórico.
   - Mantiene metadatos completos de los libros incluso después de eliminarlos.
-
-- Optimización técnica:
-  - Implementa manejo de excepciones robusto para cada fase del proceso.
-  - Utiliza peticiones HTTP con headers personalizados para evitar restricciones.
-  - Emplea BeautifulSoup para un análisis preciso del HTML de Goodreads.
-  - Realiza procesamiento por lotes para mejorar el rendimiento.
 
 ### Modelos principales
 
@@ -80,40 +68,22 @@ Esta aplicación permite recopilar, filtrar y visualizar noticias de diferentes 
 
 ## Aplicación de Música (spotify)
 
-Esta aplicación integra con la API de Spotify para mostrar, analizar y gestionar los datos musicales del usuario.
+Esta aplicación muestra los datos musicales del usuario. La sincronización con la API de Spotify fue retirada (los cambios en la API la dejaron detrás de un plan de pago), por lo que los datos guardados son un archivo histórico que ya no se actualiza. La playlist actual se muestra mediante un iframe embebido de Spotify.
 
 ### Características
 
-- Sincronización completa con biblioteca de Spotify:
-  - Obtiene todas las canciones favoritas guardadas en la cuenta.
-  - Almacena metadatos completos: título, artista, álbum, género, duración y fecha de adición.
-  - Actualiza automáticamente la biblioteca cuando hay cambios (adiciones o eliminaciones).
-- Análisis de tendencias de escucha:
-  - Visualiza el top 5 de canciones más escuchadas en el último mes.
-  - Analiza evolución de géneros y artistas preferidos.
-  - Muestra distribución temporal de adiciones a la biblioteca.
-- Experiencia multimedia mejorada:
-  - Reproductor de previsualizaciones de 30 segundos integrado en la interfaz.
-  - Extracción automática de URLs de previsualizaciones desde la API de Spotify.
-  - Visualización de portadas de álbumes en alta resolución.
-- Estadísticas visuales interactivas mediante gráficos:
+- Dashboard con la playlist actual embebida vía iframe oficial de Spotify (siempre al día, sin API).
+- Estadísticas visuales sobre el histórico de favoritos guardado:
   - Top 5 géneros musicales con distribución porcentual.
   - Top 5 artistas con conteo de canciones.
   - Gráfico temporal de canciones añadidas por mes.
-- Seguimiento histórico de cambios:
-  - Registro detallado de canciones eliminadas de favoritos.
-  - Almacenamiento de fechas exactas de eliminación.
-  - Interfaz dedicada para visualizar historial de cambios.
-- Optimización técnica:
-  - Sistema de caché para información de artistas y géneros.
-  - Procesamiento eficiente de grandes bibliotecas musicales.
-  - Manejo inteligente de la autenticación OAuth con Spotify.
+- Historial de canciones que fueron eliminadas de favoritos mientras la sincronización estuvo activa.
 
 ### Modelos principales
 
-- **SpotifyFavorites**: Almacena las canciones favoritas del usuario con todos sus metadatos asociados.
-- **SpotifyTopSongs**: Guarda las canciones más escuchadas recientemente con enlaces a previsualizaciones.
-- **DeletedSongs**: Registra un historial completo de las canciones que fueron eliminadas de favoritos.
+- **SpotifyFavorites**: Archivo histórico de las canciones favoritas con sus metadatos (ya no se actualiza).
+- **SpotifyTopSongs**: Archivo histórico del top de canciones (ya no se actualiza).
+- **DeletedSongs**: Historial de las canciones que fueron eliminadas de favoritos.
 
 ## Instalación
 
@@ -137,25 +107,19 @@ pip install -r requirements.txt
 python manage.py migrate
 ```
 
-4. Para ejecutar el scraper de libros:
+4. Para actualizar los libros desde el RSS de Goodreads manualmente:
 
 ```
-python manage.py scrap_books
+python manage.py shell -c "from home_page.utils import refresh_books_data; refresh_books_data()"
 ```
 
-5. Para actualizar el feed de noticias:
+5. Para actualizar el feed de noticias manualmente:
 
 ```
-python manage.py update_news_feed
+python manage.py shell -c "from my_news.tasks import update_news_cron; update_news_cron()"
 ```
 
-6. Para actualizar los datos de Spotify (requiere configurar las credenciales de la API):
-
-```
-python manage.py refresh_spotify_data
-```
-
-7. Instala los cronjobs en el servidor (necesario solo en producción):
+6. Instala los cronjobs en el servidor (necesario solo en producción):
 
 ```
 python manage.py crontab add
@@ -163,26 +127,11 @@ python manage.py crontab add
 
 ## Variables de entorno recomendadas
 
-Para scraping y backfill de Goodreads en local y producción:
+Para la sincronización de libros con Goodreads (vía RSS, sin cookies):
 
 ```
-GOODREADS_USER_ID=27786474-johan-gonzalez
-GOODREADS_COOKIE=session-id=...; ubid-main=...; ...
-```
-
-- `GOODREADS_COOKIE` debe ser una cookie de sesión vigente (si expira, hay que renovarla).
-- Sin esta cookie, Goodreads puede responder con login/HTML incompleto y no habrá extracción de libros/géneros.
-
-### Backfill de géneros (manual)
-
-```
-python manage.py backfill_book_genres --overwrite
-```
-
-Opcionalmente puedes pasar cookie por parámetro:
-
-```
-python manage.py backfill_book_genres --cookie "session-id=...; ..."
+GOODREADS_RSS_URL=https://www.goodreads.com/review/list_rss/27786474?shelf=read
+GOODREADS_RSS_PER_PAGE=200
 ```
 
 ## Uso
@@ -193,14 +142,11 @@ El proyecto utiliza `django-crontab` para gestionar tareas programadas que actua
 
 ```python
 CRONJOBS = [
+    # Actualiza los libros una vez al día a las 12:55 PM
+    ('55 12 * * *', 'home_page.tasks.update_books_cron'),
+
     # Actualiza las noticias cada 30 minutos
-    ('*/30 * * * *', 'my_news.tasks.update_news_feed'),
-
-    # Actualiza los libros una vez al día a las 2:00 AM
-    ('0 2 * * *', 'home_page.tasks.refresh_books_data'),
-
-    # Actualiza los datos de Spotify una vez al día a las 3:00 AM
-    ('0 3 * * *', 'spotify.tasks.refresh_spotify_data')
+    ('*/30 * * * *', 'my_news.tasks.update_news_cron'),
 ]
 ```
 
@@ -229,9 +175,8 @@ CRONJOBS = [
 
 Las tareas se ejecutan automáticamente en segundo plano según su programación:
 
-- **Libros**: Se actualizan una vez al día (a las 2:00 AM) para obtener nuevas lecturas de Goodreads.
+- **Libros**: Se actualizan una vez al día (12:55 PM) leyendo el feed RSS de Goodreads.
 - **Noticias**: Se actualizan cada 30 minutos para mantener el feed de noticias actualizado.
-- **Música**: Se actualizan una vez al día (a las 3:00 AM) para sincronizar con la biblioteca de Spotify.
 
 Nota de producción (Raspberry):
 
@@ -244,10 +189,10 @@ En ambientes de desarrollo local, puede ser más conveniente ejecutar estos coma
 ### Aplicación de Libros
 
 1. Asegúrate de tener un entorno virtual activado y las dependencias instaladas.
-2. Ejecuta el scraper: `python manage.py scrap_books`.
-3. El scraper comenzará a extraer la información de los libros de Goodreads y a descargar las portadas correspondientes.
-4. Los datos de los libros se almacenarán en la base de datos.
-5. Las portadas de los libros se guardarán en la carpeta `media/Covers`.
+2. La sincronización corre automáticamente por cron, o puedes lanzarla manualmente:
+   `python manage.py shell -c "from home_page.utils import refresh_books_data; refresh_books_data()"`
+3. Los datos se leen del feed RSS de Goodreads y se almacenan en la base de datos.
+4. Las portadas de los libros se guardarán en la carpeta `media/Covers`.
 
 ### Aplicación de Noticias
 
@@ -259,11 +204,10 @@ En ambientes de desarrollo local, puede ser más conveniente ejecutar estos coma
 
 ### Aplicación de Spotify
 
-1. Configura tus credenciales en `.env`: `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_USERNAME` y, si quieres mover canciones eliminadas a una playlist, `SPOTIFY_OLVIDADAS_PLAYLIST_ID`.
-2. Accede a la ruta `/spotify/` para ver el dashboard con tus canciones favoritas y top 5.
-3. Utiliza el reproductor integrado para escuchar previsualizaciones de 30 segundos.
-4. Visita `/spotify/stats/` para ver las estadísticas y gráficos de tu música.
-5. Consulta `/spotify/deleted/` para ver un historial de las canciones eliminadas.
-6. Actualiza los datos haciendo clic en el botón de actualización en el dashboard. Si quieres conservar la información guardada sin llamar a la API de Spotify, usa `SPOTIFY_REFRESH_ENABLED=false`.
+La sincronización con la API de Spotify fue retirada; no requiere credenciales. Las vistas muestran el archivo histórico guardado en la base de datos y la playlist actual vía iframe.
+
+1. Accede a la ruta `/spotify/` para ver el dashboard con la playlist embebida.
+2. Visita `/spotify/stats/` para ver las estadísticas y gráficos del histórico de música.
+3. Consulta `/spotify/deleted/` para ver el historial de canciones eliminadas.
 
 Siéntete libre de personalizar y adaptar este proyecto según tus necesidades. Si tienes alguna pregunta o sugerencia, no dudes en abrir un issue en el repositorio.

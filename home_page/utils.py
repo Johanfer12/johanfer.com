@@ -2,7 +2,7 @@ from bs4 import BeautifulSoup
 import feedparser
 import requests
 import os
-from datetime import datetime, timezone as dt_timezone
+from datetime import timezone as dt_timezone
 from email.utils import parsedate_to_datetime
 from PIL import Image
 import re
@@ -11,78 +11,10 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from django.utils import timezone
 from django.conf import settings
 from django.db.models import Q
-from .models import Book, DeletedBook
+from .models import Book
 
 logger = logging.getLogger(__name__)
 
-_GOODREADS_GENRES_CACHE = {}
-
-
-def extract_genres_from_review(review):
-    """Extrae hasta 3 generos desde la columna shelves de Goodreads."""
-    try:
-        shelves_td = review.find('td', class_='field shelves')
-        if not shelves_td:
-            return ""
-
-        ignored = {'read', 'to-read', 'currently-reading', 'owned', 'kindle', 'edit', '[edit]'}
-        genres = []
-        for link in shelves_td.find_all('a'):
-            href = (link.get('href') or '').lower()
-            label = link.get_text(strip=True).lower()
-            if '/shelf/show/' not in href and 'shelf=' not in href:
-                continue
-            if not label or label in ignored:
-                continue
-            if label.startswith('[') and label.endswith(']'):
-                continue
-            if label not in genres:
-                genres.append(label)
-            if len(genres) >= 3:
-                break
-
-        if not genres:
-            return ""
-        return ", ".join(g.title() for g in genres)
-    except Exception:
-        return ""
-
-def extract_genres_from_book_link(book_url, headers, max_genres=3):
-    """Extrae hasta max_genres generos desde la pagina del libro en Goodreads."""
-    try:
-        if not book_url:
-            return ""
-        if book_url in _GOODREADS_GENRES_CACHE:
-            return _GOODREADS_GENRES_CACHE[book_url]
-
-        full_url = f"https://www.goodreads.com{book_url}"
-        response = requests.get(full_url, headers=headers, timeout=20)
-        if response.status_code != 200:
-            _GOODREADS_GENRES_CACHE[book_url] = ""
-            return ""
-
-        soup = BeautifulSoup(response.text, "html.parser")
-        genre_elements = soup.select("span.BookPageMetadataSection__genreButton")
-        if not genre_elements:
-            genre_elements = soup.select('a[href*="/genres/"]')
-
-        genres = []
-        ignored = {"more", "all genres"}
-        for el in genre_elements:
-            label = el.get_text(" ", strip=True)
-            normalized = label.lower()
-            if not label or normalized in ignored:
-                continue
-            if normalized not in [g.lower() for g in genres]:
-                genres.append(label)
-            if len(genres) >= max_genres:
-                break
-
-        value = ", ".join(genres)
-        _GOODREADS_GENRES_CACHE[book_url] = value
-        return value
-    except Exception:
-        return ""
 
 def modify_cover_url(cover_url):
     return re.sub(r'(_SX\d+_SY\d+_|_SY\d+_SX\d+_|_SX\d+_|_SY\d+_)', '_SY700_', cover_url)
@@ -96,56 +28,6 @@ def convert_to_webp(source_path, destination_path):
             img.save(destination_path, 'WEBP')
     except Exception:
         logger.exception("Error al convertir la imagen")
-
-def get_book_description(book_url, headers):
-    try:
-        full_url = f"https://www.goodreads.com{book_url}"
-        response = requests.get(full_url, headers=headers)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            description_span = soup.find('span', class_='Formatted')
-            if description_span:
-                return str(description_span)
-    except Exception:
-        logger.exception("Error al obtener descripción")
-    return None
-
-def process_rating(rating_element):
-    if rating_element:
-        stars_div = rating_element.find('div', class_='stars')
-        if stars_div:
-            data_rating = stars_div.get('data-rating')
-            if data_rating and data_rating.isdigit():
-                rating = int(data_rating)
-                if 0 <= rating <= 5:
-                    return rating
-
-        stars_span = rating_element.find('span', class_='staticStars')
-        if stars_span:
-            rating_title = stars_span.get('title', '')
-            if 'did not like it' in rating_title:
-                return 1
-            elif 'it was ok' in rating_title:
-                return 2
-            elif 'really liked it' in rating_title:
-                return 4
-            elif 'liked it' in rating_title:
-                return 3
-            elif 'it was amazing' in rating_title:
-                return 5
-    return 0
-
-def process_date(date_read_str):
-    try:
-        if ',' in date_read_str:
-            return datetime.strptime(date_read_str, '%b %d, %Y').date()
-        return datetime.strptime(date_read_str + ' 01', '%b %Y %d').date()
-    except:
-        return None
-
-def extract_goodreads_id(url):
-    match = re.search(r'/show/(\d+)', url)
-    return match.group(1) if match else None
 
 def parse_rss_datetime(value):
     if not value:
@@ -273,8 +155,7 @@ def refresh_books_data():
     rss_url = getattr(settings, "GOODREADS_RSS_URL", "https://www.goodreads.com/review/list_rss/27786474?shelf=read")
     entries = fetch_goodreads_rss_entries(rss_url)
     if not entries:
-        logger.warning("Goodreads RSS no devolvió libros. Se intenta scraper legacy.")
-        refresh_books_data_scraper()
+        logger.warning("Goodreads RSS no devolvió libros. Se conserva la información guardada.")
         return
 
     created = 0
@@ -323,153 +204,3 @@ def refresh_books_data():
             updated += 1
 
     logger.info("Goodreads RSS procesado: creados=%s, actualizados=%s, items=%s", created, updated, len(entries))
-
-
-def refresh_books_data_scraper():
-    folder_path = os.path.join(settings.MEDIA_ROOT, "Covers")
-    if not os.path.exists(folder_path):
-        os.makedirs(folder_path)
-
-    goodreads_user_id = getattr(settings, "GOODREADS_USER_ID", "27786474-johan-gonzalez")
-    goodreads_cookie = (getattr(settings, "GOODREADS_COOKIE", "") or "").strip()
-    base_url = (
-        "https://www.goodreads.com/review/list/"
-        f"{goodreads_user_id}?print=true&ref=nav_mybooks&shelf=read&utf8=%E2%9C%93"
-    )
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0',
-    }
-    if goodreads_cookie:
-        headers['Cookie'] = goodreads_cookie
-    else:
-        logger.warning("GOODREADS_COOKIE no configurada. No se puede actualizar Goodreads.")
-        return
-
-    response = requests.get(base_url, headers=headers)
-
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, 'html.parser')
-        pagination_div = soup.find("div", id="reviewPagination")
-        
-        if not pagination_div:
-            logger.warning("No se encontró la paginación. Posible redirección a login o cambio de estructura.")
-            # Opcional: imprimir título para depuración
-            logger.info(f"Título de la página: {soup.title.string if soup.title else 'No title'}")
-            return
-
-        last_page_link = pagination_div.find_all("a")[-2]
-        total_pages = int(last_page_link.text)
-
-        # Calcular número total de libros en Goodreads
-        reviews = soup.find_all('tr', class_='bookalike review')
-        libros_por_pagina = len(reviews)
-        total_libros_goodreads = (total_pages - 1) * libros_por_pagina
-        ultima_pagina_reviews = BeautifulSoup(requests.get(f"{base_url}&page={total_pages}", headers=headers).text, 'html.parser')
-        total_libros_goodreads += len(ultima_pagina_reviews.find_all('tr', class_='bookalike review'))
-
-        # Comparar con libros en base de datos
-        total_libros_db = Book.objects.count()
-
-        if total_libros_db == total_libros_goodreads:
-            logger.info("No hay nuevos libros para actualizar")
-            return
-
-        # Obtener todos los book_links existentes y extraer sus IDs
-        current_books_links = Book.objects.values_list('book_link', flat=True)
-        current_ids = set()
-        for link in current_books_links:
-            gid = extract_goodreads_id(link)
-            if gid:
-                current_ids.add(gid)
-
-        if total_libros_db == 0:
-            # Si la DB está vacía, procesar todas las páginas desde la última a la primera
-            page_range = range(total_pages, 0, -1)
-        else:
-            # Si ya hay libros, solo procesar la primera página
-            page_range = range(1, 2)
-
-        for page_number in page_range:
-            page_url = f"{base_url}&page={page_number}"
-            response = requests.get(page_url, headers=headers)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            reviews = soup.find_all('tr', class_='bookalike review')
-
-            # Si estamos procesando desde el inicio, invertir el orden de los reviews
-            if total_libros_db == 0:
-                reviews = reviews[::-1]
-
-            for review in reviews:
-                try:
-                    book_link_tag = review.find('td', class_='field title').find('a')
-                    if not book_link_tag:
-                        continue
-                    book_link = book_link_tag['href']
-                    scraped_id = extract_goodreads_id(book_link)
-                    
-                    # Si el libro ya existe (por ID), saltamos al siguiente
-                    if scraped_id and scraped_id in current_ids:
-                        continue
-
-                    # Procesar datos del libro nuevo
-                    title = book_link_tag.get_text(strip=True)
-                    
-                    author_tag = review.find('td', class_='field author').find('a')
-                    author = author_tag.get_text(strip=True) if author_tag else "Unknown Author"
-                    
-                    rating_element = review.find('td', class_='field rating')
-                    my_rating = process_rating(rating_element)
-                    
-                    avg_rating_tag = review.find('td', class_='field avg_rating').find('div', class_='value')
-                    public_rating = avg_rating_tag.get_text(strip=True) if avg_rating_tag else "0.0"
-                    
-                    date_read_span = review.find('td', class_='field date_read').find('span', class_='date_read_value')
-                    date_read_str = date_read_span.get_text(strip=True) if date_read_span else ""
-                    date_read = process_date(date_read_str)
-                    
-                    description = get_book_description(book_link, headers)
-                    genres = extract_genres_from_review(review)
-                    if not genres:
-                        genres = extract_genres_from_book_link(book_link, headers)
-
-                    # Procesar portada antes de crear el libro
-                    cover_link = None
-                    cover_info = review.find('td', class_='field cover')
-                    if cover_info:
-                        img_tag = cover_info.find('img')
-                        if img_tag:
-                            cover_link = img_tag['src']
-
-                    # Crear el libro con la URL de la portada
-                    nuevo_libro = Book.objects.create(
-                        title=title,
-                        author=author,
-                        cover_link=cover_link,
-                        my_rating=my_rating,
-                        public_rating=public_rating,
-                        date_read=date_read,
-                        book_link=book_link,
-                        description=description,
-                        genres=genres
-                    )
-                    logger.info(f"Libro creado: {title}")
-                except Exception as e:
-                    logger.exception("Error procesando libro en página %s", page_number)
-                    continue
-
-                # Procesar y guardar la imagen de la portada
-                if cover_link and cover_link.endswith('.jpg'):
-                    modified_cover_url = modify_cover_url(cover_link)
-                    file_name = f"{nuevo_libro.id}.webp"
-                    file_path = os.path.join(folder_path, file_name)
-                    
-                    if not os.path.exists(file_path):
-                        temp_jpg_path = os.path.join(folder_path, f"temp_{nuevo_libro.id}.jpg")
-                        try:
-                            with open(temp_jpg_path, 'wb') as f:
-                                response = requests.get(modified_cover_url)
-                                f.write(response.content)
-                            convert_to_webp(temp_jpg_path, file_path)
-                            os.remove(temp_jpg_path)
-                        except Exception:
-                            logger.exception("Error al procesar imagen")
