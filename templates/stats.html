@@ -63,7 +63,7 @@
     <script src="{% static 'js/background_motion.js' %}"></script>
     <script>
         window.addEventListener('resize', function() {
-            Chart.instances.forEach(chart => {
+            Object.values(Chart.instances).forEach(chart => {
                 chart.resize();
             });
         });

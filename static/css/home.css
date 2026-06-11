@@ -127,6 +127,8 @@ body::after {
         radial-gradient(circle at 92% 46%, rgba(210, 181, 255, 0.7) 0 1px, transparent 2px);
     background-size: 280px 280px, 380px 380px, 480px 480px, 560px 560px, 700px 700px, 840px 840px, 980px 980px, 1120px 1120px, 1260px 1260px;
     opacity: 0.72;
+    inset: -8%;
+    will-change: transform, opacity;
     animation: nebulaMove 20s ease-in-out infinite alternate-reverse, starPulse 14s ease-in-out infinite alternate;
 }
 
@@ -424,10 +426,10 @@ html.background-motion-paused body::after {
 
 @keyframes starDrift {
     from {
-        background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0;
+        transform: translate3d(-2%, -1%, 0) scale(1.02);
     }
     to {
-        background-position: 180px 90px, -140px 100px, 100px -120px, -90px -80px, 120px -60px, -110px 70px;
+        transform: translate3d(2%, 1%, 0) scale(1.02);
     }
 }
 
