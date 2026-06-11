@@ -1,5 +1,6 @@
 #Custom files
 database.db
+my_news_update.lock
 staticfiles/
 /.claude
 CLAUDE.md

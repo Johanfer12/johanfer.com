@@ -249,7 +249,7 @@ class EmbeddingService:
                     is_redundant = score >= threshold and similar is not None
                     return is_redundant, similar, score
         except Exception:
-            pass
+            logger.exception("Error consultando Qdrant en check_redundancy; se usa el fallback en memoria.")
 
         if recent_news_cache is not None:
             candidates = [
@@ -727,7 +727,17 @@ class FeedService:
             # Usar la fecha más reciente entre la última noticia y hace 15 días
             cutoff_date = max(latest_date, fifteen_days_ago)
             
-            feed = feedparser.parse(source.url)
+            try:
+                feed_response = requests.get(
+                    source.url,
+                    timeout=15,
+                    headers={'User-Agent': 'Mozilla/5.0 (compatible; johanfer-news-bot/1.0)'},
+                )
+                feed_response.raise_for_status()
+                feed = feedparser.parse(feed_response.content)
+            except requests.RequestException:
+                logger.exception(f"Error descargando feed de {source.name}; se omite esta fuente en este ciclo.")
+                continue
             logger.info(f"Encontradas {len(feed.entries)} entradas en el feed")
             
             # Recolectar entradas válidas

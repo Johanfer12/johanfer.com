@@ -4,6 +4,8 @@ from datetime import timedelta
 from .models import News
 from .models import GroqGlobalSetting
 from .models import AIFilterInstruction
+from django.conf import settings
+import os
 import portalocker
 import logging
 
@@ -50,7 +52,8 @@ def purge_orphan_vectors(batch_size: int = 256):
         return 0
 
 def update_news_cron():
-    lock_path = '/tmp/my_news_update.lock'
+    # En BASE_DIR y no en /tmp: ahí el sistema puede borrarlo en limpiezas/reinicios.
+    lock_path = os.path.join(settings.BASE_DIR, 'my_news_update.lock')
     try:
         with portalocker.Lock(lock_path, timeout=0):
             # Completar algunas pendientes antes de traer nuevas, sin solapar el siguiente cron.

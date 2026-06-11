@@ -10,6 +10,7 @@ import logging
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from django.utils import timezone
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Q
 from Bookshelf.html_sanitizer import sanitize_html
 from .models import Book
@@ -95,6 +96,17 @@ def build_rss_page_url(rss_url, page_number, per_page):
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
+def fetch_feed_with_timeout(url, timeout=15):
+    """Descarga un feed con timeout explícito; feedparser no lo soporta nativamente."""
+    response = requests.get(
+        url,
+        timeout=timeout,
+        headers={'User-Agent': 'Mozilla/5.0 (compatible; johanfer-bookshelf/1.0)'},
+    )
+    response.raise_for_status()
+    return feedparser.parse(response.content)
+
+
 def fetch_goodreads_rss_entries(rss_url):
     per_page = max(1, min(int(getattr(settings, "GOODREADS_RSS_PER_PAGE", 200) or 200), 200))
     entries = []
@@ -102,7 +114,11 @@ def fetch_goodreads_rss_entries(rss_url):
 
     for page_number in range(1, 100):
         page_url = build_rss_page_url(rss_url, page_number, per_page)
-        feed = feedparser.parse(page_url)
+        try:
+            feed = fetch_feed_with_timeout(page_url)
+        except requests.RequestException:
+            logger.exception("Error descargando Goodreads RSS (página %s); se procesa lo recolectado.", page_number)
+            break
         if getattr(feed, "bozo", False):
             logger.warning("Goodreads RSS no pudo parsearse correctamente: %s", getattr(feed, "bozo_exception", ""))
 
@@ -164,45 +180,52 @@ def refresh_books_data():
 
     for entry in reversed(entries):
         goodreads_id = (entry.get("book_id") or "").strip() or None
-        book_link = normalize_goodreads_book_link(entry)
         title = (entry.get("title") or "").strip()
-        author = (entry.get("author_name") or "").strip() or "Unknown Author"
-        date_read = parse_rss_date(entry.get("user_read_at"))
+        try:
+            book_link = normalize_goodreads_book_link(entry)
+            author = (entry.get("author_name") or "").strip() or "Unknown Author"
+            date_read = parse_rss_date(entry.get("user_read_at"))
 
-        if not title or not date_read:
-            logger.warning("Libro RSS omitido por falta de título o fecha: %s", title or goodreads_id)
+            if not title or not date_read:
+                logger.warning("Libro RSS omitido por falta de título o fecha: %s", title or goodreads_id)
+                continue
+
+            with transaction.atomic():
+                book = find_existing_book(goodreads_id, book_link)
+                is_new = book is None
+                if is_new:
+                    book = Book()
+
+                book.title = title
+                book.author = author
+                book.cover_link = (entry.get("book_large_image_url") or entry.get("book_medium_image_url") or entry.get("book_image_url") or "").strip()
+                book.my_rating = parse_positive_int(entry.get("user_rating")) or 0
+                book.public_rating = (entry.get("average_rating") or "0.0").strip()
+                book.date_read = date_read
+                book.book_link = book_link
+                rss_description = entry.get("book_description")
+                book.description = sanitize_html(rss_description) if rss_description else book.description
+                book.goodreads_id = goodreads_id or book.goodreads_id
+                book.isbn = (entry.get("isbn") or "").strip() or book.isbn
+                book.num_pages = parse_positive_int(entry.get("num_pages")) or book.num_pages
+                book.published_year = parse_positive_int(entry.get("book_published")) or book.published_year
+                book.goodreads_date_added = parse_rss_datetime(entry.get("user_date_added")) or book.goodreads_date_added
+                book.save()
+
+            # La descarga va fuera de la transacción para no mantener
+            # bloqueada la BD (SQLite) durante peticiones de red.
+            if book.cover_link:
+                cover_path = os.path.join(folder_path, f"{book.id}.webp")
+                if is_new or not os.path.exists(cover_path):
+                    download_cover_as_webp(book.cover_link, book.id, folder_path)
+
+            if is_new:
+                created += 1
+                logger.info("Libro creado desde RSS: %s", title)
+            else:
+                updated += 1
+        except Exception:
+            logger.exception("Error procesando libro RSS: %s", title or goodreads_id)
             continue
-
-        book = find_existing_book(goodreads_id, book_link)
-        is_new = book is None
-        if is_new:
-            book = Book()
-
-        book.title = title
-        book.author = author
-        book.cover_link = (entry.get("book_large_image_url") or entry.get("book_medium_image_url") or entry.get("book_image_url") or "").strip()
-        book.my_rating = parse_positive_int(entry.get("user_rating")) or 0
-        book.public_rating = (entry.get("average_rating") or "0.0").strip()
-        book.date_read = date_read
-        book.book_link = book_link
-        rss_description = entry.get("book_description")
-        book.description = sanitize_html(rss_description) if rss_description else book.description
-        book.goodreads_id = goodreads_id or book.goodreads_id
-        book.isbn = (entry.get("isbn") or "").strip() or book.isbn
-        book.num_pages = parse_positive_int(entry.get("num_pages")) or book.num_pages
-        book.published_year = parse_positive_int(entry.get("book_published")) or book.published_year
-        book.goodreads_date_added = parse_rss_datetime(entry.get("user_date_added")) or book.goodreads_date_added
-        book.save()
-
-        if book.cover_link:
-            cover_path = os.path.join(folder_path, f"{book.id}.webp")
-            if is_new or not os.path.exists(cover_path):
-                download_cover_as_webp(book.cover_link, book.id, folder_path)
-
-        if is_new:
-            created += 1
-            logger.info("Libro creado desde RSS: %s", title)
-        else:
-            updated += 1
 
     logger.info("Goodreads RSS procesado: creados=%s, actualizados=%s, items=%s", created, updated, len(entries))
