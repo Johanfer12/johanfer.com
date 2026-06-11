@@ -978,7 +978,7 @@ def check_all_redundancy(request):
         gemini_client = FeedService.initialize_gemini()
         vector_index = FeedService.initialize_vector_index()
 
-        news_to_check = News.visible.order_by('-published_date')[:100]
+        news_to_check = News.visible.select_related('source').order_by('-published_date')[:100]
         
         redundant_count = 0
         for news in news_to_check:

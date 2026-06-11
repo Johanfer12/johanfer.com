@@ -258,8 +258,12 @@ new Chart(document.getElementById('pagesPerYearChart'), {
     }
 });
 
+let chartResizeTimer;
 window.addEventListener('resize', function() {
-    Object.values(Chart.instances).forEach(chart => {
-        chart.resize();
-    });
+    clearTimeout(chartResizeTimer);
+    chartResizeTimer = setTimeout(function() {
+        Object.values(Chart.instances).forEach(chart => {
+            chart.resize();
+        });
+    }, 250);
 });

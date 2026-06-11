@@ -110,9 +110,13 @@ def stats(request):
     books_per_year_labels = [entry['date_read__year'] for entry in books_per_year]
     books_per_year_values = [entry['total'] for entry in books_per_year]
 
-    # Cantidad de estrellas
+    # Cantidad de estrellas (una sola query agregada en vez de una por rating)
     stars_labels = ['1 Estrella', '2 Estrellas', '3 Estrellas', '4 Estrellas', '5 Estrellas']
-    stars_values = [books.filter(my_rating=i).count() for i in range(1, 6)]
+    rating_counts = {
+        entry['my_rating']: entry['total']
+        for entry in books.values('my_rating').annotate(total=Count('id'))
+    }
+    stars_values = [rating_counts.get(i, 0) for i in range(1, 6)]
 
     # Paginas leidas por año, usando el dato que entrega el RSS de Goodreads.
     pages_per_year = (

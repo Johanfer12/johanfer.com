@@ -5,6 +5,7 @@ from .models import News
 from .models import GroqGlobalSetting
 from .models import AIFilterInstruction
 from django.conf import settings
+from django.db import connection
 import os
 import portalocker
 import logging
@@ -91,6 +92,15 @@ def purge_old_news(days: int = 15):
                 logger.exception("Error eliminando vectores antiguos en Qdrant")
 
             deleted_vectors += purge_orphan_vectors()
+
+        # Tras borrar filas, refrescar estadísticas del planificador de SQLite.
+        # (VACUUM completo se evita: bloquea toda la BD y corre cada 30 min.)
+        if deleted_count and connection.vendor == 'sqlite':
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute('PRAGMA optimize')
+            except Exception:
+                logger.exception("Error ejecutando PRAGMA optimize tras la purga")
 
         logger.info(f"Purga completada: {deleted_count} noticias eliminadas (> {days} días)")
         if vector_index is not None:
