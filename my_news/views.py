@@ -1048,4 +1048,5 @@ def system_stats(request):
 class NewsLoginView(LoginView):
     template_name = 'news_login.html' # Apuntar al archivo creado por el usuario
     redirect_authenticated_user = True # Redirigir si ya está autenticado
+    next_page = '/noticias/' # Sin esto Django redirige a /accounts/profile/ (404)
 

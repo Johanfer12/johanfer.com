@@ -83,6 +83,24 @@ class StreamRemovalTests(TestCase):
         news.refresh_from_db()
         self.assertFalse(news.is_deleted)
 
+    def test_login_redirects_to_news_list(self):
+        # Regresión: sin next_page, Django redirigía a /accounts/profile/ (404).
+        self.client.logout()
+        response = self.client.post(
+            reverse('my_news:news_login'),
+            {'username': 'admin', 'password': 'pass'},
+        )
+        self.assertRedirects(response, '/noticias/')
+
+    def test_public_header_shows_login_button_for_anonymous(self):
+        self.client.logout()
+        response = self.client.get(reverse('my_news:news_list'))
+        self.assertContains(response, 'Iniciar sesión')
+        # Logueado como superuser no debe aparecer
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('my_news:news_list'))
+        self.assertNotContains(response, 'Iniciar sesión')
+
     def test_get_page_success(self):
         for i in range(3):
             make_news(self.source, f"pagina-{i}")
