@@ -1,4 +1,9 @@
 #Custom files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
 database.db
 my_news_update.lock
 staticfiles/
