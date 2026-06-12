@@ -191,7 +191,8 @@ html.instagram-webview {
     color: rgba(227, 233, 245, 0.86);
     font-size: 0.9em;
     line-height: 1.5;
-    text-align: justify;
+    /* Sin justify: en ~280px de ancho deja "ríos" de espacios. */
+    text-align: left;
     flex: 1;
     margin: 10px 0;
     display: block;

@@ -64,6 +64,8 @@
     }
 
     .chart-container {
+        /* En columna, el flex-basis 30% le gana a height y colapsa el chart. */
+        flex: none;
         width: 95%;
         max-width: 100%;
         margin: 10px 0;
@@ -84,6 +86,7 @@
     }
 
     .chart-container {
+        flex: none;
         width: 95%;
         max-width: 100%;
         margin: 10px 0;

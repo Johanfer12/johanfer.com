@@ -52,6 +52,7 @@
         </div>
     </div>
 
+    {% include 'footer.html' %}
     <script>
         const genresLabels = JSON.parse('{{ genres_labels|escapejs }}');
         const genresValues = JSON.parse('{{ genres_values|escapejs }}');

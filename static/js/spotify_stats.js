@@ -1,5 +1,16 @@
 Chart.register(ChartDataLabels);
 
+// Paleta del sitio (la misma familia azul/morado del home; nada de colores
+// por defecto de Chart.js)
+const PIE_COLORS = [
+    'rgba(108, 142, 255, 0.78)',  // azul
+    'rgba(164, 124, 255, 0.74)',  // morado
+    'rgba(222, 188, 122, 0.78)',  // dorado
+    'rgba(96, 196, 232, 0.74)',   // cian
+    'rgba(214, 132, 196, 0.72)',  // rosa-violeta
+];
+const GRID_COLOR = 'rgba(255, 255, 255, 0.05)';
+
 const isMobileChart = window.innerWidth < 768;
 const compactLabel = (label, maxLength = 16) => {
     if (!isMobileChart || typeof label !== 'string' || label.length <= maxLength) {
@@ -38,11 +49,11 @@ const commonOptions = {
     scales: {
         y: {
             ticks: { color: 'white' },
-            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+            grid: { color: GRID_COLOR }
         },
         x: {
             ticks: { color: 'white' },
-            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+            grid: { color: GRID_COLOR }
         }
     }
 };
@@ -54,13 +65,9 @@ new Chart(document.getElementById('genresChart'), {
         labels: genresLabels,
         datasets: [{
             data: genresValues,
-            backgroundColor: [
-                'rgba(255, 99, 132, 0.6)',   // Rojo
-                'rgba(54, 162, 235, 0.6)',    // Azul
-                'rgba(255, 206, 86, 0.6)',    // Amarillo
-                'rgba(75, 192, 192, 0.6)',    // Verde
-                'rgba(153, 102, 255, 0.6)'    // Morado
-            ]
+            backgroundColor: PIE_COLORS,
+            borderColor: 'rgba(10, 16, 32, 0.55)',
+            borderWidth: 2
         }]
     },
     options: {
@@ -117,8 +124,8 @@ new Chart(document.getElementById('artistsChart'), {
         datasets: [{
             label: 'Canciones por artista',
             data: artistsValues,
-            backgroundColor: 'rgba(75, 192, 192, 0.6)',
-            borderColor: 'rgba(75, 192, 192, 1)',
+            backgroundColor: 'rgba(108, 142, 255, 0.62)',
+            borderColor: 'rgba(141, 168, 255, 0.95)',
             borderWidth: 1
         }]
     },
@@ -181,8 +188,8 @@ new Chart(document.getElementById('monthlyChart'), {
         datasets: [{
             label: 'Canciones añadidas',
             data: monthsValues,
-            borderColor: 'rgba(153, 102, 255, 1)',
-            backgroundColor: 'rgba(153, 102, 255, 0.2)',
+            borderColor: 'rgba(186, 156, 255, 0.95)',
+            backgroundColor: 'rgba(164, 124, 255, 0.18)',
             fill: true
         }]
     },
@@ -211,7 +218,7 @@ new Chart(document.getElementById('monthlyChart'), {
                         size: isMobileChart ? 11 : 12
                     }
                 },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                grid: { color: GRID_COLOR }
             },
             x: {
                 ticks: {
@@ -224,7 +231,7 @@ new Chart(document.getElementById('monthlyChart'), {
                         size: isMobileChart ? 10 : 12
                     }
                 },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                grid: { color: GRID_COLOR }
             }
         },
         animation: {

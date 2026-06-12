@@ -39,19 +39,27 @@ const createBookModal = (book) => {
     const modal = document.createElement('div');
     modal.id = `modal-${book.id}`;
     modal.className = 'modal';
+    const coverImage = (book.cover_image || '').replace('.jpg', '.webp');
     modal.innerHTML = `
-        <div class="modal-content">
+        <div class="modal-content book-modal-content">
             <span class="close" onclick="closeModal('${book.id}')">&times;</span>
-            <h2>${escapeHtml(book.title)}</h2>
-            <p><strong>Autor:</strong> ${escapeHtml(book.author)}</p>
-            <p><strong>Mi Calificación</strong> ${'★'.repeat(book.my_rating)}</p>
-            <p><strong>Calificación General:</strong> ${escapeHtml(book.public_rating)}</p>
-            ${book.num_pages ? `<p><strong>Páginas:</strong> ${escapeHtml(String(book.num_pages))}</p>` : ''}
-            ${book.published_year ? `<p><strong>Publicado:</strong> ${escapeHtml(String(book.published_year))}</p>` : ''}
-            <p><strong>Lo leí el...</strong> ${escapeHtml(book.date_read)}</p>
-            <div class="book-description">
-                <strong>Descripción</strong><br><br>
-                ${book.description || 'No hay descripción disponible'}
+            <div class="book-modal-body">
+                <div class="book-modal-cover">
+                    <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(book.title)}" loading="lazy">
+                </div>
+                <div class="book-modal-info">
+                    <h2>${escapeHtml(book.title)}</h2>
+                    <p><strong>Autor:</strong> ${escapeHtml(book.author)}</p>
+                    <p><strong>Mi Calificación</strong> <span class="stars">${'★'.repeat(book.my_rating)}</span></p>
+                    <p><strong>Calificación General:</strong> ${escapeHtml(book.public_rating)}</p>
+                    ${book.num_pages ? `<p><strong>Páginas:</strong> ${escapeHtml(String(book.num_pages))}</p>` : ''}
+                    ${book.published_year ? `<p><strong>Publicado:</strong> ${escapeHtml(String(book.published_year))}</p>` : ''}
+                    <p><strong>Leído el:</strong> ${escapeHtml(book.date_read)}</p>
+                    <div class="book-description">
+                        <strong>Descripción</strong><br><br>
+                        ${book.description || 'No hay descripción disponible'}
+                    </div>
+                </div>
             </div>
         </div>
     `;

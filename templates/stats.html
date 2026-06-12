@@ -51,6 +51,8 @@
         </div>
     </div>
 
+    {% include 'footer.html' %}
+
     <script>
         const booksPerYearData = JSON.parse('{{ books_per_year_labels|escapejs }}');
         const booksPerYearValues = JSON.parse('{{ books_per_year_values|escapejs }}');

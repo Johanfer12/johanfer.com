@@ -1,6 +1,14 @@
 // Al inicio del archivo
 Chart.register(ChartDataLabels);
 
+// Paleta del sitio (derivada del gradiente azul/morado del home)
+const PALETTE = {
+    blue: { bg: 'rgba(108, 142, 255, 0.62)', border: 'rgba(141, 168, 255, 0.95)' },
+    purple: { bg: 'rgba(164, 124, 255, 0.58)', border: 'rgba(186, 156, 255, 0.95)' },
+    gold: { bg: 'rgba(222, 188, 122, 0.65)', border: 'rgba(240, 212, 150, 0.95)' },
+};
+const GRID_COLOR = 'rgba(255, 255, 255, 0.05)';
+
 const isMobileChart = window.innerWidth < 768;
 const compactLabel = (label, maxLength = 16) => {
     if (!isMobileChart || typeof label !== 'string' || label.length <= maxLength) {
@@ -15,22 +23,11 @@ const paddedAxisMax = (values) => {
     return max > 0 ? Math.ceil(max * 1.18) : undefined;
 };
 const barValueLabels = {
-    color: 'white',
+    color: 'rgba(238, 243, 251, 0.88)',
     anchor: 'end',
     align: 'end',
     clamp: false,
-    offset: 2,
-    rotation: -45,
-    backgroundColor: 'rgba(22, 27, 54, 0.82)',
-    borderColor: 'rgba(255, 255, 255, 0.22)',
-    borderRadius: 4,
-    borderWidth: 1,
-    padding: {
-        top: 2,
-        right: 4,
-        bottom: 2,
-        left: 4
-    },
+    offset: 0,
     font: {
         weight: 'bold',
         size: isMobileChart ? 9 : 11
@@ -72,7 +69,7 @@ const commonOptions = {
                 color: 'white'
             },
             grid: {
-                color: 'rgba(255, 255, 255, 0.1)'
+                color: GRID_COLOR
             }
         },
         x: {
@@ -80,7 +77,7 @@ const commonOptions = {
                 color: 'white'
             },
             grid: {
-                color: 'rgba(255, 255, 255, 0.1)'
+                color: GRID_COLOR
             }
         }
     }
@@ -94,8 +91,8 @@ new Chart(document.getElementById('booksPerYearChart'), {
         datasets: [{
             label: 'Libros leídos',
             data: booksPerYearValues,
-            backgroundColor: 'rgba(75, 192, 192, 0.6)',
-            borderColor: 'rgba(75, 192, 192, 1)',
+            backgroundColor: PALETTE.blue.bg,
+            borderColor: PALETTE.blue.border,
             borderWidth: 1
         }]
     },
@@ -130,8 +127,8 @@ new Chart(document.getElementById('starsChart'), {
         datasets: [{
             label: 'Libros',
             data: [...starsValues].reverse(),
-            backgroundColor: 'rgba(232, 184, 90, 0.68)',
-            borderColor: 'rgba(255, 216, 128, 0.95)',
+            backgroundColor: PALETTE.gold.bg,
+            borderColor: PALETTE.gold.border,
             borderWidth: 1
         }]
     },
@@ -147,7 +144,7 @@ new Chart(document.getElementById('starsChart'), {
                     precision: 0
                 },
                 grid: {
-                    color: 'rgba(255, 255, 255, 0.1)'
+                    color: GRID_COLOR
                 }
             },
             y: {
@@ -158,7 +155,7 @@ new Chart(document.getElementById('starsChart'), {
                     }
                 },
                 grid: {
-                    color: 'rgba(255, 255, 255, 0.1)'
+                    color: GRID_COLOR
                 }
             }
         },
@@ -167,21 +164,11 @@ new Chart(document.getElementById('starsChart'), {
                 display: false
             },
             datalabels: {
-                color: 'white',
+                color: 'rgba(238, 243, 251, 0.88)',
                 anchor: 'end',
                 align: 'end',
                 clamp: true,
                 offset: 4,
-                backgroundColor: 'rgba(22, 27, 54, 0.82)',
-                borderColor: 'rgba(255, 255, 255, 0.22)',
-                borderRadius: 4,
-                borderWidth: 1,
-                padding: {
-                    top: 2,
-                    right: 4,
-                    bottom: 2,
-                    left: 4
-                },
                 font: {
                     weight: 'bold',
                     size: isMobileChart ? 10 : 12
@@ -206,8 +193,8 @@ new Chart(document.getElementById('pagesPerYearChart'), {
         datasets: [{
             label: 'Páginas leídas',
             data: pagesPerYearValues,
-            backgroundColor: 'rgba(153, 102, 255, 0.6)',
-            borderColor: 'rgba(153, 102, 255, 1)',
+            backgroundColor: PALETTE.purple.bg,
+            borderColor: PALETTE.purple.border,
             borderWidth: 1
         }]
     },
@@ -222,7 +209,7 @@ new Chart(document.getElementById('pagesPerYearChart'), {
                     }
                 },
                 grid: {
-                    color: 'rgba(255, 255, 255, 0.1)'
+                    color: GRID_COLOR
                 }
             },
             y: {
@@ -238,7 +225,7 @@ new Chart(document.getElementById('pagesPerYearChart'), {
                     }
                 },
                 grid: {
-                    color: 'rgba(255, 255, 255, 0.1)'
+                    color: GRID_COLOR
                 }
             }
         },
