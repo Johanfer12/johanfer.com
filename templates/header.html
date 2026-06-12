@@ -8,7 +8,7 @@
           Mis Libros
         {% elif request.path == '/visitas/' %}
           Visitas
-        {% elif request.path == '/spotify/' or request.path == '/spotify/stats/' %}
+        {% elif request.path|slice:":9" == '/spotify/' %}
           Mi Música
         {% elif request.path == '/about/' %}
           Acerca de

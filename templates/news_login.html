@@ -70,6 +70,17 @@
             margin-bottom: 15px;
             font-size: 0.9em;
         }
+        .login-back {
+            display: inline-block;
+            margin-top: 18px;
+            font-size: 0.85em;
+            color: rgba(227, 233, 245, 0.62);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        .login-back:hover {
+            color: #f2f5fb;
+        }
     </style>
 </head>
 <body>
@@ -82,10 +93,19 @@
 
         <form method="post" action="{% url 'my_news:news_login' %}">
             {% csrf_token %}
-            {{ form.as_p }} {# Renderiza los campos del formulario (username, password) como párrafos #}
+            <p>
+                <label for="{{ form.username.id_for_label }}">Usuario</label>
+                {{ form.username }}
+            </p>
+            <p>
+                <label for="{{ form.password.id_for_label }}">Contraseña</label>
+                {{ form.password }}
+            </p>
             <button type="submit">Entrar</button>
             <input type="hidden" name="next" value="{{ next }}"> {# Importante para la redirección #}
         </form>
+
+        <a class="login-back" href="/noticias/">&larr; Volver a noticias</a>
     </div>
     <script src="{% static 'js/background_motion.js' %}"></script>
 </body>
