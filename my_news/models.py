@@ -5,16 +5,15 @@ from django.db.models import Q
 class VisibleNewsManager(models.Manager):
     """Manager para noticias visibles (no eliminadas, no filtradas, no redundantes, no filtradas por IA)"""
     def get_queryset(self):
-        return super().get_queryset().filter(
-            is_deleted=False,
-            is_filtered=False,
-            is_ai_filtered=False,
-            is_redundant=False
-        )
+        return super().get_queryset().filter(self.visible_filter())
+
+    def editorial_filter(self):
+        """Filtro compartido para contenido apto para mostrarse."""
+        return Q(is_filtered=False) & Q(is_ai_filtered=False) & Q(is_redundant=False)
     
     def visible_filter(self):
         """Devuelve el filtro Q para noticias visibles"""
-        return Q(is_deleted=False) & Q(is_filtered=False) & Q(is_ai_filtered=False) & Q(is_redundant=False)
+        return Q(is_deleted=False) & self.editorial_filter()
 
 class FeedSource(models.Model):
     name = models.CharField(max_length=200)

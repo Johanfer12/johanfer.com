@@ -553,6 +553,45 @@ class NewsFeedOrderingTests(TestCase):
         self.assertEqual(response.context['public_news_date'], latest_date.strftime('%d/%m/%Y'))
         self.assertEqual(response.context['public_storage_key'], f'public-news-hidden:{latest_date.isoformat()}')
 
+    def test_public_news_view_applies_editorial_filters_and_uses_latest_publishable_day(self):
+        latest_time = timezone.now()
+        publishable_time = latest_time - timedelta(days=1)
+        publishable = News.objects.create(
+            title='public publishable',
+            description='Visible para visitantes',
+            link='https://example.com/public-publishable',
+            published_date=publishable_time,
+            source=self.source,
+            guid=f'public-publishable-{uuid.uuid4().hex}',
+        )
+
+        filtered_states = (
+            {'is_filtered': True},
+            {'is_ai_filtered': True},
+            {'is_redundant': True},
+        )
+        for index, state in enumerate(filtered_states):
+            News.objects.create(
+                title=f'public filtered {index}',
+                description='No debe aparecer para visitantes',
+                link=f'https://example.com/public-filtered-{index}',
+                published_date=latest_time - timedelta(minutes=index),
+                source=self.source,
+                guid=f'public-filtered-{uuid.uuid4().hex}-{index}',
+                **state,
+            )
+
+        response = self.client.get(reverse('my_news:news_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context['object_list']), [publishable])
+        self.assertEqual(
+            response.context['public_news_date'],
+            timezone.localtime(publishable_time).strftime('%d/%m/%Y'),
+        )
+        self.assertContains(response, 'public publishable')
+        self.assertNotContains(response, 'public filtered')
+
     def test_public_news_view_uses_private_page_size_pagination(self):
         base_time = timezone.now()
         published_dates = [base_time - timedelta(minutes=index) for index in range(PAGE_SIZE + 1)]

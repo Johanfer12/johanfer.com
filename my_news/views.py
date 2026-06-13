@@ -79,7 +79,9 @@ def _day_bounds_local(target_date=None):
 
 
 def _latest_public_day_bounds():
-    latest_published = News.objects.aggregate(latest=Max('published_date'))['latest']
+    latest_published = News.objects.filter(
+        News.visible.editorial_filter()
+    ).aggregate(latest=Max('published_date'))['latest']
     if latest_published is None:
         return None, None, None
 
@@ -313,6 +315,7 @@ class NewsListView(ListView):
             if start_dt is None:
                 return News.objects.none()
             return News.objects.select_related('source').filter(
+                News.visible.editorial_filter(),
                 published_date__gte=start_dt,
                 published_date__lt=end_dt,
             ).order_by('-published_date', '-id')
