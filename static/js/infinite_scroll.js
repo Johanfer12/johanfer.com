@@ -49,15 +49,23 @@ const createBookModal = (book) => {
                 </div>
                 <div class="book-modal-info">
                     <h2>${escapeHtml(book.title)}</h2>
-                    <p><strong>Autor:</strong> ${escapeHtml(book.author)}</p>
-                    <p><strong>Mi Calificación</strong> <span class="stars">${'★'.repeat(book.my_rating)}</span></p>
-                    <p><strong>Calificación General:</strong> ${escapeHtml(book.public_rating)}</p>
-                    ${book.num_pages ? `<p><strong>Páginas:</strong> ${escapeHtml(String(book.num_pages))}</p>` : ''}
-                    ${book.published_year ? `<p><strong>Publicado:</strong> ${escapeHtml(String(book.published_year))}</p>` : ''}
-                    <p><strong>Leído el:</strong> ${escapeHtml(book.date_read)}</p>
+                    <div class="book-modal-metadata">
+                        <div>
+                            <p><strong>Autor:</strong> ${escapeHtml(book.author)}</p>
+                            <p><strong>Mi Calificación</strong> <span class="stars">${'★'.repeat(book.my_rating)}</span></p>
+                            <p><strong>Calificación General:</strong> ${escapeHtml(book.public_rating)}</p>
+                        </div>
+                        <div>
+                            ${book.num_pages ? `<p><strong>Páginas:</strong> ${escapeHtml(String(book.num_pages))}</p>` : ''}
+                            ${book.published_year ? `<p><strong>Publicado:</strong> ${escapeHtml(String(book.published_year))}</p>` : ''}
+                            <p><strong>Leído el:</strong> ${escapeHtml(book.date_read)}</p>
+                        </div>
+                    </div>
                     <div class="book-description">
-                        <strong>Descripción</strong><br><br>
-                        ${book.description || 'No hay descripción disponible'}
+                        <div class="book-description-scroll">
+                            <strong>Descripción</strong><br><br>
+                            ${book.description || 'No hay descripción disponible'}
+                        </div>
                     </div>
                 </div>
             </div>

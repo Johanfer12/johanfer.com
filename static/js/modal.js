@@ -12,6 +12,17 @@ function openModal(bookId) {
     }
 }
 
+document.addEventListener('scroll', function(event) {
+    const scrollArea = event.target;
+    if (!scrollArea.classList || !scrollArea.classList.contains('book-description-scroll')) return;
+
+    scrollArea.classList.add('is-scrolling');
+    clearTimeout(scrollArea._scrollbarTimer);
+    scrollArea._scrollbarTimer = setTimeout(function() {
+        scrollArea.classList.remove('is-scrolling');
+    }, 700);
+}, true);
+
 function closeModalElement(modal) {
     if (!modal || modal.classList.contains("modal-closing")) return;
 

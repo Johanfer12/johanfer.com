@@ -10,9 +10,9 @@
     <link rel="stylesheet" href="{% static 'css/header.css' %}">
     <style>
         .stats-container {
-            max-width: 1600px;
-            margin: 30px auto;
-            padding: 20px;
+            max-width: 1500px;
+            margin: 12px auto;
+            padding: 16px 20px 18px;
             background: rgba(0, 0, 0, 0.8);
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
@@ -20,28 +20,40 @@
 
         .stats-header {
             text-align: center;
-            margin-bottom: 30px;
+            margin: 0;
             color: #00a8ff;
-            font-size: 1.8em;
+            font-size: 1.65em;
             font-weight: bold;
+        }
+
+        .stats-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 14px;
         }
 
         .stats-grid {
             display: grid;
             grid-template-columns: 1fr;
-            gap: 15px;
+            gap: 10px;
         }
 
-        @media (min-width: 1024px) {
+        @media (min-width: 760px) {
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
-                gap: 20px;
+            }
+        }
+
+        @media (min-width: 1200px) {
+            .stats-grid {
+                grid-template-columns: repeat(3, 1fr);
             }
         }
 
         .stats-info {
             margin-bottom: 0;
-            padding: 15px;
+            padding: 10px 14px;
             background: rgba(20, 20, 20, 0.5);
             border-radius: 8px;
             border-left: 4px solid #00a8ff;
@@ -50,14 +62,14 @@
         .stats-label {
             font-weight: bold;
             color: #00a8ff;
-            font-size: 1.1em;
-            margin-bottom: 5px;
+            font-size: 1em;
+            margin-bottom: 2px;
         }
 
         .stats-value {
             color: #fff;
-            font-size: 1.2em;
-            padding-left: 10px;
+            font-size: 1.08em;
+            padding-left: 6px;
         }
 
         .error-message {
@@ -71,37 +83,20 @@
 
         .warning-badge {
             display: inline-block;
-            padding: 5px 10px;
+            padding: 3px 8px;
             background: rgba(255, 149, 0, 0.3);
             border-radius: 5px;
             color: #ff9500;
-            margin-top: 5px;
+            margin-top: 2px;
         }
 
         .success-badge {
             display: inline-block;
-            padding: 5px 10px;
+            padding: 3px 8px;
             background: rgba(52, 199, 89, 0.3);
             border-radius: 5px;
             color: #34c759;
-            margin-top: 5px;
-        }
-
-        .refresh-btn {
-            display: block;
-            margin: 0 auto 20px;
-            padding: 10px 25px;
-            background: #10ac84;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 1em;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-
-        .refresh-btn:hover {
-            background: #0e9972;
+            margin-top: 2px;
         }
 
         body {
@@ -112,7 +107,29 @@
         .section-divider {
             height: 2px;
             background: linear-gradient(to right, transparent, #00a8ff, transparent);
-            margin: 30px 0;
+            margin: 14px 0 10px;
+        }
+
+        .raspberry-heading {
+            text-align: center;
+            margin: 0 0 10px;
+            font-size: 1.35em;
+        }
+
+        @media (max-width: 600px) {
+            .stats-container {
+                margin: 8px;
+                padding: 14px;
+            }
+
+            .stats-topbar {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .stats-header {
+                font-size: 1.4em;
+            }
         }
 
         /* Premium override */
@@ -141,17 +158,6 @@
             color: #f2f5fb;
         }
 
-        .refresh-btn {
-            background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
-            color: #06101f;
-            border: 1px solid rgba(207, 220, 241, 0.3);
-            border-radius: 10px;
-        }
-
-        .refresh-btn:hover {
-            background: linear-gradient(165deg, rgba(255, 255, 255, 0.3), rgba(143, 180, 232, 0.94));
-        }
-
         .section-divider {
             background: linear-gradient(to right, transparent, rgba(198, 214, 242, 0.7), transparent);
         }
@@ -161,9 +167,9 @@
     {% include 'header.html' %}
 
     <div class="stats-container">
-        <h1 class="stats-header">📊 Estadísticas del Sistema</h1>
-
-        <button class="refresh-btn" onclick="location.reload()">🔄 Actualizar</button>
+        <div class="stats-topbar">
+            <h1 class="stats-header">📊 Estadísticas del Sistema</h1>
+        </div>
 
         {% if error_message %}
         <div class="error-message">
@@ -207,7 +213,7 @@
         <div class="section-divider"></div>
 
         <!-- Estadísticas específicas de Raspberry Pi -->
-        <h2 style="color: #00a8ff; text-align: center; margin: 20px 0;">🥧 Estadísticas Raspberry Pi</h2>
+        <h2 class="raspberry-heading">🥧 Estadísticas Raspberry Pi</h2>
 
         <div class="stats-grid">
             {% if stats.temperature %}
@@ -260,6 +266,11 @@
         </div>
         {% endif %}
     </div>
+    <button class="update-feed-btn" type="button" title="Actualizar estadísticas" aria-label="Actualizar estadísticas" onclick="location.reload()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+    </button>
     <script src="{% static 'js/background_motion.js' %}"></script>
 </body>
 </html>

@@ -62,24 +62,32 @@
                     </div>
                     <div class="book-modal-info">
                         <h2>{{ book.title }}</h2>
-                        <p><strong>Autor:</strong> {{ book.author }}</p>
-                        <p><strong>Mi Calificación</strong>
-                            {% for _ in "x"|ljust:book.my_rating %}
-                                <span class="stars">★</span>
-                            {% endfor %}
-                        </p>
-                        <p><strong>Calificación General:</strong> {{ book.public_rating }}</p>
-                        {% if book.num_pages %}
-                            <p><strong>Páginas:</strong> {{ book.num_pages }}</p>
-                        {% endif %}
-                        {% if book.published_year %}
-                            <p><strong>Publicado:</strong> {{ book.published_year }}</p>
-                        {% endif %}
-                        <p><strong>Leído el:</strong> {{ book.date_read|date:"d/m/Y" }}</p>
+                        <div class="book-modal-metadata">
+                            <div>
+                                <p><strong>Autor:</strong> {{ book.author }}</p>
+                                <p><strong>Mi Calificación</strong>
+                                    {% for _ in "x"|ljust:book.my_rating %}
+                                        <span class="stars">★</span>
+                                    {% endfor %}
+                                </p>
+                                <p><strong>Calificación General:</strong> {{ book.public_rating }}</p>
+                            </div>
+                            <div>
+                                {% if book.num_pages %}
+                                    <p><strong>Páginas:</strong> {{ book.num_pages }}</p>
+                                {% endif %}
+                                {% if book.published_year %}
+                                    <p><strong>Publicado:</strong> {{ book.published_year }}</p>
+                                {% endif %}
+                                <p><strong>Leído el:</strong> {{ book.date_read|date:"d/m/Y" }}</p>
+                            </div>
+                        </div>
 
                         <div class="book-description">
-                            <strong>Descripción</strong><br><br>
-                            {{ book.description|sanitize }}
+                            <div class="book-description-scroll">
+                                <strong>Descripción</strong><br><br>
+                                {{ book.description|sanitize }}
+                            </div>
                         </div>
                     </div>
                 </div>

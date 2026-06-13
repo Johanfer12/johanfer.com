@@ -484,15 +484,18 @@ a:hover {
         text-align: left;
         overflow-wrap: anywhere;
         hyphens: auto;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(163, 181, 212, 0.58) transparent;
     }
 
-    .book-modal-content .book-description::-webkit-scrollbar {
+    .book-modal-content .book-description-scroll {
+        scrollbar-width: thin;
+    }
+
+    .book-modal-content .book-description-scroll::-webkit-scrollbar {
         width: 5px;
     }
 
-    .book-modal-content .book-description::-webkit-scrollbar-thumb {
+    .book-modal-content .book-description-scroll:hover::-webkit-scrollbar-thumb,
+    .book-modal-content .book-description-scroll.is-scrolling::-webkit-scrollbar-thumb {
         border-radius: 999px;
         background-color: rgba(163, 181, 212, 0.58);
     }
@@ -618,7 +621,7 @@ a:hover {
     /* Sin justify: en columnas estrechas genera "ríos" de espacios. */
     text-align: left;
     margin-top: 10px;
-    padding: 12px 14px;
+    padding: 12px 7px 12px 14px;
     border-radius: 10px;
     border: 1px solid rgba(198, 214, 242, 0.18);
     background: rgba(8, 14, 30, 0.62);
@@ -627,8 +630,36 @@ a:hover {
     line-height: 1.55;
     flex: 1 1 auto;
     min-height: 0;
+    overflow: hidden;
+    overscroll-behavior: contain;
+}
+
+.book-description-scroll {
+    height: 100%;
+    min-height: 0;
+    padding-right: 7px;
     overflow-y: auto;
     overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+}
+
+.book-description-scroll:hover,
+.book-description-scroll.is-scrolling {
+    scrollbar-color: rgba(163, 181, 212, 0.58) transparent;
+}
+
+.book-description-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.book-description-scroll::-webkit-scrollbar-thumb {
+    background-color: transparent;
+}
+
+.book-description-scroll:hover::-webkit-scrollbar-thumb,
+.book-description-scroll.is-scrolling::-webkit-scrollbar-thumb {
+    background-color: rgba(163, 181, 212, 0.58);
 }
 
 /* Modal de libro: dos columnas con la portada protagonista */
@@ -665,6 +696,12 @@ a:hover {
     margin-top: 0;
 }
 
+.book-modal-metadata {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 28px;
+}
+
 .stars {
     color: #f0d496;
     text-shadow: 0 0 8px rgba(240, 212, 150, 0.35);
@@ -683,6 +720,10 @@ a:hover {
         max-height: none;
         min-height: 0;
         flex: 1 1 auto;
+    }
+
+    .book-modal-metadata {
+        grid-template-columns: 1fr;
     }
 }
 
