@@ -1,5 +1,6 @@
 from datetime import timedelta
 import uuid
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -10,6 +11,7 @@ from django.utils import timezone
 
 from .models import FeedSource, News
 from .services import FeedService, GroqRateLimiter
+from .tasks import purge_old_news
 from .views import NEWS_NOTIFICATION_SETTLE_DELAY, PAGE_SIZE
 
 
@@ -305,6 +307,22 @@ class NewsFeedOrderingTests(TestCase):
 
     def setUp(self):
         cache.clear()
+
+    @patch('my_news.tasks.FeedService.initialize_vector_index', return_value=None)
+    def test_purge_old_news_keeps_saved_articles(self, _initialize_vector_index):
+        old_date = timezone.now() - timedelta(days=16)
+        saved = self.create_news_batch(1, prefix='saved-old', published_dates=[old_date])[0]
+        saved.is_saved = True
+        saved.save(update_fields=['is_saved'])
+        unsaved = self.create_news_batch(1, prefix='unsaved-old', published_dates=[old_date])[0]
+        recent = self.create_news_batch(1, prefix='recent', published_dates=[timezone.now()])[0]
+
+        removed = purge_old_news(days=15)
+
+        self.assertEqual(removed, 1)
+        self.assertTrue(News.objects.filter(pk=saved.pk).exists())
+        self.assertFalse(News.objects.filter(pk=unsaved.pk).exists())
+        self.assertTrue(News.objects.filter(pk=recent.pk).exists())
 
     def test_get_page_orders_descending_with_id_tiebreaker(self):
         self.client.force_login(self.superuser)

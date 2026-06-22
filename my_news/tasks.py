@@ -73,15 +73,16 @@ def update_news_cron():
 
 
 def purge_old_news(days: int = 15):
-    """Elimina definitivamente noticias más viejas que 'days' días.
-    Usa published_date como referencia.
+    """Elimina noticias no guardadas más viejas que ``days`` días.
+
+    Usa ``published_date`` como referencia y conserva las noticias que el
+    usuario haya marcado como guardadas.
     """
     try:
         cutoff = timezone.now() - timedelta(days=days)
-        stale_guids = list(
-            News.objects.filter(published_date__lt=cutoff).values_list('guid', flat=True)
-        )
-        deleted_count, _ = News.objects.filter(published_date__lt=cutoff).delete()
+        stale_news = News.objects.filter(published_date__lt=cutoff, is_saved=False)
+        stale_guids = list(stale_news.values_list('guid', flat=True))
+        deleted_count, _ = stale_news.delete()
 
         deleted_vectors = 0
         vector_index = FeedService.initialize_vector_index()
@@ -102,7 +103,9 @@ def purge_old_news(days: int = 15):
             except Exception:
                 logger.exception("Error ejecutando PRAGMA optimize tras la purga")
 
-        logger.info(f"Purga completada: {deleted_count} noticias eliminadas (> {days} días)")
+        logger.info(
+            f"Purga completada: {deleted_count} noticias no guardadas eliminadas (> {days} días)"
+        )
         if vector_index is not None:
             logger.info(f"Qdrant sincronizado: {deleted_vectors} vectores eliminados")
         return deleted_count
