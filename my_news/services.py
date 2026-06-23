@@ -44,7 +44,6 @@ class GroqRateLimiter:
         'llama-3.3-70b-versatile': {'tpm': 12_000, 'rpm': 30},
         'openai/gpt-oss-120b': {'tpm': 8_000, 'rpm': 30},
         'openai/gpt-oss-20b': {'tpm': 8_000, 'rpm': 30},
-        'qwen/qwen3-32b': {'tpm': 6_000, 'rpm': 60},
         'groq/compound': {'tpm': 70_000, 'rpm': 30},
         'groq/compound-mini': {'tpm': 70_000, 'rpm': 30},
     }
@@ -674,11 +673,11 @@ class FeedService:
             groq_setting = GroqGlobalSetting.objects.first()
             if not groq_setting:
                 logger.warning("No se encontró configuración global de Groq. Creando con modelo predeterminado.")
-                groq_setting = GroqGlobalSetting.objects.create(model_name='qwen/qwen3-32b')
+                groq_setting = GroqGlobalSetting.objects.create(model_name='openai/gpt-oss-120b')
             groq_model = groq_setting.model_name
         except Exception:
             logger.exception("Error al obtener configuración de Groq. Usando default.")
-            groq_model = 'qwen/qwen3-32b'
+            groq_model = 'openai/gpt-oss-120b'
         
         filter_word_patterns = FeedService.build_filter_word_patterns(
             FilterWord.objects.filter(active=True)

@@ -24,7 +24,6 @@ class GroqRateLimiterTests(SimpleTestCase):
         limiter = GroqRateLimiter()
 
         self.assertEqual(limiter.get_limits('openai/gpt-oss-120b'), (6_000, 1))
-        self.assertEqual(limiter.get_limits('qwen/qwen3-32b'), (4_500, 1))
 
     def test_retry_after_is_read_from_response_headers(self):
         class Response:

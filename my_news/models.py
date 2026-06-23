@@ -145,9 +145,9 @@ class GeminiGlobalSetting(models.Model):
 class GroqGlobalSetting(models.Model):
     model_name = models.CharField(
         max_length=100,
-        default='qwen/qwen3-32b',
+        default='openai/gpt-oss-120b',
         verbose_name="Modelo Groq Global",
-        help_text="Nombre del modelo de Groq a utilizar (ej: 'qwen/qwen3-32b')."
+        help_text="Nombre del modelo de Groq a utilizar (ej: 'openai/gpt-oss-120b')."
     )
     updated_at = models.DateTimeField(auto_now=True)
 
