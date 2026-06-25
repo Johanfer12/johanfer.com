@@ -78,10 +78,17 @@ def _day_bounds_local(target_date=None):
     return local_date, start_dt, end_dt
 
 
+def _public_news_filter():
+    """Noticias aptas para visitantes, sin aplicar borrados personales."""
+    return News.visible.editorial_filter()
+
+
+def _public_news_queryset():
+    return News.objects.select_related('source').filter(_public_news_filter())
+
+
 def _latest_public_day_bounds():
-    latest_published = News.objects.filter(
-        News.visible.editorial_filter()
-    ).aggregate(latest=Max('published_date'))['latest']
+    latest_published = _public_news_queryset().aggregate(latest=Max('published_date'))['latest']
     if latest_published is None:
         return None, None, None
 
@@ -314,8 +321,7 @@ class NewsListView(ListView):
             self.public_news_date = local_date
             if start_dt is None:
                 return News.objects.none()
-            return News.objects.select_related('source').filter(
-                News.visible.editorial_filter(),
+            return _public_news_queryset().filter(
                 published_date__gte=start_dt,
                 published_date__lt=end_dt,
             ).order_by('-published_date', '-id')

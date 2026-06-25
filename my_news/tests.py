@@ -635,6 +635,30 @@ class NewsFeedOrderingTests(TestCase):
         self.assertContains(page_two_response, f'id="public-news-{public_news[-1].id}"')
         self.assertContains(page_two_response, '?page=1')
 
+    def test_public_news_view_paginates_personally_deleted_news(self):
+        base_time = timezone.now()
+        public_news = self.create_news_batch(
+            PAGE_SIZE + 2,
+            prefix='public-deleted-page',
+            published_dates=[base_time - timedelta(minutes=index) for index in range(PAGE_SIZE + 2)],
+        )
+        News.objects.filter(pk__in=[item.pk for item in public_news]).update(
+            is_deleted=True,
+            deleted_at=timezone.now(),
+        )
+
+        response = self.client.get(reverse('my_news:news_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total_news'], PAGE_SIZE + 2)
+        self.assertEqual(len(response.context['page_obj']), PAGE_SIZE)
+        self.assertContains(response, f'id="public-news-{public_news[0].id}"')
+
+        page_two_response = self.client.get(reverse('my_news:news_list'), {'page': 2})
+
+        self.assertEqual(len(page_two_response.context['page_obj']), 2)
+        self.assertContains(page_two_response, f'id="public-news-{public_news[-1].id}"')
+
     def test_private_json_endpoint_requires_superuser(self):
         response = self.client.get(reverse('my_news:get_page'), {'page': 1, 'order': 'desc'})
         self.assertEqual(response.status_code, 302)

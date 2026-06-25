@@ -45,6 +45,11 @@
     const totalPages = Number.parseInt(pageData.total_pages || '1', 10) || 1;
     const refillQueue = [];
     let refillInFlight = false;
+    const mobileTapState = {
+        startX: 0,
+        startY: 0,
+        moved: false,
+    };
 
     const resetAllDesktopHoverCards = () => {
         if (CardUi.isMobile()) return;
@@ -150,12 +155,43 @@
 
     grid?.addEventListener('click', (event) => {
         const button = event.target.closest('.delete-btn, .mobile-delete-btn');
-        if (!button) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const id = String(button.dataset.id || '');
-        removeCard(button.closest('.news-card-container'), id);
+        if (button) {
+            event.preventDefault();
+            event.stopPropagation();
+            const id = String(button.dataset.id || '');
+            removeCard(button.closest('.news-card-container'), id);
+            return;
+        }
+
+        if (!CardUi.isMobile()) return;
+
+        const container = event.target.closest('.news-card-container');
+        if (!container || CardUi.isCardActionTarget(event.target) || mobileTapState.moved) return;
+
+        const card = container.querySelector('.news-card');
+        if (!card) return;
+        if (card.classList.contains('is-flipped') && event.target.closest('.news-description')) return;
+
+        cards().forEach((item) => {
+            if (item !== container) CardUi.resetFlipState(item);
+        });
+        card.classList.toggle('is-flipped', !card.classList.contains('is-flipped'));
+        card.classList.remove('image-hover', 'delete-hover');
     });
+
+    grid?.addEventListener('pointerdown', (event) => {
+        if (!CardUi.isMobile() || event.pointerType !== 'touch') return;
+        mobileTapState.startX = event.clientX;
+        mobileTapState.startY = event.clientY;
+        mobileTapState.moved = false;
+    }, {passive: true});
+
+    grid?.addEventListener('pointermove', (event) => {
+        if (!CardUi.isMobile() || event.pointerType !== 'touch') return;
+        const dx = Math.abs(event.clientX - mobileTapState.startX);
+        const dy = Math.abs(event.clientY - mobileTapState.startY);
+        if (dx > 8 || dy > 8) mobileTapState.moved = true;
+    }, {passive: true});
 
     grid?.addEventListener('mousemove', (event) => {
         const container = event.target.closest('.news-card-container');

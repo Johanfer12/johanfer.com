@@ -1508,6 +1508,7 @@
         startX: 0,
         startY: 0,
         moved: false,
+        startedInDescription: false,
     };
 
     DOM.grid?.addEventListener('pointerdown', (e) => {
@@ -1515,6 +1516,7 @@
         mobileTapState.startX = e.clientX;
         mobileTapState.startY = e.clientY;
         mobileTapState.moved = false;
+        mobileTapState.startedInDescription = !!e.target.closest('.news-card.is-flipped .news-description');
     }, {passive: true});
 
     DOM.grid?.addEventListener('pointermove', (e) => {
@@ -1760,11 +1762,19 @@
 
     let mobileScrollResetTimer = null;
     window.addEventListener('scroll', () => {
-        if (!isMobile() || mobileScrollResetTimer) return;
+        if (!isMobile() || mobileScrollResetTimer || mobileTapState.startedInDescription) return;
         mobileScrollResetTimer = setTimeout(() => {
             mobileScrollResetTimer = null;
             resetAllMobileTapCards();
         }, 80);
+    }, {passive: true});
+
+    window.addEventListener('touchend', () => {
+        mobileTapState.startedInDescription = false;
+    }, {passive: true});
+
+    window.addEventListener('touchcancel', () => {
+        mobileTapState.startedInDescription = false;
     }, {passive: true});
 
     // Sondeo de noticias nuevas. Antes era una conexión SSE permanente, pero
