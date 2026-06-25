@@ -532,28 +532,33 @@ class NewsFeedOrderingTests(TestCase):
         self.assertContains(response, '?page=2&order=asc')
         self.assertContains(response, 'q=foo-news')
 
-    def test_public_news_view_shows_latest_available_day_and_ignores_personal_delete_flag(self):
-        latest_time = timezone.now() - timedelta(days=38)
-        previous_time = latest_time - timedelta(days=1)
-        latest_date = timezone.localtime(latest_time).date()
+    def test_public_news_view_shows_latest_created_day_and_ignores_personal_delete_flag(self):
+        latest_created_time = timezone.now() - timedelta(days=38)
+        previous_created_time = latest_created_time - timedelta(days=1)
+        latest_published_time = latest_created_time - timedelta(days=3)
+        previous_published_time = latest_published_time + timedelta(hours=1)
+        latest_date = timezone.localtime(latest_created_time).date()
 
         latest_public_news = News.objects.create(
             title='public latest',
             description='Visible en la fecha mas reciente',
             link='https://example.com/public-latest',
-            published_date=latest_time,
+            published_date=latest_published_time,
             source=self.source,
             guid=f'public-latest-{uuid.uuid4().hex}',
             is_deleted=True,
         )
-        News.objects.create(
+        previous_public_news = News.objects.create(
             title='public previous',
             description='No visible porque es de un dia anterior',
             link='https://example.com/public-previous',
-            published_date=previous_time,
+            published_date=previous_published_time,
             source=self.source,
             guid=f'public-previous-{uuid.uuid4().hex}',
         )
+        News.objects.filter(pk=latest_public_news.pk).update(created_at=latest_created_time)
+        News.objects.filter(pk=previous_public_news.pk).update(created_at=previous_created_time)
+        latest_public_news.refresh_from_db()
 
         response = self.client.get(reverse('my_news:news_list'))
 
@@ -570,7 +575,7 @@ class NewsFeedOrderingTests(TestCase):
         self.assertEqual(response.context['public_news_date'], latest_date.strftime('%d/%m/%Y'))
         self.assertEqual(response.context['public_storage_key'], f'public-news-hidden:{latest_date.isoformat()}')
 
-    def test_public_news_view_applies_editorial_filters_and_uses_latest_publishable_day(self):
+    def test_public_news_view_applies_editorial_filters_and_uses_latest_created_day(self):
         latest_time = timezone.now()
         publishable_time = latest_time - timedelta(days=1)
         publishable = News.objects.create(
@@ -604,10 +609,29 @@ class NewsFeedOrderingTests(TestCase):
         self.assertEqual(list(response.context['object_list']), [publishable])
         self.assertEqual(
             response.context['public_news_date'],
-            timezone.localtime(publishable_time).strftime('%d/%m/%Y'),
+            timezone.localdate().strftime('%d/%m/%Y'),
         )
         self.assertContains(response, 'public publishable')
         self.assertNotContains(response, 'public filtered')
+
+    def test_public_news_view_includes_items_created_today_with_older_publish_dates(self):
+        created_today = timezone.now()
+        old_published_time = created_today - timedelta(days=2)
+        older_public_news = News.objects.create(
+            title='created today but published earlier',
+            description='Debe salir porque entro al feed hoy',
+            link='https://example.com/created-today-published-earlier',
+            published_date=old_published_time,
+            source=self.source,
+            guid=f'created-today-published-earlier-{uuid.uuid4().hex}',
+        )
+
+        response = self.client.get(reverse('my_news:news_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'created today but published earlier')
+        self.assertContains(response, f'id="public-news-{older_public_news.id}"')
+        self.assertEqual(response.context['total_news'], 1)
 
     def test_public_news_view_uses_private_page_size_pagination(self):
         base_time = timezone.now()

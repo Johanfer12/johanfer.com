@@ -88,11 +88,11 @@ def _public_news_queryset():
 
 
 def _latest_public_day_bounds():
-    latest_published = _public_news_queryset().aggregate(latest=Max('published_date'))['latest']
-    if latest_published is None:
+    latest_created = _public_news_queryset().aggregate(latest=Max('created_at'))['latest']
+    if latest_created is None:
         return None, None, None
 
-    latest_local_date = timezone.localtime(latest_published).date()
+    latest_local_date = timezone.localtime(latest_created).date()
     return _day_bounds_local(latest_local_date)
 
 
@@ -322,8 +322,8 @@ class NewsListView(ListView):
             if start_dt is None:
                 return News.objects.none()
             return _public_news_queryset().filter(
-                published_date__gte=start_dt,
-                published_date__lt=end_dt,
+                created_at__gte=start_dt,
+                created_at__lt=end_dt,
             ).order_by('-published_date', '-id')
 
         # Usar el manager optimizado + búsqueda y orden dinámico
