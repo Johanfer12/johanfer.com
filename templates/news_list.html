@@ -39,51 +39,58 @@
         {% endif %}
     </div>
 
-    <button class="update-feed-btn" id="updateFeedBtn" title="Actualizar feed">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-        </svg>
-    </button>
+    <div class="news-actions-menu" id="newsActionsMenu">
+        <div class="news-actions-list" id="newsActionsList" aria-label="Acciones de noticias">
+            <button class="reader-btn" id="readerBtn" title="Modo lectura con voz" aria-label="Modo lectura con voz">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                </svg>
+            </button>
 
-    <!-- Botón flotante de deshacer -->
-    <button class="undo-btn" id="undoBtn" title="Deshacer (hasta 5)">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 14l-5-5 5-5"></path>
-            <path d="M4 9h10a7 7 0 1 1 0 14H7"></path>
-        </svg>
-    </button>
+            <button class="order-btn" id="orderBtn" title="Cambiar orden (recientes/antiguas)" aria-label="Cambiar orden">
+                {% if order == 'asc' %}
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-sort-ascending-numbers" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                    <path d="M4 15l3 3l3 -3" />
+                    <path d="M7 6v12" />
+                    <path d="M17 3a2 2 0 0 1 2 2v3a2 2 0 1 1 -4 0v-3a2 2 0 0 1 2 -2z" />
+                    <circle cx="17" cy="16" r="2" />
+                    <path d="M19 16v3a2 2 0 0 1 -2 2h-1.5" />
+                </svg>
+                {% else %}
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-sort-descending-numbers" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                    <path d="M4 15l3 3l3 -3" />
+                    <path d="M7 6v12" />
+                    <path d="M17 14a2 2 0 0 1 2 2v3a2 2 0 1 1 -4 0v-3a2 2 0 0 1 2 -2z" />
+                    <circle cx="17" cy="5" r="2" />
+                    <path d="M19 5v3a2 2 0 0 1 -2 2h-1.5" />
+                </svg>
+                {% endif %}
+            </button>
 
-    <!-- Botón flotante de cambio de orden -->
-    <button class="order-btn" id="orderBtn" title="Cambiar orden (recientes/antiguas)">
-        {% if order == 'asc' %}
-        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-sort-ascending-numbers" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-            <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-            <path d="M4 15l3 3l3 -3" />
-            <path d="M7 6v12" />
-            <path d="M17 3a2 2 0 0 1 2 2v3a2 2 0 1 1 -4 0v-3a2 2 0 0 1 2 -2z" />
-            <circle cx="17" cy="16" r="2" />
-            <path d="M19 16v3a2 2 0 0 1 -2 2h-1.5" />
-        </svg>
-        {% else %}
-        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-sort-descending-numbers" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-            <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-            <path d="M4 15l3 3l3 -3" />
-            <path d="M7 6v12" />
-            <path d="M17 14a2 2 0 0 1 2 2v3a2 2 0 1 1 -4 0v-3a2 2 0 0 1 2 -2z" />
-            <circle cx="17" cy="5" r="2" />
-            <path d="M19 5v3a2 2 0 0 1 -2 2h-1.5" />
-        </svg>
-        {% endif %}
-    </button>
+            <button class="undo-btn" id="undoBtn" title="Deshacer (hasta 5)" aria-label="Deshacer">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 14l-5-5 5-5"></path>
+                    <path d="M4 9h10a7 7 0 1 1 0 14H7"></path>
+                </svg>
+            </button>
 
-    <!-- Botón de modo lectura con TTS -->
-    <button class="reader-btn" id="readerBtn" title="Modo lectura con voz">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
-            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-        </svg>
-    </button>
+            <button class="update-feed-btn" id="updateFeedBtn" title="Actualizar feed" aria-label="Actualizar feed">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+            </button>
+        </div>
+
+        <button class="news-actions-toggle" id="newsActionsToggle" type="button" title="Mostrar acciones" aria-label="Mostrar acciones" aria-expanded="false" aria-controls="newsActionsList">
+            <svg class="news-actions-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 15l-6-6l-6 6"></path>
+            </svg>
+        </button>
+    </div>
 
     <!-- Notificación de nuevas noticias -->
     <div id="new-news-notification" class="notification">

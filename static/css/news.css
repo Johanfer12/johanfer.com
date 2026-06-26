@@ -845,6 +845,83 @@ html.instagram-webview {
     background: #d64456;
 }
 
+.news-actions-menu {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 1000;
+    width: 48px;
+    height: 48px;
+}
+
+.news-actions-list {
+    position: absolute;
+    right: 0;
+    bottom: 58px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease;
+}
+
+.news-actions-menu:not(.is-open) .news-actions-list {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(12px) scale(0.96);
+}
+
+.news-actions-menu.is-open .news-actions-list {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+}
+
+.news-actions-menu .update-feed-btn,
+.news-actions-menu .undo-btn,
+.news-actions-menu .order-btn,
+.news-actions-menu .reader-btn {
+    position: static;
+    right: auto;
+    bottom: auto;
+    z-index: auto;
+    flex: 0 0 48px;
+}
+
+.news-actions-toggle {
+    width: 48px;
+    height: 48px;
+    border: 1px solid rgba(207, 220, 241, 0.3);
+    border-radius: 50%;
+    background: rgba(9, 18, 35, 0.78);
+    color: #f2f5fb;
+    cursor: pointer;
+    box-shadow: 0 10px 24px rgba(2, 8, 18, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(12px);
+    transition: transform 0.22s ease, background 0.22s ease, border-color 0.22s ease;
+}
+
+.news-actions-toggle:hover {
+    transform: scale(1.06);
+    background: rgba(17, 31, 58, 0.9);
+    border-color: rgba(207, 220, 241, 0.48);
+}
+
+.news-actions-toggle svg {
+    width: 21px;
+    height: 21px;
+    transition: transform 0.22s ease;
+}
+
+.news-actions-menu.is-open .news-actions-toggle svg {
+    transform: rotate(180deg);
+}
+
 /* Overlay de modo lectura */
 .reader-overlay {
     position: fixed;

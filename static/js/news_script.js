@@ -14,6 +14,8 @@
         updateFeedBtn: '#updateFeedBtn',
         undoBtn: '#undoBtn',
         orderBtn: '#orderBtn',
+        actionsMenu: '#newsActionsMenu',
+        actionsToggle: '#newsActionsToggle',
     };
 
     const MAX_NEWS = 25;
@@ -29,6 +31,17 @@
     const isMobile = CardUi?.isMobile || (() => window.innerWidth <= 767);
     
     const DOM = Object.fromEntries(Object.entries(SELECTORS).map(([k, v]) => [k, $(v)]));
+    const ACTION_BUTTON_SELECTOR = '.news-actions-list button';
+    const setActionMenuOpen = (isOpen) => {
+        if (!DOM.actionsMenu || !DOM.actionsToggle) return;
+        DOM.actionsMenu.classList.toggle('is-open', isOpen);
+        DOM.actionsToggle.setAttribute('aria-expanded', String(isOpen));
+        DOM.actionsToggle.setAttribute('aria-label', isOpen ? 'Ocultar acciones' : 'Mostrar acciones');
+        DOM.actionsToggle.title = isOpen ? 'Ocultar acciones' : 'Mostrar acciones';
+        $$(ACTION_BUTTON_SELECTOR, DOM.actionsMenu).forEach(button => {
+            button.tabIndex = isOpen ? 0 : -1;
+        });
+    };
     const USER_FLAGS = (() => {
         try {
             const raw = $('#news-user-flags')?.textContent;
@@ -1836,6 +1849,24 @@
 
     // Cerrar notificación manualmente
     DOM.notifCloseBtn?.addEventListener('click', hideNotification);
+
+    setActionMenuOpen(false);
+    DOM.actionsToggle?.addEventListener('click', () => {
+        setActionMenuOpen(!DOM.actionsMenu?.classList.contains('is-open'));
+    });
+    DOM.actionsMenu?.addEventListener('click', (e) => {
+        if (e.target.closest(ACTION_BUTTON_SELECTOR) && !e.target.closest('#newsActionsToggle')) {
+            setActionMenuOpen(false);
+        }
+    });
+    document.addEventListener('click', (e) => {
+        if (DOM.actionsMenu?.classList.contains('is-open') && !DOM.actionsMenu.contains(e.target)) {
+            setActionMenuOpen(false);
+        }
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') setActionMenuOpen(false);
+    });
 
     // Botón de actualizar feed
     DOM.updateFeedBtn?.addEventListener('click', function () {
