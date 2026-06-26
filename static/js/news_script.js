@@ -319,10 +319,32 @@
         [title, summary, header, link].filter(Boolean).join('\n\n')
     );
 
-    const wrapText = (ctx, text, maxWidth, maxLines) => {
-        const words = (text || '').split(' ');
+    const wrapText = (ctx, text, maxWidth, maxLines = Infinity) => {
+        const limit = Number.isFinite(maxLines) ? maxLines : Infinity;
+        const words = (text || '').split(/\s+/).filter(Boolean);
         const lines = [];
         let current = '';
+
+        const pushLine = (line) => {
+            if (lines.length >= limit) return false;
+            lines.push(line);
+            return lines.length < limit;
+        };
+
+        const pushLongWord = (word) => {
+            let chunk = '';
+            for (const char of word) {
+                const candidate = `${chunk}${char}`;
+                if (ctx.measureText(candidate).width <= maxWidth || !chunk) {
+                    chunk = candidate;
+                    continue;
+                }
+                if (!pushLine(chunk)) return false;
+                chunk = char;
+            }
+            current = chunk;
+            return true;
+        };
 
         for (const word of words) {
             const candidate = current ? `${current} ${word}` : word;
@@ -330,26 +352,26 @@
                 current = candidate;
                 continue;
             }
-            if (current) lines.push(current);
+            if (current && !pushLine(current)) break;
             current = word;
-            if (lines.length >= maxLines) break;
+            if (ctx.measureText(current).width > maxWidth && !pushLongWord(current)) break;
         }
-        if (current && lines.length < maxLines) lines.push(current);
+        if (current && lines.length < limit) lines.push(current);
 
-        if (lines.length === maxLines) {
-            const last = lines[maxLines - 1];
+        if (Number.isFinite(limit) && lines.length === limit) {
+            const last = lines[limit - 1];
             if (ctx.measureText(last).width > maxWidth) {
                 let trimmed = last;
                 while (trimmed.length > 1 && ctx.measureText(`${trimmed}...`).width > maxWidth) {
                     trimmed = trimmed.slice(0, -1);
                 }
-                lines[maxLines - 1] = `${trimmed}...`;
+                lines[limit - 1] = `${trimmed}...`;
             } else if (words.join(' ') !== lines.join(' ')) {
                 let trimmed = last;
                 while (trimmed.length > 1 && ctx.measureText(`${trimmed}...`).width > maxWidth) {
                     trimmed = trimmed.slice(0, -1);
                 }
-                lines[maxLines - 1] = `${trimmed}...`;
+                lines[limit - 1] = `${trimmed}...`;
             }
         }
         return lines;
@@ -417,17 +439,43 @@
 
     const createShareCardBlob = async ({ header, title, summary, imageUrl }) => {
         const width = 844;
-        const height = 1424;
+        const minHeight = 1424;
         const padding = 54;
         const canvas = document.createElement('canvas');
         canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, width, height); // PNG transparente fuera de la tarjeta
+        canvas.height = 1;
+        let ctx = canvas.getContext('2d');
 
         const cardX = 0;
         const cardY = 0;
         const cardW = width;
+        const imageAreaX = cardX + 20;
+        const imageAreaY = cardY + 20;
+        const imageAreaW = cardW - 40;
+        const imageAreaH = 430;
+        const headerLineHeight = 30;
+        const titleLineHeight = 58;
+        const summaryLineHeight = 50;
+
+        ctx.font = '600 22px Arial, sans-serif';
+        const headerLines = wrapText(ctx, header, width - (padding * 2));
+        ctx.font = 'bold 48px Arial, sans-serif';
+        const titleLines = wrapText(ctx, title, width - (padding * 2));
+        ctx.font = '400 36px Arial, sans-serif';
+        const summaryLines = wrapText(ctx, summary, width - (padding * 2) - 24);
+
+        const textStartY = imageAreaY + imageAreaH + 56;
+        const summaryStartY = textStartY
+            + (headerLines.length * headerLineHeight)
+            + 16
+            + (titleLines.length * titleLineHeight)
+            + 18;
+        const contentHeight = summaryStartY + (summaryLines.length * summaryLineHeight) + 54;
+        const height = Math.max(minHeight, Math.ceil(contentHeight));
+        canvas.height = height;
+        ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, width, height); // PNG transparente fuera de la tarjeta
+
         const cardH = height;
         roundRect(ctx, cardX, cardY, cardW, cardH, 28);
         ctx.fillStyle = 'rgba(0, 0, 0, 0.84)';
@@ -441,10 +489,6 @@
         ctx.fill();
 
         // Zona de imagen superior con clipping redondeado
-        const imageAreaX = cardX + 20;
-        const imageAreaY = cardY + 20;
-        const imageAreaW = cardW - 40;
-        const imageAreaH = 430;
         roundRect(ctx, imageAreaX, imageAreaY, imageAreaW, imageAreaH, 28);
         ctx.save();
         ctx.clip();
@@ -483,19 +527,17 @@
         ctx.fillStyle = '#93c5fd';
         ctx.font = '600 22px Arial, sans-serif';
         ctx.textBaseline = 'top';
-        const headerLines = wrapText(ctx, header, width - (padding * 2), 2);
         headerLines.forEach(line => {
             ctx.fillText(line, padding, y);
-            y += 30;
+            y += headerLineHeight;
         });
 
         y += 16;
         ctx.fillStyle = '#f8fafc';
         ctx.font = 'bold 48px Arial, sans-serif';
-        const titleLines = wrapText(ctx, title, width - (padding * 2), 5);
         titleLines.forEach(line => {
             ctx.fillText(line, padding, y);
-            y += 58;
+            y += titleLineHeight;
         });
 
         y += 18;
@@ -506,8 +548,7 @@
         drawCenteredParagraph(ctx, summary, summaryBoxX, summaryBoxY, summaryBoxW, summaryBoxH, {
             font: '400 36px Arial, sans-serif',
             color: '#d1d5db',
-            lineHeight: 50,
-            maxLines: 11,
+            lineHeight: summaryLineHeight,
             verticalAlign: 'adaptive',
         });
 
