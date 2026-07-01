@@ -106,8 +106,7 @@ html.instagram-webview {
     padding: 15px;
     display: flex;
     flex-direction: column;
-    justify-content: flex-start;
-    gap: 10px;
+    justify-content: space-between;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
@@ -194,17 +193,14 @@ html.instagram-webview {
     line-height: 1.5;
     /* Sin justify: en ~280px de ancho deja "ríos" de espacios. */
     text-align: left;
-    flex: 1 1 auto;
-    min-height: 0;
-    margin: 0;
+    flex: 1;
+    margin: 10px 0;
     display: block;
     overflow-y: auto;
     hyphens: auto;
     word-break: break-word;
     overscroll-behavior: contain;
     touch-action: pan-y;
-    padding: 2px 8px 10px 5px;
-    scrollbar-gutter: stable;
 }
 
 .news-description br {
@@ -222,6 +218,11 @@ html.instagram-webview {
     content: none;
 }
 
+/* Ajustar el espacio para los bulletpoints personalizados */
+.news-description {
+    padding-left: 5px;
+}
+
 .news-description img {
     max-width: 100%;
     max-height: 15px;
@@ -233,11 +234,9 @@ html.instagram-webview {
 /* Enlaces */
 .news-links {
     display: flex;
-    flex: 0 0 32px;
     gap: 8px;
     justify-content: center;
-    align-items: center;
-    margin-top: 0;
+    margin-top: auto;
 }
 
 .news-link {
