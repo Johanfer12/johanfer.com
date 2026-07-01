@@ -542,13 +542,41 @@ class FeedService:
         return cleaned or None
 
     @staticmethod
+    def prepare_content_for_groq(title, original_content, content_limit=2500):
+        """Convierte HTML/texto del feed en cuerpo compacto para el prompt."""
+        raw_content = html.unescape(original_content or '')
+        if not raw_content:
+            return ''
+
+        if '<' in raw_content and '>' in raw_content:
+            soup = BeautifulSoup(raw_content, 'html.parser')
+            for element in soup.find_all(['script', 'style', 'nav', 'header', 'footer', 'iframe', 'noscript']):
+                element.decompose()
+            clean_text = soup.get_text(' ', strip=True)
+        else:
+            clean_text = raw_content
+
+        clean_text = html.unescape(clean_text)
+        clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+
+        safe_title = re.sub(r'\s+', ' ', title or '').strip()
+        if safe_title and clean_text.lower().startswith(safe_title.lower()):
+            clean_text = clean_text[len(safe_title):].lstrip(' :-|')
+
+        clean_text = re.sub(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\s+', '', clean_text)
+        clean_text = re.sub(r'\bLinkedin\s+twitter\s+instagram\b', ' ', clean_text, flags=re.IGNORECASE)
+        clean_text = re.sub(r'\b\d+\s+publicaciones\s+de\s+', ' ', clean_text, flags=re.IGNORECASE)
+        clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+
+        return clean_text[:content_limit].strip()
+
+    @staticmethod
     def process_content_with_groq(title, original_content, groq_client, model_name, filter_instructions_text, max_retries=2):
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
         instructions_section = (filter_instructions_text or FeedService._DEFAULT_FILTER_INSTRUCTIONS)
-        content_limit = 4000
-        base_content = (original_content or "")[:content_limit]
-        plain_content = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', base_content)).strip()
+        base_content = FeedService.prepare_content_for_groq(title, original_content)
+        plain_content = base_content
 
         safe_title = (title or "").replace("{", "{{").replace("}", "}}")
         safe_content = base_content.replace("{", "{{").replace("}", "}}")

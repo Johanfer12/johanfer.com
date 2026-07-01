@@ -69,6 +69,45 @@ class FilterWordPatternTests(SimpleTestCase):
         )
 
 
+class GroqContentPreparationTests(SimpleTestCase):
+    def test_html_feed_content_is_converted_to_plain_text(self):
+        content = '<p>El <a href="https://example.com">WiFi 7</a> llega a casa.</p><script>bad()</script>'
+
+        cleaned = FeedService.prepare_content_for_groq('Titulo', content)
+
+        self.assertEqual(cleaned, 'El WiFi 7 llega a casa.')
+
+    def test_repeated_title_and_feed_byline_noise_are_removed(self):
+        title = 'AMD avisa a sus socios'
+        content = (
+            'AMD avisa a sus socios Por Borja Rodríguez 30/06/2026 Hardware '
+            'Según los últimos rumores, AMD prepara una subida de precio.'
+        )
+
+        cleaned = FeedService.prepare_content_for_groq(title, content)
+
+        self.assertNotIn(title, cleaned)
+        self.assertIn('Según los últimos rumores', cleaned)
+
+    def test_vidaextra_header_noise_is_compacted(self):
+        content = (
+            '2026-06-30T14:00:34Z Sergio Cejas Editor Sergio Cejas Editor '
+            'Linkedin twitter instagram 17772 publicaciones de Sergio Cejas '
+            'Este verano nos van a faltar horas para jugar.'
+        )
+
+        cleaned = FeedService.prepare_content_for_groq('Splatoon Raiders', content)
+
+        self.assertNotIn('Linkedin twitter instagram', cleaned)
+        self.assertNotIn('17772 publicaciones', cleaned)
+        self.assertIn('Este verano', cleaned)
+
+    def test_content_is_limited_before_prompting(self):
+        cleaned = FeedService.prepare_content_for_groq('Titulo', 'a' * 3000, content_limit=120)
+
+        self.assertEqual(len(cleaned), 120)
+
+
 class GroqRateLimiterTests(SimpleTestCase):
     def setUp(self):
         FeedService._GROQ_RATE_LIMITER = GroqRateLimiter()
