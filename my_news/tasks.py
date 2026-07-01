@@ -62,7 +62,7 @@ def update_news_cron():
                 retry_summarize_pending(limit=5, days=15)
             except Exception:
                 logger.exception("Error reintentando resúmenes pendientes antes del cron")
-            FeedService.fetch_and_save_news(max_ai_items=10)
+            FeedService.fetch_and_save_news(max_ai_items=20)
             logger.info("Noticias actualizadas correctamente")
             # Ejecutar limpieza tras actualización
             purge_old_news(15)

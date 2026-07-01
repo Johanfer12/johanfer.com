@@ -1,6 +1,7 @@
 from datetime import timedelta
 import uuid
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -13,6 +14,59 @@ from .models import FeedSource, News
 from .services import FeedService, GroqRateLimiter
 from .tasks import purge_old_news
 from .views import NEWS_NOTIFICATION_SETTLE_DELAY, PAGE_SIZE
+
+
+class FeedEntry(dict):
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError as exc:
+            raise AttributeError(key) from exc
+
+
+class FilterWordPatternTests(SimpleTestCase):
+    def build_patterns(self, *words):
+        filter_words = [
+            SimpleNamespace(word=word, title_only=title_only)
+            for word, title_only in words
+        ]
+        return FeedService.build_filter_word_patterns(filter_words)
+
+    def test_filter_word_does_not_match_inside_another_word(self):
+        patterns = self.build_patterns(('Andor', False))
+
+        should_filter, filter_word = FeedService.should_filter_news(
+            'La Tierra ha perdido su resplandor ambar',
+            'El resplandor nocturno cambio por los LED.',
+            patterns,
+        )
+
+        self.assertFalse(should_filter)
+        self.assertIsNone(filter_word)
+
+    def test_filter_word_matches_standalone_word(self):
+        patterns = self.build_patterns(('Andor', False))
+
+        should_filter, filter_word = FeedService.should_filter_news(
+            'Andor tendra una nueva temporada',
+            '',
+            patterns,
+        )
+
+        self.assertTrue(should_filter)
+        self.assertEqual(filter_word.word, 'Andor')
+
+    def test_filter_phrase_matches_complete_phrase_only(self):
+        patterns = self.build_patterns(('Star Wars', True))
+
+        self.assertEqual(
+            FeedService.should_filter_news('Nueva serie de Star Wars', '', patterns)[0],
+            True,
+        )
+        self.assertEqual(
+            FeedService.should_filter_news('Star Warships llega al cine', '', patterns)[0],
+            False,
+        )
 
 
 class GroqRateLimiterTests(SimpleTestCase):
@@ -266,6 +320,70 @@ Okay, primero razono sobre la noticia.
         self.assertIsNone(description)
         self.assertIsNone(short_answer)
         self.assertIsNone(ai_filter)
+
+
+class FeedIngestionBudgetTests(TestCase):
+    def setUp(self):
+        self.source = FeedSource.objects.create(
+            name='Budget Feed',
+            url='https://example.com/rss.xml',
+        )
+
+    @patch('my_news.services.EmbeddingService.check_redundancy', return_value=(False, None, 0.0))
+    @patch('my_news.services.FeedService.initialize_vector_index', return_value=None)
+    @patch('my_news.services.FeedService.initialize_groq', return_value=object())
+    @patch('my_news.services.FeedService.initialize_gemini', return_value=object())
+    @patch('my_news.services.FeedService.process_content_with_groq')
+    @patch('my_news.services.feedparser.parse')
+    @patch('my_news.services.requests.get')
+    def test_ai_budget_does_not_drop_unprocessed_entries(
+        self,
+        mock_get,
+        mock_parse,
+        mock_process,
+        _initialize_gemini,
+        _initialize_groq,
+        _initialize_vector_index,
+        _check_redundancy,
+    ):
+        class Response:
+            content = b'<rss></rss>'
+
+            def raise_for_status(self):
+                return None
+
+        now = timezone.now()
+        mock_get.return_value = Response()
+        mock_parse.return_value.entries = [
+            FeedEntry(
+                id='budget-1',
+                title='Primera noticia',
+                link='https://example.com/budget-1',
+                description='Descripcion primera',
+                published_parsed=(now - timedelta(minutes=2)).utctimetuple(),
+            ),
+            FeedEntry(
+                id='budget-2',
+                title='Segunda noticia',
+                link='https://example.com/budget-2',
+                description='Descripcion segunda',
+                published_parsed=(now - timedelta(minutes=1)).utctimetuple(),
+            ),
+        ]
+        mock_process.return_value = ('Resumen IA', None, None)
+
+        created_count = FeedService.fetch_and_save_news(max_ai_items=1)
+
+        self.assertEqual(created_count, 2)
+        self.assertEqual(mock_process.call_count, 1)
+
+        first = News.objects.get(guid='budget-1')
+        second = News.objects.get(guid='budget-2')
+
+        self.assertEqual(first.description, 'Resumen IA')
+        self.assertTrue(first.is_ai_processed)
+        self.assertEqual(second.description, 'Descripcion segunda')
+        self.assertFalse(second.is_ai_processed)
 
 
 class NewsFeedOrderingTests(TestCase):

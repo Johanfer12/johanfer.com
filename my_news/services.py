@@ -386,7 +386,12 @@ class FeedService:
             cleaned_word = raw_word.strip() if raw_word else ''
             if not cleaned_word:
                 continue
-            compiled = re.compile(r'\b' + re.escape(cleaned_word) + r'\b', re.IGNORECASE)
+            escaped_terms = [re.escape(term) for term in cleaned_word.split()]
+            escaped_phrase = r'\s+'.join(escaped_terms)
+            compiled = re.compile(
+                r'(?<![\w])' + escaped_phrase + r'(?![\w])',
+                re.IGNORECASE,
+            )
             patterns.append((filter_word, compiled, bool(getattr(filter_word, 'title_only', False))))
         return patterns
 
@@ -872,9 +877,6 @@ class FeedService:
                     )
                     continue
 
-                if max_ai_items is not None and ai_attempts >= max_ai_items:
-                    logger.info(f"Presupuesto de IA completado ({max_ai_items}); se dejan noticias para la próxima actualización.")
-                    break
                 continue # Pasar a la siguiente noticia
             # <<<<< FIN FILTRO PALABRA CLAVE >>>>>
 
@@ -887,26 +889,38 @@ class FeedService:
                 if not image_url and full_content['image_url']:
                     image_url = full_content['image_url']
 
-            if max_ai_items is not None and ai_attempts >= max_ai_items:
-                logger.info(f"Presupuesto de IA agotado ({max_ai_items}); se dejan noticias para la próxima actualización.")
-                break
-            ai_attempts += 1
+            ai_was_processed = False
+            short_answer = None
+            ai_filter_reason = None
 
-            # Si no se filtró por palabra clave, procesar con IA (Groq)
-            processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_groq(
-                entry.title,
-                original_description,
-                groq_client,
-                groq_model,
-                filter_instructions_text
-            )
-            if not processed_description:
-                logger.warning("Saltando noticia: Groq no generó resumen; se reintentará en una próxima actualización.")
-                continue
+            if max_ai_items is not None and ai_attempts >= max_ai_items:
+                logger.info(
+                    f"Presupuesto de IA agotado ({max_ai_items}); "
+                    "se guarda la noticia sin resumen para procesarla luego."
+                )
+                processed_description = sanitize_html(original_description)
+            else:
+                ai_attempts += 1
+
+                # Si no se filtró por palabra clave, procesar con IA (Groq)
+                processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_groq(
+                    entry.title,
+                    original_description,
+                    groq_client,
+                    groq_model,
+                    filter_instructions_text
+                )
+                if processed_description:
+                    ai_was_processed = True
+                else:
+                    logger.warning(
+                        "Groq no generó resumen; se guarda la noticia sin procesar para reintentar luego."
+                    )
+                    processed_description = sanitize_html(original_description)
 
             # >>>>> LÓGICA DE FILTRADO IA (después de palabra clave) <<<<<
             # Asegurarnos que ai_filter_reason es un string no vacío antes de usarlo
-            if ai_filter_reason and isinstance(ai_filter_reason, str) and ai_filter_reason.strip():
+            if ai_was_processed and ai_filter_reason and isinstance(ai_filter_reason, str) and ai_filter_reason.strip():
                 logger.info(f"Noticia marcada para FILTRAR por IA. Razón: {ai_filter_reason}")
                 
                 try:
@@ -955,7 +969,7 @@ class FeedService:
                     published_date=published,
                     source=source,
                     image_url=image_url,
-                    is_ai_processed=bool(processed_description and processed_description != original_description)
+                    is_ai_processed=ai_was_processed
                 )
                 new_articles_count += 1
             except Exception:
@@ -1013,10 +1027,6 @@ class FeedService:
                         vector_index.upsert(news_item.guid, embedding, payload)
                     except Exception:
                         pass
-
-            if max_ai_items is not None and ai_attempts >= max_ai_items:
-                logger.info(f"Presupuesto de IA completado ({max_ai_items}); se dejan noticias para la próxima actualización.")
-                break
 
         
         # Actualizar la fecha de última obtención para todas las fuentes con una sola escritura
