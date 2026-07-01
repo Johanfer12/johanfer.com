@@ -157,3 +157,20 @@ class GroqGlobalSetting(models.Model):
     class Meta:
         verbose_name = "Configuración Global Groq"
         verbose_name_plural = "Configuraciones Globales Groq"
+
+
+class CerebrasGlobalSetting(models.Model):
+    model_name = models.CharField(
+        max_length=100,
+        default='gemma-4-31b',
+        verbose_name="Modelo Cerebras Global",
+        help_text="Nombre del modelo de Cerebras a utilizar (ej: 'gemma-4-31b')."
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Configuración Global Cerebras ({self.model_name})"
+
+    class Meta:
+        verbose_name = "Configuración Global Cerebras"
+        verbose_name_plural = "Configuraciones Globales Cerebras"

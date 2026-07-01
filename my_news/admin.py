@@ -3,7 +3,7 @@ from django import forms
 from django.utils import timezone
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources
-from .models import FeedSource, News, FilterWord, AIFilterInstruction, GroqGlobalSetting
+from .models import FeedSource, News, FilterWord, AIFilterInstruction, GroqGlobalSetting, CerebrasGlobalSetting
 
 # --- Resource para FeedSource ---
 class FeedSourceResource(resources.ModelResource):
@@ -97,6 +97,17 @@ class GroqGlobalSettingAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return not GroqGlobalSetting.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return True
+
+
+@admin.register(CerebrasGlobalSetting)
+class CerebrasGlobalSettingAdmin(admin.ModelAdmin):
+    list_display = ('model_name', 'updated_at')
+
+    def has_add_permission(self, request):
+        return not CerebrasGlobalSetting.objects.exists()
 
     def has_delete_permission(self, request, obj=None):
         return True

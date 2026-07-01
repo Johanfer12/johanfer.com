@@ -2,14 +2,14 @@ import feedparser
 from datetime import datetime, timedelta
 from django.utils import timezone
 import pytz
-from .models import News, FeedSource, FilterWord, AIFilterInstruction, GeminiGlobalSetting, GroqGlobalSetting
+from .models import News, FeedSource, FilterWord, AIFilterInstruction, GeminiGlobalSetting, CerebrasGlobalSetting
 import re
 from google import genai
 from google.genai import types
 import time
 import requests
 import os
-from groq import Groq
+from cerebras.cloud.sdk import Cerebras
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import numpy as np
@@ -31,21 +31,18 @@ except Exception:
 logger = logging.getLogger(__name__)
 
 
-class GroqRateLimiter:
-    """Rate limiter simple por proceso para no superar TPM/RPM de Groq."""
+class CerebrasRateLimiter:
+    """Rate limiter simple por proceso para no superar cuotas de Cerebras."""
 
-    DEFAULT_RPM = 1000
-    DEFAULT_TPM = 250_000
+    DEFAULT_RPM = 300
+    DEFAULT_TPM = 500_000
     SAFETY_FACTOR = 0.75
-    SAFE_RPM_CAP = 30
+    SAFE_RPM_CAP = 250
     MAX_RETRY_SLEEP_SECONDS = 90
     MODEL_LIMITS = {
-        'llama-3.1-8b-instant': {'tpm': 6_000, 'rpm': 30},
-        'llama-3.3-70b-versatile': {'tpm': 12_000, 'rpm': 30},
-        'openai/gpt-oss-120b': {'tpm': 8_000, 'rpm': 30},
-        'openai/gpt-oss-20b': {'tpm': 8_000, 'rpm': 30},
-        'groq/compound': {'tpm': 70_000, 'rpm': 30},
-        'groq/compound-mini': {'tpm': 70_000, 'rpm': 30},
+        'gemma-4-31b': {'tpm': 500_000, 'rpm': 300},
+        'gpt-oss-120b': {'tpm': 1_000_000, 'rpm': 1_000},
+        'zai-glm-4.7': {'tpm': 500_000, 'rpm': 500},
     }
 
     def __init__(self):
@@ -57,6 +54,8 @@ class GroqRateLimiter:
         self.remaining_requests = None
         self.reset_tokens_at = None
         self.reset_requests_at = None
+        self.limit_tokens = None
+        self.limit_requests = None
 
     class Deferred(Exception):
         """Señal interna: conviene pausar esta corrida y reintentar luego."""
@@ -103,10 +102,33 @@ class GroqRateLimiter:
 
     def update_from_headers(self, headers):
         now = time.monotonic()
-        remaining_tokens = self._read_header(headers, 'x-ratelimit-remaining-tokens')
-        remaining_requests = self._read_header(headers, 'x-ratelimit-remaining-requests')
-        reset_tokens = self.parse_reset_seconds(self._read_header(headers, 'x-ratelimit-reset-tokens'))
-        reset_requests = self.parse_reset_seconds(self._read_header(headers, 'x-ratelimit-reset-requests'))
+        remaining_tokens = (
+            self._read_header(headers, 'x-ratelimit-remaining-tokens-minute')
+            or self._read_header(headers, 'x-ratelimit-remaining-tokens')
+        )
+        remaining_requests = (
+            self._read_header(headers, 'x-ratelimit-remaining-requests-minute')
+            or self._read_header(headers, 'x-ratelimit-remaining-requests-day')
+            or self._read_header(headers, 'x-ratelimit-remaining-requests')
+        )
+        limit_tokens = (
+            self._read_header(headers, 'x-ratelimit-limit-tokens-minute')
+            or self._read_header(headers, 'x-ratelimit-limit-tokens')
+        )
+        limit_requests = (
+            self._read_header(headers, 'x-ratelimit-limit-requests-minute')
+            or self._read_header(headers, 'x-ratelimit-limit-requests-day')
+            or self._read_header(headers, 'x-ratelimit-limit-requests')
+        )
+        reset_tokens = self.parse_reset_seconds(
+            self._read_header(headers, 'x-ratelimit-reset-tokens-minute')
+            or self._read_header(headers, 'x-ratelimit-reset-tokens')
+        )
+        reset_requests = self.parse_reset_seconds(
+            self._read_header(headers, 'x-ratelimit-reset-requests-minute')
+            or self._read_header(headers, 'x-ratelimit-reset-requests-day')
+            or self._read_header(headers, 'x-ratelimit-reset-requests')
+        )
 
         try:
             self.remaining_tokens = int(float(remaining_tokens)) if remaining_tokens is not None else None
@@ -118,6 +140,16 @@ class GroqRateLimiter:
         except (TypeError, ValueError):
             self.remaining_requests = None
 
+        try:
+            self.limit_tokens = int(float(limit_tokens)) if limit_tokens is not None else None
+        except (TypeError, ValueError):
+            self.limit_tokens = None
+
+        try:
+            self.limit_requests = int(float(limit_requests)) if limit_requests is not None else None
+        except (TypeError, ValueError):
+            self.limit_requests = None
+
         self.reset_tokens_at = now + reset_tokens if reset_tokens is not None else None
         self.reset_requests_at = now + reset_requests if reset_requests is not None else None
 
@@ -126,11 +158,11 @@ class GroqRateLimiter:
             return
         wait_time = max(0.0, float(wait_time))
         if wait_time > self.MAX_RETRY_SLEEP_SECONDS:
-            raise GroqRateLimiter.Deferred(
-                f"Groq rate limit: {reason}; reset en {wait_time:.1f}s"
+            raise CerebrasRateLimiter.Deferred(
+                f"Cerebras rate limit: {reason}; reset en {wait_time:.1f}s"
             )
         if wait_time > 0:
-            logger.warning(f"Rate limit Groq: esperando {wait_time:.1f}s ({reason}).")
+            logger.warning(f"Rate limit Cerebras: esperando {wait_time:.1f}s ({reason}).")
             time.sleep(wait_time)
 
     def reset_if_needed(self):
@@ -167,7 +199,7 @@ class GroqRateLimiter:
 
             if estimated_tokens > token_limit and self.used_tokens == 0 and self.used_requests == 0:
                 logger.warning(
-                    f"Rate limit Groq local: una petición estimada en {estimated_tokens} tokens "
+                    f"Rate limit Cerebras local: una petición estimada en {estimated_tokens} tokens "
                     f"supera el límite seguro de {token_limit}; se enviará una sola petición."
                 )
                 self.used_tokens = estimated_tokens
@@ -176,11 +208,14 @@ class GroqRateLimiter:
 
             wait_time = self.seconds_until_next_window() + 1
             logger.warning(
-                f"Rate limit Groq local: esperando {wait_time:.1f}s "
+                f"Rate limit Cerebras local: esperando {wait_time:.1f}s "
                 f"(modelo={model_name}, estimado={estimated_tokens} tokens, "
                 f"usados={self.used_tokens}/{token_limit})."
             )
             time.sleep(wait_time)
+
+
+GroqRateLimiter = CerebrasRateLimiter
 
 
 class EmbeddingService:
@@ -401,9 +436,10 @@ class FeedService:
     _DEFAULT_FILTER_INSTRUCTIONS = "(No hay instrucciones de filtro IA activas)"
 
     _GEMINI_CLIENT = None
-    _GROQ_CLIENT = None
+    _CEREBRAS_CLIENT = None
     _VECTOR_INDEX = None
-    _GROQ_RATE_LIMITER = GroqRateLimiter()
+    _CEREBRAS_RATE_LIMITER = CerebrasRateLimiter()
+    _GROQ_RATE_LIMITER = _CEREBRAS_RATE_LIMITER
 
     @staticmethod
     def initialize_gemini():
@@ -416,14 +452,16 @@ class FeedService:
         return FeedService._GEMINI_CLIENT
 
     @staticmethod
-    def initialize_groq():
-        """Cliente Groq - para procesamiento de contenido (resúmenes)"""
-        if FeedService._GROQ_CLIENT is None:
-            api_key = getattr(settings, 'GROQ_API_KEY', None) or os.environ.get('GROQ_API_KEY')
+    def initialize_cerebras():
+        """Cliente Cerebras - para procesamiento de contenido (resúmenes)."""
+        if FeedService._CEREBRAS_CLIENT is None:
+            api_key = getattr(settings, 'CEREBRAS_API_KEY', None) or os.environ.get('CEREBRAS_API_KEY')
             if not api_key:
-                raise ValueError("GROQ_API_KEY no configurada. Agrégala en settings.py o como variable de entorno.")
-            FeedService._GROQ_CLIENT = Groq(api_key=api_key)
-        return FeedService._GROQ_CLIENT
+                raise ValueError("CEREBRAS_API_KEY no configurada. Agrégala en settings.py o como variable de entorno.")
+            FeedService._CEREBRAS_CLIENT = Cerebras(api_key=api_key)
+        return FeedService._CEREBRAS_CLIENT
+
+    initialize_groq = initialize_cerebras
 
     @staticmethod
     def initialize_vector_index():
@@ -474,29 +512,50 @@ class FeedService:
         response = getattr(error, 'response', None)
         headers = getattr(response, 'headers', None)
         if headers:
+            FeedService._CEREBRAS_RATE_LIMITER.update_from_headers(headers)
             retry_after = headers.get('retry-after') or headers.get('Retry-After')
             if retry_after:
                 try:
                     return max(1, int(float(retry_after)))
                 except (TypeError, ValueError):
                     pass
+            reset_tokens = FeedService._CEREBRAS_RATE_LIMITER.parse_reset_seconds(
+                headers.get('x-ratelimit-reset-tokens-minute')
+                or headers.get('X-Ratelimit-Reset-Tokens-Minute')
+                or headers.get('x-ratelimit-reset-tokens')
+            )
+            reset_requests = FeedService._CEREBRAS_RATE_LIMITER.parse_reset_seconds(
+                headers.get('x-ratelimit-reset-requests-minute')
+                or headers.get('x-ratelimit-reset-requests-day')
+                or headers.get('X-Ratelimit-Reset-Requests-Day')
+                or headers.get('x-ratelimit-reset-requests')
+            )
+            remaining_requests = headers.get('x-ratelimit-remaining-requests-day')
+            try:
+                requests_depleted = remaining_requests is not None and int(float(remaining_requests)) <= 0
+            except (TypeError, ValueError):
+                requests_depleted = False
+            if requests_depleted and reset_requests is not None:
+                return max(1, int(reset_requests) + 1)
+            if reset_tokens is not None:
+                return max(1, int(reset_tokens) + 1)
 
         match = re.search(r'try again in ([0-9.]+s|(?:[0-9.]+m)?[0-9.]+s)', str(error), re.IGNORECASE)
         if match:
-            retry_seconds = FeedService._GROQ_RATE_LIMITER.parse_reset_seconds(match.group(1))
+            retry_seconds = FeedService._CEREBRAS_RATE_LIMITER.parse_reset_seconds(match.group(1))
             if retry_seconds is not None:
                 return max(1, int(retry_seconds) + 1)
 
         return None
 
     @staticmethod
-    def _is_groq_json_validation_error(error):
+    def _is_cerebras_json_validation_error(error):
         error_text = str(error).lower()
         return 'json_validate_failed' in error_text or 'failed to validate json' in error_text
 
     @staticmethod
-    def _uses_gpt_oss_reasoning(model_name):
-        return (model_name or '').startswith('openai/gpt-oss-')
+    def _uses_low_reasoning(model_name):
+        return model_name in {'gpt-oss-120b'}
 
     @staticmethod
     def _parse_model_json(response_text):
@@ -541,7 +600,7 @@ class FeedService:
         return cleaned or None
 
     @staticmethod
-    def prepare_content_for_groq(title, original_content, content_limit=2500):
+    def prepare_content_for_cerebras(title, original_content, content_limit=2500):
         """Convierte HTML/texto del feed en cuerpo compacto para el prompt."""
         raw_content = html.unescape(original_content or '')
         if not raw_content:
@@ -569,12 +628,14 @@ class FeedService:
 
         return clean_text[:content_limit].strip()
 
+    prepare_content_for_groq = prepare_content_for_cerebras
+
     @staticmethod
-    def process_content_with_groq(title, original_content, groq_client, model_name, filter_instructions_text, max_retries=2):
+    def process_content_with_cerebras(title, original_content, cerebras_client, model_name, filter_instructions_text, max_retries=2):
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
         instructions_section = (filter_instructions_text or FeedService._DEFAULT_FILTER_INSTRUCTIONS)
-        base_content = FeedService.prepare_content_for_groq(title, original_content)
+        base_content = FeedService.prepare_content_for_cerebras(title, original_content)
         plain_content = base_content
 
         safe_title = (title or "").replace("{", "{{").replace("}", "}}")
@@ -591,7 +652,7 @@ class FeedService:
 
         for attempt in range(max_retries):
             try:
-                FeedService._GROQ_RATE_LIMITER.acquire(model_name, prompt, max_completion_tokens)
+                FeedService._CEREBRAS_RATE_LIMITER.acquire(model_name, prompt, max_completion_tokens)
                 request_kwargs = {
                     "model": model_name,
                     "messages": [
@@ -605,18 +666,18 @@ class FeedService:
                         }
                     ],
                     "temperature": 0.3,
-                    "max_tokens": max_completion_tokens,
+                    "max_completion_tokens": max_completion_tokens,
                 }
-                if FeedService._uses_gpt_oss_reasoning(model_name):
+                if FeedService._uses_low_reasoning(model_name):
                     request_kwargs["reasoning_effort"] = "low"
                 if use_response_format:
                     request_kwargs["response_format"] = {"type": "json_object"}
 
-                completions = groq_client.chat.completions
+                completions = cerebras_client.chat.completions
                 raw_completions = getattr(completions, 'with_raw_response', None)
                 if raw_completions is not None:
                     raw_response = raw_completions.create(**request_kwargs)
-                    FeedService._GROQ_RATE_LIMITER.update_from_headers(
+                    FeedService._CEREBRAS_RATE_LIMITER.update_from_headers(
                         getattr(raw_response, 'headers', None)
                     )
                     response = raw_response.parse()
@@ -624,7 +685,7 @@ class FeedService:
                     response = completions.create(**request_kwargs)
                 response_text = response.choices[0].message.content or ''
                 if not response_text.strip():
-                    logger.warning(f"Groq devolvió contenido vacío (intento {attempt + 1}/{max_retries}).")
+                    logger.warning(f"Cerebras devolvió contenido vacío (intento {attempt + 1}/{max_retries}).")
                     if attempt == max_retries - 1:
                         return None, None, None
                     time.sleep(5)
@@ -653,7 +714,7 @@ class FeedService:
                     return sanitize_html(processed_summary), short_answer, ai_filter_reason
 
                 except json.JSONDecodeError as json_e:
-                    logger.warning(f"Error decodificando JSON de Groq (intento {attempt + 1}): {json_e}")
+                    logger.warning(f"Error decodificando JSON de Cerebras (intento {attempt + 1}): {json_e}")
                     logger.debug(f"Texto recibido: {response_text[:200]}...")
                     if attempt == max_retries - 1:
                         logger.warning("Fallo de JSON en último intento; no se guardará respuesta cruda del modelo.")
@@ -663,41 +724,43 @@ class FeedService:
 
             except Exception as e:
                 error_str = str(e)
-                if isinstance(e, GroqRateLimiter.Deferred):
+                if isinstance(e, CerebrasRateLimiter.Deferred):
                     logger.warning(str(e))
                     return None, None, None
-                if FeedService._is_groq_json_validation_error(e) and use_response_format:
+                if FeedService._is_cerebras_json_validation_error(e) and use_response_format:
                     use_response_format = False
-                    logger.warning("Groq rechazó el modo JSON estricto; reintentando sin response_format.")
+                    logger.warning("Cerebras rechazó el modo JSON estricto; reintentando sin response_format.")
                     continue
                 if "429" in error_str or "rate_limit" in error_str.lower():
                     retry_after = FeedService._extract_retry_after_seconds(e)
-                    wait_time = retry_after or max(FeedService._GROQ_RATE_LIMITER.seconds_until_next_window() + 1, 120)
-                    if wait_time > FeedService._GROQ_RATE_LIMITER.MAX_RETRY_SLEEP_SECONDS:
+                    wait_time = retry_after or max(FeedService._CEREBRAS_RATE_LIMITER.seconds_until_next_window() + 1, 120)
+                    if wait_time > FeedService._CEREBRAS_RATE_LIMITER.MAX_RETRY_SLEEP_SECONDS:
                         logger.warning(
-                            f"Groq pidió esperar {wait_time}s por rate limit; "
+                            f"Cerebras pidió esperar {wait_time}s por rate limit; "
                             "se pospone esta noticia para una próxima actualización."
                         )
                         return None, None, None
                     if attempt >= max_retries - 1:
                         logger.warning(
-                            f"Límite de peticiones Groq en último intento; "
+                            f"Límite de peticiones Cerebras en último intento; "
                             f"se pospone esta noticia {wait_time}s para una próxima actualización."
                         )
                         return None, None, None
-                    logger.warning(f"Límite de peticiones Groq (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
+                    logger.warning(f"Límite de peticiones Cerebras (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
                     time.sleep(wait_time)
                     continue
                 elif "500" in error_str and attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 5
-                    logger.warning(f"Error interno de Groq (500) (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
+                    logger.warning(f"Error interno de Cerebras (500) (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
                     time.sleep(wait_time)
                     continue
-                logger.exception("Error procesando contenido con Groq: %s", error_str)
+                logger.exception("Error procesando contenido con Cerebras: %s", error_str)
                 return None, None, None
 
-        logger.warning("Se agotaron los reintentos para procesar contenido con Groq.")
+        logger.warning("Se agotaron los reintentos para procesar contenido con Cerebras.")
         return None, None, None
+
+    process_content_with_groq = process_content_with_cerebras
 
     @staticmethod
     def extract_image_from_description(description):
@@ -788,20 +851,20 @@ class FeedService:
         logger.info("Inicializando modelos...")
         # Cliente Gemini solo para embeddings
         gemini_client = FeedService.initialize_gemini()
-        # Cliente Groq para procesamiento de contenido (resúmenes)
-        groq_client = FeedService.initialize_groq()
+        # Cliente Cerebras para procesamiento de contenido (resúmenes)
+        cerebras_client = FeedService.initialize_cerebras()
         vector_index = FeedService.initialize_vector_index()
 
-        # Obtener modelo de Groq desde el admin (base de datos) o usar default
+        # Obtener modelo de Cerebras desde el admin (base de datos) o usar default
         try:
-            groq_setting = GroqGlobalSetting.objects.first()
-            if not groq_setting:
-                logger.warning("No se encontró configuración global de Groq. Creando con modelo predeterminado.")
-                groq_setting = GroqGlobalSetting.objects.create(model_name='openai/gpt-oss-120b')
-            groq_model = groq_setting.model_name
+            cerebras_setting = CerebrasGlobalSetting.objects.first()
+            if not cerebras_setting:
+                logger.warning("No se encontró configuración global de Cerebras. Creando con modelo predeterminado.")
+                cerebras_setting = CerebrasGlobalSetting.objects.create(model_name='gemma-4-31b')
+            cerebras_model = cerebras_setting.model_name
         except Exception:
-            logger.exception("Error al obtener configuración de Groq. Usando default.")
-            groq_model = 'openai/gpt-oss-120b'
+            logger.exception("Error al obtener configuración de Cerebras. Usando default.")
+            cerebras_model = 'gemma-4-31b'
         
         filter_word_patterns = FeedService.build_filter_word_patterns(
             FilterWord.objects.filter(active=True)
@@ -811,7 +874,7 @@ class FeedService:
         )
 
         sources = list(FeedSource.objects.filter(active=True))
-        logger.info(f"Procesando {len(sources)} fuentes activas con Groq ({groq_model})")
+        logger.info(f"Procesando {len(sources)} fuentes activas con Cerebras ({cerebras_model})")
         new_articles_count = 0
         
         # Calcular la fecha límite (15 días atrás)
@@ -1021,19 +1084,19 @@ class FeedService:
             else:
                 ai_attempts += 1
 
-                # Si no se filtró por palabra clave, procesar con IA (Groq)
-                processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_groq(
+                # Si no se filtró por palabra clave, procesar con IA (Cerebras)
+                processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_cerebras(
                     entry.title,
                     original_description,
-                    groq_client,
-                    groq_model,
+                    cerebras_client,
+                    cerebras_model,
                     filter_instructions_text
                 )
                 if processed_description:
                     ai_was_processed = True
                 else:
                     logger.warning(
-                        "Groq no generó resumen; se pausa la ingesta para reintentar luego."
+                        "Cerebras no generó resumen; se pausa la ingesta para reintentar luego."
                     )
                     break
 

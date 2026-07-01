@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import FeedSource, News
-from .services import FeedService, GroqRateLimiter
+from .services import FeedService, CerebrasRateLimiter
 from .tasks import purge_old_news
 from .views import NEWS_NOTIFICATION_SETTLE_DELAY, PAGE_SIZE
 
@@ -69,11 +69,11 @@ class FilterWordPatternTests(SimpleTestCase):
         )
 
 
-class GroqContentPreparationTests(SimpleTestCase):
+class CerebrasContentPreparationTests(SimpleTestCase):
     def test_html_feed_content_is_converted_to_plain_text(self):
         content = '<p>El <a href="https://example.com">WiFi 7</a> llega a casa.</p><script>bad()</script>'
 
-        cleaned = FeedService.prepare_content_for_groq('Titulo', content)
+        cleaned = FeedService.prepare_content_for_cerebras('Titulo', content)
 
         self.assertEqual(cleaned, 'El WiFi 7 llega a casa.')
 
@@ -84,7 +84,7 @@ class GroqContentPreparationTests(SimpleTestCase):
             'Según los últimos rumores, AMD prepara una subida de precio.'
         )
 
-        cleaned = FeedService.prepare_content_for_groq(title, content)
+        cleaned = FeedService.prepare_content_for_cerebras(title, content)
 
         self.assertNotIn(title, cleaned)
         self.assertIn('Según los últimos rumores', cleaned)
@@ -96,56 +96,61 @@ class GroqContentPreparationTests(SimpleTestCase):
             'Este verano nos van a faltar horas para jugar.'
         )
 
-        cleaned = FeedService.prepare_content_for_groq('Splatoon Raiders', content)
+        cleaned = FeedService.prepare_content_for_cerebras('Splatoon Raiders', content)
 
         self.assertNotIn('Linkedin twitter instagram', cleaned)
         self.assertNotIn('17772 publicaciones', cleaned)
         self.assertIn('Este verano', cleaned)
 
     def test_content_is_limited_before_prompting(self):
-        cleaned = FeedService.prepare_content_for_groq('Titulo', 'a' * 3000, content_limit=120)
+        cleaned = FeedService.prepare_content_for_cerebras('Titulo', 'a' * 3000, content_limit=120)
 
         self.assertEqual(len(cleaned), 120)
 
 
-class GroqRateLimiterTests(SimpleTestCase):
+class CerebrasRateLimiterTests(SimpleTestCase):
     def setUp(self):
-        FeedService._GROQ_RATE_LIMITER = GroqRateLimiter()
-        FeedService._GROQ_RATE_LIMITER.SAFE_RPM_CAP = 100
+        FeedService._CEREBRAS_RATE_LIMITER = CerebrasRateLimiter()
+        FeedService._GROQ_RATE_LIMITER = FeedService._CEREBRAS_RATE_LIMITER
+        FeedService._CEREBRAS_RATE_LIMITER.SAFE_RPM_CAP = 500
 
     def test_model_limits_are_conservative_for_news_processing(self):
-        limiter = GroqRateLimiter()
+        limiter = CerebrasRateLimiter()
 
-        self.assertEqual(limiter.get_limits('openai/gpt-oss-120b'), (6_000, 22))
+        self.assertEqual(limiter.get_limits('gemma-4-31b'), (375_000, 225))
 
     def test_reset_header_duration_is_parsed(self):
-        limiter = GroqRateLimiter()
+        limiter = CerebrasRateLimiter()
 
         self.assertEqual(limiter.parse_reset_seconds('7.66s'), 7.66)
         self.assertEqual(limiter.parse_reset_seconds('2m59.56s'), 179.56)
 
     def test_response_headers_update_remaining_capacity(self):
-        limiter = GroqRateLimiter()
+        limiter = CerebrasRateLimiter()
 
         limiter.update_from_headers({
-            'x-ratelimit-remaining-tokens': '1234',
-            'x-ratelimit-remaining-requests': '42',
-            'x-ratelimit-reset-tokens': '7.66s',
-            'x-ratelimit-reset-requests': '2m59.56s',
+            'x-ratelimit-remaining-tokens-minute': '1234',
+            'x-ratelimit-remaining-requests-day': '42',
+            'x-ratelimit-limit-tokens-minute': '500000',
+            'x-ratelimit-limit-requests-day': '1000000000',
+            'x-ratelimit-reset-tokens-minute': '7.66s',
+            'x-ratelimit-reset-requests-day': '2m59.56s',
         })
 
         self.assertEqual(limiter.remaining_tokens, 1234)
         self.assertEqual(limiter.remaining_requests, 42)
+        self.assertEqual(limiter.limit_tokens, 500000)
+        self.assertEqual(limiter.limit_requests, 1000000000)
         self.assertIsNotNone(limiter.reset_tokens_at)
         self.assertIsNotNone(limiter.reset_requests_at)
 
     def test_long_header_reset_defers_processing(self):
-        limiter = GroqRateLimiter()
+        limiter = CerebrasRateLimiter()
         limiter.remaining_tokens = 1
         limiter.reset_tokens_at = limiter.window_start + 120
 
-        with self.assertRaises(GroqRateLimiter.Deferred):
-            limiter.acquire('openai/gpt-oss-120b', 'x' * 1000, 1024)
+        with self.assertRaises(CerebrasRateLimiter.Deferred):
+            limiter.acquire('gemma-4-31b', 'x' * 1000, 1024)
 
     def test_retry_after_is_read_from_response_headers(self):
         class Response:
@@ -155,6 +160,18 @@ class GroqRateLimiterTests(SimpleTestCase):
         error.response = Response()
 
         self.assertEqual(FeedService._extract_retry_after_seconds(error), 42)
+
+    def test_retry_delay_is_read_from_cerebras_rate_limit_headers(self):
+        class Response:
+            headers = {
+                'x-ratelimit-remaining-tokens-minute': '0',
+                'x-ratelimit-reset-tokens-minute': '11.38',
+            }
+
+        error = Exception('429 rate limit exceeded')
+        error.response = Response()
+
+        self.assertEqual(FeedService._extract_retry_after_seconds(error), 12)
 
     def test_retry_after_is_read_from_error_message(self):
         error = Exception('Rate limit reached. Please try again in 12.4s.')
@@ -182,11 +199,11 @@ class GroqRateLimiterTests(SimpleTestCase):
         class Client:
             chat = Chat()
 
-        description, short_answer, ai_filter = FeedService.process_content_with_groq(
+        description, short_answer, ai_filter = FeedService.process_content_with_cerebras(
             'Titulo',
             'Descripcion original',
             Client(),
-            'openai/gpt-oss-120b',
+            'gemma-4-31b',
             FeedService._DEFAULT_FILTER_INSTRUCTIONS,
             max_retries=2,
         )
@@ -196,14 +213,14 @@ class GroqRateLimiterTests(SimpleTestCase):
         self.assertIsNone(ai_filter)
 
     def test_single_large_request_does_not_wait_forever(self):
-        limiter = GroqRateLimiter()
+        limiter = CerebrasRateLimiter()
         limiter.MODEL_LIMITS = {'tiny-model': {'tpm': 100, 'rpm': 20}}
 
         estimated_tokens = limiter.acquire('tiny-model', 'x' * 1000, 1024)
 
         self.assertGreater(estimated_tokens, 25)
 
-    def test_groq_failure_returns_empty_result_instead_of_original_content(self):
+    def test_cerebras_failure_returns_empty_result_instead_of_original_content(self):
         class Completions:
             def create(self, **kwargs):
                 raise Exception('429 rate limit exceeded')
@@ -214,11 +231,11 @@ class GroqRateLimiterTests(SimpleTestCase):
         class Client:
             chat = Chat()
 
-        description, short_answer, ai_filter = FeedService.process_content_with_groq(
+        description, short_answer, ai_filter = FeedService.process_content_with_cerebras(
             'Titulo',
             'Descripcion original sin procesar',
             Client(),
-            'openai/gpt-oss-120b',
+            'gemma-4-31b',
             FeedService._DEFAULT_FILTER_INSTRUCTIONS,
             max_retries=1,
         )
@@ -256,11 +273,11 @@ class GroqRateLimiterTests(SimpleTestCase):
                 self.chat = Chat()
 
         client = Client()
-        description, short_answer, ai_filter = FeedService.process_content_with_groq(
+        description, short_answer, ai_filter = FeedService.process_content_with_cerebras(
             'Titulo',
             'Descripcion original',
             client,
-            'openai/gpt-oss-120b',
+            'gpt-oss-120b',
             FeedService._DEFAULT_FILTER_INSTRUCTIONS,
             max_retries=2,
         )
@@ -272,7 +289,7 @@ class GroqRateLimiterTests(SimpleTestCase):
         self.assertNotIn('response_format', client.chat.completions.calls[1])
         self.assertEqual(client.chat.completions.calls[1]['reasoning_effort'], 'low')
 
-    def test_groq_response_headers_are_recorded_from_raw_response(self):
+    def test_cerebras_response_headers_are_recorded_from_raw_response(self):
         class Message:
             content = '{"summary": "Resumen con headers.", "short_answer": null, "ai_filter": null}'
 
@@ -284,9 +301,9 @@ class GroqRateLimiterTests(SimpleTestCase):
 
         class RawResponse:
             headers = {
-                'x-ratelimit-remaining-tokens': '4321',
-                'x-ratelimit-remaining-requests': '999',
-                'x-ratelimit-reset-tokens': '1.5s',
+                'x-ratelimit-remaining-tokens-minute': '4321',
+                'x-ratelimit-remaining-requests-day': '999',
+                'x-ratelimit-reset-tokens-minute': '1.5s',
             }
 
             def parse(self):
@@ -305,11 +322,11 @@ class GroqRateLimiterTests(SimpleTestCase):
         class Client:
             chat = Chat()
 
-        description, short_answer, ai_filter = FeedService.process_content_with_groq(
+        description, short_answer, ai_filter = FeedService.process_content_with_cerebras(
             'Titulo',
             'Descripcion original',
             Client(),
-            'openai/gpt-oss-120b',
+            'gemma-4-31b',
             FeedService._DEFAULT_FILTER_INSTRUCTIONS,
             max_retries=1,
         )
@@ -317,8 +334,8 @@ class GroqRateLimiterTests(SimpleTestCase):
         self.assertEqual(description, 'Resumen con headers.')
         self.assertIsNone(short_answer)
         self.assertIsNone(ai_filter)
-        self.assertEqual(FeedService._GROQ_RATE_LIMITER.remaining_tokens, 4321)
-        self.assertEqual(FeedService._GROQ_RATE_LIMITER.remaining_requests, 999)
+        self.assertEqual(FeedService._CEREBRAS_RATE_LIMITER.remaining_tokens, 4321)
+        self.assertEqual(FeedService._CEREBRAS_RATE_LIMITER.remaining_requests, 999)
 
     def test_reasoning_wrapped_json_is_extracted(self):
         class Message:
@@ -348,11 +365,11 @@ Okay, primero razono sobre la noticia.
         class Client:
             chat = Chat()
 
-        description, short_answer, ai_filter = FeedService.process_content_with_groq(
+        description, short_answer, ai_filter = FeedService.process_content_with_cerebras(
             'Motorola Razr 70',
             'Descripcion original',
             Client(),
-            'openai/gpt-oss-120b',
+            'gemma-4-31b',
             FeedService._DEFAULT_FILTER_INSTRUCTIONS,
             max_retries=1,
         )
@@ -396,11 +413,11 @@ Okay, primero razono sobre la noticia.
         class Client:
             chat = Chat()
 
-        description, short_answer, ai_filter = FeedService.process_content_with_groq(
+        description, short_answer, ai_filter = FeedService.process_content_with_cerebras(
             'Titulo',
             'Descripcion original',
             Client(),
-            'openai/gpt-oss-120b',
+            'gemma-4-31b',
             FeedService._DEFAULT_FILTER_INSTRUCTIONS,
             max_retries=1,
         )
@@ -409,7 +426,7 @@ Okay, primero razono sobre la noticia.
         self.assertIsNone(short_answer)
         self.assertIsNone(ai_filter)
 
-    def test_empty_groq_response_is_not_saved_as_summary(self):
+    def test_empty_cerebras_response_is_not_saved_as_summary(self):
         class Message:
             content = ''
 
@@ -429,11 +446,11 @@ Okay, primero razono sobre la noticia.
         class Client:
             chat = Chat()
 
-        description, short_answer, ai_filter = FeedService.process_content_with_groq(
+        description, short_answer, ai_filter = FeedService.process_content_with_cerebras(
             'Titulo',
             'Descripcion original',
             Client(),
-            'openai/gpt-oss-120b',
+            'gemma-4-31b',
             FeedService._DEFAULT_FILTER_INSTRUCTIONS,
             max_retries=1,
         )
@@ -452,9 +469,9 @@ class FeedIngestionBudgetTests(TestCase):
 
     @patch('my_news.services.EmbeddingService.check_redundancy', return_value=(False, None, 0.0))
     @patch('my_news.services.FeedService.initialize_vector_index', return_value=None)
-    @patch('my_news.services.FeedService.initialize_groq', return_value=object())
+    @patch('my_news.services.FeedService.initialize_cerebras', return_value=object())
     @patch('my_news.services.FeedService.initialize_gemini', return_value=object())
-    @patch('my_news.services.FeedService.process_content_with_groq')
+    @patch('my_news.services.FeedService.process_content_with_cerebras')
     @patch('my_news.services.feedparser.parse')
     @patch('my_news.services.requests.get')
     def test_ai_budget_does_not_drop_unprocessed_entries(
@@ -463,7 +480,7 @@ class FeedIngestionBudgetTests(TestCase):
         mock_parse,
         mock_process,
         _initialize_gemini,
-        _initialize_groq,
+        _initialize_cerebras,
         _initialize_vector_index,
         _check_redundancy,
     ):

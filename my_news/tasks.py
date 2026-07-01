@@ -2,7 +2,7 @@ from .services import FeedService
 from django.utils import timezone
 from datetime import timedelta
 from .models import News
-from .models import GroqGlobalSetting
+from .models import CerebrasGlobalSetting
 from .models import AIFilterInstruction
 from django.conf import settings
 from django.db import connection
@@ -121,11 +121,14 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
     Solo cuenta como procesada si se guardan cambios.
     """
     try:
-        groq_client = FeedService.initialize_groq()
+        cerebras_client = FeedService.initialize_cerebras()
         try:
-            global_model_name = (GroqGlobalSetting.objects.first() or GroqGlobalSetting(model_name='openai/gpt-oss-120b')).model_name
+            global_model_name = (
+                CerebrasGlobalSetting.objects.first()
+                or CerebrasGlobalSetting(model_name='gemma-4-31b')
+            ).model_name
         except Exception:
-            global_model_name = 'openai/gpt-oss-120b'
+            global_model_name = 'gemma-4-31b'
 
         try:
             filter_instructions_text = FeedService.build_filter_instructions_text(
@@ -144,10 +147,10 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
         processed = 0
         for news in qs:
             saved_changes = False
-            processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_groq(
+            processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_cerebras(
                 news.title,
                 news.description or '',
-                groq_client,
+                cerebras_client,
                 global_model_name,
                 filter_instructions_text
             )

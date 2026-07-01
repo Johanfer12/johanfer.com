@@ -21,6 +21,7 @@ def make_news(source, title, minutes_ago=120, **kwargs):
         link=f"https://example.com/{title}",
         published_date=now - timedelta(minutes=minutes_ago),
         source=source,
+        is_ai_processed=True,
         **kwargs,
     )
     # created_at es auto_now_add; lo retrasamos para superar el settle delay (60s)
