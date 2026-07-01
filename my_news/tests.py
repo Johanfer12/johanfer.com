@@ -300,8 +300,14 @@ class CerebrasRateLimiterTests(SimpleTestCase):
         self.assertEqual(description, 'Resumen procesado.')
         self.assertIsNone(short_answer)
         self.assertIsNone(ai_filter)
-        self.assertIn('response_format', client.chat.completions.calls[0])
-        self.assertNotIn('response_format', client.chat.completions.calls[1])
+        self.assertEqual(
+            client.chat.completions.calls[0]['response_format']['type'],
+            'json_schema',
+        )
+        self.assertEqual(
+            client.chat.completions.calls[1]['response_format']['type'],
+            'json_object',
+        )
         self.assertEqual(client.chat.completions.calls[1]['reasoning_effort'], 'low')
 
     def test_cerebras_response_headers_are_recorded_from_raw_response(self):

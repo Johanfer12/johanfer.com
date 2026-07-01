@@ -437,6 +437,23 @@ class FeedService:
         IMPORTANTE: Responde únicamente con el objeto JSON válido, sin texto adicional antes o después.
         """)
     _DEFAULT_FILTER_INSTRUCTIONS = "(No hay instrucciones de filtro IA activas)"
+    _NEWS_ANALYSIS_RESPONSE_FORMAT = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "news_analysis",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "summary": {"type": "string"},
+                    "short_answer": {"type": ["string", "null"]},
+                    "ai_filter": {"type": ["string", "null"]},
+                },
+                "required": ["summary", "short_answer", "ai_filter"],
+            },
+        },
+    }
 
     _GEMINI_CLIENT = None
     _CEREBRAS_CLIENT = None
@@ -650,8 +667,8 @@ class FeedService:
             content=safe_content,
             instructions=safe_instructions
         )
-        max_completion_tokens = 1024
-        use_response_format = True
+        max_completion_tokens = 512
+        response_format_mode = "json_schema"
 
         for attempt in range(max_retries):
             try:
@@ -673,7 +690,9 @@ class FeedService:
                 }
                 if FeedService._uses_low_reasoning(model_name):
                     request_kwargs["reasoning_effort"] = "low"
-                if use_response_format:
+                if response_format_mode == "json_schema":
+                    request_kwargs["response_format"] = FeedService._NEWS_ANALYSIS_RESPONSE_FORMAT
+                elif response_format_mode == "json_object":
                     request_kwargs["response_format"] = {"type": "json_object"}
 
                 completions = cerebras_client.chat.completions
@@ -730,9 +749,13 @@ class FeedService:
                 if isinstance(e, CerebrasRateLimiter.Deferred):
                     logger.warning(str(e))
                     return None, None, None
-                if FeedService._is_cerebras_json_validation_error(e) and use_response_format:
-                    use_response_format = False
-                    logger.warning("Cerebras rechazó el modo JSON estricto; reintentando sin response_format.")
+                if FeedService._is_cerebras_json_validation_error(e) and response_format_mode:
+                    if response_format_mode == "json_schema":
+                        response_format_mode = "json_object"
+                        logger.warning("Cerebras rechazó json_schema; reintentando con json_object.")
+                    else:
+                        response_format_mode = None
+                        logger.warning("Cerebras rechazó el modo JSON estricto; reintentando sin response_format.")
                     continue
                 if "429" in error_str or "rate_limit" in error_str.lower():
                     retry_after = FeedService._extract_retry_after_seconds(e)
