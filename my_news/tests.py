@@ -152,6 +152,21 @@ class CerebrasRateLimiterTests(SimpleTestCase):
         with self.assertRaises(CerebrasRateLimiter.Deferred):
             limiter.acquire('gemma-4-31b', 'x' * 1000, 1024)
 
+    def test_missing_reset_header_uses_local_window(self):
+        limiter = CerebrasRateLimiter()
+        limiter.remaining_requests = 0
+        waits = []
+
+        def fake_sleep_or_defer(wait_time, reason):
+            waits.append((wait_time, reason))
+            limiter.remaining_requests = None
+
+        limiter._sleep_or_defer = fake_sleep_or_defer
+        limiter.acquire('gemma-4-31b', 'prompt', 8)
+
+        self.assertEqual(waits[0][1], 'sin requests disponibles')
+        self.assertGreater(waits[0][0], 0)
+
     def test_retry_after_is_read_from_response_headers(self):
         class Response:
             headers = {'Retry-After': '42'}

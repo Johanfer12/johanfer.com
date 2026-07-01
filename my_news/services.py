@@ -108,6 +108,7 @@ class CerebrasRateLimiter:
         )
         remaining_requests = (
             self._read_header(headers, 'x-ratelimit-remaining-requests-minute')
+            or self._read_header(headers, 'x-ratelimit-remaining-requests-hour')
             or self._read_header(headers, 'x-ratelimit-remaining-requests-day')
             or self._read_header(headers, 'x-ratelimit-remaining-requests')
         )
@@ -117,6 +118,7 @@ class CerebrasRateLimiter:
         )
         limit_requests = (
             self._read_header(headers, 'x-ratelimit-limit-requests-minute')
+            or self._read_header(headers, 'x-ratelimit-limit-requests-hour')
             or self._read_header(headers, 'x-ratelimit-limit-requests-day')
             or self._read_header(headers, 'x-ratelimit-limit-requests')
         )
@@ -126,6 +128,7 @@ class CerebrasRateLimiter:
         )
         reset_requests = self.parse_reset_seconds(
             self._read_header(headers, 'x-ratelimit-reset-requests-minute')
+            or self._read_header(headers, 'x-ratelimit-reset-requests-hour')
             or self._read_header(headers, 'x-ratelimit-reset-requests-day')
             or self._read_header(headers, 'x-ratelimit-reset-requests')
         )
@@ -179,12 +182,12 @@ class CerebrasRateLimiter:
             self.reset_if_needed()
             now = time.monotonic()
             if self.remaining_requests is not None and self.remaining_requests <= 0:
-                wait_time = (self.reset_requests_at - now + 1) if self.reset_requests_at else None
+                wait_time = (self.reset_requests_at - now + 1) if self.reset_requests_at else self.seconds_until_next_window() + 1
                 self._sleep_or_defer(wait_time, 'sin requests disponibles')
                 self.remaining_requests = None
                 continue
             if self.remaining_tokens is not None and estimated_tokens > self.remaining_tokens:
-                wait_time = (self.reset_tokens_at - now + 1) if self.reset_tokens_at else None
+                wait_time = (self.reset_tokens_at - now + 1) if self.reset_tokens_at else self.seconds_until_next_window() + 1
                 self._sleep_or_defer(wait_time, 'tokens insuficientes')
                 self.remaining_tokens = None
                 continue
