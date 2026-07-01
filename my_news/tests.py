@@ -77,7 +77,36 @@ class GroqRateLimiterTests(SimpleTestCase):
     def test_model_limits_are_conservative_for_news_processing(self):
         limiter = GroqRateLimiter()
 
-        self.assertEqual(limiter.get_limits('openai/gpt-oss-120b'), (6_000, 1))
+        self.assertEqual(limiter.get_limits('openai/gpt-oss-120b'), (6_000, 22))
+
+    def test_reset_header_duration_is_parsed(self):
+        limiter = GroqRateLimiter()
+
+        self.assertEqual(limiter.parse_reset_seconds('7.66s'), 7.66)
+        self.assertEqual(limiter.parse_reset_seconds('2m59.56s'), 179.56)
+
+    def test_response_headers_update_remaining_capacity(self):
+        limiter = GroqRateLimiter()
+
+        limiter.update_from_headers({
+            'x-ratelimit-remaining-tokens': '1234',
+            'x-ratelimit-remaining-requests': '42',
+            'x-ratelimit-reset-tokens': '7.66s',
+            'x-ratelimit-reset-requests': '2m59.56s',
+        })
+
+        self.assertEqual(limiter.remaining_tokens, 1234)
+        self.assertEqual(limiter.remaining_requests, 42)
+        self.assertIsNotNone(limiter.reset_tokens_at)
+        self.assertIsNotNone(limiter.reset_requests_at)
+
+    def test_long_header_reset_defers_processing(self):
+        limiter = GroqRateLimiter()
+        limiter.remaining_tokens = 1
+        limiter.reset_tokens_at = limiter.window_start + 120
+
+        with self.assertRaises(GroqRateLimiter.Deferred):
+            limiter.acquire('openai/gpt-oss-120b', 'x' * 1000, 1024)
 
     def test_retry_after_is_read_from_response_headers(self):
         class Response:
@@ -198,6 +227,54 @@ class GroqRateLimiterTests(SimpleTestCase):
         self.assertIn('response_format', client.chat.completions.calls[0])
         self.assertNotIn('response_format', client.chat.completions.calls[1])
         self.assertEqual(client.chat.completions.calls[1]['reasoning_effort'], 'low')
+
+    def test_groq_response_headers_are_recorded_from_raw_response(self):
+        class Message:
+            content = '{"summary": "Resumen con headers.", "short_answer": null, "ai_filter": null}'
+
+        class Choice:
+            message = Message()
+
+        class Response:
+            choices = [Choice()]
+
+        class RawResponse:
+            headers = {
+                'x-ratelimit-remaining-tokens': '4321',
+                'x-ratelimit-remaining-requests': '999',
+                'x-ratelimit-reset-tokens': '1.5s',
+            }
+
+            def parse(self):
+                return Response()
+
+        class RawCompletions:
+            def create(self, **kwargs):
+                return RawResponse()
+
+        class Completions:
+            with_raw_response = RawCompletions()
+
+        class Chat:
+            completions = Completions()
+
+        class Client:
+            chat = Chat()
+
+        description, short_answer, ai_filter = FeedService.process_content_with_groq(
+            'Titulo',
+            'Descripcion original',
+            Client(),
+            'openai/gpt-oss-120b',
+            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
+            max_retries=1,
+        )
+
+        self.assertEqual(description, 'Resumen con headers.')
+        self.assertIsNone(short_answer)
+        self.assertIsNone(ai_filter)
+        self.assertEqual(FeedService._GROQ_RATE_LIMITER.remaining_tokens, 4321)
+        self.assertEqual(FeedService._GROQ_RATE_LIMITER.remaining_requests, 999)
 
     def test_reasoning_wrapped_json_is_extracted(self):
         class Message:

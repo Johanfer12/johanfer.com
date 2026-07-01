@@ -37,7 +37,7 @@ class GroqRateLimiter:
     DEFAULT_RPM = 1000
     DEFAULT_TPM = 250_000
     SAFETY_FACTOR = 0.75
-    SAFE_RPM_CAP = 1
+    SAFE_RPM_CAP = 30
     MAX_RETRY_SLEEP_SECONDS = 90
     MODEL_LIMITS = {
         'llama-3.1-8b-instant': {'tpm': 6_000, 'rpm': 30},
@@ -53,6 +53,14 @@ class GroqRateLimiter:
         self.window_start = time.monotonic()
         self.used_tokens = 0
         self.used_requests = 0
+        self.remaining_tokens = None
+        self.remaining_requests = None
+        self.reset_tokens_at = None
+        self.reset_requests_at = None
+
+    class Deferred(Exception):
+        """Señal interna: conviene pausar esta corrida y reintentar luego."""
+        pass
 
     def get_limits(self, model_name):
         model_limits = self.MODEL_LIMITS.get(model_name or '', {})
@@ -71,6 +79,60 @@ class GroqRateLimiter:
         elapsed = time.monotonic() - self.window_start
         return max(0.0, self.window_seconds - elapsed)
 
+    def parse_reset_seconds(self, value):
+        if not value:
+            return None
+        text = str(value).strip().lower()
+        try:
+            return max(0.0, float(text.rstrip('s')))
+        except ValueError:
+            pass
+
+        match = re.fullmatch(r'(?:(\d+(?:\.\d+)?)m)?(?:(\d+(?:\.\d+)?)s)?', text)
+        if not match:
+            return None
+
+        minutes = float(match.group(1) or 0)
+        seconds = float(match.group(2) or 0)
+        return max(0.0, minutes * 60 + seconds)
+
+    def _read_header(self, headers, name):
+        if not headers:
+            return None
+        return headers.get(name) or headers.get(name.title()) or headers.get(name.lower())
+
+    def update_from_headers(self, headers):
+        now = time.monotonic()
+        remaining_tokens = self._read_header(headers, 'x-ratelimit-remaining-tokens')
+        remaining_requests = self._read_header(headers, 'x-ratelimit-remaining-requests')
+        reset_tokens = self.parse_reset_seconds(self._read_header(headers, 'x-ratelimit-reset-tokens'))
+        reset_requests = self.parse_reset_seconds(self._read_header(headers, 'x-ratelimit-reset-requests'))
+
+        try:
+            self.remaining_tokens = int(float(remaining_tokens)) if remaining_tokens is not None else None
+        except (TypeError, ValueError):
+            self.remaining_tokens = None
+
+        try:
+            self.remaining_requests = int(float(remaining_requests)) if remaining_requests is not None else None
+        except (TypeError, ValueError):
+            self.remaining_requests = None
+
+        self.reset_tokens_at = now + reset_tokens if reset_tokens is not None else None
+        self.reset_requests_at = now + reset_requests if reset_requests is not None else None
+
+    def _sleep_or_defer(self, wait_time, reason):
+        if wait_time is None:
+            return
+        wait_time = max(0.0, float(wait_time))
+        if wait_time > self.MAX_RETRY_SLEEP_SECONDS:
+            raise GroqRateLimiter.Deferred(
+                f"Groq rate limit: {reason}; reset en {wait_time:.1f}s"
+            )
+        if wait_time > 0:
+            logger.warning(f"Rate limit Groq: esperando {wait_time:.1f}s ({reason}).")
+            time.sleep(wait_time)
+
     def reset_if_needed(self):
         if time.monotonic() - self.window_start >= self.window_seconds:
             self.window_start = time.monotonic()
@@ -83,6 +145,18 @@ class GroqRateLimiter:
 
         while True:
             self.reset_if_needed()
+            now = time.monotonic()
+            if self.remaining_requests is not None and self.remaining_requests <= 0:
+                wait_time = (self.reset_requests_at - now + 1) if self.reset_requests_at else None
+                self._sleep_or_defer(wait_time, 'sin requests disponibles')
+                self.remaining_requests = None
+                continue
+            if self.remaining_tokens is not None and estimated_tokens > self.remaining_tokens:
+                wait_time = (self.reset_tokens_at - now + 1) if self.reset_tokens_at else None
+                self._sleep_or_defer(wait_time, 'tokens insuficientes')
+                self.remaining_tokens = None
+                continue
+
             would_exceed_tokens = self.used_tokens + estimated_tokens > token_limit
             would_exceed_requests = self.used_requests + 1 > request_limit
 
@@ -511,7 +585,16 @@ class FeedService:
                 if use_response_format:
                     request_kwargs["response_format"] = {"type": "json_object"}
 
-                response = groq_client.chat.completions.create(**request_kwargs)
+                completions = groq_client.chat.completions
+                raw_completions = getattr(completions, 'with_raw_response', None)
+                if raw_completions is not None:
+                    raw_response = raw_completions.create(**request_kwargs)
+                    FeedService._GROQ_RATE_LIMITER.update_from_headers(
+                        getattr(raw_response, 'headers', None)
+                    )
+                    response = raw_response.parse()
+                else:
+                    response = completions.create(**request_kwargs)
                 response_text = response.choices[0].message.content or ''
                 if not response_text.strip():
                     logger.warning(f"Groq devolvió contenido vacío (intento {attempt + 1}/{max_retries}).")
@@ -553,6 +636,9 @@ class FeedService:
 
             except Exception as e:
                 error_str = str(e)
+                if isinstance(e, GroqRateLimiter.Deferred):
+                    logger.warning(str(e))
+                    return None, None, None
                 if FeedService._is_groq_json_validation_error(e) and use_response_format:
                     use_response_format = False
                     logger.warning("Groq rechazó el modo JSON estricto; reintentando sin response_format.")
