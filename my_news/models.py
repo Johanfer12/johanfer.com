@@ -9,7 +9,7 @@ class VisibleNewsManager(models.Manager):
 
     def editorial_filter(self):
         """Filtro compartido para contenido apto para mostrarse."""
-        return Q(is_filtered=False) & Q(is_ai_filtered=False) & Q(is_redundant=False)
+        return Q(is_filtered=False) & Q(is_ai_filtered=False) & Q(is_redundant=False) & Q(is_ai_processed=True)
     
     def visible_filter(self):
         """Devuelve el filtro Q para noticias visibles"""

@@ -374,16 +374,14 @@ class FeedIngestionBudgetTests(TestCase):
 
         created_count = FeedService.fetch_and_save_news(max_ai_items=1)
 
-        self.assertEqual(created_count, 2)
+        self.assertEqual(created_count, 1)
         self.assertEqual(mock_process.call_count, 1)
 
         first = News.objects.get(guid='budget-1')
-        second = News.objects.get(guid='budget-2')
 
         self.assertEqual(first.description, 'Resumen IA')
         self.assertTrue(first.is_ai_processed)
-        self.assertEqual(second.description, 'Descripcion segunda')
-        self.assertFalse(second.is_ai_processed)
+        self.assertFalse(News.objects.filter(guid='budget-2').exists())
 
 
 class NewsFeedOrderingTests(TestCase):
@@ -417,6 +415,7 @@ class NewsFeedOrderingTests(TestCase):
                     published_date=published_at,
                     source=self.source,
                     guid=f'{prefix}-{uuid.uuid4().hex}-{index}',
+                    is_ai_processed=True,
                 )
             )
 
@@ -665,6 +664,7 @@ class NewsFeedOrderingTests(TestCase):
             source=self.source,
             guid=f'public-latest-{uuid.uuid4().hex}',
             is_deleted=True,
+            is_ai_processed=True,
         )
         previous_public_news = News.objects.create(
             title='public previous',
@@ -673,6 +673,7 @@ class NewsFeedOrderingTests(TestCase):
             published_date=previous_published_time,
             source=self.source,
             guid=f'public-previous-{uuid.uuid4().hex}',
+            is_ai_processed=True,
         )
         News.objects.filter(pk=latest_public_news.pk).update(created_at=latest_created_time)
         News.objects.filter(pk=previous_public_news.pk).update(created_at=previous_created_time)
@@ -703,6 +704,7 @@ class NewsFeedOrderingTests(TestCase):
             published_date=publishable_time,
             source=self.source,
             guid=f'public-publishable-{uuid.uuid4().hex}',
+            is_ai_processed=True,
         )
 
         filtered_states = (
@@ -742,6 +744,7 @@ class NewsFeedOrderingTests(TestCase):
             published_date=old_published_time,
             source=self.source,
             guid=f'created-today-published-earlier-{uuid.uuid4().hex}',
+            is_ai_processed=True,
         )
 
         response = self.client.get(reverse('my_news:news_list'))
@@ -820,6 +823,7 @@ class NewsFeedOrderingTests(TestCase):
             published_date=timezone.now(),
             source=self.source,
             guid=f'fresh-visible-{uuid.uuid4().hex}',
+            is_ai_processed=True,
         )
 
         response = self.client.get(reverse('my_news:check_new_news'), {'cursor': cursor})

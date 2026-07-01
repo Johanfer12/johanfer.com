@@ -139,7 +139,7 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
             created_at__gte=cutoff,
             is_deleted=False,     # no reintentar si el usuario la eliminó
             is_ai_processed=False # solo las no procesadas por IA
-        ).order_by('-created_at')[:limit]
+        ).order_by('created_at', 'id')[:limit]
 
         processed = 0
         for news in qs:

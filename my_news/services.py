@@ -896,9 +896,9 @@ class FeedService:
             if max_ai_items is not None and ai_attempts >= max_ai_items:
                 logger.info(
                     f"Presupuesto de IA agotado ({max_ai_items}); "
-                    "se guarda la noticia sin resumen para procesarla luego."
+                    "se pausa la ingesta para continuar en la próxima actualización."
                 )
-                processed_description = sanitize_html(original_description)
+                break
             else:
                 ai_attempts += 1
 
@@ -914,9 +914,9 @@ class FeedService:
                     ai_was_processed = True
                 else:
                     logger.warning(
-                        "Groq no generó resumen; se guarda la noticia sin procesar para reintentar luego."
+                        "Groq no generó resumen; se pausa la ingesta para reintentar luego."
                     )
-                    processed_description = sanitize_html(original_description)
+                    break
 
             # >>>>> LÓGICA DE FILTRADO IA (después de palabra clave) <<<<<
             # Asegurarnos que ai_filter_reason es un string no vacío antes de usarlo
