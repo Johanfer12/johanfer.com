@@ -481,12 +481,11 @@ class FeedService:
                 except (TypeError, ValueError):
                     pass
 
-        match = re.search(r'try again in ([0-9.]+)s', str(error), re.IGNORECASE)
+        match = re.search(r'try again in ([0-9.]+s|(?:[0-9.]+m)?[0-9.]+s)', str(error), re.IGNORECASE)
         if match:
-            try:
-                return max(1, int(float(match.group(1))) + 1)
-            except (TypeError, ValueError):
-                pass
+            retry_seconds = FeedService._GROQ_RATE_LIMITER.parse_reset_seconds(match.group(1))
+            if retry_seconds is not None:
+                return max(1, int(retry_seconds) + 1)
 
         return None
 
@@ -671,13 +670,19 @@ class FeedService:
                     use_response_format = False
                     logger.warning("Groq rechazó el modo JSON estricto; reintentando sin response_format.")
                     continue
-                if ("429" in error_str or "rate_limit" in error_str.lower()) and attempt < max_retries - 1:
+                if "429" in error_str or "rate_limit" in error_str.lower():
                     retry_after = FeedService._extract_retry_after_seconds(e)
                     wait_time = retry_after or max(FeedService._GROQ_RATE_LIMITER.seconds_until_next_window() + 1, 120)
                     if wait_time > FeedService._GROQ_RATE_LIMITER.MAX_RETRY_SLEEP_SECONDS:
                         logger.warning(
                             f"Groq pidió esperar {wait_time}s por rate limit; "
                             "se pospone esta noticia para una próxima actualización."
+                        )
+                        return None, None, None
+                    if attempt >= max_retries - 1:
+                        logger.warning(
+                            f"Límite de peticiones Groq en último intento; "
+                            f"se pospone esta noticia {wait_time}s para una próxima actualización."
                         )
                         return None, None, None
                     logger.warning(f"Límite de peticiones Groq (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")

@@ -161,6 +161,11 @@ class GroqRateLimiterTests(SimpleTestCase):
 
         self.assertEqual(FeedService._extract_retry_after_seconds(error), 13)
 
+    def test_retry_after_reads_minute_duration_from_error_message(self):
+        error = Exception('Rate limit reached. Please try again in 10m46.271999999s.')
+
+        self.assertEqual(FeedService._extract_retry_after_seconds(error), 647)
+
     def test_long_retry_after_postpones_news_instead_of_sleeping(self):
         class Response:
             headers = {'Retry-After': '600'}
