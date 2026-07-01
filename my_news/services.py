@@ -173,6 +173,10 @@ class CerebrasRateLimiter:
             self.window_start = time.monotonic()
             self.used_tokens = 0
             self.used_requests = 0
+            if self.reset_requests_at is None:
+                self.remaining_requests = None
+            if self.reset_tokens_at is None:
+                self.remaining_tokens = None
 
     def acquire(self, model_name, prompt, max_completion_tokens=1024):
         estimated_tokens = self.estimate_tokens(prompt, max_completion_tokens)

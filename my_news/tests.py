@@ -167,6 +167,15 @@ class CerebrasRateLimiterTests(SimpleTestCase):
         self.assertEqual(waits[0][1], 'sin requests disponibles')
         self.assertGreater(waits[0][0], 0)
 
+    def test_local_window_reset_clears_stale_header_capacity_without_reset_header(self):
+        limiter = CerebrasRateLimiter()
+        limiter.remaining_requests = 0
+        limiter.window_start -= limiter.window_seconds + 1
+
+        limiter.reset_if_needed()
+
+        self.assertIsNone(limiter.remaining_requests)
+
     def test_retry_after_is_read_from_response_headers(self):
         class Response:
             headers = {'Retry-After': '42'}
