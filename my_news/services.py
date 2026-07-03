@@ -1030,7 +1030,10 @@ class FeedService:
                     News.objects.create(
                         guid=guid,
                         title=entry.title[:500],
-                        description=sanitize_html(entry.get('description', '') or ''),
+                        # Fila oculta: guardar solo texto plano recortado
+                        description=FeedService.prepare_content_for_cerebras(
+                            entry.title, entry.get('description', '') or '', content_limit=2000
+                        ),
                         link=entry.link,
                         published_date=published,
                         source=source,
@@ -1114,7 +1117,8 @@ class FeedService:
                         guid=guid,
                         title=entry.title,
                         short_answer=None,
-                        description=sanitize_html(original_description),
+                        # Fila oculta: texto plano recortado, no el HTML completo del feed
+                        description=sanitize_html(plain_description[:2000]),
                         link=entry.link,
                         published_date=published,
                         source=source,
@@ -1183,7 +1187,8 @@ class FeedService:
                         guid=guid,
                         title=entry.title,
                         short_answer=None,
-                        description=sanitize_html(original_description),
+                        # Fila oculta: texto plano recortado, no el artículo completo
+                        description=sanitize_html(plain_description[:2000]),
                         link=entry.link,
                         published_date=published,
                         source=source,

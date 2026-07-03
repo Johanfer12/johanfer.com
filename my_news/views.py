@@ -187,13 +187,15 @@ def _build_page_response(*, order, page, cursor, search_query, backup_only=False
     elif page and page > 1:
         anchor_idx = (page - 1) * PAGE_SIZE - 1
         if anchor_idx >= 0:
-            prev_slice = list(base_qs[:anchor_idx + 1])
-            if prev_slice:
-                anchor = prev_slice[-1]
+            # Solo se necesita la clave (fecha, id) del ancla: evitar
+            # materializar todas las filas previas como objetos completos.
+            anchor_row = list(base_qs.values_list('published_date', 'id')[anchor_idx:anchor_idx + 1])
+            if anchor_row:
+                anchor_date, anchor_id = anchor_row[0]
                 if order == 'asc':
-                    key_q = Q(published_date__gt=anchor.published_date) | (Q(published_date=anchor.published_date) & Q(id__gt=anchor.id))
+                    key_q = Q(published_date__gt=anchor_date) | (Q(published_date=anchor_date) & Q(id__gt=anchor_id))
                 else:
-                    key_q = Q(published_date__lt=anchor.published_date) | (Q(published_date=anchor.published_date) & Q(id__lt=anchor.id))
+                    key_q = Q(published_date__lt=anchor_date) | (Q(published_date=anchor_date) & Q(id__lt=anchor_id))
                 base_qs = base_qs.filter(key_q)
 
     window_qs = base_qs
@@ -276,10 +278,12 @@ def delete_news(request, pk):
                 Q(title__icontains=search_query) | Q(description__icontains=search_query)
             )
         base_qs = base_qs.order_by('published_date', 'id') if order == 'asc' else base_qs.order_by('-published_date', '-id')
-        page_start = (current_page - 1) * PAGE_SIZE
-        page_qs = list(base_qs[page_start:page_start + PAGE_SIZE])
-        if len(page_qs) == PAGE_SIZE:
-            next_news = page_qs[-1]
+        # Solo hace falta el último ítem de la página recalculada; si existe,
+        # la página sigue llena y ese es el reemplazo que espera la UI.
+        page_end_idx = current_page * PAGE_SIZE - 1
+        page_end = list(base_qs.select_related('source')[page_end_idx:page_end_idx + 1])
+        if page_end:
+            next_news = page_end[0]
         
         response_data = {
             'status': 'success',
@@ -709,6 +713,7 @@ def toggle_save_news(request, pk):
 
 
 @require_GET
+@superuser_required
 def test_redundancy(request):
     """Vista para probar la detección de redundancia en noticias"""
     try:
@@ -864,6 +869,7 @@ def test_redundancy(request):
         return render(request, 'redundancy_test.html', {'error_message': f'Ocurrió un error: {str(e)}'})
 
 @require_GET
+@superuser_required
 def generate_embeddings(request):
     """Indexa noticias visibles recientes en Qdrant sin guardar vectores en SQLite."""
     try:
@@ -902,6 +908,7 @@ def generate_embeddings(request):
         return JsonResponse({'status': 'error', 'message': str(e)})
 
 @require_GET
+@superuser_required
 def check_all_redundancy(request):
     """Verifica redundancia en noticias visibles usando Qdrant."""
     try:
