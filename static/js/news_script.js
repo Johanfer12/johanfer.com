@@ -863,6 +863,24 @@
     const getCurrentCardIds = () => $$('.news-card-container', DOM.grid)
         .map(card => normalizeId(card.dataset.newsId || card.id.replace('news-', '')));
 
+    const parseTimestamp = (value) => {
+        const parsed = Date.parse(value || '');
+        return Number.isNaN(parsed) ? null : parsed;
+    };
+
+    // Fecha de publicación más vieja visible en la página actual. Si una
+    // noticia nueva llega con fecha anterior (backlog de una fuente), no va a
+    // aparecer en esta página y no debe anunciarse en el banner.
+    const getVisiblePageOldestPublished = () => {
+        if (STATE.order === 'asc') return null;
+        const cards = $$('.news-card-container', DOM.grid);
+        if (cards.length < MAX_NEWS) return null; // página sin llenar: todo entra
+        const stamps = cards
+            .map(card => parseTimestamp(card.dataset.publishedAt))
+            .filter(stamp => stamp !== null);
+        return stamps.length ? Math.min(...stamps) : null;
+    };
+
     const sameCardSequence = (left, right) => (
         left.length === right.length && left.every((id, index) => id === right[index])
     );
@@ -1413,7 +1431,16 @@
             if (!freshCards.length) return;
             STATE.pendingNews.push(...freshCards);
             updateCounters(data.total_news, data.total_pages);
-            showNotification(freshCards.length);
+            // Anunciar solo las que entran en la página visible: el backlog
+            // con fechas viejas se integra en silencio (queda páginas atrás).
+            const oldestVisible = getVisiblePageOldestPublished();
+            const announceCount = oldestVisible === null
+                ? freshCards.length
+                : freshCards.filter(item => {
+                    const publishedStamp = parseTimestamp(item?.published_at ?? item?.data?.published_at);
+                    return publishedStamp === null || publishedStamp >= oldestVisible;
+                }).length;
+            if (announceCount) showNotification(announceCount);
             if (hasActiveUiMutation()) {
                 scheduleSilentSync('nuevas noticias durante mutacion', {delay: 1200});
                 return;
