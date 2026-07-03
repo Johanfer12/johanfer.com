@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import numpy as np
 from django.db.models import Q, Max
+import hashlib
 import json
 import textwrap
 import html
@@ -419,24 +420,8 @@ class FeedService:
         - Ambos campos deben ser complementarios y libres de relleno o frases ambiguas; evita cualquier forma de clickbait.
         - El summary NUNCA debe ser null: describe lo ocurrido incluso si el short_answer ya dio el dato principal.
 
-        Ejemplo de JSON de salida esperado (sin filtro IA):
-        {{
-          "summary": "Texto del resumen principal aquí.",
-          "short_answer": null,
-          "ai_filter": null
-        }}
-        Ejemplo de JSON de salida esperado (con filtro IA):
-        {{
-          "summary": "Resumen de la noticia sobre horóscopos.",
-          "short_answer": null,
-          "ai_filter": "Noticias sobre horóscopos"
-        }}
-        Ejemplo de JSON de salida esperado (clickbait pregunta directa CON contexto adicional):
-        {{
-          "summary": "El estudio analizó 1000 casos durante 5 años y encontró correlaciones con factores genéticos y ambientales específicos.",
-          "short_answer": "La clave fue la combinación de ejercicio y dieta mediterránea.",
-          "ai_filter": null
-        }}
+        Ejemplo del formato de salida:
+        {{"summary": "Texto del resumen aquí.", "short_answer": null, "ai_filter": null}}
 
         IMPORTANTE: Responde únicamente con el objeto JSON válido, sin texto adicional antes o después.
         """)
@@ -625,7 +610,10 @@ class FeedService:
 
     @staticmethod
     def prepare_content_for_cerebras(title, original_content, content_limit=2500):
-        """Convierte HTML/texto del feed en cuerpo compacto para el prompt."""
+        """Convierte HTML/texto del feed en cuerpo compacto para el prompt.
+
+        Con ``content_limit=None`` devuelve el texto limpio sin truncar.
+        """
         raw_content = html.unescape(original_content or '')
         if not raw_content:
             return ''
@@ -650,16 +638,29 @@ class FeedService:
         clean_text = re.sub(r'\b\d+\s+publicaciones\s+de\s+', ' ', clean_text, flags=re.IGNORECASE)
         clean_text = re.sub(r'\s+', ' ', clean_text).strip()
 
-        return clean_text[:content_limit].strip()
+        if content_limit and len(clean_text) > content_limit:
+            truncated = clean_text[:content_limit]
+            # Cortar en el final de la última frase completa para no partir
+            # a mitad de oración justo el dato que el resumen necesita.
+            sentence_end = max(
+                truncated.rfind('. '),
+                truncated.rfind('! '),
+                truncated.rfind('? '),
+            )
+            if sentence_end > content_limit * 0.6:
+                truncated = truncated[:sentence_end + 1]
+            clean_text = truncated.strip()
+
+        return clean_text
 
     prepare_content_for_groq = prepare_content_for_cerebras
 
     @staticmethod
-    def process_content_with_cerebras(title, original_content, cerebras_client, model_name, filter_instructions_text, max_retries=2):
+    def process_content_with_cerebras(title, original_content, cerebras_client, model_name, filter_instructions_text, max_retries=2, content_limit=2500):
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
         instructions_section = (filter_instructions_text or FeedService._DEFAULT_FILTER_INSTRUCTIONS)
-        base_content = FeedService.prepare_content_for_cerebras(title, original_content)
+        base_content = FeedService.prepare_content_for_cerebras(title, original_content, content_limit=content_limit)
         plain_content = base_content
 
         safe_title = (title or "").replace("{", "{{").replace("}", "}}")
@@ -735,7 +736,7 @@ class FeedService:
                     processed_summary = re.sub(r'^\* (.+?)$', r' <strong>\1</strong>', processed_summary, flags=re.MULTILINE)
                     processed_summary = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', processed_summary)
                     processed_summary = processed_summary.replace('\n\n', '<br><br>').replace('\n', '<br>')
-                    processed_summary = processed_summary.replace('', '<br>')
+                    processed_summary = processed_summary.replace('', '<br>')
 
                     return sanitize_html(processed_summary), short_answer, ai_filter_reason
 
@@ -816,9 +817,14 @@ class FeedService:
                 content_text = response.text 
 
             soup = BeautifulSoup(content_text, 'html.parser')
-            
-            # Eliminar elementos no deseados
-            for element in soup.find_all(['script', 'style', 'nav', 'header', 'footer', 'iframe']):
+
+            # Eliminar elementos no deseados (boilerplate que contamina el texto).
+            # OJO: no eliminar <noscript>: en sitios renderizados por JS (p.ej.
+            # foros Flarum como WOW Chakra) el cuerpo del artículo vive ahí.
+            for element in soup.find_all([
+                'script', 'style', 'nav', 'header', 'footer', 'iframe',
+                'aside', 'form', 'button',
+            ]):
                 element.decompose()
             
             # Buscar el contenido principal con diferentes selectores
@@ -843,9 +849,15 @@ class FeedService:
                     img_tag = soup.find('img', {'class': ['featured-image', 'wp-post-image', 'article-image']})
                     if img_tag and img_tag.get('src'):
                         image_url = urljoin(url, img_tag['src'])
-                
-                # Obtener el texto del contenido
-                text_content = content.get_text(separator=' ', strip=True)
+
+                # Preferir solo los párrafos: evita pies de foto, bloques de
+                # "relacionados", banners de cookies/suscripción, etc.
+                paragraphs = [p.get_text(' ', strip=True) for p in content.find_all('p')]
+                paragraph_text = ' '.join(part for part in paragraphs if part)
+                if len(paragraph_text) >= 300:
+                    text_content = paragraph_text
+                else:
+                    text_content = content.get_text(separator=' ', strip=True)
             
             return {
                 'text': text_content,
@@ -976,6 +988,10 @@ class FeedService:
                 
                 # Verificar si la noticia ya existe
                 guid = entry.get('id', entry.link)
+                # GUIDs desmesurados: usar un hash estable para poder
+                # guardarlos y que la deduplicación siga funcionando.
+                if len(guid) > 400:
+                    guid = 'sha256:' + hashlib.sha256(guid.encode('utf-8')).hexdigest()
                 if guid in existing_guids:
                     continue
 
@@ -1006,14 +1022,25 @@ class FeedService:
             
             logger.info(f"\nProcesando entrada: {entry.title} ({published})")
             
-            # Validación: Saltar noticias con títulos anormalmente largos
+            # Validación: títulos anormalmente largos se guardan como filtradas
+            # (registrando el guid) para no re-descargarlas en cada ciclo.
             if len(entry.title) > 200:
-                logger.info(f"SALTANDO noticia con título muy largo ({len(entry.title)} caracteres): {entry.title[:100]}...")
-                continue
-                
-            # Validación: Saltar noticias con GUID muy largo
-            if len(guid) > 400:
-                logger.info(f"SALTANDO noticia con GUID muy largo ({len(guid)} caracteres)")
+                logger.info(f"FILTRANDO noticia con título muy largo ({len(entry.title)} caracteres): {entry.title[:100]}...")
+                try:
+                    News.objects.create(
+                        guid=guid,
+                        title=entry.title[:500],
+                        description=sanitize_html(entry.get('description', '') or ''),
+                        link=entry.link,
+                        published_date=published,
+                        source=source,
+                        is_filtered=True,
+                        is_ai_processed=True,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Error al guardar noticia con título largo. GUID=%s", guid[:100]
+                    )
                 continue
             
             # Primero intentar obtener la imagen del feed
@@ -1052,9 +1079,27 @@ class FeedService:
                 except UnicodeDecodeError:
                      # Si falla, usar una decodificación con reemplazo
                     original_description = original_description.decode('utf-8', 'replace')
-            
+
+            # Feeds Atom/WordPress suelen traer el cuerpo completo en
+            # entry.content y solo un extracto (o nada) en description:
+            # usar el bloque más largo para no resumir a ciegas.
+            if hasattr(entry, 'content') and entry.content:
+                for content_block in entry.content:
+                    try:
+                        block_value = content_block.get('value')
+                    except AttributeError:
+                        block_value = getattr(content_block, 'value', None)
+                    if block_value and len(block_value) > len(original_description):
+                        original_description = block_value
+
+            # Texto plano para filtrado y embeddings (sin markup, sin truncar)
+            plain_description = FeedService.prepare_content_for_cerebras(
+                entry.title, original_description, content_limit=None
+            )
+
             # >>>>> ORDEN CAMBIADO: Primero filtro por PALABRA CLAVE <<<<<
-            should_filter, filter_word = FeedService.should_filter_news(entry.title, original_description, filter_word_patterns)
+            # Se filtra sobre texto plano para no matchear dentro de URLs o atributos HTML.
+            should_filter, filter_word = FeedService.should_filter_news(entry.title, plain_description, filter_word_patterns)
             if should_filter:
                 logger.info(f"Noticia FILTRADA por palabra clave: {filter_word.word}")
                 
@@ -1092,14 +1137,72 @@ class FeedService:
                 continue # Pasar a la siguiente noticia
             # <<<<< FIN FILTRO PALABRA CLAVE >>>>>
 
-            # Si deep_search está activado, obtener contenido completo solo para noticias no filtradas por keyword
-            if source.deep_search:
+            # Obtener contenido completo (solo noticias no filtradas por keyword) si:
+            # - deep_search está activado para la fuente, o
+            # - el feed trajo tan poco texto que la IA resumiría a ciegas.
+            ai_content_limit = 2500
+            if source.deep_search or len(plain_description) < 200:
                 full_content = FeedService.get_full_article_content(entry.link)
-                if full_content['text']:
+                if full_content['text'] and (
+                    source.deep_search or len(full_content['text']) > len(plain_description)
+                ):
                     original_description = full_content['text']
+                    plain_description = FeedService.prepare_content_for_cerebras(
+                        entry.title, original_description, content_limit=None
+                    )
+                    # Con artículo completo vale la pena dar más contexto al modelo
+                    ai_content_limit = 6000
                 # Solo usar la imagen del contenido si no se encontró una en el feed
                 if not image_url and full_content['image_url']:
                     image_url = full_content['image_url']
+
+            # Guard extra: nunca crear noticias anteriores a 15 días
+            if published < fifteen_days_ago:
+                continue
+
+            # Verificar redundancia ANTES de llamar a la IA: una noticia
+            # redundante no debe consumir presupuesto de resúmenes. El
+            # embedding se genera desde título + contenido original limpio.
+            candidate = News(
+                guid=guid,
+                title=entry.title,
+                description=plain_description,
+                source=source,
+                published_date=published,
+            )
+            is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
+                candidate, gemini_client, recent_news_cache, vector_index
+            )
+            embedding = getattr(candidate, "_embedding_vector", None)
+
+            if is_redundant and similar_news:
+                logger.info(f"¡Noticia redundante detectada! Similar a: {similar_news.title}")
+                logger.info(f"Puntuación de similitud: {similarity_score:.4f} (Umbral: {source.similarity_threshold})")
+                try:
+                    News.objects.create(
+                        guid=guid,
+                        title=entry.title,
+                        short_answer=None,
+                        description=sanitize_html(original_description),
+                        link=entry.link,
+                        published_date=published,
+                        source=source,
+                        image_url=image_url,
+                        is_redundant=True,
+                        is_filtered=True,
+                        similar_to=similar_news,
+                        similarity_score=similarity_score,
+                        is_ai_processed=True,
+                    )
+                    new_articles_count += 1
+                    redundant_count += 1
+                except Exception:
+                    logger.exception(
+                        "Error al guardar noticia redundante. GUID=%s título=%s",
+                        guid[:100],
+                        entry.title[:100],
+                    )
+                continue
 
             ai_was_processed = False
             short_answer = None
@@ -1111,24 +1214,25 @@ class FeedService:
                     "se pausa la ingesta para continuar en la próxima actualización."
                 )
                 break
-            else:
-                ai_attempts += 1
 
-                # Si no se filtró por palabra clave, procesar con IA (Cerebras)
-                processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_cerebras(
-                    entry.title,
-                    original_description,
-                    cerebras_client,
-                    cerebras_model,
-                    filter_instructions_text
+            ai_attempts += 1
+
+            # Si no se filtró por palabra clave ni es redundante, procesar con IA (Cerebras)
+            processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_cerebras(
+                entry.title,
+                original_description,
+                cerebras_client,
+                cerebras_model,
+                filter_instructions_text,
+                content_limit=ai_content_limit,
+            )
+            if processed_description:
+                ai_was_processed = True
+            else:
+                logger.warning(
+                    "Cerebras no generó resumen; se pausa la ingesta para reintentar luego."
                 )
-                if processed_description:
-                    ai_was_processed = True
-                else:
-                    logger.warning(
-                        "Cerebras no generó resumen; se pausa la ingesta para reintentar luego."
-                    )
-                    break
+                break
 
             # >>>>> LÓGICA DE FILTRADO IA (después de palabra clave) <<<<<
             # Asegurarnos que ai_filter_reason es un string no vacío antes de usarlo
@@ -1166,10 +1270,6 @@ class FeedService:
                 logger.warning(f"Gemini devolvió un valor para ai_filter ({ai_filter_reason}) pero no es la instrucción esperada. No se filtrará.")
             # <<<<< FIN LÓGICA FILTRADO IA >>>>>
 
-            # Guard extra: nunca crear noticias anteriores a 15 días
-            if published < fifteen_days_ago:
-                continue
-
             # Crear la nueva noticia (si no fue filtrada por IA ni por palabra)
             try:
                 news_item = News.objects.create(
@@ -1181,7 +1281,10 @@ class FeedService:
                     published_date=published,
                     source=source,
                     image_url=image_url,
-                    is_ai_processed=ai_was_processed
+                    is_ai_processed=ai_was_processed,
+                    # Conservar la referencia a la más parecida aunque no supere el umbral
+                    similar_to=similar_news,
+                    similarity_score=similarity_score if similar_news else None,
                 )
                 new_articles_count += 1
             except Exception:
@@ -1192,36 +1295,9 @@ class FeedService:
                     entry.link[:100],
                 )
                 continue
-            
-            # Verificar redundancia (esto genera un embedding transitorio; Qdrant lo persiste)
-            is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
-                news_item, gemini_client, recent_news_cache, vector_index
-            )
-            embedding = getattr(news_item, "_embedding_vector", None)
 
-            # Consolidar en una sola escritura posterior al create()
-            update_fields = []
-            if similar_news:
-                news_item.similar_to = similar_news
-                news_item.similarity_score = similarity_score
-                update_fields.extend(['similar_to', 'similarity_score'])
-
-            if is_redundant and similar_news:
-                logger.info(f"¡Noticia redundante detectada! Similar a: {similar_news.title}")
-                logger.info(f"Puntuación de similitud: {similarity_score:.4f} (Umbral: {news_item.source.similarity_threshold})")
-                
-                # Marcar como redundante y filtrada (ya hemos guardado similar_to y score)
-                news_item.is_redundant = True
-                news_item.is_filtered = True  # Usamos is_filtered en lugar de is_deleted
-                update_fields.extend(['is_redundant', 'is_filtered'])
-                
-                redundant_count += 1
-
-            if update_fields:
-                # de-duplicar campos para evitar SQL redundante
-                news_item.save(update_fields=list(dict.fromkeys(update_fields)))
-
-            if not is_redundant and embedding:
+            if embedding:
+                news_item._embedding_vector = embedding
                 recent_news_cache.append(news_item)
                 # Indexar en Qdrant (si está disponible) para futuras búsquedas
                 if vector_index is not None:
