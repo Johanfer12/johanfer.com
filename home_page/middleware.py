@@ -8,6 +8,18 @@ from django.core.cache import cache
 from .models import VisitLog
 
 
+def get_client_ip(request):
+    real_ip = (request.headers.get('X-Real-IP') or '').strip()
+    if real_ip:
+        return real_ip
+
+    forwarded = request.headers.get('X-Forwarded-For')
+    if forwarded:
+        # Tomar el ultimo hop evita spoofing comun en el primer valor.
+        return forwarded.split(',')[-1].strip()
+    return (request.META.get('REMOTE_ADDR') or '').strip()
+
+
 class VisitLogMiddleware:
     SESSION_VISITOR_KEY = 'visit_visitor_id'
     SKIP_PREFIXES = (
@@ -19,11 +31,11 @@ class VisitLogMiddleware:
         '/noticias/save/',
         '/noticias/delete/',
         '/noticias/undo/',
+        '/noticias/latest-deleted/',
         '/noticias/update-feed/',
         '/noticias/cleanup-old/',
         '/noticias/retry-summaries/',
         '/noticias/check-new-news/',
-        '/noticias/news-stream/',
         '/noticias/get-news-count/',
         '/noticias/get-page/',
         '/noticias/generate-embeddings/',
@@ -67,7 +79,7 @@ class VisitLogMiddleware:
         if 'text/html' not in accept and '*/*' not in accept:
             return
 
-        ip = self._get_client_ip(request)
+        ip = get_client_ip(request)
         if not ip:
             return
 
@@ -86,18 +98,6 @@ class VisitLogMiddleware:
             user_agent=(request.headers.get('User-Agent') or '')[:1500],
             referrer=(request.headers.get('Referer') or '')[:1500],
         )
-
-    @staticmethod
-    def _get_client_ip(request):
-        real_ip = (request.headers.get('X-Real-IP') or '').strip()
-        if real_ip:
-            return real_ip
-
-        forwarded = request.headers.get('X-Forwarded-For')
-        if forwarded:
-            # Tomar el ultimo hop evita spoofing comun en el primer valor.
-            return forwarded.split(',')[-1].strip()
-        return (request.META.get('REMOTE_ADDR') or '').strip()
 
     @staticmethod
     def _is_public_ip(value):

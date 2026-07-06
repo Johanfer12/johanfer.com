@@ -111,7 +111,6 @@ class CerebrasContentPreparationTests(SimpleTestCase):
 class CerebrasRateLimiterTests(SimpleTestCase):
     def setUp(self):
         FeedService._CEREBRAS_RATE_LIMITER = CerebrasRateLimiter()
-        FeedService._GROQ_RATE_LIMITER = FeedService._CEREBRAS_RATE_LIMITER
         FeedService._CEREBRAS_RATE_LIMITER.SAFE_RPM_CAP = 500
 
     def test_model_limits_are_conservative_for_news_processing(self):
@@ -788,22 +787,6 @@ class NewsFeedOrderingTests(TestCase):
         ]
         expected_after_delete = [news_id for news_id in filtered_ids if news_id != deleted_id][:25]
         self.assertEqual(current_page_ids, expected_after_delete)
-
-    def test_initial_backup_cards_follow_same_ordering_rule(self):
-        same_time = timezone.now()
-        self.create_news_batch(30, prefix='backup-order', published_dates=[same_time] * 30)
-
-        self.client.force_login(self.superuser)
-        response = self.client.get(reverse('my_news:news_list'), {'order': 'asc'})
-
-        backup_ids = [card['id'] for card in response.context['backup_cards']]
-        expected_backup_ids = list(
-            News.visible.filter(is_saved=False)
-            .order_by('published_date', 'id')
-            .values_list('id', flat=True)[25:30]
-        )
-
-        self.assertEqual(backup_ids, expected_backup_ids)
 
     def test_template_pagination_keeps_order_and_search_query(self):
         self.create_news_batch(26, prefix='foo-news')

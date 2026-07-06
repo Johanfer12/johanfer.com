@@ -1,5 +1,4 @@
 from django.db import models
-from django.utils import timezone
 from django.db.models import Q
 
 class VisibleNewsManager(models.Manager):
@@ -125,52 +124,19 @@ class AIFilterInstruction(models.Model):
     def __str__(self):
         return self.instruction
 
-class GeminiGlobalSetting(models.Model):
-    model_name = models.CharField(
-        max_length=100,
-        default='gemini-2.0-flash',
-        verbose_name="Modelo Gemini Global",
-        help_text="Nombre del modelo de Gemini a utilizar globalmente (ej: 'gemini-1.5-flash', 'gemini-pro')."
-    )
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"Configuración Global Gemini ({self.model_name})"
-
-    class Meta:
-        verbose_name = "Configuración Global Gemini"
-        verbose_name_plural = "Configuraciones Globales Gemini"
-
-
-class GroqGlobalSetting(models.Model):
-    model_name = models.CharField(
-        max_length=100,
-        default='openai/gpt-oss-120b',
-        verbose_name="Modelo Groq Global",
-        help_text="Nombre del modelo de Groq a utilizar (ej: 'openai/gpt-oss-120b')."
-    )
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"Configuración Global Groq ({self.model_name})"
-
-    class Meta:
-        verbose_name = "Configuración Global Groq"
-        verbose_name_plural = "Configuraciones Globales Groq"
-
-
-class CerebrasGlobalSetting(models.Model):
+class AIModelSetting(models.Model):
+    """Modelo de IA usado para procesar noticias, independiente del proveedor."""
     model_name = models.CharField(
         max_length=100,
         default='gemma-4-31b',
-        verbose_name="Modelo Cerebras Global",
-        help_text="Nombre del modelo de Cerebras a utilizar (ej: 'gemma-4-31b')."
+        verbose_name="Modelo IA Global",
+        help_text="Nombre del modelo de IA a utilizar para resúmenes (ej: 'gemma-4-31b')."
     )
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Configuración Global Cerebras ({self.model_name})"
+        return f"Configuración Global de Modelo IA ({self.model_name})"
 
     class Meta:
-        verbose_name = "Configuración Global Cerebras"
-        verbose_name_plural = "Configuraciones Globales Cerebras"
+        verbose_name = "Configuración Global de Modelo IA"
+        verbose_name_plural = "Configuraciones Globales de Modelo IA"

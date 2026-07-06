@@ -1,8 +1,8 @@
-from .services import FeedService
+from .services import FeedService, DEFAULT_AI_MODEL
 from django.utils import timezone
 from datetime import timedelta
 from .models import News
-from .models import CerebrasGlobalSetting
+from .models import AIModelSetting
 from .models import AIFilterInstruction
 from django.conf import settings
 from django.db import connection
@@ -123,12 +123,12 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
     try:
         cerebras_client = FeedService.initialize_cerebras()
         try:
-            global_model_name = (
-                CerebrasGlobalSetting.objects.first()
-                or CerebrasGlobalSetting(model_name='gemma-4-31b')
+            ai_model_name = (
+                AIModelSetting.objects.first()
+                or AIModelSetting(model_name=DEFAULT_AI_MODEL)
             ).model_name
         except Exception:
-            global_model_name = 'gemma-4-31b'
+            ai_model_name = DEFAULT_AI_MODEL
 
         try:
             filter_instructions_text = FeedService.build_filter_instructions_text(
@@ -146,12 +146,11 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
 
         processed = 0
         for news in qs:
-            saved_changes = False
             processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_cerebras(
                 news.title,
                 news.description or '',
                 cerebras_client,
-                global_model_name,
+                ai_model_name,
                 filter_instructions_text
             )
 

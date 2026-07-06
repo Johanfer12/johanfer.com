@@ -5,6 +5,7 @@ from django.http import HttpResponse
 from django.contrib.auth.decorators import user_passes_test
 from .models import Book
 from .models import VisitLog
+from .middleware import get_client_ip
 from django.db.models import Count, Sum
 from django.db.models import Q
 from django.urls import reverse
@@ -46,18 +47,17 @@ def bookshelf(request):
     if query:
         books = books.filter(Q(title__icontains=query) | Q(author__icontains=query))
 
-    total_books = books.count()  # Total de libros en la base de datos
-    
-    # Truncar el título de los libros que tienen ':' en el título
-    for book in books:
-        if ':' in book.title:
-            book.title = book.title.split(':', 1)[0]
-    
     # Set up pagination
     paginator = Paginator(books, 20)  # 20 libros por vista
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
-    
+    total_books = paginator.count  # Total de libros (reutiliza el count del paginador)
+
+    # Truncar el título de los libros que tienen ':' (solo los de la página visible)
+    for book in page_obj:
+        if ':' in book.title:
+            book.title = book.title.split(':', 1)[0]
+
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         # Si la petición es AJAX, devolver los datos en formato JSON
         book_data = []
@@ -143,17 +143,6 @@ def custom_404_view(request, exception):
     return render(request, '404.html', status=404)
 
 
-def _get_client_ip(request):
-    real_ip = (request.headers.get('X-Real-IP') or '').strip()
-    if real_ip:
-        return real_ip
-
-    forwarded = request.headers.get('X-Forwarded-For')
-    if forwarded:
-        return forwarded.split(',')[-1].strip()
-    return (request.META.get('REMOTE_ADDR') or '').strip()
-
-
 def _get_visitor_id(request):
     return (request.session.get(SESSION_VISITOR_KEY) or '').strip()
 
@@ -237,7 +226,7 @@ def visits(request):
     paginator = Paginator(visit_qs, 100)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
-    current_ip = _get_client_ip(request)
+    current_ip = get_client_ip(request)
     current_visitor_id = _get_visitor_id(request)
 
     for visit in page_obj.object_list:

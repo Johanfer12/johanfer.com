@@ -2,7 +2,7 @@ import feedparser
 from datetime import datetime, timedelta
 from django.utils import timezone
 import pytz
-from .models import News, FeedSource, FilterWord, AIFilterInstruction, GeminiGlobalSetting, CerebrasGlobalSetting
+from .models import News, FeedSource, FilterWord, AIFilterInstruction, AIModelSetting
 import re
 from google import genai
 from google.genai import types
@@ -13,7 +13,7 @@ from cerebras.cloud.sdk import Cerebras
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import numpy as np
-from django.db.models import Q, Max
+from django.db.models import Max
 import hashlib
 import json
 import textwrap
@@ -30,6 +30,10 @@ except Exception:
 
 
 logger = logging.getLogger(__name__)
+
+# Modelo de IA por defecto para resúmenes; el valor activo vive en la BD
+# (AIModelSetting, editable desde el admin) y este es solo el fallback.
+DEFAULT_AI_MODEL = 'gemma-4-31b'
 
 
 class CerebrasRateLimiter:
@@ -223,16 +227,7 @@ class CerebrasRateLimiter:
             time.sleep(wait_time)
 
 
-GroqRateLimiter = CerebrasRateLimiter
-
-
 class EmbeddingService:
-    @staticmethod
-    def initialize_embedding_model():
-        """Crea un cliente genai para usar en embeddings."""
-        # Cambiado: reutilizar el cliente de FeedService para embeddings
-        return FeedService.initialize_gemini()
-
     @staticmethod
     # Cambiado: Aceptar client en lugar de model_name
     def generate_embedding(text, client, max_retries=3):
@@ -448,7 +443,6 @@ class FeedService:
     _CEREBRAS_CLIENT = None
     _VECTOR_INDEX = None
     _CEREBRAS_RATE_LIMITER = CerebrasRateLimiter()
-    _GROQ_RATE_LIMITER = _CEREBRAS_RATE_LIMITER
 
     @staticmethod
     def initialize_gemini():
@@ -469,8 +463,6 @@ class FeedService:
                 raise ValueError("CEREBRAS_API_KEY no configurada. Agrégala en settings.py o como variable de entorno.")
             FeedService._CEREBRAS_CLIENT = Cerebras(api_key=api_key)
         return FeedService._CEREBRAS_CLIENT
-
-    initialize_groq = initialize_cerebras
 
     @staticmethod
     def initialize_vector_index():
@@ -653,8 +645,6 @@ class FeedService:
 
         return clean_text
 
-    prepare_content_for_groq = prepare_content_for_cerebras
-
     @staticmethod
     def process_content_with_cerebras(title, original_content, cerebras_client, model_name, filter_instructions_text, max_retries=2, content_limit=2500):
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
@@ -791,8 +781,6 @@ class FeedService:
         logger.warning("Se agotaron los reintentos para procesar contenido con Cerebras.")
         return None, None, None
 
-    process_content_with_groq = process_content_with_cerebras
-
     @staticmethod
     def extract_image_from_description(description):
         # Buscar una URL de imagen en el HTML de la descripción
@@ -897,16 +885,16 @@ class FeedService:
         cerebras_client = FeedService.initialize_cerebras()
         vector_index = FeedService.initialize_vector_index()
 
-        # Obtener modelo de Cerebras desde el admin (base de datos) o usar default
+        # Obtener modelo de IA desde el admin (base de datos) o usar default
         try:
-            cerebras_setting = CerebrasGlobalSetting.objects.first()
-            if not cerebras_setting:
-                logger.warning("No se encontró configuración global de Cerebras. Creando con modelo predeterminado.")
-                cerebras_setting = CerebrasGlobalSetting.objects.create(model_name='gemma-4-31b')
-            cerebras_model = cerebras_setting.model_name
+            ai_model_setting = AIModelSetting.objects.first()
+            if not ai_model_setting:
+                logger.warning("No se encontró configuración global de modelo IA. Creando con modelo predeterminado.")
+                ai_model_setting = AIModelSetting.objects.create(model_name=DEFAULT_AI_MODEL)
+            ai_model_name = ai_model_setting.model_name
         except Exception:
-            logger.exception("Error al obtener configuración de Cerebras. Usando default.")
-            cerebras_model = 'gemma-4-31b'
+            logger.exception("Error al obtener configuración de modelo IA. Usando default.")
+            ai_model_name = DEFAULT_AI_MODEL
         
         filter_word_patterns = FeedService.build_filter_word_patterns(
             FilterWord.objects.filter(active=True)
@@ -916,7 +904,7 @@ class FeedService:
         )
 
         sources = list(FeedSource.objects.filter(active=True))
-        logger.info(f"Procesando {len(sources)} fuentes activas con Cerebras ({cerebras_model})")
+        logger.info(f"Procesando {len(sources)} fuentes activas con Cerebras ({ai_model_name})")
         new_articles_count = 0
         
         # Calcular la fecha límite (15 días atrás)
@@ -1227,7 +1215,7 @@ class FeedService:
                 entry.title,
                 original_description,
                 cerebras_client,
-                cerebras_model,
+                ai_model_name,
                 filter_instructions_text,
                 content_limit=ai_content_limit,
             )

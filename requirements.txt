@@ -48,7 +48,6 @@ pytz==2024.2
 PyYAML==6.0.3
 qdrant-client==1.15.1
 cerebras-cloud-sdk==1.67.0
-redis==5.2.1
 requests==2.31.0
 rsa==4.9
 sgmllib3k==1.0.0

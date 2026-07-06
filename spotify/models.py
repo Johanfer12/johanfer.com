@@ -18,22 +18,6 @@ class SpotifyFavorites(models.Model):
     def __str__(self):
         return f"{self.song_name} - {self.artist_name}"
 
-class SpotifyTopSongs(models.Model):
-    song_name = models.CharField(max_length=200)
-    artist_name = models.CharField(max_length=200)
-    song_url = models.URLField()
-    album_cover = models.URLField(max_length=300, null=True, blank=True)
-    preview_url = models.URLField(max_length=300, null=True, blank=True)
-    rank = models.PositiveSmallIntegerField(default=0)
-
-    class Meta:
-        ordering = ['rank', 'id']
-        verbose_name = 'Canción Top'
-        verbose_name_plural = 'Canciones Top'
-
-    def __str__(self):
-        return f"{self.song_name} - {self.artist_name}"
-
 class DeletedSongs(models.Model):
     song_name = models.CharField(max_length=200)
     artist_name = models.CharField(max_length=200)

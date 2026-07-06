@@ -196,13 +196,9 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Cerebras API (para procesamiento de noticias)
+# Cerebras API (para procesamiento de noticias). El modelo de IA activo se
+# configura en la BD (my_news.AIModelSetting, editable desde el admin).
 CEREBRAS_API_KEY = os.getenv('CEREBRAS_API_KEY')
-CEREBRAS_MODEL = os.getenv('CEREBRAS_MODEL', 'gemma-4-31b')
-
-# Configuración heredada de Groq, conservada para migraciones/compatibilidad.
-GROQ_API_KEY = os.getenv('GROQ_API_KEY')
-GROQ_MODEL = os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b')
 
 # Gemini Embeddings
 GEMINI_EMBEDDING_MODEL = os.getenv('GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001')

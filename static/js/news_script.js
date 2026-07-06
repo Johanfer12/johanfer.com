@@ -84,13 +84,9 @@
         userInteracted: false,
         lastChecked: new Date().toISOString(),
         latestNewsCursor: INITIAL_CURSOR,
-        backupCards: [], // Noticias de respaldo precargadas (ahora hasta 25)
         deleteStack: [],
         order: new URLSearchParams(location.search).get('order') || 'desc',
         currentPage: parseInt(new URLSearchParams(location.search).get('page') || '1', 10),
-        nextCursor: null,
-        loadingMoreBackup: false, // Flag para evitar múltiples peticiones
-        backupCursor: null, // Cursor para las siguientes noticias de respaldo
         deletingNews: new Set(), // IDs de noticias siendo eliminadas
         savingNews: new Set(), // IDs de noticias siendo guardadas/desguardadas
         restoringNews: false,
@@ -98,7 +94,6 @@
         lastDbSyncAt: 0, // timestamp del ultimo sync fuerte con DB
         newsPollTimer: null, // intervalo de sondeo de noticias nuevas
         checkController: null,
-        backupController: null,
         syncController: null,
         lifecycleSyncTimer: null,
         locallyDeletedIds: new Set(), // IDs borrados localmente para evitar reinserciones desde cache cliente
@@ -262,7 +257,6 @@
         const targetId = normalizeId(newsId);
         if (!targetId) return;
         STATE.pendingNews = STATE.pendingNews.filter(item => normalizeId(item?.id) !== targetId);
-        STATE.backupCards = STATE.backupCards.filter(item => extractPayloadId(item) !== targetId);
     };
     const abortBackgroundReads = () => {
         if (STATE.syncController) STATE.syncController.abort();
@@ -885,11 +879,7 @@
         left.length === right.length && left.every((id, index) => id === right[index])
     );
 
-    const applyPageMetadata = (data, visibleCards, visibleBackupCards) => {
-        STATE.backupCards = visibleBackupCards;
-        STATE.nextCursor = data.next_cursor || null;
-        STATE.backupCursor = data.backup_next_cursor || data.next_cursor || null;
-        log(`Inicializadas ${STATE.backupCards.length} noticias de respaldo`);
+    const applyPageMetadata = (data) => {
         updateCounters(data.total_news, data.total_pages);
         updatePagination(data.total_pages);
     };
@@ -897,12 +887,11 @@
     const renderPageFromServerData = (data, {animateMerge = false, animation = null} = {}) => {
         if (!data || data.status !== 'success') return;
         const visibleCards = (data.cards || []).filter(item => !shouldSkipServerCard(extractPayloadId(item)));
-        const visibleBackupCards = (data.backup_cards || []).filter(item => !shouldSkipServerCard(extractPayloadId(item)));
         let renderAnimation = animation || (animateMerge ? 'merge' : 'none');
         const serverIds = visibleCards.map(item => normalizeId(extractPayloadId(item)));
         if (renderAnimation === 'silent') {
             if (sameCardSequence(getCurrentCardIds(), serverIds)) {
-                applyPageMetadata(data, visibleCards, visibleBackupCards);
+                applyPageMetadata(data);
                 enforceCardLimit();
                 return;
             }
@@ -949,7 +938,7 @@
         if (shouldAnimateInsertions) {
             insertedCards.forEach((el, index) => animateCardInsertion(el, {delay: Math.min(index * 55, 220)}));
         }
-        applyPageMetadata(data, visibleCards, visibleBackupCards);
+        applyPageMetadata(data);
         enforceCardLimit();
     };
 
@@ -1006,23 +995,6 @@
             await syncCurrentPageFromDb({force, animation});
             connectNewsStream();
         }, delay);
-    };
-
-    /* ---------------------------------------------------------------------
-     *  Carga inicial y precarga de noticias de respaldo
-     * ------------------------------------------------------------------ */
-    const initializeBackupCards = () => {
-        try {
-            const backupDataElement = $('#backup-cards-data');
-            if (backupDataElement) {
-                const backupData = JSON.parse(backupDataElement.textContent);
-                STATE.backupCards = backupData || [];
-                log(`Inicializadas ${STATE.backupCards.length} noticias de respaldo desde el servidor`);
-            }
-        } catch (e) {
-            err('Error al inicializar noticias de respaldo:', e);
-            STATE.backupCards = [];
-        }
     };
 
     /* ---------------------------------------------------------------------
@@ -1122,13 +1094,12 @@
         return fetchJson(`/noticias/latest-deleted/?${params.toString()}`);
     };
 
-    const serverGetPage = ({cursor, page, order, q, backupOnly = false, signal}) => {
+    const serverGetPage = ({cursor, page, order, q, signal}) => {
         const params = new URLSearchParams();
         if (cursor) params.set('cursor', cursor);
         else if (page) params.set('page', page);
         if (order) params.set('order', order);
         if (q) params.set('q', q);
-        if (backupOnly) params.set('backup_only', 'true');
         if (isSavedView()) params.set('saved_only', 'true');
         return fetchJson(`/noticias/get-page/?${params.toString()}`, {signal});
     };
@@ -1141,59 +1112,6 @@
         },
         body: `saved_only=${isSavedView() ? 'true' : 'false'}`,
     });
-
-    // Nueva función para cargar más noticias de respaldo
-    const loadMoreBackupNews = async () => {
-        if (STATE.loadingMoreBackup) return; // Evitar múltiples peticiones
-        
-        const currentPageNum = parseInt(new URLSearchParams(location.search).get('page') || '1', 10);
-        if (currentPageNum !== 1) return; // Solo cargar respaldo en página 1
-        
-        STATE.loadingMoreBackup = true;
-        log('Cargando más noticias de respaldo...');
-        
-        try {
-            if (STATE.backupController) STATE.backupController.abort();
-            const backupController = new AbortController();
-            STATE.backupController = backupController;
-            const q = new URLSearchParams(location.search).get('q') || '';
-            // Usar el cursor de respaldo o calcular desde dónde seguir
-            const cursor = STATE.backupCursor || STATE.nextCursor;
-            
-            const data = await serverGetPage({
-                cursor: cursor,
-                order: STATE.order,
-                q: q,
-                backupOnly: true,
-                signal: backupController.signal
-            });
-            
-            if (data.status === 'success' && data.backup_cards) {
-                // Filtrar noticias duplicadas
-                const newBackups = data.backup_cards.filter(card => 
-                    !$(`#news-${card.id}`, DOM.grid) && 
-                    !STATE.backupCards.some(existing => existing.id == card.id)
-                );
-                
-                STATE.backupCards.push(...newBackups);
-                
-                // Actualizar cursor para la siguiente carga de respaldo
-                if (data.backup_next_cursor) {
-                    STATE.backupCursor = data.backup_next_cursor;
-                } else if (newBackups.length > 0) {
-                    STATE.backupCursor = cursor;
-                }
-                
-                log(`Cargadas ${newBackups.length} noticias adicionales de respaldo. Total: ${STATE.backupCards.length}`);
-            }
-        } catch (e) {
-            if (e.name === 'AbortError') return;
-            err('Error cargando más noticias de respaldo:', e);
-        } finally {
-            STATE.backupController = null;
-            STATE.loadingMoreBackup = false;
-        }
-    };
 
     const toggleSaveNews = (newsId) => {
         if (STATE.savingNews.has(newsId)) return;
@@ -1293,7 +1211,6 @@
             pruneNewsFromClientCaches(normalizedNewsId);
             updateCounters(data.total_news, data.total_pages);
             appendReplacementCardFromPayload(data.card);
-            if (STATE.backupCards.length < 5) loadMoreBackupNews();
             refreshHoverUnderPointer();
             scheduleSilentSync('eliminar noticia');
         };
@@ -1446,10 +1363,6 @@
                 return;
             }
             loadNewNews();
-
-            if (STATE.backupCards.length < 5) {
-                loadMoreBackupNews();
-            }
         }
     };
 
@@ -1946,11 +1859,6 @@
                 if (data.status !== 'success') throw new Error(data.message);
                 updateCounters(data.total_news, data.total_pages);
                 checkForNewNews();
-                
-                // Recargar respaldo si tenemos pocas noticias después de actualizar feed
-                if (STATE.backupCards.length < 5) {
-                    loadMoreBackupNews();
-                }
             })
             .catch(e => { err('Actualizar feed:', e); alert('Error al actualizar el feed: ' + e.message); })
             .finally(() => { setButtonBusy(btn, false); });
@@ -2047,9 +1955,8 @@
     /* ---------------------------------------------------------------------
      *  Arranque
      * ------------------------------------------------------------------ */
-    // Inicializar noticias de respaldo y sincronizar con DB al abrir
+    // Sincronizar con DB al abrir
     document.addEventListener('DOMContentLoaded', () => {
-        initializeBackupCards();
         applyAdaptiveTitleSize(document);
         syncCurrentPageFromDb({force: true})
             .catch(e => err('Error al cargar página inicial:', e));

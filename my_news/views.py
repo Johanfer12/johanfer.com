@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from django.views.generic import ListView
-from .models import News, FeedSource
+from .models import News
 from django.http import JsonResponse
 from django.http import HttpResponse
 from django.views.decorators.http import require_POST, require_GET
@@ -21,7 +21,6 @@ from .tasks import purge_old_news, retry_summarize_pending
 import subprocess
 import platform
 import hashlib
-import json
 import time
 import logging
 from urllib.parse import urlparse
@@ -96,19 +95,25 @@ def _latest_public_day_bounds():
     return _day_bounds_local(latest_local_date)
 
 
+def _apply_feed_filters(qs, *, saved_only=False, search_query=None, order=None):
+    """Filtros comunes del feed: guardadas, búsqueda y orden keyset."""
+    qs = qs.filter(is_saved=saved_only)
+    if search_query:
+        qs = qs.filter(Q(title__icontains=search_query) | Q(description__icontains=search_query))
+    if order == 'asc':
+        qs = qs.order_by('published_date', 'id')
+    elif order is not None:
+        qs = qs.order_by('-published_date', '-id')
+    return qs
+
+
 def _get_total_news_and_pages(search_query=None, saved_only=False):
     key = _counts_cache_key(search_query, saved_only=saved_only)
     cached = cache.get(key)
     if cached:
         return cached
 
-    count_qs = News.visible
-    if saved_only:
-        count_qs = count_qs.filter(is_saved=True)
-    else:
-        count_qs = count_qs.filter(is_saved=False)
-    if search_query:
-        count_qs = count_qs.filter(Q(title__icontains=search_query) | Q(description__icontains=search_query))
+    count_qs = _apply_feed_filters(News.visible, saved_only=saved_only, search_query=search_query)
     total_news = count_qs.count()
     total_pages = (total_news + (PAGE_SIZE - 1)) // PAGE_SIZE
     result = (total_news, total_pages)
@@ -118,7 +123,6 @@ def _get_total_news_and_pages(search_query=None, saved_only=False):
 
 def _serialize_news_card(article):
     published_local = timezone.localtime(article.published_date) if article.published_date else None
-    created_local = timezone.localtime(article.created_at) if article.created_at else None
     return {
         'id': article.id,
         'title': article.title or '',
@@ -156,21 +160,13 @@ def _news_notification_cutoff():
     return timezone.now() - NEWS_NOTIFICATION_SETTLE_DELAY
 
 
-def _build_page_response(*, order, page, cursor, search_query, backup_only=False, saved_only=False):
-    base_qs = News.visible.select_related('source')
-    if saved_only:
-        base_qs = base_qs.filter(is_saved=True)
-    else:
-        base_qs = base_qs.filter(is_saved=False)
-    if search_query:
-        base_qs = base_qs.filter(
-            Q(title__icontains=search_query) | Q(description__icontains=search_query)
-        )
-
-    if order == 'asc':
-        base_qs = base_qs.order_by('published_date', 'id')
-    else:
-        base_qs = base_qs.order_by('-published_date', '-id')
+def _build_page_response(*, order, page, cursor, search_query, saved_only=False):
+    base_qs = _apply_feed_filters(
+        News.visible.select_related('source'),
+        saved_only=saved_only,
+        search_query=search_query,
+        order=order,
+    )
 
     if cursor:
         try:
@@ -198,26 +194,7 @@ def _build_page_response(*, order, page, cursor, search_query, backup_only=False
                     key_q = Q(published_date__lt=anchor_date) | (Q(published_date=anchor_date) & Q(id__lt=anchor_id))
                 base_qs = base_qs.filter(key_q)
 
-    window_qs = base_qs
-
-    if backup_only:
-        backup_items = list(window_qs[:PAGE_SIZE])
-        backup_cards = [_serialize_news_card(article) for article in backup_items]
-        backup_next_cursor = None
-        if backup_items:
-            last_backup = backup_items[-1]
-            backup_next_cursor = f"{last_backup.published_date.isoformat()}|{last_backup.id}"
-        total_news, total_pages = _get_total_news_and_pages(search_query, saved_only=saved_only)
-        return {
-            'status': 'success',
-            'backup_cards': backup_cards,
-            'backup_next_cursor': backup_next_cursor,
-            'total_news': total_news,
-            'total_pages': total_pages,
-            'order': order
-        }
-
-    items = list(window_qs[:PAGE_SIZE + 1])
+    items = list(base_qs[:PAGE_SIZE + 1])
     has_more = len(items) > PAGE_SIZE
     items = items[:PAGE_SIZE]
     cards = [_serialize_news_card(article) for article in items]
@@ -227,22 +204,11 @@ def _build_page_response(*, order, page, cursor, search_query, backup_only=False
         last = items[-1]
         next_cursor = f"{last.published_date.isoformat()}|{last.id}"
 
-    backup_size = PAGE_SIZE if page == 1 else 5
-    backup_items = list(window_qs[PAGE_SIZE:PAGE_SIZE + backup_size])
-    backup_cards = [_serialize_news_card(article) for article in backup_items]
-
-    backup_next_cursor = None
-    if backup_items:
-        last_backup = backup_items[-1]
-        backup_next_cursor = f"{last_backup.published_date.isoformat()}|{last_backup.id}"
-
     total_news, total_pages = _get_total_news_and_pages(search_query, saved_only=saved_only)
     return {
         'status': 'success',
         'cards': cards,
         'next_cursor': next_cursor,
-        'backup_cards': backup_cards,
-        'backup_next_cursor': backup_next_cursor,
         'total_news': total_news,
         'total_pages': total_pages,
         'order': order
@@ -268,16 +234,9 @@ def delete_news(request, pk):
         next_news = None
         total_news, total_pages = _get_total_news_and_pages(search_query=search_query, saved_only=saved_only)
 
-        base_qs = News.visible
-        if saved_only:
-            base_qs = base_qs.filter(is_saved=True)
-        else:
-            base_qs = base_qs.filter(is_saved=False)
-        if search_query:
-            base_qs = base_qs.filter(
-                Q(title__icontains=search_query) | Q(description__icontains=search_query)
-            )
-        base_qs = base_qs.order_by('published_date', 'id') if order == 'asc' else base_qs.order_by('-published_date', '-id')
+        base_qs = _apply_feed_filters(
+            News.visible, saved_only=saved_only, search_query=search_query, order=order
+        )
         # Solo hace falta el último ítem de la página recalculada; si existe,
         # la página sigue llena y ese es el reemplazo que espera la UI.
         page_end_idx = current_page * PAGE_SIZE - 1
@@ -307,7 +266,7 @@ def superuser_required(view_func):
 
 class NewsListView(ListView):
     model = News
-    paginate_by = 25
+    saved_only = False
 
     def is_private_view(self):
         user = self.request.user
@@ -331,22 +290,13 @@ class NewsListView(ListView):
             ).order_by('-published_date', '-id')
 
         # Usar el manager optimizado + búsqueda y orden dinámico
-        order = self.request.GET.get('order', 'desc')
-        search_query = self.request.GET.get('q')
+        return _apply_feed_filters(
+            News.visible.select_related('source'),
+            saved_only=self.saved_only,
+            search_query=self.request.GET.get('q'),
+            order=self.request.GET.get('order', 'desc'),
+        )
 
-        queryset = News.visible.select_related('source').filter(is_saved=False)
-        if search_query:
-            queryset = queryset.filter(
-                Q(title__icontains=search_query) | Q(description__icontains=search_query)
-            )
-
-        if order == 'asc':
-            queryset = queryset.order_by('published_date', 'id')
-        else:
-            queryset = queryset.order_by('-published_date', '-id')
-
-        return queryset
-    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
@@ -373,76 +323,32 @@ class NewsListView(ListView):
         # En lugar de hacer self.get_queryset().count() duplicado
         total_news = context['paginator'].count
         context['total_news'] = total_news
-        
+
         # Obtener página actual
         page = self.request.GET.get('page', 1)
         try:
             current_page = int(page)
         except (ValueError, TypeError):
             current_page = 1
-            
-        # Obtener noticias de respaldo (5 adicionales) por keyset (cursor) a partir del último ítem de la página
-        order = self.request.GET.get('order', 'desc')
-        ordering = ('published_date', 'id') if order == 'asc' else ('-published_date', '-id')
+
         current_queryset = self.get_queryset()
-        page_qs = list(current_queryset[(current_page - 1) * PAGE_SIZE: (current_page - 1) * PAGE_SIZE + PAGE_SIZE])
-        last_item = page_qs[-1] if page_qs else None  # último en la página independientemente del orden
-        backup_news = []
-        if last_item:
-            if order == 'asc':
-                backup_q = (
-                    Q(published_date__gt=last_item.published_date) |
-                    (Q(published_date=last_item.published_date) & Q(id__gt=last_item.id))
-                )
-            else:
-                backup_q = (
-                    Q(published_date__lt=last_item.published_date) |
-                    (Q(published_date=last_item.published_date) & Q(id__lt=last_item.id))
-                )
-            backup_news = current_queryset.filter(backup_q).order_by(*ordering)[:5]
-        
-        # Noticias de respaldo serializadas para JavaScript
-        backup_cards = [_serialize_news_card(article) for article in backup_news]
-        
-        context['backup_cards'] = backup_cards
         context['current_page'] = current_page
-        context['order'] = order
+        context['order'] = self.request.GET.get('order', 'desc')
         latest_created = current_queryset.order_by('-created_at', '-id').values_list('created_at', 'id').first()
         context['initial_news_cursor'] = f"{latest_created[0].isoformat()}|{latest_created[1]}" if latest_created else None
         context['news_user_flags'] = {
             'is_staff': bool(self.request.user.is_staff),
             'default_image_url': static('Img/News_Default.png'),
         }
-        context['news_view_mode'] = {'saved_only': False}
-        
+        context['news_view_mode'] = {'saved_only': self.saved_only}
+
         return context
 
 
 @method_decorator(superuser_required, name='dispatch')
 class SavedNewsListView(NewsListView):
     template_name = 'news_list.html'
-
-    def get_queryset(self):
-        order = self.request.GET.get('order', 'desc')
-        search_query = self.request.GET.get('q')
-
-        queryset = News.visible.select_related('source').filter(is_saved=True)
-        if search_query:
-            queryset = queryset.filter(
-                Q(title__icontains=search_query) | Q(description__icontains=search_query)
-            )
-
-        if order == 'asc':
-            queryset = queryset.order_by('published_date', 'id')
-        else:
-            queryset = queryset.order_by('-published_date', '-id')
-
-        return queryset
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['news_view_mode'] = {'saved_only': True}
-        return context
+    saved_only = True
 
 @require_GET
 @user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
@@ -451,7 +357,7 @@ def update_feed(request):
         # Reintentar completar resúmenes pendientes antes de buscar nuevas
         try:
             retry_summarize_pending(limit=5, days=15)
-        except Exception as _:
+        except Exception:
             pass
         new_articles = FeedService.fetch_and_save_news(max_ai_items=20)
         _bump_cache_version()
@@ -475,11 +381,7 @@ def check_new_news(request):
         saved_only = request.GET.get('saved_only', 'false').lower() == 'true'
         notification_cutoff = _news_notification_cutoff()
         current_time = notification_cutoff.isoformat()
-        news_qs = News.visible.select_related('source')
-        if saved_only:
-            news_qs = news_qs.filter(is_saved=True)
-        else:
-            news_qs = news_qs.filter(is_saved=False)
+        news_qs = _apply_feed_filters(News.visible.select_related('source'), saved_only=saved_only)
         news_qs = news_qs.filter(created_at__lte=notification_cutoff)
         created_dt, created_id = _parse_created_cursor(cursor)
 
@@ -598,13 +500,12 @@ def get_page(request):
     try:
         order = request.GET.get('order', 'desc')
         search_query = request.GET.get('q')
-        backup_only = request.GET.get('backup_only', 'false').lower() == 'true'
         saved_only = request.GET.get('saved_only', 'false').lower() == 'true'
         page = _safe_page(request.GET.get('page', 1))
         cursor = request.GET.get('cursor')
 
         version = _get_cache_version()
-        key_raw = f"{version}|{order}|{search_query or ''}|{page}|{cursor or ''}|{int(backup_only)}|{int(saved_only)}"
+        key_raw = f"{version}|{order}|{search_query or ''}|{page}|{cursor or ''}|{int(saved_only)}"
         cache_key = f"news:page:{hashlib.md5(key_raw.encode('utf-8')).hexdigest()}"
         cached = cache.get(cache_key)
         if cached:
@@ -615,7 +516,6 @@ def get_page(request):
             page=page,
             cursor=cursor,
             search_query=search_query,
-            backup_only=backup_only,
             saved_only=saved_only,
         )
         cache.set(cache_key, payload, PAGE_CACHE_TTL)
@@ -813,31 +713,25 @@ def test_redundancy(request):
         # Total general de redundantes histórico
         total_redundant_all_time = News.objects.filter(is_redundant=True).count()
 
-        # Calcular estadísticas de redundancia por fuente
-        source_stats = []
-        sources = FeedSource.objects.filter(active=True)
-
-        for source in sources:
-            # Total de noticias de esta fuente hoy
-            source_total_today = news_today_qs.filter(source=source).count()
-
-            if source_total_today > 0:
-                # Noticias redundantes de esta fuente hoy
-                source_redundant_today = news_today_qs.filter(
-                    source=source,
-                    is_redundant=True
-                ).count()
-
-                # Calcular porcentaje de redundancia
-                redundancy_percentage = (source_redundant_today / source_total_today) * 100
-
-                source_stats.append({
-                    'name': source.name,
-                    'total_today': source_total_today,
-                    'redundant_today': source_redundant_today,
-                    'redundancy_percentage': redundancy_percentage,
-                    'non_redundant_today': source_total_today - source_redundant_today
-                })
+        # Calcular estadísticas de redundancia por fuente (una sola query agregada)
+        source_rows = (
+            news_today_qs.filter(source__active=True)
+            .values('source__name')
+            .annotate(
+                total_today=Count('id'),
+                redundant_today=Count('id', filter=Q(is_redundant=True)),
+            )
+        )
+        source_stats = [
+            {
+                'name': row['source__name'],
+                'total_today': row['total_today'],
+                'redundant_today': row['redundant_today'],
+                'redundancy_percentage': (row['redundant_today'] / row['total_today']) * 100,
+                'non_redundant_today': row['total_today'] - row['redundant_today'],
+            }
+            for row in source_rows
+        ]
 
         # Ordenar por porcentaje de redundancia descendente
         source_stats.sort(key=lambda x: x['redundancy_percentage'], reverse=True)
@@ -1034,9 +928,22 @@ def system_stats(request):
         try:
             with open('/proc/uptime', 'r') as f:
                 uptime_seconds = float(f.readline().split()[0])
-                uptime_hours = int(uptime_seconds // 3600)
-                uptime_minutes = int((uptime_seconds % 3600) // 60)
-                stats['uptime'] = f"{uptime_hours}h {uptime_minutes}m"
+            total_minutes, _ = divmod(int(uptime_seconds), 60)
+            total_hours, minutes = divmod(total_minutes, 60)
+            total_days, hours = divmod(total_hours, 24)
+            months, rest_days = divmod(total_days, 30)
+            weeks, days = divmod(rest_days, 7)
+            parts = []
+            if months:
+                parts.append(f"{months} mes" if months == 1 else f"{months} meses")
+            if weeks:
+                parts.append(f"{weeks} semana" if weeks == 1 else f"{weeks} semanas")
+            if days:
+                parts.append(f"{days} día" if days == 1 else f"{days} días")
+            if hours:
+                parts.append(f"{hours}h")
+            parts.append(f"{minutes}m")
+            stats['uptime'] = ' '.join(parts)
         except Exception:
             stats['uptime'] = "N/A"
 
