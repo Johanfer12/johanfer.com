@@ -2,6 +2,7 @@ let page = 1;
 let loading = false;
 let hasNext = true;
 let currentQuery = '';
+let currentOrden = '';
 
 const bookContainer = document.getElementById('book-container');
 const loadingDiv = document.getElementById('loading');
@@ -122,6 +123,9 @@ function loadMoreBooks() {
     if (currentQuery) {
         params.set('q', currentQuery);
     }
+    if (currentOrden) {
+        params.set('orden', currentOrden);
+    }
 
     fetch(`/bookshelf?${params.toString()}`, {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -159,6 +163,9 @@ window.bookshelfApplySearch = function (query) {
     if (currentQuery) {
         params.set('q', currentQuery);
     }
+    if (currentOrden) {
+        params.set('orden', currentOrden);
+    }
 
     const url = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', url);
@@ -193,8 +200,10 @@ window.bookshelfApplySearch = function (query) {
 };
 
 document.addEventListener('DOMContentLoaded', function () {
-    const initialQuery = new URLSearchParams(window.location.search).get('q');
+    const initialParams = new URLSearchParams(window.location.search);
+    const initialQuery = initialParams.get('q');
     currentQuery = initialQuery ? initialQuery.trim() : '';
+    currentOrden = initialParams.get('orden') || '';
     hasNext = bookContainer.dataset.hasNext === 'true';
 
     if (hasNext) {

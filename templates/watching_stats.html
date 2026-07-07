@@ -1,0 +1,67 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estadísticas de mi TV</title>
+    <meta name="description" content="Estadísticas de series y películas: vistas por año, mis calificaciones y décadas de estreno.">
+    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    <meta property="og:site_name" content="{{ site_name }}">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Estadísticas de mi TV | {{ site_name }}">
+    <meta property="og:description" content="Series y películas por año, mis calificaciones y décadas de estreno.">
+    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/watch-icon.svg' %}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Estadísticas de mi TV | {{ site_name }}">
+    <meta name="twitter:description" content="Series y películas por año, mis calificaciones y décadas de estreno.">
+    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/watch-icon.svg' %}">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'css/stats.css' %}">
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+</head>
+<body class="has-header stats-page watching-stats-page">
+    {% include 'header.html' %}
+    <div class="statistics-container">
+        <div class="statistics-content">
+            <h2>Estadísticas de mi TV</h2>
+            <div class="charts-row">
+                <div class="chart-container">
+                    <h3>Series y Películas por Año</h3>
+                    <div class="chart-canvas-frame">
+                        <canvas id="perYearChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <h3>Mis Calificaciones</h3>
+                    <div class="chart-canvas-frame">
+                        <canvas id="ratingsChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <h3>Décadas de Estreno</h3>
+                    <div class="chart-canvas-frame">
+                        <canvas id="decadesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% include 'footer.html' %}
+    <script>
+        const yearsLabels = JSON.parse('{{ years_labels|escapejs }}');
+        const showsPerYear = JSON.parse('{{ shows_per_year|escapejs }}');
+        const moviesPerYear = JSON.parse('{{ movies_per_year|escapejs }}');
+        const ratingsLabels = JSON.parse('{{ ratings_labels|escapejs }}');
+        const ratingsValues = JSON.parse('{{ ratings_values|escapejs }}');
+        const decadesLabels = JSON.parse('{{ decades_labels|escapejs }}');
+        const decadesValues = JSON.parse('{{ decades_values|escapejs }}');
+    </script>
+    <script src="{% static 'js/watching_stats.js' %}"></script>
+    <script src="{% static 'js/background_motion.js' %}"></script>
+</body>
+</html>

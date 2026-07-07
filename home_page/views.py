@@ -7,7 +7,7 @@ from .models import Book
 from .models import VisitLog
 from .middleware import get_client_ip
 from django.db.models import Count, Sum
-from django.db.models import Q
+from django.db.models import F, Q
 from django.urls import reverse
 from django.utils import timezone as dj_timezone
 from django.conf import settings
@@ -41,10 +41,21 @@ def _extract_iso2_from_country_text(country):
 def home(request):
     return render(request, 'home_page.html')
 
+# Órdenes disponibles del bookshelf; los libros en curso siempre van primero
+BOOK_ORDERS = {
+    'fecha_desc': ('-is_reading', F('date_read').desc(nulls_last=True), '-id'),
+    'fecha_asc': ('-is_reading', F('date_read').asc(nulls_last=True), 'id'),
+    'nota_desc': ('-is_reading', '-my_rating', '-id'),
+    'nota_asc': ('-is_reading', 'my_rating', '-id'),
+}
+
+
 def bookshelf(request):
     query = (request.GET.get('q') or '').strip()
-    # Los libros en curso van primero, luego los leídos del más reciente al más viejo
-    books = Book.objects.all().order_by('-is_reading', '-id')
+    orden = request.GET.get('orden', 'fecha_desc')
+    if orden not in BOOK_ORDERS:
+        orden = 'fecha_desc'
+    books = Book.objects.all().order_by(*BOOK_ORDERS[orden])
     if query:
         books = books.filter(Q(title__icontains=query) | Q(author__icontains=query))
 

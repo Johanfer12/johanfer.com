@@ -5,4 +5,5 @@ app_name = 'watching'
 
 urlpatterns = [
     path('', views.watching, name='index'),
+    path('stats/', views.watching_stats, name='stats'),
 ]

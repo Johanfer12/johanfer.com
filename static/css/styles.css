@@ -265,11 +265,11 @@ a:hover {
 }
 
 .watch-toggle-btn.shows {
-    bottom: 76px;
+    bottom: 132px;
 }
 
 .watch-toggle-btn.movies {
-    bottom: 20px;
+    bottom: 76px;
 }
 
 .watch-toggle-btn:hover {
@@ -320,7 +320,7 @@ a:hover {
 
 .book-search-btn {
     position: fixed;
-    bottom: 20px;
+    bottom: 76px;
     right: 20px;
     width: 48px;
     height: 48px;
@@ -339,7 +339,7 @@ a:hover {
 
 .book-scroll-top-btn {
     position: fixed;
-    bottom: 76px;
+    bottom: 132px;
     right: 20px;
     width: 48px;
     height: 48px;
@@ -384,6 +384,37 @@ a:hover {
 
 .book-search-btn.is-clear:hover {
     background: linear-gradient(165deg, rgba(255, 255, 255, 0.32), rgba(214, 188, 143, 0.98));
+}
+
+/* Botón flotante de ordenar (Mis Libros y Mi TV): siempre el de más abajo */
+.book-sort-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 48px;
+    height: 48px;
+    box-shadow: 0 8px 20px rgba(3, 10, 20, 0.45);
+    border-radius: 50%;
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
+    border: 1px solid var(--glass-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #f2f5fb;
+    z-index: 1000;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.book-sort-btn:hover {
+    transform: scale(1.08);
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.3), rgba(143, 180, 232, 0.94));
+}
+
+.book-sort-btn svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
 }
 
 ::-webkit-scrollbar {
@@ -924,6 +955,52 @@ a:hover {
         width: min(560px, 92vw);
         max-height: none;
     }
+}
+
+/* Mini modal de ordenamiento */
+.sort-modal-content {
+    width: min(380px, 92vw);
+    max-height: none;
+    overflow: visible;
+    padding: 22px 20px 18px;
+    background: linear-gradient(150deg, rgba(242, 248, 255, 0.22), rgba(42, 58, 84, 0.54) 38%, rgba(13, 22, 38, 0.78) 82%);
+    border-color: rgba(220, 232, 250, 0.38);
+    box-shadow: 0 34px 72px rgba(2, 8, 18, 0.64), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    -webkit-backdrop-filter: blur(20px) saturate(132%);
+    backdrop-filter: blur(20px) saturate(132%);
+}
+
+.sort-modal-content h2 {
+    margin: 0 0 14px;
+}
+
+.sort-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sort-option {
+    height: 42px;
+    border-radius: 10px;
+    border: 1px solid rgba(198, 214, 242, 0.28);
+    background: rgba(8, 14, 30, 0.72);
+    color: var(--text-primary);
+    font: inherit;
+    cursor: pointer;
+    transition: transform 0.15s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.sort-option:hover {
+    transform: translateY(-1px);
+    border-color: var(--accent-strong);
+}
+
+.sort-option.active {
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
+    color: #06101f;
+    font-weight: 700;
+    pointer-events: none;
 }
 
 @media (min-width: 1024px) {
