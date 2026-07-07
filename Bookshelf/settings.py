@@ -33,7 +33,7 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'raspberrypi.local', 'www.johanfer.com', 'johanfer.com', '192.168.1.7']
 
 SITE_NAME = 'Mi Bitácora'
-SITE_TAGLINE = 'Lo que leo, escucho y descubro.'
+SITE_TAGLINE = 'Lo que leo, veo, escucho y descubro.'
 SITE_META_DESCRIPTION = 'Mi Bitácora: lo que leo, escucho y descubro en un solo lugar.'
 
 
@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'spotify',
     'django_crontab',
     'my_news',
+    'watching',
 ]
 
 MIDDLEWARE = [
@@ -81,6 +82,7 @@ AXES_ONLY_ADMIN_SITE = True
 CRONJOBS = [
     ('55 12 * * *', 'home_page.tasks.update_books_cron'),
     ('*/30 * * * *', 'my_news.tasks.update_news_cron'),
+    ('25 13 * * *', 'watching.tasks.update_watching_cron'),  # Series/pelis desde Trakt
 ]
 
 ROOT_URLCONF = 'Bookshelf.urls'
@@ -207,6 +209,13 @@ GEMINI_EMBEDDING_DIM = int(os.getenv('GEMINI_EMBEDDING_DIM', 768))
 # Qdrant (vector DB)
 QDRANT_URL = os.getenv('QDRANT_URL', 'http://localhost:6333')
 QDRANT_COLLECTION = os.getenv('QDRANT_COLLECTION', 'news_embeddings_gemini001_d768_v1')
+
+# Trakt (historial de películas/series; API v2, sin OAuth para perfiles públicos)
+# Crear app en https://trakt.tv/oauth/applications para obtener el Client ID.
+TRAKT_CLIENT_ID = os.getenv('TRAKT_CLIENT_ID')
+TRAKT_USERNAME = os.getenv('TRAKT_USERNAME')
+# TMDB (pósters; API key gratuita en https://www.themoviedb.org/settings/api)
+TMDB_API_KEY = os.getenv('TMDB_API_KEY')
 
 # Goodreads (sincronización vía RSS)
 GOODREADS_RSS_URL = os.getenv('GOODREADS_RSS_URL', 'https://www.goodreads.com/review/list_rss/27786474?shelf=read')

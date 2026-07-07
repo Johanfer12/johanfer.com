@@ -197,7 +197,8 @@ html.background-motion-paused body::after {
 
 .main-icons-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(225px, 1fr));
+    /* 210px permite 4 tarjetas por fila dentro del contenedor de 1040px */
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
     gap: 1.1rem;
 }
 
@@ -296,9 +297,8 @@ html.background-motion-paused body::after {
     }
 
     body {
-        height: 100svh;
-        height: 100dvh;
-        align-items: stretch;
+        height: auto;
+        align-items: center;
         padding: max(0.75rem, env(safe-area-inset-top)) max(0.65rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(0.65rem, env(safe-area-inset-left));
         overflow: hidden;
     }
@@ -306,19 +306,20 @@ html.background-motion-paused body::after {
     .content-container {
         display: flex;
         flex-direction: column;
-        width: 100%;
-        max-height: 100%;
+        width: min(100%, 390px);
+        max-height: calc(100dvh - 1.5rem);
         min-height: 0;
-        padding: clamp(14px, 3.7dvh, 22px) 12px clamp(12px, 2.6dvh, 18px);
+        padding: clamp(18px, 4.2dvh, 26px) clamp(14px, 4vw, 20px);
         border-radius: 20px;
     }
 
     .main-icons-container {
-        flex: 1 1 auto;
+        flex: 0 0 auto;
         min-height: 0;
-        grid-template-columns: 1fr;
-        grid-template-rows: repeat(3, minmax(0, 1fr));
-        gap: clamp(0.45rem, 1.6dvh, 0.8rem);
+        grid-template-columns: repeat(2, minmax(0, 148px));
+        justify-content: center;
+        align-content: center;
+        gap: clamp(0.7rem, 2.1dvh, 0.95rem);
     }
 
     .welcome-text {
@@ -341,20 +342,19 @@ html.background-motion-paused body::after {
     }
 
     .main-icon a {
-        height: 100%;
-        min-height: 0;
-        padding: clamp(0.45rem, 1.6dvh, 1rem) 0.8rem;
-        gap: clamp(0.25rem, 0.8dvh, 0.65rem);
+        min-height: clamp(142px, 20dvh, 158px);
+        padding: clamp(0.85rem, 2.2dvh, 1rem) 0.55rem;
+        gap: clamp(0.35rem, 1dvh, 0.55rem);
     }
 
     .main-icon img {
-        width: clamp(70px, 18dvh, 118px);
-        height: clamp(70px, 18dvh, 118px);
+        width: clamp(62px, 9.5dvh, 78px);
+        height: clamp(62px, 9.5dvh, 78px);
     }
 
     .main-icon h2 {
-        margin: clamp(0.15rem, 0.6dvh, 0.5rem) 0 0;
-        font-size: clamp(1.15rem, 5.8vw, 1.58rem);
+        margin: clamp(0.2rem, 0.6dvh, 0.45rem) 0 0;
+        font-size: clamp(1rem, 4.5vw, 1.18rem);
     }
 }
 
@@ -365,8 +365,8 @@ html.background-motion-paused body::after {
     }
 
     .main-icon img {
-        width: clamp(62px, 17dvh, 104px);
-        height: clamp(62px, 17dvh, 104px);
+        width: clamp(54px, 9dvh, 68px);
+        height: clamp(54px, 9dvh, 68px);
     }
 }
 
@@ -388,8 +388,8 @@ html.background-motion-paused body::after {
     }
 
     .main-icon img {
-        width: clamp(56px, 15.5dvh, 92px);
-        height: clamp(56px, 15.5dvh, 92px);
+        width: clamp(50px, 8.8dvh, 62px);
+        height: clamp(50px, 8.8dvh, 62px);
     }
 
     .main-icon h2 {

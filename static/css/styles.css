@@ -244,6 +244,80 @@ a:hover {
     cursor: pointer;
 }
 
+/* --- Página "Viendo" (Trakt) --- */
+/* Botones flotantes para alternar entre series y películas */
+.watch-toggle-btn {
+    position: fixed;
+    right: 20px;
+    width: 48px;
+    height: 48px;
+    box-shadow: 0 8px 20px rgba(3, 10, 20, 0.45);
+    border-radius: 50%;
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.14), rgba(80, 100, 140, 0.55));
+    border: 1px solid var(--glass-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #f2f5fb;
+    z-index: 1000;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.watch-toggle-btn.shows {
+    bottom: 76px;
+}
+
+.watch-toggle-btn.movies {
+    bottom: 20px;
+}
+
+.watch-toggle-btn:hover {
+    transform: scale(1.08);
+}
+
+.watch-toggle-btn.active {
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.3), rgba(143, 180, 232, 0.94));
+    pointer-events: none;
+}
+
+.watch-toggle-btn svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+}
+
+/* Listón diagonal "Viendo" en la esquina de la portada */
+.watching-ribbon {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 110px;
+    height: 110px;
+    overflow: hidden;
+    border-top-right-radius: 12px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.watching-ribbon span {
+    position: absolute;
+    display: block;
+    width: 170px;
+    padding: 5px 0;
+    background: linear-gradient(135deg, var(--accent-strong), #4f66b0);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+    color: #fff;
+    font-size: 0.75em;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-align: center;
+    transform: rotate(45deg);
+    right: -44px;
+    top: 28px;
+}
+
 .book-search-btn {
     position: fixed;
     bottom: 20px;
@@ -674,6 +748,7 @@ a:hover {
 .book-modal-cover {
     flex: 0 0 235px;
     align-self: center;
+    position: relative; /* ancla para el listón "Leyendo" */
 }
 
 .book-modal-cover img {
@@ -703,6 +778,37 @@ a:hover {
 }
 
 .stars {
+    color: #f0d496;
+    text-shadow: 0 0 8px rgba(240, 212, 150, 0.35);
+}
+
+.rating-stars {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    color: #f0d496;
+    font-size: 1.05em;
+    line-height: 1;
+    text-shadow: 0 0 8px rgba(240, 212, 150, 0.35);
+}
+
+.rating-star {
+    position: relative;
+    display: inline-block;
+}
+
+.rating-star-empty,
+.rating-star-half {
+    color: rgba(240, 212, 150, 0.28);
+    text-shadow: none;
+}
+
+.rating-star-half::before {
+    content: '★';
+    position: absolute;
+    inset: 0;
+    width: 50%;
+    overflow: hidden;
     color: #f0d496;
     text-shadow: 0 0 8px rgba(240, 212, 150, 0.35);
 }

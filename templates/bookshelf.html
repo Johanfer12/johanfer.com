@@ -31,23 +31,30 @@
                 <!-- Carátula con cursor "manito" y evento de apertura -->
                 <div class="book-cover" onclick="openModal('{{ book.id }}')">
                     <img src="{{ MEDIA_URL }}Covers/{{ book.id }}.webp" alt="{{ book.title }}">
+                    {% if book.is_reading %}
+                    <div class="watching-ribbon"><span>Leyendo</span></div>
+                    {% endif %}
                 </div>
-                
+
                 <!-- Info del libro que se ve al girar la carátula -->
                 <div class="book-info">
-                    <a href="{{ book.goodreads_url }}" 
-                       class="book-title" 
+                    <a href="{{ book.goodreads_url }}"
+                       class="book-title"
                        target="_blank">
                        {{ book.title }}
                     </a>
                     <p><strong>Autor</strong><br>{{ book.author }}</p>
+                    {% if not book.is_reading %}
                     <p><strong>Mi Calificación</strong><br>
                         {% for _ in "x"|ljust:book.my_rating %}
                             <span class="stars">★</span>
                         {% endfor %}
                     </p>
+                    {% endif %}
                     <p><strong>Calificación General</strong><br>{{ book.public_rating }}</p>
+                    {% if not book.is_reading %}
                     <p><strong>Lo leí el...</strong><br>{{ book.date_read|date:"d/m/Y" }}</p>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -59,17 +66,22 @@
                 <div class="book-modal-body">
                     <div class="book-modal-cover">
                         <img src="{{ MEDIA_URL }}Covers/{{ book.id }}.webp" alt="{{ book.title }}" loading="lazy">
+                        {% if book.is_reading %}
+                        <div class="watching-ribbon"><span>Leyendo</span></div>
+                        {% endif %}
                     </div>
                     <div class="book-modal-info">
                         <h2>{{ book.title }}</h2>
                         <div class="book-modal-metadata">
                             <div>
                                 <p><strong>Autor:</strong> {{ book.author }}</p>
+                                {% if not book.is_reading %}
                                 <p><strong>Mi Calificación</strong>
                                     {% for _ in "x"|ljust:book.my_rating %}
                                         <span class="stars">★</span>
                                     {% endfor %}
                                 </p>
+                                {% endif %}
                                 <p><strong>Calificación General:</strong> {{ book.public_rating }}</p>
                             </div>
                             <div>
@@ -79,7 +91,9 @@
                                 {% if book.published_year %}
                                     <p><strong>Publicado:</strong> {{ book.published_year }}</p>
                                 {% endif %}
-                                <p><strong>Leído el:</strong> {{ book.date_read|date:"d/m/Y" }}</p>
+                                {% if not book.is_reading %}
+                                    <p><strong>Leído el:</strong> {{ book.date_read|date:"d/m/Y" }}</p>
+                                {% endif %}
                             </div>
                         </div>
 

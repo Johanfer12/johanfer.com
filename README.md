@@ -1,6 +1,6 @@
-# Mi Biblioteca, Noticias y Música: Aplicaciones Django para Libros, Noticias RSS y Spotify
+# Mi Bitácora: Libros, Series, Noticias y Música en Django
 
-Este proyecto Django incluye tres aplicaciones principales: una biblioteca que se sincroniza con la lista de lectura de Goodreads vía RSS, una aplicación de noticias que recopila artículos de fuentes RSS y una aplicación que muestra datos archivados de Spotify.
+Este proyecto Django incluye cuatro aplicaciones principales: una biblioteca que se sincroniza con la lista de lectura de Goodreads vía RSS, una sección de series y películas que se sincroniza con el historial de Trakt, una aplicación de noticias que recopila artículos de fuentes RSS con procesamiento IA, y una aplicación que muestra datos archivados de Spotify.
 
 ## Aplicación de Libros
 
@@ -13,6 +13,7 @@ Esta aplicación sincroniza la lista de lectura de Goodreads a través de su fee
   - Pagina el feed RSS automáticamente para cargas iniciales grandes.
   - Evita duplicados identificando los libros por su ID de Goodreads.
   - No requiere cookies de sesión ni scraping de HTML.
+  - Lee también la estantería `currently-reading`: el libro en curso aparece primero en la biblioteca con un listón diagonal "Leyendo", sin calificación ni fecha hasta terminarlo.
 
 - Procesamiento avanzado de imágenes:
   - Modifica los enlaces de portadas para obtener la máxima resolución disponible (700px).
@@ -26,8 +27,27 @@ Esta aplicación sincroniza la lista de lectura de Goodreads a través de su fee
 
 ### Modelos principales
 
-- **Book**: Almacena la información completa de cada libro (título, autor, portada, calificaciones, fecha, enlaces, descripción).
+- **Book**: Almacena la información completa de cada libro (título, autor, portada, calificaciones, fecha, enlaces, descripción, flag de lectura en curso).
 - **DeletedBook**: Registra libros que fueron eliminados de la lista de lectura en Goodreads.
+
+## Aplicación de Series y Películas (watching)
+
+Sección "Mi TV": sincroniza el historial de visualización desde la API pública de Trakt (v2, sin OAuth para perfiles públicos) y muestra las series y películas vistas con sus pósters.
+
+### Características
+
+- Sincronización con la API de Trakt:
+  - Historial completo de películas y episodios con deduplicación por evento.
+  - Calificaciones personales y totales de episodios vistos por serie.
+  - Corta la paginación al llegar a eventos ya guardados.
+- Pósters y metadatos desde TMDB (calificación pública, episodios disponibles, sinopsis en español), convertidos a WebP en `media/Posters` (un póster por obra; los episodios comparten el de su serie).
+- Una tarjeta por obra: los episodios de una serie se agrupan mostrando cuántos llevas y el último visto (ej. `T01E08`).
+- Listón diagonal "Viendo" en series con actividad reciente que aún tienen episodios pendientes.
+- Botones flotantes para alternar entre series y películas (`/viendo/?tipo=...`).
+
+### Modelos principales
+
+- **WatchedItem**: Un evento del historial (película o episodio) con temporada/episodio, calificaciones, fecha y IDs de Trakt/TMDB.
 
 ## Aplicación de Noticias (my_news)
 
@@ -40,10 +60,11 @@ Esta aplicación permite recopilar, filtrar y visualizar noticias de diferentes 
   - Filtrado automático basado en palabras clave personalizables.
   - Filtrado inteligente mediante instrucciones de IA configurables.
   - Detección de noticias redundantes mediante análisis de similitud vectorial (embeddings).
-- Procesamiento con IA avanzada (Google Gemini):
+- Procesamiento con IA (Cerebras para resúmenes, Gemini para embeddings):
   - Generación de resúmenes concisos y objetivos de noticias.
   - Extracción de respuestas cortas para titulares tipo pregunta o clickbait.
   - Análisis automático de relevancia y calidad del contenido.
+  - El modelo activo se configura en la BD (AIModelSetting, editable desde el admin) con nombre neutral de proveedor.
 - Capacidad de extracción profunda de contenido:
   - Recuperación del texto completo de artículos cuando es necesario.
   - Extracción de imágenes de alta calidad de los artículos originales.
@@ -80,7 +101,6 @@ Esta aplicación muestra los datos musicales del usuario. La sincronización con
 ### Modelos principales
 
 - **SpotifyFavorites**: Archivo histórico de las canciones favoritas con sus metadatos (ya no se actualiza).
-- **SpotifyTopSongs**: Archivo histórico del top de canciones (ya no se actualiza).
 - **DeletedSongs**: Historial de las canciones que fueron eliminadas de favoritos.
 
 ## Instalación
@@ -132,6 +152,14 @@ GOODREADS_RSS_URL=https://www.goodreads.com/review/list_rss/27786474?shelf=read
 GOODREADS_RSS_PER_PAGE=200
 ```
 
+Para la sección de series y películas (Trakt + TMDB):
+
+```
+TRAKT_CLIENT_ID=...   # Client ID de una app creada en https://trakt.tv/oauth/applications
+TRAKT_USERNAME=...    # Usuario de Trakt (el perfil y el historial deben ser públicos)
+TMDB_API_KEY=...      # API key gratuita de https://www.themoviedb.org/settings/api
+```
+
 ## Uso
 
 ### Tareas Automatizadas con django-crontab
@@ -145,6 +173,9 @@ CRONJOBS = [
 
     # Actualiza las noticias cada 30 minutos
     ('*/30 * * * *', 'my_news.tasks.update_news_cron'),
+
+    # Actualiza series y películas desde Trakt una vez al día
+    ('25 13 * * *', 'watching.tasks.update_watching_cron'),
 ]
 ```
 
@@ -175,6 +206,7 @@ Las tareas se ejecutan automáticamente en segundo plano según su programación
 
 - **Libros**: Se actualizan una vez al día (12:55 PM) leyendo el feed RSS de Goodreads.
 - **Noticias**: Se actualizan cada 30 minutos para mantener el feed de noticias actualizado.
+- **Series y películas**: Se actualizan una vez al día (1:25 PM) desde la API de Trakt.
 
 Nota de producción (Raspberry):
 
@@ -191,6 +223,14 @@ En ambientes de desarrollo local, puede ser más conveniente ejecutar estos coma
    `python manage.py shell -c "from home_page.utils import refresh_books_data; refresh_books_data()"`
 3. Los datos se leen del feed RSS de Goodreads y se almacenan en la base de datos.
 4. Las portadas de los libros se guardarán en la carpeta `media/Covers`.
+
+### Aplicación de Series y Películas
+
+1. Crea una app en Trakt y configura las variables de entorno (ver arriba).
+2. La sincronización corre automáticamente por cron, o puedes lanzarla manualmente:
+   `python manage.py shell -c "from watching.utils import refresh_watching_data; refresh_watching_data()"`
+3. Accede a la ruta `/viendo/` para ver la sección "Mi TV"; los botones flotantes alternan entre series y películas.
+4. Los pósters se guardan en la carpeta `media/Posters`.
 
 ### Aplicación de Noticias
 

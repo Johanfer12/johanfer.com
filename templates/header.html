@@ -6,6 +6,8 @@
       <h1>
         {% if request.path == '/bookshelf/' %}
           Mis Libros
+        {% elif request.path == '/viendo/' %}
+          Mi TV
         {% elif request.path == '/visitas/' %}
           Visitas
         {% elif request.path|slice:":9" == '/spotify/' %}
@@ -24,6 +26,8 @@
       </h1>
       {% if request.path == '/bookshelf/' %}
         <p class="total">{{ total_books }} libros</p>
+      {% elif request.path == '/viendo/' %}
+        <p class="total">{{ total_watched }} {{ watch_label }}</p>
       {% elif request.path == '/visitas/' %}
         <p class="total">{{ total_visits }} visitas</p>
       {% elif request.path == '/spotify/' %}

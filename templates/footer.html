@@ -1,11 +1,33 @@
 <style>
+    /* Footer siempre al fondo: el body reserva espacio abajo y el footer
+       se ancla ahí en absoluto. No altera el layout del resto de la página
+       (a diferencia de volver el body flex, que rompe los margin auto). */
+    body:has(.site-footer:not(.site-footer--fixed)) {
+        position: relative;
+        min-height: 100vh;
+        box-sizing: border-box;
+        padding-bottom: 96px;
+    }
+
     .site-footer {
-        margin: 34px auto 0;
         padding: 16px 12px 20px;
         text-align: center;
         font-size: 0.78rem;
         letter-spacing: 0.02em;
         color: rgba(226, 234, 248, 0.42);
+    }
+
+    .site-footer:not(.site-footer--fixed) {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+    }
+
+    @media (max-width: 700px) {
+        body:has(.site-footer:not(.site-footer--fixed)) {
+            padding-bottom: 130px;
+        }
     }
 
     .site-footer a {
@@ -45,5 +67,5 @@
     }
 </style>
 <footer class="site-footer{% if footer_fixed %} site-footer--fixed{% endif %}">
-    johanfer.com<span class="footer-dot">·</span>hecho con Django en una Raspberry Pi<span class="footer-dot">·</span><a href="https://github.com/Johanfer12/johanfer.com" target="_blank" rel="noopener noreferrer">GitHub</a>
+    © {% now "Y" %} johanfer.com<span class="footer-dot">·</span>Servidor casero transmitiendo desde Raspberry Pi<span class="footer-dot">·</span><a href="https://github.com/Johanfer12/johanfer.com" target="_blank" rel="noopener noreferrer">GitHub</a>
 </footer>

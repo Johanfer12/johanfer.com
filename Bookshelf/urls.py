@@ -11,6 +11,7 @@ urlpatterns = [
     path('', include('home_page.urls')),  #Urls de home_page
     path('spotify/', include('spotify.urls')),  #Urls de spotify
     path('noticias/', include('my_news.urls')),  # Nueva ruta para las noticias
+    path('viendo/', include('watching.urls')),  # Películas y series (Trakt)
 ]
 
 # Servir archivos media en desarrollo

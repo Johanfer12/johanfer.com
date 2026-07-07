@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Acerca de</title>
-    <meta name="description" content="Acerca de {{ site_name }}: libros, Spotify, noticias, filtros y resúmenes.">
+    <meta name="description" content="Acerca de {{ site_name }}: libros, series, música, noticias, filtros y resúmenes.">
     <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     <meta property="og:site_name" content="{{ site_name }}">
     <meta property="og:type" content="website">
@@ -28,11 +28,16 @@
     <div class="about-container">
         <div class="about-content">
             <h2>¿Por qué?</h2>
-            <p><strong>{{ site_name }}</strong> es mi espacio personal para organizar en un mismo lugar tres cosas que sigo con frecuencia: los libros que he leído, la música que escucho y las noticias que reviso a diario. Una forma más visual de volver sobre lo que voy leyendo y escuchando.</p>
+            <p><strong>{{ site_name }}</strong> es mi espacio personal para organizar en un mismo lugar lo que sigo con frecuencia: los libros que leo, las series y películas que veo, la música que escucho y las noticias que reviso a diario. Una forma más visual de volver sobre lo que voy descubriendo.</p>
 
             <section class="about-section">
                 <h3>Libros</h3>
-                <p>La sección de libros toma como base mi historial de <a href="https://www.goodreads.com">Goodreads</a>. Ahí he llevado durante años el registro de lecturas, calificaciones y fechas, y aquí lo presento de una forma más agradable visualmente, con portadas, mi calificación, datos del libro y estadísticas para ver cómo ha cambiado mi ritmo de lectura con el tiempo.</p>
+                <p>La sección de libros toma como base mi historial de <a href="https://www.goodreads.com">Goodreads</a>. Ahí he llevado durante años el registro de lecturas, calificaciones y fechas, y aquí lo presento de una forma más agradable visualmente, con portadas, mi calificación, datos del libro y estadísticas para ver cómo ha cambiado mi ritmo de lectura con el tiempo. El libro que tengo en curso aparece de primero con su marca de "Leyendo".</p>
+            </section>
+
+            <section class="about-section">
+                <h3>Mi TV</h3>
+                <p>La sección de series y películas se alimenta de mi historial en <a href="https://trakt.tv">Trakt</a>, donde registro lo que voy viendo. Las series se agrupan en una sola tarjeta con el conteo de episodios y el último visto, y las que tengo en curso llevan su listón de "Viendo". Los pósters y datos adicionales vienen de TMDB.</p>
             </section>
 
             <section class="about-section">

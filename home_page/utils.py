@@ -96,6 +96,14 @@ def build_rss_page_url(rss_url, page_number, per_page):
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
+def build_shelf_url(rss_url, shelf):
+    """Devuelve la URL del RSS apuntando a otra estantería de Goodreads."""
+    parts = urlsplit(rss_url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query["shelf"] = shelf
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
 def fetch_feed_with_timeout(url, timeout=15):
     """Descarga un feed con timeout explícito; feedparser no lo soporta nativamente."""
     response = requests.get(
@@ -164,12 +172,76 @@ def download_cover_as_webp(cover_url, book_id, folder_path):
             os.remove(temp_path)
 
 
+def sync_currently_reading(rss_url, folder_path):
+    """Sincroniza la estantería currently-reading: marca is_reading y crea
+    los libros en curso que aún no existan (sin fecha ni calificación).
+
+    Devuelve la lista de ids marcados, o None si el feed no pudo leerse
+    (en ese caso no se tocan los flags existentes).
+    """
+    reading_url = build_shelf_url(rss_url, "currently-reading")
+    try:
+        feed = fetch_feed_with_timeout(reading_url)
+    except requests.RequestException:
+        logger.exception("Error descargando shelf currently-reading; se conservan los flags actuales.")
+        return None
+
+    reading_ids = []
+    for entry in getattr(feed, "entries", []) or []:
+        goodreads_id = (entry.get("book_id") or "").strip() or None
+        title = (entry.get("title") or "").strip()
+        if not title:
+            continue
+        try:
+            book_link = normalize_goodreads_book_link(entry)
+            with transaction.atomic():
+                book = find_existing_book(goodreads_id, book_link)
+                is_new = book is None
+                if is_new:
+                    book = Book(my_rating=0, date_read=None)
+
+                book.title = title
+                book.author = (entry.get("author_name") or "").strip() or "Unknown Author"
+                book.cover_link = (entry.get("book_large_image_url") or entry.get("book_medium_image_url") or entry.get("book_image_url") or "").strip()
+                book.public_rating = (entry.get("average_rating") or "0.0").strip()
+                book.book_link = book_link
+                book.is_reading = True
+                rss_description = entry.get("book_description")
+                book.description = sanitize_html(rss_description) if rss_description else book.description
+                book.goodreads_id = goodreads_id or book.goodreads_id
+                book.isbn = (entry.get("isbn") or "").strip() or book.isbn
+                book.num_pages = parse_positive_int(entry.get("num_pages")) or book.num_pages
+                book.published_year = parse_positive_int(entry.get("book_published")) or book.published_year
+                book.goodreads_date_added = parse_rss_datetime(entry.get("user_date_added")) or book.goodreads_date_added
+                book.save()
+
+            if book.cover_link:
+                cover_path = os.path.join(folder_path, f"{book.id}.webp")
+                if is_new or not os.path.exists(cover_path):
+                    download_cover_as_webp(book.cover_link, book.id, folder_path)
+
+            reading_ids.append(book.id)
+            if is_new:
+                logger.info("Libro en curso creado desde RSS: %s", title)
+        except Exception:
+            logger.exception("Error procesando libro en curso RSS: %s", title or goodreads_id)
+            continue
+
+    return reading_ids
+
+
 def refresh_books_data():
     folder_path = os.path.join(settings.MEDIA_ROOT, "Covers")
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
     rss_url = getattr(settings, "GOODREADS_RSS_URL", "https://www.goodreads.com/review/list_rss/27786474?shelf=read")
+
+    # Estantería "leyendo ahora": marcar en curso y limpiar los que salieron
+    reading_ids = sync_currently_reading(rss_url, folder_path)
+    if reading_ids is not None:
+        Book.objects.filter(is_reading=True).exclude(id__in=reading_ids).update(is_reading=False)
+
     entries = fetch_goodreads_rss_entries(rss_url)
     if not entries:
         logger.warning("Goodreads RSS no devolvió libros. Se conserva la información guardada.")
@@ -202,6 +274,7 @@ def refresh_books_data():
                 book.my_rating = parse_positive_int(entry.get("user_rating")) or 0
                 book.public_rating = (entry.get("average_rating") or "0.0").strip()
                 book.date_read = date_read
+                book.is_reading = False  # está en la estantería "read": terminado
                 book.book_link = book_link
                 rss_description = entry.get("book_description")
                 book.description = sanitize_html(rss_description) if rss_description else book.description

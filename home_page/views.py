@@ -43,7 +43,8 @@ def home(request):
 
 def bookshelf(request):
     query = (request.GET.get('q') or '').strip()
-    books = Book.objects.all().order_by('-id')
+    # Los libros en curso van primero, luego los leídos del más reciente al más viejo
+    books = Book.objects.all().order_by('-is_reading', '-id')
     if query:
         books = books.filter(Q(title__icontains=query) | Q(author__icontains=query))
 
@@ -67,7 +68,8 @@ def bookshelf(request):
                 'author': book.author,
                 'my_rating': book.my_rating,
                 'public_rating': book.public_rating,
-                'date_read': book.date_read.strftime('%Y-%m-%d'),
+                'date_read': book.date_read.strftime('%Y-%m-%d') if book.date_read else None,
+                'is_reading': book.is_reading,
                 'book_link': book.goodreads_url,
                 'cover_image': f"{settings.MEDIA_URL}Covers/{book.id}.webp",
                 'id': book.id,
@@ -103,7 +105,8 @@ def about(request):
     return render(request, 'about.html')
 
 def stats(request):
-    books = Book.objects.all()
+    # Los libros en curso no tienen fecha: fuera de las estadísticas
+    books = Book.objects.filter(date_read__isnull=False)
 
     # Libros leídos por año
     books_per_year = books.values('date_read__year').annotate(total=Count('id')).order_by('date_read__year')
