@@ -959,7 +959,7 @@ a:hover {
 
 /* Mini modal de ordenamiento */
 .sort-modal-content {
-    width: min(380px, 92vw);
+    width: min(300px, 92vw);
     max-height: none;
     overflow: visible;
     padding: 22px 20px 18px;
@@ -981,12 +981,15 @@ a:hover {
 }
 
 .sort-option {
-    height: 42px;
+    height: 44px;
     border-radius: 10px;
     border: 1px solid rgba(198, 214, 242, 0.28);
     background: rgba(8, 14, 30, 0.72);
     color: var(--text-primary);
-    font: inherit;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.2px;
     cursor: pointer;
     transition: transform 0.15s ease, background-color 0.2s ease, color 0.2s ease;
 }

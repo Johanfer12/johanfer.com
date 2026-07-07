@@ -14,7 +14,7 @@ from django.conf import settings
 from Bookshelf.html_sanitizer import sanitize_html
 import json
 from datetime import datetime, timezone
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 SESSION_VISITOR_KEY = 'visit_visitor_id'
 
@@ -215,6 +215,20 @@ def _apply_visits_filters(filters):
 
 @user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
 def visits(request):
+    # Guardar la página de origen para decidir el botón de retorno (igual que en About)
+    referer_path = urlparse(request.META.get('HTTP_REFERER', '')).path
+    if referer_path and referer_path != request.path:
+        if referer_path.startswith('/bookshelf'):
+            request.session['visits_source'] = 'bookshelf'
+        elif referer_path.startswith('/viendo'):
+            request.session['visits_source'] = 'viendo'
+        elif referer_path.startswith('/spotify'):
+            request.session['visits_source'] = 'spotify'
+        elif referer_path.startswith('/noticias'):
+            request.session['visits_source'] = 'news'
+        elif referer_path == '/':
+            request.session['visits_source'] = 'home'
+
     filters = _get_visits_filters(request)
     filtered_qs = _apply_visits_filters(filters)
 
