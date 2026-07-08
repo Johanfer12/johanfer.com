@@ -92,19 +92,26 @@ def fetch_trakt_watched_show_totals():
 
 
 def fetch_tmdb_media_details(tmdb_type, tmdb_id):
-    """Metadatos en español de TMDB. tmdb_type: 'movie' | 'tv'."""
+    """Metadatos de TMDB: textos en español pero carátula en inglés. tmdb_type: 'movie' | 'tv'."""
     api_key = getattr(settings, 'TMDB_API_KEY', None)
     if not api_key or not tmdb_id:
         return {}
     try:
         response = requests.get(
             f"{TMDB_API_BASE}/{tmdb_type}/{tmdb_id}",
-            params={'api_key': api_key, 'language': 'es-ES'},
+            params={
+                'api_key': api_key,
+                'language': 'es-ES',
+                # Trae también el listado de imágenes en inglés (y sin idioma) para
+                # elegir la carátula original en vez de la localizada al español.
+                'append_to_response': 'images',
+                'include_image_language': 'en,null',
+            },
             timeout=15,
         )
         response.raise_for_status()
         payload = response.json() or {}
-        poster_path = payload.get('poster_path')
+        poster_path = _pick_english_poster(payload)
         return {
             'overview': (payload.get('overview') or '').strip(),
             'public_rating': _normalize_tmdb_rating(payload.get('vote_average')),
@@ -115,6 +122,17 @@ def fetch_tmdb_media_details(tmdb_type, tmdb_id):
     except Exception:
         logger.exception("Error consultando metadatos en TMDB (%s %s)", tmdb_type, tmdb_id)
         return {}
+
+
+def _pick_english_poster(payload):
+    """Elige la carátula en inglés; si no hay, la neutral, y por último la localizada."""
+    posters = (payload.get('images') or {}).get('posters') or []
+    # TMDB devuelve los pósters ordenados por votos; 'en' primero, luego sin idioma.
+    for wanted in ('en', None):
+        for poster in posters:
+            if poster.get('iso_639_1') == wanted and poster.get('file_path'):
+                return poster['file_path']
+    return payload.get('poster_path')
 
 
 def fetch_tmdb_poster_url(tmdb_type, tmdb_id):
@@ -141,11 +159,11 @@ def _extract_season_counts(payload):
     return season_counts
 
 
-def download_poster(poster_url, file_name):
+def download_poster(poster_url, file_name, force=False):
     folder = os.path.join(settings.MEDIA_ROOT, 'Posters')
     os.makedirs(folder, exist_ok=True)
     file_path = os.path.join(folder, file_name)
-    if os.path.exists(file_path):
+    if os.path.exists(file_path) and not force:
         return
     temp_path = os.path.join(folder, f"temp_{file_name}.jpg")
     try:
@@ -288,6 +306,28 @@ def _get_tmdb_metadata(cache, tmdb_type, tmdb_id):
     if key not in cache:
         cache[key] = fetch_tmdb_media_details(tmdb_type, tmdb_id)
     return cache[key]
+
+
+def refresh_posters(force=False):
+    """Re-descarga la carátula de cada obra distinta. Con force=True sobrescribe
+    las existentes (útil tras cambiar el idioma de las carátulas)."""
+    tmdb_cache = {}
+    seen = set()
+    updated = 0
+    for item in WatchedItem.objects.exclude(tmdb_id__isnull=True).only(
+        'media_type', 'trakt_id', 'tmdb_id'
+    ):
+        key = (item.media_type, item.trakt_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        tmdb_type = 'tv' if item.media_type == 'episode' else 'movie'
+        poster_url = _get_tmdb_metadata(tmdb_cache, tmdb_type, item.tmdb_id).get('poster_url')
+        if poster_url:
+            download_poster(poster_url, item.poster_name, force=force)
+            updated += 1
+    logger.info("Carátulas re-descargadas: %s", updated)
+    return updated
 
 
 def _update_existing_ratings(ratings):
