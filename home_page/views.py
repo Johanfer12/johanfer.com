@@ -57,7 +57,10 @@ def bookshelf(request):
         orden = 'fecha_desc'
     books = Book.objects.all().order_by(*BOOK_ORDERS[orden])
     if query:
-        books = books.filter(Q(title__icontains=query) | Q(author__icontains=query))
+        book_filter = Q(title__icontains=query) | Q(author__icontains=query)
+        if query.isdigit():
+            book_filter |= Q(date_read__year=int(query))
+        books = books.filter(book_filter)
 
     # Set up pagination
     paginator = Paginator(books, 20)  # 20 libros por vista

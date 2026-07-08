@@ -4,6 +4,7 @@ let loading = false;
 let hasNext = true;
 let currentTipo = 'series';
 let currentOrden = '';
+let currentQuery = '';
 
 const watchContainer = document.getElementById('watch-container');
 const loadingDiv = document.getElementById('loading');
@@ -130,6 +131,9 @@ function loadMoreCards() {
     if (currentOrden) {
         params.set('orden', currentOrden);
     }
+    if (currentQuery) {
+        params.set('q', currentQuery);
+    }
 
     fetch(`/viendo/?${params.toString()}`, {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -161,12 +165,91 @@ function handleScroll() {
     }
 }
 
+const setWatchedTotalLabel = (count) => {
+    const totalLabel = document.querySelector('.header .total');
+    if (!totalLabel || typeof count === 'undefined') {
+        return;
+    }
+    const noun = watchContainer.dataset.watchNoun || '';
+    totalLabel.textContent = `${count} ${noun}${count === 1 ? '' : 's'}`.trim();
+};
+
+// Reescribe los enlaces de los toggles series/películas para que arrastren el
+// filtro activo (los href vienen del servidor y no saben de la búsqueda AJAX).
+const syncToggleLinks = () => {
+    document.querySelectorAll('.watch-toggle-btn').forEach((link) => {
+        const tipo = link.classList.contains('movies') ? 'peliculas' : 'series';
+        const params = new URLSearchParams();
+        params.set('tipo', tipo);
+        if (currentOrden && currentOrden !== 'fecha_desc') {
+            params.set('orden', currentOrden);
+        }
+        if (currentQuery) {
+            params.set('q', currentQuery);
+        }
+        link.setAttribute('href', `?${params.toString()}`);
+    });
+};
+
+// Aplica una búsqueda por título recargando la primera página vía AJAX,
+// reemplazando las tarjetas y reseteando la paginación (igual que en libros).
+window.watchingApplySearch = function (query) {
+    currentQuery = (query || '').trim();
+    page = 1;
+
+    const params = new URLSearchParams();
+    params.set('page', '1');
+    params.set('tipo', currentTipo);
+    if (currentOrden) {
+        params.set('orden', currentOrden);
+    }
+    if (currentQuery) {
+        params.set('q', currentQuery);
+    }
+
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+
+    loading = true;
+    loadingDiv.style.display = 'block';
+
+    return fetch(`/viendo/?${params.toString()}`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+        .then((response) => response.json())
+        .then((data) => {
+            watchContainer.innerHTML = '';
+            document.querySelectorAll('div.modal[id^="modal-watch-"]').forEach((modal) => modal.remove());
+            (data.cards || []).forEach((card) => {
+                watchContainer.appendChild(createWatchItem(card));
+                watchContainer.appendChild(createWatchModal(card));
+            });
+            hasNext = Boolean(data.has_next);
+            setWatchedTotalLabel(data.total_watched);
+            syncToggleLinks();
+            loading = false;
+            loadingDiv.style.display = 'none';
+
+            window.removeEventListener('scroll', handleScroll);
+            if (hasNext) {
+                window.addEventListener('scroll', handleScroll);
+            }
+            return data;
+        })
+        .catch((error) => {
+            console.error('Error al aplicar búsqueda:', error);
+            loading = false;
+            loadingDiv.style.display = 'none';
+            throw error;
+        });
+};
+
 document.addEventListener('DOMContentLoaded', function () {
     if (!watchContainer) return;
 
     const params = new URLSearchParams(window.location.search);
     currentTipo = params.get('tipo') === 'peliculas' ? 'peliculas' : 'series';
     currentOrden = params.get('orden') || '';
+    currentQuery = params.get('q') || '';
     hasNext = watchContainer.dataset.hasNext === 'true';
 
     if (hasNext) {

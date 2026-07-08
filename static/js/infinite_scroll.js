@@ -109,7 +109,7 @@ const setTotalBooksLabel = (count) => {
     if (!totalLabel || typeof count === 'undefined') {
         return;
     }
-    totalLabel.textContent = `${count} libros`;
+    totalLabel.textContent = `${count} libro${count === 1 ? '' : 's'}`;
 };
 
 function loadMoreBooks() {

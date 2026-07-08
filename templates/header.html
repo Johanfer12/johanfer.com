@@ -25,9 +25,9 @@
         {% endif %}
       </h1>
       {% if request.path == '/bookshelf/' %}
-        <p class="total">{{ total_books }} libros</p>
+        <p class="total">{{ total_books }} libro{{ total_books|pluralize }}</p>
       {% elif request.path == '/viendo/' %}
-        <p class="total">{{ total_watched }} {{ watch_label }}</p>
+        <p class="total">{{ total_watched }} {{ watch_noun }}{{ total_watched|pluralize }}</p>
       {% elif request.path == '/visitas/' %}
         <p class="total">{{ total_visits }} visitas</p>
       {% elif request.path == '/spotify/' %}

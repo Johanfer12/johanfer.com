@@ -265,11 +265,11 @@ a:hover {
 }
 
 .watch-toggle-btn.shows {
-    bottom: 132px;
+    bottom: 188px;
 }
 
 .watch-toggle-btn.movies {
-    bottom: 76px;
+    bottom: 132px;
 }
 
 .watch-toggle-btn:hover {
@@ -384,6 +384,11 @@ a:hover {
 
 .book-search-btn.is-clear:hover {
     background: linear-gradient(165deg, rgba(255, 255, 255, 0.32), rgba(214, 188, 143, 0.98));
+}
+
+/* En Mi TV el buscador va justo sobre ordenar (como en libros): ordenar (20) · buscar (76) · películas (132) · series (188) */
+.book-search-btn.watch-search {
+    bottom: 76px;
 }
 
 /* Botón flotante de ordenar (Mis Libros y Mi TV): siempre el de más abajo */

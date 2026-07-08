@@ -26,6 +26,7 @@ def _group_by_media(items):
     shows = {}
     movies = {}
     for item in items:
+        watched_year = timezone.localtime(item.watched_at).year
         if item.media_type == 'episode':
             episode_key = (item.season, item.episode)
             entry = shows.get(item.trakt_id)
@@ -37,6 +38,7 @@ def _group_by_media(items):
                     'episode_count': 1,
                     'episode_total': item.total_episodes or 1,
                     'available_episodes': item.available_episodes,
+                    'watched_years': {watched_year},
                 }
             else:
                 entry['plays'] += 1
@@ -46,6 +48,7 @@ def _group_by_media(items):
                     entry['episode_total'],
                     item.total_episodes or entry['episode_count'],
                 )
+                entry['watched_years'].add(watched_year)
                 if item.available_episodes:
                     entry['available_episodes'] = max(
                         entry['available_episodes'] or 0,
@@ -56,9 +59,10 @@ def _group_by_media(items):
         bucket = movies
         entry = bucket.get(item.trakt_id)
         if entry is None:
-            bucket[item.trakt_id] = {'latest': item, 'plays': 1}
+            bucket[item.trakt_id] = {'latest': item, 'plays': 1, 'watched_years': {watched_year}}
         else:
             entry['plays'] += 1
+            entry['watched_years'].add(watched_year)
     return list(shows.values()), list(movies.values())
 
 
@@ -82,6 +86,7 @@ def watching(request):
     orden = request.GET.get('orden', 'fecha_desc')
     if orden not in ('fecha_desc', 'fecha_asc', 'nota_desc', 'nota_asc'):
         orden = 'fecha_desc'
+    query = (request.GET.get('q') or '').strip()
 
     items = list(WatchedItem.objects.all())
     show_cards, movie_cards = _group_by_media(items)
@@ -94,9 +99,17 @@ def watching(request):
         card['is_watching'] = card['latest'].watched_at >= watching_cutoff and not is_complete
 
     if tipo == 'peliculas':
-        cards, watch_label = movie_cards, 'películas'
+        cards, watch_label, watch_noun = movie_cards, 'películas', 'película'
     else:
-        cards, watch_label = show_cards, 'series'
+        cards, watch_label, watch_noun = show_cards, 'series', 'serie'
+    if query:
+        needle = query.lower()
+        year = int(query) if query.isdigit() else None
+        cards = [
+            c for c in cards
+            if needle in c['latest'].title.lower()
+            or (year is not None and year in c.get('watched_years', ()))
+        ]
     _sort_cards(cards, orden)
 
     paginator = Paginator(cards, 20)  # 20 tarjetas por vista, igual que en libros
@@ -127,6 +140,7 @@ def watching(request):
             'cards': card_data,
             'has_next': page_obj.has_next(),
             'total_watched': paginator.count,
+            'query': query,
         })
 
     return render(request, 'watching.html', {
@@ -134,7 +148,9 @@ def watching(request):
         'active_tipo': tipo,
         'active_orden': orden,
         'watch_label': watch_label,
+        'watch_noun': watch_noun,
         'total_watched': paginator.count,
+        'current_query': query,
     })
 
 

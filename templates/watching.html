@@ -16,7 +16,8 @@
 
     <div id="watch-container" class="book-container"
          data-has-next="{% if cards.has_next %}true{% else %}false{% endif %}"
-         data-fallback-poster="{% static 'Img/News_Default.png' %}">
+         data-fallback-poster="{% static 'Img/News_Default.png' %}"
+         data-watch-noun="{{ watch_noun }}">
         {% for card in cards %}
         <div class="book-item">
             <div class="book-info-container">
@@ -123,6 +124,27 @@
         </svg>
     </button>
 
+    <button class="book-search-btn watch-search" id="watchSearchBtn" title="Buscar" aria-label="Buscar">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true">
+            <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z"/>
+        </svg>
+    </button>
+
+    <div id="watchSearchModal" class="modal books-search-modal" role="dialog" aria-modal="true" aria-labelledby="watchSearchTitle">
+        <div class="modal-content books-search-content">
+            <button type="button" class="close books-search-close" id="watchSearchCloseBtn" aria-label="Cerrar">&times;</button>
+            <h2 id="watchSearchTitle">Buscar</h2>
+            <p class="books-search-subtitle">Filtra por título o año.</p>
+            <form id="watchSearchForm" class="books-search-form">
+                <input id="watchSearchInput" type="text" class="books-search-input" placeholder="Escribe aquí..." autocomplete="off" value="{{ current_query|default:'' }}">
+                <div class="books-search-actions">
+                    <button type="submit" class="books-search-apply">Buscar</button>
+                    <button type="button" class="books-search-cancel" id="watchSearchCancelBtn">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="sortModal" class="modal sort-modal" role="dialog" aria-modal="true" aria-labelledby="sortTitle">
         <div class="modal-content sort-modal-content">
             <button type="button" class="close sort-close" aria-label="Cerrar">&times;</button>
@@ -136,14 +158,14 @@
         </div>
     </div>
 
-    <a href="?tipo=series{% if active_orden != 'fecha_desc' %}&amp;orden={{ active_orden }}{% endif %}"
+    <a href="?tipo=series{% if active_orden != 'fecha_desc' %}&amp;orden={{ active_orden }}{% endif %}{% if current_query %}&amp;q={{ current_query|urlencode }}{% endif %}"
        class="watch-toggle-btn shows {% if active_tipo == 'series' %}active{% endif %}"
        title="Series" aria-label="Ver series">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true">
             <path d="M2.5 13.5A.5.5 0 0 1 3 13h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zM13.991 3l.024.001a1.46 1.46 0 0 1 .538.143.757.757 0 0 1 .302.254c.067.1.145.277.145.602v5.991l-.001.024a1.464 1.464 0 0 1-.143.538.758.758 0 0 1-.254.302c-.1.067-.277.145-.602.145H2.009l-.024-.001a1.464 1.464 0 0 1-.538-.143.758.758 0 0 1-.302-.254C1.078 10.502 1 10.325 1 10V4.009l.001-.024a1.46 1.46 0 0 1 .143-.538.758.758 0 0 1 .254-.302C1.498 3.078 1.675 3 2 3h11.991zM14 2H2C0 2 0 4 0 4v6c0 2 2 2 2 2h12c2 0 2-2 2-2V4c0-2-2-2-2-2z"/>
         </svg>
     </a>
-    <a href="?tipo=peliculas{% if active_orden != 'fecha_desc' %}&amp;orden={{ active_orden }}{% endif %}"
+    <a href="?tipo=peliculas{% if active_orden != 'fecha_desc' %}&amp;orden={{ active_orden }}{% endif %}{% if current_query %}&amp;q={{ current_query|urlencode }}{% endif %}"
        class="watch-toggle-btn movies {% if active_tipo == 'peliculas' %}active{% endif %}"
        title="Películas" aria-label="Ver películas">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true">
@@ -154,6 +176,7 @@
     {% include 'footer.html' %}
     <script src="{% static 'js/modal.js' %}"></script>
     <script src="{% static 'js/watching_scroll.js' %}"></script>
+    <script src="{% static 'js/watching_search.js' %}"></script>
     <script src="{% static 'js/sort_modal.js' %}"></script>
     <script src="{% static 'js/background_motion.js' %}"></script>
 </body>
