@@ -20,8 +20,9 @@ WATCHING_WINDOW_DAYS = 14
 def _group_by_media(items):
     """Agrupa los eventos por obra (trakt_id): una tarjeta por serie/película.
 
-    El queryset llega ordenado por -watched_at, así que el primer evento de
-    cada obra es el más reciente y el orden de las tarjetas queda cronológico.
+    El queryset llega ordenado por (-watched_at, -season, -episode), así que el
+    primer evento de cada obra es el más reciente; ante fechas empatadas gana el
+    episodio más alto (para que 'latest' sea el finale, no un episodio arbitrario).
     """
     shows = {}
     movies = {}
@@ -88,7 +89,9 @@ def watching(request):
         orden = 'fecha_desc'
     query = (request.GET.get('q') or '').strip()
 
-    items = list(WatchedItem.objects.all())
+    # Orden por fecha desc; en empate (p.ej. una temporada marcada de golpe con la
+    # misma fecha) gana el episodio más alto, para que "Último" sea el finale real.
+    items = list(WatchedItem.objects.order_by('-watched_at', '-season', '-episode'))
     show_cards, movie_cards = _group_by_media(items)
 
     watching_cutoff = timezone.now() - timedelta(days=WATCHING_WINDOW_DAYS)
