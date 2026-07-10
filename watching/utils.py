@@ -238,10 +238,17 @@ def parse_history_item(item, ratings=None):
 
 
 def refresh_watching_data(max_pages=5, stop_when_page_has_no_new=True):
-    """Sincroniza el historial de Trakt: crea eventos nuevos y baja pósters faltantes."""
-    existing_ids = set(WatchedItem.objects.values_list('trakt_history_id', flat=True))
+    """Sincroniza el historial de Trakt: crea eventos nuevos, actualiza la fecha de
+    los que cambiaron y (solo en crawl completo) elimina los que ya no están en Trakt."""
+    existing = {w.trakt_history_id: w for w in WatchedItem.objects.only(
+        'id', 'trakt_history_id', 'watched_at'
+    )}
     created = 0
+    updated = 0
+    seen_ids = set()
     tmdb_cache = {}
+    reached_end = False
+    had_error = False
     try:
         ratings = fetch_trakt_ratings()
     except requests.RequestException:
@@ -258,15 +265,29 @@ def refresh_watching_data(max_pages=5, stop_when_page_has_no_new=True):
             history = fetch_trakt_history(page=page)
         except requests.RequestException:
             logger.exception("Error descargando historial de Trakt (página %s); se procesa lo recolectado.", page)
+            had_error = True
             break
         if not history:
+            reached_end = True
             break
 
         page_had_new = False
         for raw_item in history:
             data = parse_history_item(raw_item, ratings)
-            if not data or data['trakt_history_id'] in existing_ids:
+            if not data:
                 continue
+            history_id = data['trakt_history_id']
+            seen_ids.add(history_id)
+
+            existing_obj = existing.get(history_id)
+            if existing_obj is not None:
+                # Ya existe: solo actualizar la fecha si la cambiaron en Trakt.
+                if existing_obj.watched_at != data['watched_at']:
+                    existing_obj.watched_at = data['watched_at']
+                    existing_obj.save(update_fields=['watched_at'])
+                    updated += 1
+                continue
+
             tmdb_type = 'tv' if data['media_type'] == 'episode' else 'movie'
             metadata = _get_tmdb_metadata(tmdb_cache, tmdb_type, data.get('tmdb_id'))
             if metadata.get('overview'):
@@ -276,7 +297,7 @@ def refresh_watching_data(max_pages=5, stop_when_page_has_no_new=True):
             if data['media_type'] == 'episode':
                 data['available_episodes'] = metadata.get('available_episodes')
             watched = WatchedItem.objects.create(**data)
-            existing_ids.add(watched.trakt_history_id)
+            existing[watched.trakt_history_id] = watched
             created += 1
             page_had_new = True
 
@@ -295,7 +316,26 @@ def refresh_watching_data(max_pages=5, stop_when_page_has_no_new=True):
     _update_existing_overviews(tmdb_cache)
     _update_existing_episode_totals(show_totals, tmdb_cache)
 
-    logger.info("Trakt sincronizado: %s eventos nuevos", created)
+    # Solo si recorrimos TODO el historial sin errores podemos afirmar que lo que
+    # falta en Trakt fue eliminado allá (fechas re-scrobbleadas, borrados, etc.).
+    deleted = 0
+    crawl_complete = reached_end and not had_error and not stop_when_page_has_no_new
+    if crawl_complete:
+        stale_ids = set(existing) - seen_ids
+        # Salvaguarda: si "sobrara" una fracción grande es señal de un crawl anómalo;
+        # no borramos en masa para no arrasar el historial por un fallo imprevisto.
+        if stale_ids and len(stale_ids) <= max(5, len(existing) // 5):
+            deleted, _ = WatchedItem.objects.filter(trakt_history_id__in=stale_ids).delete()
+        elif stale_ids:
+            logger.warning(
+                "Reconciliación abortada: %s de %s marcados como sobrantes (posible crawl anómalo).",
+                len(stale_ids), len(existing),
+            )
+
+    logger.info(
+        "Trakt sincronizado: %s nuevos, %s con fecha actualizada, %s eliminados",
+        created, updated, deleted,
+    )
     return created
 
 
