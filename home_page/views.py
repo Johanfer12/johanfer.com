@@ -13,7 +13,7 @@ from django.utils import timezone as dj_timezone
 from django.conf import settings
 from Bookshelf.html_sanitizer import sanitize_html
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode, urlparse
 
 SESSION_VISITOR_KEY = 'visit_visitor_id'
@@ -164,16 +164,14 @@ def _get_visitor_id(request):
     return (request.session.get(SESSION_VISITOR_KEY) or '').strip()
 
 
-def _parse_datetime_local(value):
+def _parse_visit_date(value):
     if not value:
         return None
     try:
-        dt = datetime.fromisoformat(value)
+        dt = datetime.strptime(value, '%Y-%m-%d')
     except ValueError:
         return None
-    if dj_timezone.is_naive(dt):
-        dt = dj_timezone.make_aware(dt, dj_timezone.get_current_timezone())
-    return dt
+    return dj_timezone.make_aware(dt, dj_timezone.get_current_timezone())
 
 
 def _get_visits_filters(request):
@@ -206,17 +204,67 @@ def _apply_visits_filters(filters):
     if filters['ua']:
         visit_qs = visit_qs.filter(user_agent__icontains=filters['ua'])
 
-    date_from = _parse_datetime_local(filters['from'])
-    date_to = _parse_datetime_local(filters['to'])
+    date_from = _parse_visit_date(filters['from'])
+    date_to = _parse_visit_date(filters['to'])
     if date_from:
         visit_qs = visit_qs.filter(visited_at__gte=date_from)
     if date_to:
-        visit_qs = visit_qs.filter(visited_at__lte=date_to)
+        visit_qs = visit_qs.filter(visited_at__lt=date_to + timedelta(days=1))
 
     return visit_qs
 
 
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+def _group_visits_by_country(visits, current_visitor_id, current_ip):
+    groups = {}
+
+    for visit in visits:
+        iso2 = (visit.country_code or '').upper()
+        if not iso2:
+            iso2 = _extract_iso2_from_country_text(visit.country)
+
+        country_name = (visit.country or '').strip()
+        country_label = country_name or iso2 or 'País desconocido'
+        country_key = f'iso:{iso2}' if iso2 else f'name:{country_label.casefold()}'
+        is_self = (
+            bool(current_visitor_id and visit.visitor_id == current_visitor_id)
+            or bool(current_ip and visit.ip_address == current_ip)
+        )
+
+        visit.country_flag = _iso2_to_flag(iso2)
+        visit.country_iso2 = iso2.lower() if iso2 else ''
+        visit.is_self = is_self
+
+        if country_key not in groups:
+            groups[country_key] = {
+                'country': country_label,
+                'country_flag': visit.country_flag,
+                'country_iso2': visit.country_iso2,
+                'visits': [],
+                'visit_count': 0,
+                'self_count': 0,
+            }
+
+        group = groups[country_key]
+        if group['country'] in (iso2, 'País desconocido') and country_name:
+            group['country'] = country_name
+        group['visits'].append(visit)
+        group['visit_count'] += 1
+        group['self_count'] += int(is_self)
+
+    grouped_visits = list(groups.values())
+    grouped_visits.sort(key=lambda group: not (
+        group['country_iso2'] == 'co'
+        or group['country'].casefold() == 'colombia'
+    ))
+    return grouped_visits
+
+
+@user_passes_test(
+    lambda u: u.is_superuser or (
+        settings.DEBUG and settings.VISITS_ALLOW_LOCAL_WITHOUT_LOGIN
+    ),
+    login_url='/noticias/login/',
+)
 def visits(request):
     # Guardar la página de origen para decidir el botón de retorno (igual que en About)
     referer_path = urlparse(request.META.get('HTTP_REFERER', '')).path
@@ -242,7 +290,12 @@ def visits(request):
         if delete_one.isdigit():
             filtered_qs.filter(id=int(delete_one)).delete()
         elif action == 'delete_selected':
-            selected_ids = [v for v in request.POST.getlist('selected_visits') if v.isdigit()]
+            selected_ids = [
+                visit_id
+                for value in request.POST.getlist('selected_visits')
+                for visit_id in value.split(',')
+                if visit_id.isdigit()
+            ]
             if selected_ids:
                 filtered_qs.filter(id__in=selected_ids).delete()
         elif action == 'delete_all_filtered':
@@ -253,34 +306,20 @@ def visits(request):
             return redirect(f"{request.path}?{query_string}")
         return redirect(request.path)
 
-    visit_qs = filtered_qs.order_by('-visited_at')
-    paginator = Paginator(visit_qs, 100)
-    page_number = request.GET.get('page', 1)
-    page_obj = paginator.get_page(page_number)
+    visits_list = list(filtered_qs.order_by('-visited_at'))
     current_ip = get_client_ip(request)
     current_visitor_id = _get_visitor_id(request)
-
-    for visit in page_obj.object_list:
-        iso2 = (visit.country_code or '').upper()
-        if not iso2:
-            iso2 = _extract_iso2_from_country_text(visit.country)
-        visit.country_flag = _iso2_to_flag(iso2)
-        visit.country_iso2 = iso2.lower() if iso2 else ''
-        visit.is_self = (
-            bool(current_visitor_id and visit.visitor_id == current_visitor_id)
-            or bool(current_ip and visit.ip_address == current_ip)
-        )
-
-    query_params = request.GET.copy()
-    if 'page' in query_params:
-        del query_params['page']
+    visit_groups = _group_visits_by_country(
+        visits_list,
+        current_visitor_id,
+        current_ip,
+    )
 
     return render(request, 'visits.html', {
-        'page_obj': page_obj,
-        'total_visits': visit_qs.count(),
+        'visit_groups': visit_groups,
+        'total_visits': len(visits_list),
         'current_ip': current_ip,
         'current_visitor_id': current_visitor_id,
-        'filter_query': query_params.urlencode(),
         'filters': filters,
     })
 

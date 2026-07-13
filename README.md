@@ -145,6 +145,16 @@ python manage.py crontab add
 
 ## Variables de entorno recomendadas
 
+Para abrir `/visitas/` sin iniciar sesión durante el desarrollo local:
+
+```
+DEBUG=true
+VISITS_ALLOW_LOCAL_WITHOUT_LOGIN=true
+```
+
+La excepción solo se aplica cuando ambas variables están activas. En producción,
+mantén `DEBUG=false`; los usuarios seguirán necesitando una cuenta de superusuario.
+
 Para la sincronización de libros con Goodreads (vía RSS, sin cookies):
 
 ```

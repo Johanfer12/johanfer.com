@@ -17,19 +17,37 @@
         <div class="visits-toolbar">
             <form method="get" id="visits-filter-form">
                 <div class="filter-grid">
-                    <input class="filter-input" type="datetime-local" name="from" value="{{ filters.from }}" title="Desde">
-                    <input class="filter-input" type="datetime-local" name="to" value="{{ filters.to }}" title="Hasta">
-                    <input class="filter-input" type="text" name="ip" value="{{ filters.ip }}" placeholder="Filtrar IP">
-                    <input class="filter-input" type="text" name="country" value="{{ filters.country }}" placeholder="Filtrar país">
-                    <input class="filter-input" type="text" name="path" value="{{ filters.path }}" placeholder="Filtrar ruta">
-                    <input class="filter-input" type="text" name="ua" value="{{ filters.ua }}" placeholder="Filtrar user-agent">
+                    <label class="filter-field filter-field-date">
+                        <input class="filter-input" type="date" name="from" value="{{ filters.from }}" aria-label="Desde" title="Desde">
+                    </label>
+                    <label class="filter-field filter-field-date">
+                        <input class="filter-input" type="date" name="to" value="{{ filters.to }}" aria-label="Hasta" title="Hasta">
+                    </label>
+                    <label class="filter-field">
+                        <input class="filter-input" type="text" name="ip" value="{{ filters.ip }}" placeholder="Dirección IP" aria-label="IP">
+                    </label>
+                    <label class="filter-field">
+                        <input class="filter-input" type="text" name="country" value="{{ filters.country }}" placeholder="Nombre del país" aria-label="País">
+                    </label>
+                    <label class="filter-field filter-field-wide">
+                        <input class="filter-input" type="text" name="path" value="{{ filters.path }}" placeholder="Ruta visitada" aria-label="Ruta">
+                    </label>
+                    <label class="filter-field filter-field-wide">
+                        <input class="filter-input" type="text" name="ua" value="{{ filters.ua }}" placeholder="Navegador o bot" aria-label="User-Agent">
+                    </label>
                 </div>
             </form>
 
             <div class="toolbar-actions">
-                <button class="btn" type="submit" form="visits-filter-form">Filtrar</button>
-                <a class="btn secondary" href="/visitas/">Limpiar</a>
-                <div class="toolbar-group">
+                <div class="toolbar-group toolbar-group-primary">
+                    <button class="btn" type="submit" form="visits-filter-form">Filtrar</button>
+                    <a class="btn secondary" href="/visitas/">Limpiar filtros</a>
+                </div>
+                <div class="toolbar-group toolbar-group-danger">
+                    <label class="select-all-control">
+                        <input id="select-all-visits" type="checkbox">
+                        <span>Seleccionar todas</span>
+                    </label>
                     <button class="btn danger" type="submit" form="visits-delete-form" name="action" value="delete_selected" onclick="return confirm('¿Eliminar visitas seleccionadas?');">Eliminar seleccionadas</button>
                     <button class="btn danger" type="submit" form="visits-delete-form" name="action" value="delete_all_filtered" onclick="return confirm('¿Eliminar todas las visitas del filtro actual?');">Eliminar todo</button>
                 </div>
@@ -44,78 +62,86 @@
             <input type="hidden" name="country" value="{{ filters.country }}">
             <input type="hidden" name="path" value="{{ filters.path }}">
             <input type="hidden" name="ua" value="{{ filters.ua }}">
+            <input type="hidden" id="selected-visits-values" name="selected_visits" value="">
 
-            <div class="visits-table-wrap">
-                <table class="visits-table">
-                    <thead>
-                        <tr>
-                            <th>Fecha/Hora</th>
-                            <th class="visit-check"><input id="select-all-visits" type="checkbox" title="Seleccionar todo"></th>
-                            <th>IP</th>
-                            <th>País</th>
-                            <th>Ruta</th>
-                            <th>User-Agent</th>
-                            <th class="visit-actions">X</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for visit in page_obj %}
-                        <tr>
-                            <td>{{ visit.visited_at|date:"Y-m-d H:i:s" }}</td>
-                            <td class="visit-check"><input class="visit-select" type="checkbox" name="selected_visits" value="{{ visit.id }}"></td>
-                            <td>
-                                {{ visit.ip_address }}
-                                {% if visit.is_self %}
-                                <span class="self-badge">YO</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if visit.country %}
-                                {% if visit.country_iso2 %}
-                                <img class="country-flag-img" src="https://flagcdn.com/24x18/{{ visit.country_iso2 }}.png" alt="{{ visit.country }}">
-                                {% elif visit.country_flag %}
-                                <span class="country-flag">{{ visit.country_flag }}</span>
-                                {% endif %}
-                                {{ visit.country }}
-                                {% else %}
-                                -
-                                {% endif %}
-                            </td>
-                            <td class="visit-path">{{ visit.path }}</td>
-                            <td class="visit-agent">{{ visit.user_agent|default:"-" }}</td>
-                            <td class="visit-actions">
-                                <button class="inline-delete" type="submit" name="delete_one" value="{{ visit.id }}" title="Eliminar visita" aria-label="Eliminar visita" onclick="return confirm('¿Eliminar esta visita?');">&times;</button>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="7">No hay visitas registradas todavía.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            {% if visit_groups %}
+            <div class="visit-country-groups">
+                {% for group in visit_groups %}
+                <details class="visit-country-group">
+                    <summary>
+                        <span class="country-summary-name">
+                            {% if group.country_iso2 %}
+                            <img class="country-flag-img" src="https://flagcdn.com/24x18/{{ group.country_iso2 }}.png" alt="">
+                            {% elif group.country_flag %}
+                            <span class="country-flag" aria-hidden="true">{{ group.country_flag }}</span>
+                            {% endif %}
+                            <span>{{ group.country }}</span>
+                        </span>
+                        <span class="country-summary-count">
+                            {{ group.visit_count }} visita{{ group.visit_count|pluralize }}
+                            {% if group.self_count %}
+                            <span class="self-summary">({{ group.self_count }} {{ group.self_count|pluralize:"tuya,tuyas" }})</span>
+                            {% endif %}
+                        </span>
+                        <span class="country-summary-chevron" aria-hidden="true"></span>
+                    </summary>
+
+                    <div class="visits-table-wrap">
+                        <table class="visits-table">
+                            <colgroup>
+                                <col class="visit-col-date">
+                                <col class="visit-col-check">
+                                <col class="visit-col-ip">
+                                <col class="visit-col-path">
+                                <col class="visit-col-agent">
+                                <col class="visit-col-actions">
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th>Fecha/Hora</th>
+                                    <th class="visit-check">Sel.</th>
+                                    <th>IP</th>
+                                    <th>Ruta</th>
+                                    <th>User-Agent</th>
+                                    <th class="visit-actions">X</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for visit in group.visits %}
+                                <tr>
+                                    <td>{{ visit.visited_at|date:"Y-m-d H:i:s" }}</td>
+                                    <td class="visit-check"><input class="visit-select" type="checkbox" value="{{ visit.id }}" aria-label="Seleccionar visita"></td>
+                                    <td>
+                                        {{ visit.ip_address }}
+                                        {% if visit.is_self %}
+                                        <span class="self-badge">YO</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="visit-path">{{ visit.path }}</td>
+                                    <td class="visit-agent">{{ visit.user_agent|default:"-" }}</td>
+                                    <td class="visit-actions">
+                                        <button class="inline-delete" type="submit" name="delete_one" value="{{ visit.id }}" title="Eliminar visita" aria-label="Eliminar visita" onclick="return confirm('¿Eliminar esta visita?');">&times;</button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+                {% endfor %}
             </div>
+            {% else %}
+            <div class="visits-empty">No hay visitas que coincidan con los filtros.</div>
+            {% endif %}
         </form>
-
-        {% if page_obj.paginator.num_pages > 1 %}
-        <div class="pagination">
-            {% if page_obj.has_previous %}
-            <a href="?{% if filter_query %}{{ filter_query }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
-            {% endif %}
-
-            <span class="active">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
-
-            {% if page_obj.has_next %}
-            <a href="?{% if filter_query %}{{ filter_query }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
-            {% endif %}
-        </div>
-        {% endif %}
     </div>
     <script>
         (function () {
             const master = document.getElementById('select-all-visits');
             if (!master) return;
             const items = document.querySelectorAll('.visit-select');
+            const deleteForm = document.getElementById('visits-delete-form');
+            const selectedValues = document.getElementById('selected-visits-values');
             master.addEventListener('change', function () {
                 items.forEach(function (item) {
                     item.checked = master.checked;
@@ -131,6 +157,13 @@
                         return checkbox.checked;
                     });
                 });
+            });
+            deleteForm.addEventListener('submit', function (event) {
+                if (!event.submitter || event.submitter.value !== 'delete_selected') return;
+                selectedValues.value = Array.from(items)
+                    .filter(function (checkbox) { return checkbox.checked; })
+                    .map(function (checkbox) { return checkbox.value; })
+                    .join(',');
             });
         })();
     </script>
