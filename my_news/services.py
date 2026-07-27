@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 # Modelo de IA por defecto para resúmenes; el valor activo vive en la BD
 # (AIModelSetting, editable desde el admin) y este es solo el fallback.
 DEFAULT_AI_MODEL = 'gemma-4-31b'
+DEFAULT_AI_CONTENT_LIMIT = 10_000
 
 
 class CerebrasRateLimiter:
@@ -45,7 +46,9 @@ class CerebrasRateLimiter:
     SAFE_RPM_CAP = 250
     MAX_RETRY_SLEEP_SECONDS = 90
     MODEL_LIMITS = {
-        'gemma-4-31b': {'tpm': 500_000, 'rpm': 300},
+        # Límite observado en los headers del proyecto de producción.
+        # El factor de seguridad reduce este valor a 22.500 TPM.
+        'gemma-4-31b': {'tpm': 30_000, 'rpm': 300},
         'gpt-oss-120b': {'tpm': 1_000_000, 'rpm': 1_000},
         'zai-glm-4.7': {'tpm': 500_000, 'rpm': 500},
     }
@@ -601,7 +604,11 @@ class FeedService:
         return cleaned or None
 
     @staticmethod
-    def prepare_content_for_cerebras(title, original_content, content_limit=2500):
+    def prepare_content_for_cerebras(
+        title,
+        original_content,
+        content_limit=DEFAULT_AI_CONTENT_LIMIT,
+    ):
         """Convierte HTML/texto del feed en cuerpo compacto para el prompt.
 
         Con ``content_limit=None`` devuelve el texto limpio sin truncar.
@@ -646,7 +653,15 @@ class FeedService:
         return clean_text
 
     @staticmethod
-    def process_content_with_cerebras(title, original_content, cerebras_client, model_name, filter_instructions_text, max_retries=2, content_limit=2500):
+    def process_content_with_cerebras(
+        title,
+        original_content,
+        cerebras_client,
+        model_name,
+        filter_instructions_text,
+        max_retries=2,
+        content_limit=DEFAULT_AI_CONTENT_LIMIT,
+    ):
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
         instructions_section = (filter_instructions_text or FeedService._DEFAULT_FILTER_INSTRUCTIONS)
@@ -1132,7 +1147,7 @@ class FeedService:
             # Obtener contenido completo (solo noticias no filtradas por keyword) si:
             # - deep_search está activado para la fuente, o
             # - el feed trajo tan poco texto que la IA resumiría a ciegas.
-            ai_content_limit = 2500
+            ai_content_limit = DEFAULT_AI_CONTENT_LIMIT
             if source.deep_search or len(plain_description) < 200:
                 full_content = FeedService.get_full_article_content(entry.link)
                 if full_content['text'] and (
@@ -1142,8 +1157,10 @@ class FeedService:
                     plain_description = FeedService.prepare_content_for_cerebras(
                         entry.title, original_description, content_limit=None
                     )
-                    # Con artículo completo vale la pena dar más contexto al modelo
-                    ai_content_limit = 6000
+                    # El mismo límite amplio cubre tanto el RSS como el artículo
+                    # descargado sin penalizar a las fuentes que ya entregan el
+                    # cuerpo completo en el feed.
+                    ai_content_limit = DEFAULT_AI_CONTENT_LIMIT
                 # Solo usar la imagen del contenido si no se encontró una en el feed
                 if not image_url and full_content['image_url']:
                     image_url = full_content['image_url']

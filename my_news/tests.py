@@ -107,6 +107,21 @@ class CerebrasContentPreparationTests(SimpleTestCase):
 
         self.assertEqual(len(cleaned), 120)
 
+    def test_default_limit_keeps_information_after_legacy_cutoff(self):
+        content = ('Contexto introductorio sin el dato principal. ' * 75) + (
+            'Dato decisivo ubicado después del antiguo límite.'
+        )
+
+        cleaned = FeedService.prepare_content_for_cerebras('Titulo', content)
+
+        self.assertGreater(len(cleaned), 2500)
+        self.assertIn('Dato decisivo', cleaned)
+
+    def test_default_limit_caps_content_at_10000_characters(self):
+        cleaned = FeedService.prepare_content_for_cerebras('Titulo', 'a' * 12000)
+
+        self.assertEqual(len(cleaned), 10000)
+
 
 class CerebrasRateLimiterTests(SimpleTestCase):
     def setUp(self):
@@ -116,7 +131,7 @@ class CerebrasRateLimiterTests(SimpleTestCase):
     def test_model_limits_are_conservative_for_news_processing(self):
         limiter = CerebrasRateLimiter()
 
-        self.assertEqual(limiter.get_limits('gemma-4-31b'), (375_000, 225))
+        self.assertEqual(limiter.get_limits('gemma-4-31b'), (22_500, 225))
 
     def test_reset_header_duration_is_parsed(self):
         limiter = CerebrasRateLimiter()
