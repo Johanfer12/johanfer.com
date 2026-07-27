@@ -65,6 +65,18 @@ html.instagram-webview {
     }
 }
 
+/* En escritorio la tarjeta conserva 300px: una escala más compacta mejora la
+   jerarquía y evita que titulares normales parezcan texto móvil ampliado. */
+@media (min-width: 768px) {
+    .news-card-container {
+        --news-title-size: 17px;
+        --news-summary-size: 14px;
+        --news-meta-size: 13px;
+        --news-description-size: 15px;
+        --news-media-height: 140px;
+    }
+}
+
 /*
  * Instagram para Android aplica TextZoom desde el WebView. La compensación
  * queda centralizada como tokens del componente para no duplicar reglas.
@@ -88,9 +100,8 @@ html.instagram-webview .news-card-container {
     transition: transform 0.56s cubic-bezier(0.22, 0.61, 0.36, 1);
     -webkit-transform-style: preserve-3d;
     transform-style: preserve-3d;
-    transform: translateZ(0);
+    transform: none;
     -webkit-font-smoothing: subpixel-antialiased;
-    will-change: transform;
 }
 
 /* Una sola sombra dentro del plano 3D: gira junto con ambas caras. */
@@ -131,7 +142,7 @@ html.instagram-webview .news-card-container {
     background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
     display: flex;
     flex-direction: column;
-    transform: rotateY(0deg) translateZ(1px);
+    transform: rotateY(0deg);
 }
 
 .news-media-zone {
@@ -147,7 +158,7 @@ html.instagram-webview .news-card-container {
 
 .card-back {
     background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
-    transform: rotateY(180deg) translateZ(1px);
+    transform: rotateY(180deg);
     padding: 15px;
     display: flex;
     flex-direction: column;

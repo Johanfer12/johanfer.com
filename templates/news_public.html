@@ -26,7 +26,7 @@
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/news-icon.svg' %}">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/header.css' %}">
-    <link rel="stylesheet" href="{% static 'css/news.css' %}?v=20260727-6">
+    <link rel="stylesheet" href="{% static 'css/news.css' %}">
     <link rel="stylesheet" href="{% static 'css/news_public.css' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
 </head>
@@ -65,8 +65,8 @@
 
     {{ public_storage_key|json_script:"public-news-storage-key" }}
     {{ public_page_data|json_script:"public-news-page-data" }}
-    <script src="{% static 'js/news_cards_common.js' %}?v=20260727-3"></script>
-    <script src="{% static 'js/news_public.js' %}?v=20260727-5"></script>
+    <script src="{% static 'js/news_cards_common.js' %}"></script>
+    <script src="{% static 'js/news_public.js' %}"></script>
     <script src="{% static 'js/background_motion.js' %}"></script>
 </body>
 </html>
