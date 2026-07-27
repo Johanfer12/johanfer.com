@@ -525,6 +525,23 @@ html.instagram-webview .news-card-container {
     }
 }
 
+@media (min-width: 768px) {
+    .news-description {
+        line-height: 1.48;
+        text-wrap: pretty;
+    }
+
+    .news-description.is-description-compact {
+        font-size: 14px;
+        line-height: 1.44;
+    }
+
+    .news-description.is-description-tight {
+        font-size: 13px;
+        line-height: 1.42;
+    }
+}
+
 @media (max-width: 767px) {
     .main-content {
         min-height: calc(100vh - 100px);

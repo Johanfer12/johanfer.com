@@ -404,7 +404,7 @@
     };
 
     const applyAdaptiveTitleSize = (scope = document) => {
-        CardUi.fitTitleToSummary?.(scope);
+        CardUi.fitCardText?.(scope);
     };
 
     const drawCenteredParagraph = (ctx, text, boxX, boxY, boxWidth, boxHeight, { font, color, lineHeight, maxLines, verticalAlign = 'center' }) => {

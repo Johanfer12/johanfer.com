@@ -146,7 +146,7 @@
         root.querySelectorAll?.('.news-image').forEach((image) => {
             if (!image.isConnected) return;
             if (image.complete && image.naturalWidth === 0) useFallbackImage(image);
-            image.addEventListener('load', () => fitTitleToSummary(image.closest('.news-card-container') || document), {once: true});
+            image.addEventListener('load', () => fitCardText(image.closest('.news-card-container') || document), {once: true});
         });
     };
 
@@ -181,6 +181,23 @@
         });
     };
 
+    const fitDescriptionToCard = (scope = document) => {
+        scope.querySelectorAll?.('.news-description').forEach((description) => {
+            description.classList.remove('is-description-compact', 'is-description-tight');
+            if (isMobile() || description.scrollHeight <= description.clientHeight + 1) return;
+
+            description.classList.add('is-description-compact');
+            if (description.scrollHeight <= description.clientHeight + 1) return;
+
+            description.classList.add('is-description-tight');
+        });
+    };
+
+    const fitCardText = (scope = document) => {
+        fitTitleToSummary(scope);
+        fitDescriptionToCard(scope);
+    };
+
     document.addEventListener('error', (event) => {
         if (event.target?.matches?.('.news-image')) useFallbackImage(event.target);
     }, true);
@@ -188,28 +205,28 @@
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             bindImageFallbacks();
-            fitTitleToSummary();
+            fitCardText();
         });
     } else {
         bindImageFallbacks();
-        fitTitleToSummary();
+        fitCardText();
     }
 
     // Coalescar pasadas de ajuste de títulos: cada pasada fuerza reflows por
     // tarjeta, así que múltiples llamadas seguidas (load + resize) se agrupan
     // en una sola. Las imágenes que cargan tarde ya re-ajustan su propia
     // tarjeta vía bindImageFallbacks.
-    let titleFitTimer = null;
-    const scheduleTitleFit = () => {
-        if (titleFitTimer) clearTimeout(titleFitTimer);
-        titleFitTimer = window.setTimeout(() => {
-            titleFitTimer = null;
-            fitTitleToSummary();
+    let cardTextFitTimer = null;
+    const scheduleCardTextFit = () => {
+        if (cardTextFitTimer) clearTimeout(cardTextFitTimer);
+        cardTextFitTimer = window.setTimeout(() => {
+            cardTextFitTimer = null;
+            fitCardText();
         }, 120);
     };
 
-    window.addEventListener('load', scheduleTitleFit);
-    window.addEventListener('resize', scheduleTitleFit);
+    window.addEventListener('load', scheduleCardTextFit);
+    window.addEventListener('resize', scheduleCardTextFit);
 
     window.NewsCards = {
         isMobile,
@@ -225,5 +242,7 @@
         resetFlipState,
         bindImageFallbacks,
         fitTitleToSummary,
+        fitDescriptionToCard,
+        fitCardText,
     };
 })();
