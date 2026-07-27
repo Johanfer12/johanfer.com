@@ -111,30 +111,31 @@ Esta aplicación muestra los datos musicales del usuario. La sincronización con
 git clone https://github.com/tu-usuario/tu-repositorio.git
 ```
 
-2. Crea un entorno virtual e instala las dependencias:
+2. Configura Poetry para guardar los entornos fuera del repositorio e instala
+   las dependencias:
 
-```
-python -m venv env
-source env/bin/activate  # En Windows, usa `env\Scripts\activate`
-pip install -r requirements.txt
+```powershell
+poetry config virtualenvs.in-project false
+poetry config virtualenvs.path "$env:USERPROFILE\.virtualenvs"
+poetry install
 ```
 
 3. Aplica las migraciones de Django:
 
 ```
-python manage.py migrate
+poetry run python manage.py migrate
 ```
 
 4. Para actualizar los libros desde el RSS de Goodreads manualmente:
 
 ```
-python manage.py shell -c "from home_page.utils import refresh_books_data; refresh_books_data()"
+poetry run python manage.py shell -c "from home_page.utils import refresh_books_data; refresh_books_data()"
 ```
 
 5. Para actualizar el feed de noticias manualmente:
 
 ```
-python manage.py shell -c "from my_news.tasks import update_news_cron; update_news_cron()"
+poetry run python manage.py shell -c "from my_news.tasks import update_news_cron; update_news_cron()"
 ```
 
 6. Instala los cronjobs en el servidor (necesario solo en producción):
