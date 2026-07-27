@@ -23,7 +23,7 @@ html.instagram-webview {
 .news-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 300px));
-    gap: 15px;
+    gap: 20px;
     padding: 15px;
     max-width: 1800px;
     margin: 0 auto;
@@ -34,15 +34,46 @@ html.instagram-webview {
 
 /* Contenedor de tarjeta de noticia */
 .news-card-container {
+    --news-card-radius: 12px;
+    --news-card-shadow: 0 12px 28px rgba(2, 8, 18, 0.38), 0 3px 8px rgba(2, 8, 18, 0.24);
+    --news-card-mobile-gap: 22px;
+    --news-title-size: 1.2rem;
+    --news-summary-size: 1rem;
+    --news-meta-size: 0.94rem;
+    --news-description-size: 1rem;
+    --news-media-height: 140px;
     width: 300px;
     height: 350px;
     position: relative;
     z-index: 1;
     transform-origin: top left;
-    /* will-change solo durante animaciones (.inserting/.collapsing); dejarlo
-       permanente mantiene una capa GPU viva por tarjeta en reposo. */
+    container-type: inline-size;
+    border-radius: var(--news-card-radius);
+    isolation: isolate;
+    -webkit-perspective: 1000px;
     perspective: 1000px; /* Mejora el efecto 3D */
     transition: transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+@supports (font-size: 1cqi) {
+    .news-card-container {
+        --news-title-size: clamp(1.15rem, calc(1.02rem + 1cqi), 1.32rem);
+        --news-summary-size: clamp(1rem, calc(0.93rem + 0.35cqi), 1.08rem);
+        --news-meta-size: clamp(0.94rem, calc(0.87rem + 0.35cqi), 1rem);
+        --news-description-size: clamp(1rem, calc(0.93rem + 0.35cqi), 1.08rem);
+        --news-media-height: clamp(140px, 46.67cqi, 154px);
+    }
+}
+
+/*
+ * Instagram para Android aplica TextZoom desde el WebView. La compensación
+ * queda centralizada como tokens del componente para no duplicar reglas.
+ */
+html.instagram-webview .news-card-container {
+    --news-title-size: 0.96em;
+    --news-summary-size: 0.78em;
+    --news-meta-size: 0.78em;
+    --news-description-size: 0.8em;
 }
 
 .news-card-container:hover {
@@ -55,10 +86,22 @@ html.instagram-webview {
     width: 100%;
     height: 100%;
     transition: transform 0.56s cubic-bezier(0.22, 0.61, 0.36, 1);
+    -webkit-transform-style: preserve-3d;
     transform-style: preserve-3d;
     transform: translateZ(0);
     -webkit-font-smoothing: subpixel-antialiased;
     will-change: transform;
+}
+
+/* Una sola sombra dentro del plano 3D: gira junto con ambas caras. */
+.news-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--news-card-radius);
+    box-shadow: var(--news-card-shadow);
+    transform: translateZ(-1px);
+    pointer-events: none;
 }
 
 /* El giro se controla por JS para evitar que el borde del contenedor dispare el flip */
@@ -74,27 +117,29 @@ html.instagram-webview {
 /* Frente y reverso de la tarjeta */
 .card-front, .card-back {
     position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
-    border-radius: 10px;
+    border-radius: var(--news-card-radius);
     overflow: hidden;
     border: 1px solid rgba(198, 214, 242, 0.16);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.28), 0 8px 20px rgba(0, 0, 0, 0.22);
 }
 
 .card-front {
     background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
     display: flex;
     flex-direction: column;
-    transform: rotateY(0deg) translateZ(0);
+    transform: rotateY(0deg) translateZ(1px);
 }
 
 .news-media-zone {
     position: relative;
-    flex: 0 0 140px;
-    height: 140px;
+    flex: 0 0 var(--news-media-height);
+    height: var(--news-media-height);
+    min-height: 140px;
+    max-height: 154px;
     width: 100%;
     overflow: hidden;
     background: rgba(9, 16, 28, 0.54);
@@ -102,7 +147,7 @@ html.instagram-webview {
 
 .card-back {
     background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
-    transform: rotateY(180deg) translateZ(0);
+    transform: rotateY(180deg) translateZ(1px);
     padding: 15px;
     display: flex;
     flex-direction: column;
@@ -110,23 +155,6 @@ html.instagram-webview {
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
-    contain: content;
-}
-
-/* Corregir orientación del texto en el reverso */
-.card-back * {
-    transform: scaleX(-1);
-}
-
-.card-back .news-description,
-.card-back .news-meta,
-.card-back .news-links,
-.news-link {
-    transform: none; 
-}
-
-.card-back .news-links * {
-    transform: none !important;
 }
 
 /* Elementos de la tarjeta */
@@ -139,18 +167,13 @@ html.instagram-webview {
 
 .news-title {
     flex: 0 0 auto;
-    font-size: 1.05em;
+    font-size: var(--news-title-size);
     font-weight: 700;
     margin: 10px 15px 5px 15px;
     color: #f2f5fb;
     line-height: 1.28;
-    word-break: break-word;
+    word-break: normal;
     overflow-wrap: anywhere;
-}
-
-.news-title.is-title-overflow-4 {
-    font-size: 0.9em;
-    line-height: 1.22;
 }
 
 .news-title.is-title-clamped {
@@ -169,7 +192,8 @@ html.instagram-webview {
 
 .news-meta {
     color: rgba(227, 233, 245, 0.58);
-    font-size: 0.85em;
+    font-size: var(--news-meta-size);
+    line-height: 1.35;
     padding: 10px 15px;
     margin-top: auto;
     display: flex;
@@ -179,6 +203,8 @@ html.instagram-webview {
 
 .meta-info {
     flex-grow: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .similarity-score {
@@ -189,18 +215,21 @@ html.instagram-webview {
 
 .news-description {
     color: rgba(227, 233, 245, 0.86);
-    font-size: 0.9em;
-    line-height: 1.5;
+    font-size: var(--news-description-size);
+    line-height: 1.55;
     /* Sin justify: en ~280px de ancho deja "ríos" de espacios. */
     text-align: left;
     flex: 1;
     margin: 10px 0;
     display: block;
     overflow-y: auto;
-    hyphens: auto;
-    word-break: break-word;
+    hyphens: none;
+    word-break: normal;
+    overflow-wrap: anywhere;
     overscroll-behavior: contain;
     touch-action: pan-y;
+    -webkit-user-select: text;
+    user-select: text;
 }
 
 .news-description br {
@@ -492,8 +521,8 @@ html.instagram-webview {
 
     .news-grid {
         gap: 0;
-        grid-template-columns: minmax(0, min(330px, 96%));
-        padding: 0 0 18px;
+        grid-template-columns: minmax(0, min(330px, calc(100% - 32px)));
+        padding: 0 0 24px;
     }
 
     /* Deshabilitar resaltado azul al tocar en móviles */
@@ -507,70 +536,10 @@ html.instagram-webview {
         -ms-user-select: none; /* Internet Explorer/Edge */
         user-select: none; /* Standard */
         touch-action: manipulation;
-        contain: layout paint style;
-        margin-bottom: 15px;
-    }
-    .news-media-zone {
-        flex: 0 0 clamp(140px, 42.8vw, 154px);
-        height: clamp(140px, 42.8vw, 154px);
-        min-height: 140px;
-        max-height: 154px;
-    }
-
-    .news-title {
-        font-size: clamp(1.2rem, 5.1vw, 1.32rem);
-        line-height: 1.3;
-    }
-
-    .card-front .short-answer {
-        font-size: clamp(1rem, 4.2vw, 1.08rem);
-        line-height: 1.45;
-    }
-
-    .news-meta {
-        font-size: clamp(0.94rem, 3.9vw, 1rem);
-        line-height: 1.35;
-    }
-
-    .card-back .news-description {
-        font-size: clamp(1rem, 4.2vw, 1.08rem);
-        line-height: 1.55;
-    }
-
-    html.instagram-webview .news-title,
-    html.instagram-webview .short-answer,
-    html.instagram-webview .news-meta,
-    html.instagram-webview .news-description {
-        max-height: 999999px;
-    }
-
-    /*
-     * Instagram para Android aplica TextZoom del WebView además del tamaño
-     * responsive. Compensarlo solo dentro de ese WebView evita que ambas caras
-     * crezcan hasta ~1.3x sin volver a encoger las tarjetas en otros móviles.
-     */
-    html.instagram-webview .news-title {
-        font-size: 0.96em;
-        line-height: 1.24;
-    }
-
-    html.instagram-webview .card-front .short-answer {
-        font-size: 0.78em;
-        line-height: 1.38;
-    }
-
-    html.instagram-webview .news-meta {
-        font-size: 0.78em;
-        line-height: 1.35;
-    }
-
-    html.instagram-webview .card-back .news-description {
-        font-size: 0.8em;
-        line-height: 1.5;
+        margin-bottom: var(--news-card-mobile-gap);
     }
 
     .news-card .news-image { filter: saturate(0.95) contrast(0.98); }
-    .card-front, .card-back { box-shadow: 0 4px 8px rgba(0,0,0,0.22), 0 6px 14px rgba(0,0,0,0.18); }
 }
 
 /* Animación de eliminación (shrink + fade, barato en GPU) */
@@ -600,8 +569,9 @@ html.instagram-webview {
     will-change: height, width, margin, opacity, transform;
     transition: height 0.45s ease, width 0.45s ease, margin 0.45s ease, opacity 0.35s ease, transform 0.45s ease;
 }
-.news-card-container.collapsing .news-card {
-    box-shadow: none !important;
+
+.news-card-container.collapsing .news-card::before {
+    box-shadow: none;
 }
 
 /* Animación para la nueva tarjeta que entra */
@@ -815,14 +785,14 @@ html.instagram-webview {
 }
 
 .short-answer {
-    font-size: 0.8em;
+    font-size: var(--news-summary-size);
     color: rgba(227, 233, 245, 0.68);
     font-weight: 500;
     margin: 0 15px 6px 15px;
     margin-top: auto;
-    line-height: 1.4;
+    line-height: 1.45;
     font-style: italic;
-    word-break: break-word;
+    word-break: normal;
     overflow-wrap: anywhere;
 }
 

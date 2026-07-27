@@ -49,8 +49,10 @@
         startX: 0,
         startY: 0,
         startScrollY: 0,
+        startedAt: 0,
         moved: false,
         touchActive: false,
+        selectionActiveAtStart: false,
         suppressCompatibilityClick: false,
         scrolling: false,
         scrollEndTimer: null,
@@ -160,11 +162,11 @@
 
     const toggleCardFromTapTarget = (target) => {
         const container = target.closest('.news-card-container');
-        if (!container || CardUi.isCardActionTarget(target) || mobileTapState.moved) return false;
+        if (!container || CardUi.isCardActionTarget(target)) return false;
+        if (!CardUi.isValidMobileTap(mobileTapState, container)) return false;
 
         const card = container.querySelector('.news-card');
         if (!card) return false;
-        if (card.classList.contains('is-flipped') && target.closest('.news-description')) return false;
 
         cards().forEach((item) => {
             if (item !== container) CardUi.resetFlipState(item);
@@ -199,8 +201,12 @@
         mobileTapState.startX = event.clientX;
         mobileTapState.startY = event.clientY;
         mobileTapState.startScrollY = window.scrollY;
+        mobileTapState.startedAt = Date.now();
         mobileTapState.moved = false;
         mobileTapState.touchActive = true;
+        mobileTapState.selectionActiveAtStart = CardUi.hasTextSelectionWithin(
+            event.target.closest('.news-card-container')
+        );
     }, {passive: true});
 
     grid?.addEventListener('pointermove', (event) => {
@@ -218,13 +224,15 @@
         const dy = Math.abs(event.clientY - mobileTapState.startY);
         const scrolled = Math.abs(window.scrollY - mobileTapState.startScrollY);
         if (dx > 8 || dy > 8 || scrolled > 2) mobileTapState.moved = true;
-        if (!toggleCardFromTapTarget(event.target)) return;
+        if (CardUi.isCardActionTarget(event.target)) return;
 
-        // pointerup ya atendió el toque; ignorar el click sintético posterior.
+        // Todo pointerup táctil sobre la superficie de la tarjeta ya fue
+        // clasificado aquí, incluso si era scroll, pulsación larga o selección.
         mobileTapState.suppressCompatibilityClick = true;
         window.setTimeout(() => {
             mobileTapState.suppressCompatibilityClick = false;
         }, 500);
+        toggleCardFromTapTarget(event.target);
     }, {passive: true});
 
     grid?.addEventListener('pointercancel', (event) => {
@@ -244,7 +252,6 @@
             mobileTapState.scrolling = false;
             mobileTapState.scrollEndTimer = null;
         }, 160);
-        cards().forEach(CardUi.resetFlipState);
     }, {passive: true});
 
     grid?.addEventListener('mousemove', (event) => {

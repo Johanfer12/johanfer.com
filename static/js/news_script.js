@@ -1046,7 +1046,7 @@
             requestAnimationFrame(() => {
                 el.style.transition = 'height 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), margin-bottom 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.24s ease';
                 el.style.height = `${finalHeight}px`;
-                el.style.marginBottom = '15px';
+                el.style.marginBottom = 'var(--news-card-mobile-gap)';
                 el.style.opacity = '1';
                 const onInsertionEnd = (event) => {
                     if (event.propertyName !== 'height') return;
@@ -1487,7 +1487,7 @@
             updateSaveButtonVisual(saveBtn, isSaved);
         }
 
-        // Solo reduce tamaño si el titulo realmente supera 4 lineas renderizadas.
+        // Limitar líneas solo cuando el contenido supera la altura de la cara.
         requestAnimationFrame(() => applyAdaptiveTitleSize(container));
     };
 
@@ -1501,27 +1501,56 @@
     const mobileTapState = {
         startX: 0,
         startY: 0,
+        startScrollY: 0,
+        startedAt: 0,
         moved: false,
-        startedInDescription: false,
+        touchActive: false,
+        hasTouchSequence: false,
+        selectionActiveAtStart: false,
     };
 
     DOM.grid?.addEventListener('pointerdown', (e) => {
         if (!isMobile() || e.pointerType !== 'touch') return;
         mobileTapState.startX = e.clientX;
         mobileTapState.startY = e.clientY;
+        mobileTapState.startScrollY = window.scrollY;
+        mobileTapState.startedAt = Date.now();
         mobileTapState.moved = false;
-        mobileTapState.startedInDescription = !!e.target.closest('.news-card.is-flipped .news-description');
+        mobileTapState.touchActive = true;
+        mobileTapState.hasTouchSequence = true;
+        const container = e.target.closest('.news-card-container');
+        mobileTapState.selectionActiveAtStart = CardUi.hasTextSelectionWithin(container);
     }, {passive: true});
 
     DOM.grid?.addEventListener('pointermove', (e) => {
         if (!isMobile() || e.pointerType !== 'touch') return;
         const dx = Math.abs(e.clientX - mobileTapState.startX);
         const dy = Math.abs(e.clientY - mobileTapState.startY);
-        if (dx > 8 || dy > 8) mobileTapState.moved = true;
+        const scrolled = Math.abs(window.scrollY - mobileTapState.startScrollY);
+        if (dx > 8 || dy > 8 || scrolled > 2) mobileTapState.moved = true;
+    }, {passive: true});
+
+    DOM.grid?.addEventListener('pointerup', (e) => {
+        if (!isMobile() || e.pointerType !== 'touch') return;
+        mobileTapState.touchActive = false;
+        const dx = Math.abs(e.clientX - mobileTapState.startX);
+        const dy = Math.abs(e.clientY - mobileTapState.startY);
+        const scrolled = Math.abs(window.scrollY - mobileTapState.startScrollY);
+        if (dx > 8 || dy > 8 || scrolled > 2) mobileTapState.moved = true;
+    }, {passive: true});
+
+    DOM.grid?.addEventListener('pointercancel', (e) => {
+        if (!isMobile() || e.pointerType !== 'touch') return;
+        mobileTapState.moved = true;
+        mobileTapState.touchActive = false;
+        mobileTapState.hasTouchSequence = false;
     }, {passive: true});
 
     // Delegación de eventos para reducir listeners por tarjeta
     DOM.grid?.addEventListener('click', (e) => {
+        const hasTrackedTouch = mobileTapState.hasTouchSequence;
+        mobileTapState.hasTouchSequence = false;
+
         const shareBtn = e.target.closest('.share-opener');
         if (shareBtn) {
             e.stopPropagation();
@@ -1564,8 +1593,8 @@
 
             const cardElement = container.querySelector('.news-card');
             if (!cardElement || cardElement.dataset.flipLocked === 'true') return;
-            if (mobileTapState.moved) return;
-            if (cardElement.classList.contains('is-flipped') && e.target.closest('.news-description')) return;
+            if (hasTrackedTouch && !CardUi.isValidMobileTap(mobileTapState, container)) return;
+            if (!hasTrackedTouch && CardUi.hasTextSelectionWithin(container)) return;
 
             const shouldFlip = !cardElement.classList.contains('is-flipped');
             $$('.news-card-container', DOM.grid).forEach((card) => {
@@ -1728,6 +1757,7 @@
     });
 
     DOM.grid?.addEventListener('pointerout', (e) => {
+        if (e.pointerType === 'touch' || isMobile()) return;
         const container = e.target.closest('.news-card-container');
         if (!container || (e.relatedTarget && container.contains(e.relatedTarget))) return;
         if (isPointerWithinCardBounds(container, e)) return;
@@ -1735,6 +1765,7 @@
     });
 
     DOM.grid?.addEventListener('pointercancel', (e) => {
+        if (e.pointerType === 'touch' || isMobile()) return;
         const container = e.target.closest('.news-card-container');
         if (container) resetCardHoverMode(container);
     });
@@ -1754,21 +1785,19 @@
         if (!e.target.closest?.('.news-card-container')) resetAllMobileTapCards();
     });
 
-    let mobileScrollResetTimer = null;
     window.addEventListener('scroll', () => {
-        if (!isMobile() || mobileScrollResetTimer || mobileTapState.startedInDescription) return;
-        mobileScrollResetTimer = setTimeout(() => {
-            mobileScrollResetTimer = null;
-            resetAllMobileTapCards();
-        }, 80);
+        if (!isMobile()) return;
+        if (mobileTapState.touchActive) mobileTapState.moved = true;
     }, {passive: true});
 
     window.addEventListener('touchend', () => {
-        mobileTapState.startedInDescription = false;
+        mobileTapState.touchActive = false;
     }, {passive: true});
 
     window.addEventListener('touchcancel', () => {
-        mobileTapState.startedInDescription = false;
+        mobileTapState.moved = true;
+        mobileTapState.touchActive = false;
+        mobileTapState.hasTouchSequence = false;
     }, {passive: true});
 
     // Sondeo de noticias nuevas. Antes era una conexión SSE permanente, pero

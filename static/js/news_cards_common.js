@@ -96,6 +96,32 @@
         '.mobile-delete-btn',
     ].join(', '));
 
+    const hasTextSelectionWithin = (container) => {
+        const selection = window.getSelection?.();
+        if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false;
+        if (!container) return true;
+
+        const isNodeWithin = (node) => {
+            if (!node) return false;
+            const element = node.nodeType === 3 ? node.parentElement : node;
+            return !!element && container.contains(element);
+        };
+
+        if (isNodeWithin(selection.anchorNode) || isNodeWithin(selection.focusNode)) return true;
+
+        try {
+            return selection.getRangeAt(0).intersectsNode(container);
+        } catch (_) {
+            return false;
+        }
+    };
+
+    const isValidMobileTap = (state, container, {maxDuration = 500} = {}) => {
+        if (!state || state.moved || state.selectionActiveAtStart) return false;
+        if (state.startedAt && (Date.now() - state.startedAt) > maxDuration) return false;
+        return !hasTextSelectionWithin(container);
+    };
+
     const resetFlipState = (container) => {
         const card = container?.querySelector('.news-card');
         if (!card) return;
@@ -138,7 +164,7 @@
             const title = front.querySelector('.news-title');
             if (!title) return;
 
-            title.classList.remove('is-title-overflow-4', 'is-title-clamped');
+            title.classList.remove('is-title-clamped');
             title.style.removeProperty('--title-lines');
 
             const lineHeight = getLineHeight(title);
@@ -194,6 +220,8 @@
         isPointerInProtectedMediaZone,
         isPointerWithinCardBounds,
         isCardActionTarget,
+        hasTextSelectionWithin,
+        isValidMobileTap,
         resetFlipState,
         bindImageFallbacks,
         fitTitleToSummary,
