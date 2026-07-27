@@ -48,7 +48,12 @@
     const mobileTapState = {
         startX: 0,
         startY: 0,
+        startScrollY: 0,
         moved: false,
+        touchActive: false,
+        suppressCompatibilityClick: false,
+        scrolling: false,
+        scrollEndTimer: null,
     };
 
     const resetAllDesktopHoverCards = () => {
@@ -153,6 +158,22 @@
     updateCounter();
     refillCards();
 
+    const toggleCardFromTapTarget = (target) => {
+        const container = target.closest('.news-card-container');
+        if (!container || CardUi.isCardActionTarget(target) || mobileTapState.moved) return false;
+
+        const card = container.querySelector('.news-card');
+        if (!card) return false;
+        if (card.classList.contains('is-flipped') && target.closest('.news-description')) return false;
+
+        cards().forEach((item) => {
+            if (item !== container) CardUi.resetFlipState(item);
+        });
+        card.classList.toggle('is-flipped', !card.classList.contains('is-flipped'));
+        card.classList.remove('image-hover', 'delete-hover');
+        return true;
+    };
+
     grid?.addEventListener('click', (event) => {
         const button = event.target.closest('.delete-btn, .mobile-delete-btn');
         if (button) {
@@ -165,35 +186,71 @@
 
         if (!CardUi.isMobile()) return;
 
-        const container = event.target.closest('.news-card-container');
-        if (!container || CardUi.isCardActionTarget(event.target) || mobileTapState.moved) return;
-
-        const card = container.querySelector('.news-card');
-        if (!card) return;
-        if (card.classList.contains('is-flipped') && event.target.closest('.news-description')) return;
-
-        cards().forEach((item) => {
-            if (item !== container) CardUi.resetFlipState(item);
-        });
-        card.classList.toggle('is-flipped', !card.classList.contains('is-flipped'));
-        card.classList.remove('image-hover', 'delete-hover');
+        if (mobileTapState.scrolling) return;
+        if (mobileTapState.suppressCompatibilityClick) {
+            mobileTapState.suppressCompatibilityClick = false;
+            return;
+        }
+        toggleCardFromTapTarget(event.target);
     });
 
     grid?.addEventListener('pointerdown', (event) => {
         if (!CardUi.isMobile() || event.pointerType !== 'touch') return;
         mobileTapState.startX = event.clientX;
         mobileTapState.startY = event.clientY;
+        mobileTapState.startScrollY = window.scrollY;
         mobileTapState.moved = false;
+        mobileTapState.touchActive = true;
     }, {passive: true});
 
     grid?.addEventListener('pointermove', (event) => {
         if (!CardUi.isMobile() || event.pointerType !== 'touch') return;
         const dx = Math.abs(event.clientX - mobileTapState.startX);
         const dy = Math.abs(event.clientY - mobileTapState.startY);
-        if (dx > 8 || dy > 8) mobileTapState.moved = true;
+        const scrolled = Math.abs(window.scrollY - mobileTapState.startScrollY);
+        if (dx > 8 || dy > 8 || scrolled > 2) mobileTapState.moved = true;
+    }, {passive: true});
+
+    grid?.addEventListener('pointerup', (event) => {
+        if (!CardUi.isMobile() || event.pointerType !== 'touch') return;
+        mobileTapState.touchActive = false;
+        const dx = Math.abs(event.clientX - mobileTapState.startX);
+        const dy = Math.abs(event.clientY - mobileTapState.startY);
+        const scrolled = Math.abs(window.scrollY - mobileTapState.startScrollY);
+        if (dx > 8 || dy > 8 || scrolled > 2) mobileTapState.moved = true;
+        if (!toggleCardFromTapTarget(event.target)) return;
+
+        // pointerup ya atendió el toque; ignorar el click sintético posterior.
+        mobileTapState.suppressCompatibilityClick = true;
+        window.setTimeout(() => {
+            mobileTapState.suppressCompatibilityClick = false;
+        }, 500);
+    }, {passive: true});
+
+    grid?.addEventListener('pointercancel', (event) => {
+        if (!CardUi.isMobile() || event.pointerType !== 'touch') return;
+        mobileTapState.moved = true;
+        mobileTapState.touchActive = false;
+    }, {passive: true});
+
+    window.addEventListener('scroll', () => {
+        if (!CardUi.isMobile()) return;
+        if (mobileTapState.touchActive) mobileTapState.moved = true;
+        mobileTapState.scrolling = true;
+        if (mobileTapState.scrollEndTimer) {
+            window.clearTimeout(mobileTapState.scrollEndTimer);
+        }
+        mobileTapState.scrollEndTimer = window.setTimeout(() => {
+            mobileTapState.scrolling = false;
+            mobileTapState.scrollEndTimer = null;
+        }, 160);
+        cards().forEach(CardUi.resetFlipState);
     }, {passive: true});
 
     grid?.addEventListener('mousemove', (event) => {
+        // Instagram y la emulación táctil pueden emitir mousemove antes del
+        // click compatible. En móvil el giro pertenece únicamente al toque.
+        if (CardUi.isMobile()) return;
         const container = event.target.closest('.news-card-container');
         if (!container) return;
         const card = container.querySelector('.news-card');
@@ -210,6 +267,7 @@
     });
 
     grid?.addEventListener('pointerout', (event) => {
+        if (CardUi.isMobile()) return;
         const container = event.target.closest('.news-card-container');
         if (!container || (event.relatedTarget && container.contains(event.relatedTarget))) return;
         if (CardUi.isPointerWithinCardBounds(container, event)) return;
@@ -217,6 +275,7 @@
     });
 
     document.addEventListener('mousemove', (event) => {
+        if (CardUi.isMobile()) return;
         const container = event.target.closest?.('.news-card-container');
         cards().forEach((card) => {
             if (card !== container) CardUi.resetFlipState(card);

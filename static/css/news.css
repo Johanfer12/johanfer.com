@@ -539,8 +539,34 @@ html.instagram-webview {
 
     html.instagram-webview .news-title,
     html.instagram-webview .short-answer,
-    html.instagram-webview .news-meta {
+    html.instagram-webview .news-meta,
+    html.instagram-webview .news-description {
         max-height: 999999px;
+    }
+
+    /*
+     * Instagram para Android aplica TextZoom del WebView además del tamaño
+     * responsive. Compensarlo solo dentro de ese WebView evita que ambas caras
+     * crezcan hasta ~1.3x sin volver a encoger las tarjetas en otros móviles.
+     */
+    html.instagram-webview .news-title {
+        font-size: 0.96em;
+        line-height: 1.24;
+    }
+
+    html.instagram-webview .card-front .short-answer {
+        font-size: 0.78em;
+        line-height: 1.38;
+    }
+
+    html.instagram-webview .news-meta {
+        font-size: 0.78em;
+        line-height: 1.35;
+    }
+
+    html.instagram-webview .card-back .news-description {
+        font-size: 0.8em;
+        line-height: 1.5;
     }
 
     .news-card .news-image { filter: saturate(0.95) contrast(0.98); }
