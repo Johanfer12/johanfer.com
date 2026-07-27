@@ -12,6 +12,7 @@ CLAUDE.md
 /qdrant_storage/
 /media/
 /ops_local/
+/server/
 RASPBERRY_SERVER_REBUILD.md
 AGENTS.md
 /scripts/
