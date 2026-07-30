@@ -44,12 +44,7 @@
                     <a class="btn secondary" href="/visitas/">Limpiar filtros</a>
                 </div>
                 <div class="toolbar-group toolbar-group-danger">
-                    <label class="select-all-control">
-                        <input id="select-all-visits" type="checkbox">
-                        <span>Seleccionar todas</span>
-                    </label>
-                    <button class="btn danger" type="submit" form="visits-delete-form" name="action" value="delete_selected" onclick="return confirm('¿Eliminar visitas seleccionadas?');">Eliminar seleccionadas</button>
-                    <button class="btn danger" type="submit" form="visits-delete-form" name="action" value="delete_all_filtered" onclick="return confirm('¿Eliminar todas las visitas del filtro actual?');">Eliminar todo</button>
+                    <button class="btn danger" type="submit" form="visits-delete-form" name="action" value="delete_all_filtered" data-confirm-delete="filtered">Eliminar todo</button>
                 </div>
             </div>
         </div>
@@ -67,67 +62,93 @@
             {% if visit_groups %}
             <div class="visit-country-groups">
                 {% for group in visit_groups %}
-                <details class="visit-country-group">
-                    <summary>
-                        <span class="country-summary-name">
-                            {% if group.country_iso2 %}
-                            <img class="country-flag-img" src="https://flagcdn.com/24x18/{{ group.country_iso2 }}.png" alt="">
-                            {% elif group.country_flag %}
-                            <span class="country-flag" aria-hidden="true">{{ group.country_flag }}</span>
-                            {% endif %}
-                            <span>{{ group.country }}</span>
-                        </span>
-                        <span class="country-summary-count">
-                            {{ group.visit_count }} visita{{ group.visit_count|pluralize }}
-                            {% if group.self_count %}
-                            <span class="self-summary">({{ group.self_count }} {{ group.self_count|pluralize:"tuya,tuyas" }})</span>
-                            {% endif %}
-                        </span>
-                        <span class="country-summary-chevron" aria-hidden="true"></span>
-                    </summary>
-
-                    <div class="visits-table-wrap">
-                        <table class="visits-table">
-                            <colgroup>
-                                <col class="visit-col-date">
-                                <col class="visit-col-check">
-                                <col class="visit-col-ip">
-                                <col class="visit-col-path">
-                                <col class="visit-col-agent">
-                                <col class="visit-col-actions">
-                            </colgroup>
-                            <thead>
-                                <tr>
-                                    <th>Fecha/Hora</th>
-                                    <th class="visit-check">Sel.</th>
-                                    <th>IP</th>
-                                    <th>Ruta</th>
-                                    <th>User-Agent</th>
-                                    <th class="visit-actions">X</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for visit in group.visits %}
-                                <tr>
-                                    <td>{{ visit.visited_at|date:"Y-m-d H:i:s" }}</td>
-                                    <td class="visit-check"><input class="visit-select" type="checkbox" value="{{ visit.id }}" aria-label="Seleccionar visita"></td>
-                                    <td>
-                                        {{ visit.ip_address }}
-                                        {% if visit.is_self %}
-                                        <span class="self-badge">YO</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="visit-path">{{ visit.path }}</td>
-                                    <td class="visit-agent">{{ visit.user_agent|default:"-" }}</td>
-                                    <td class="visit-actions">
-                                        <button class="inline-delete" type="submit" name="delete_one" value="{{ visit.id }}" title="Eliminar visita" aria-label="Eliminar visita" onclick="return confirm('¿Eliminar esta visita?');">&times;</button>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                <article class="visit-country-group">
+                    <div class="country-card">
+                        <button class="country-card-open" type="button" data-country-modal-target="country-visits-{{ forloop.counter }}" aria-haspopup="dialog">
+                            <span class="country-summary-name">
+                                {% if group.is_local %}
+                                <span class="country-type-icon" aria-hidden="true">🏠</span>
+                                {% elif group.is_unknown %}
+                                <span class="country-type-icon" aria-hidden="true">🌐</span>
+                                {% elif group.country_iso2 %}
+                                <img class="country-flag-img" src="https://flagcdn.com/24x18/{{ group.country_iso2 }}.png" alt="">
+                                {% elif group.country_flag %}
+                                <span class="country-flag" aria-hidden="true">{{ group.country_flag }}</span>
+                                {% endif %}
+                                <span>{{ group.country }}</span>
+                            </span>
+                            <span class="country-summary-count">
+                                {{ group.visit_count }} visita{{ group.visit_count|pluralize }}
+                                {% if group.self_count %}
+                                <span class="self-summary">({{ group.self_count }} {{ group.self_count|pluralize:"tuya,tuyas" }})</span>
+                                {% endif %}
+                            </span>
+                            <span class="country-summary-chevron" aria-hidden="true"></span>
+                        </button>
                     </div>
-                </details>
+
+                    <div class="country-visits-modal" id="country-visits-{{ forloop.counter }}" role="dialog" aria-modal="true" aria-labelledby="country-modal-title-{{ forloop.counter }}" hidden>
+                        <div class="country-modal-backdrop" data-close-country-modal></div>
+                        <div class="country-modal-panel" role="document">
+                            <div class="country-modal-header">
+                                <div>
+                                    <h2 id="country-modal-title-{{ forloop.counter }}">{{ group.country }}</h2>
+                                    <p>{{ group.visit_count }} visita{{ group.visit_count|pluralize }}{% if group.self_count %} · {{ group.self_count }} {{ group.self_count|pluralize:"tuya,tuyas" }}{% endif %}</p>
+                                </div>
+                                <div class="country-modal-header-actions">
+                                    <label class="country-select-control">
+                                        <input class="select-country-visits" type="checkbox" aria-label="Seleccionar todas las visitas de {{ group.country }}">
+                                        <span>Seleccionar país</span>
+                                    </label>
+                                    <button class="btn danger country-delete-selected" type="submit" name="action" value="delete_selected" data-confirm-delete="selected">Eliminar seleccionadas</button>
+                                    <button class="btn danger country-delete-all" type="submit" name="action" value="delete_selected" data-confirm-delete="country">Eliminar país</button>
+                                    <button class="country-modal-close" type="button" data-close-country-modal aria-label="Cerrar visitas de {{ group.country }}">&times;</button>
+                                </div>
+                            </div>
+                            <div class="visits-table-wrap">
+                                <table class="visits-table">
+                                    <colgroup>
+                                        <col class="visit-col-date">
+                                        <col class="visit-col-check">
+                                        <col class="visit-col-ip">
+                                        <col class="visit-col-path">
+                                        <col class="visit-col-agent">
+                                        <col class="visit-col-actions">
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha/Hora</th>
+                                            <th class="visit-check">Sel.</th>
+                                            <th>IP</th>
+                                            <th>Ruta</th>
+                                            <th>User-Agent</th>
+                                            <th class="visit-actions">X</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for visit in group.visits %}
+                                        <tr>
+                                            <td>{{ visit.visited_at|date:"Y-m-d H:i:s" }}</td>
+                                            <td class="visit-check"><input class="visit-select" type="checkbox" value="{{ visit.id }}" aria-label="Seleccionar visita"></td>
+                                            <td>
+                                                {{ visit.ip_address }}
+                                                {% if visit.is_self %}
+                                                <span class="self-badge">YO</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="visit-path">{{ visit.path }}</td>
+                                            <td class="visit-agent">{{ visit.user_agent|default:"-" }}</td>
+                                            <td class="visit-actions">
+                                                <button class="inline-delete" type="submit" name="delete_one" value="{{ visit.id }}" title="Eliminar visita" aria-label="Eliminar visita" data-confirm-delete="one">&times;</button>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </article>
                 {% endfor %}
             </div>
             {% else %}
@@ -135,36 +156,178 @@
             {% endif %}
         </form>
     </div>
+    <div class="delete-modal" id="delete-confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title" aria-describedby="delete-modal-message" hidden>
+        <div class="delete-modal-backdrop" data-close-delete-modal></div>
+        <div class="delete-modal-panel" role="document">
+            <h2 id="delete-modal-title">Confirmar eliminación</h2>
+            <p id="delete-modal-message"></p>
+            <div class="delete-modal-actions">
+                <button class="btn secondary" id="cancel-delete" type="button">Cancelar</button>
+                <button class="btn danger" id="confirm-delete" type="button">Eliminar</button>
+            </div>
+        </div>
+    </div>
     <script>
         (function () {
-            const master = document.getElementById('select-all-visits');
-            if (!master) return;
-            const items = document.querySelectorAll('.visit-select');
+            const items = Array.from(document.querySelectorAll('.visit-select'));
+            const groups = Array.from(document.querySelectorAll('.visit-country-group'));
             const deleteForm = document.getElementById('visits-delete-form');
             const selectedValues = document.getElementById('selected-visits-values');
-            master.addEventListener('change', function () {
-                items.forEach(function (item) {
-                    item.checked = master.checked;
-                });
-            });
-            items.forEach(function (item) {
-                item.addEventListener('change', function () {
-                    if (!item.checked) {
-                        master.checked = false;
-                        return;
-                    }
-                    master.checked = Array.from(items).every(function (checkbox) {
-                        return checkbox.checked;
-                    });
-                });
-            });
-            deleteForm.addEventListener('submit', function (event) {
-                if (!event.submitter || event.submitter.value !== 'delete_selected') return;
-                selectedValues.value = Array.from(items)
-                    .filter(function (checkbox) { return checkbox.checked; })
+            const modal = document.getElementById('delete-confirmation-modal');
+            const countryModals = Array.from(document.querySelectorAll('.country-visits-modal'));
+            const modalMessage = document.getElementById('delete-modal-message');
+            const confirmDelete = document.getElementById('confirm-delete');
+            const cancelDelete = document.getElementById('cancel-delete');
+            let pendingSubmitter = null;
+            let previouslyFocused = null;
+            let activeCountryModal = null;
+            let countryModalOpener = null;
+
+            function updateSelectedValues(selectedItems) {
+                selectedValues.value = selectedItems
                     .map(function (checkbox) { return checkbox.value; })
                     .join(',');
+            }
+
+            function updateCountryState(group) {
+                const countryMaster = group.querySelector('.select-country-visits');
+                const countryItems = Array.from(group.querySelectorAll('.visit-select'));
+                const selectedCount = countryItems.filter(function (checkbox) {
+                    return checkbox.checked;
+                }).length;
+                countryMaster.checked = countryItems.length > 0 && selectedCount === countryItems.length;
+                countryMaster.indeterminate = selectedCount > 0 && selectedCount < countryItems.length;
+            }
+
+            function syncSelectionState() {
+                groups.forEach(updateCountryState);
+            }
+
+            groups.forEach(function (group) {
+                const countryMaster = group.querySelector('.select-country-visits');
+                countryMaster.addEventListener('change', function () {
+                    group.querySelectorAll('.visit-select').forEach(function (item) {
+                        item.checked = countryMaster.checked;
+                    });
+                    syncSelectionState();
+                });
             });
+
+            items.forEach(function (item) {
+                item.addEventListener('change', syncSelectionState);
+            });
+
+            function syncModalOpenState() {
+                const hasOpenCountryModal = countryModals.some(function (countryModal) {
+                    return !countryModal.hidden;
+                });
+                document.body.classList.toggle('modal-open', !modal.hidden || hasOpenCountryModal);
+            }
+
+            function closeDeleteModal() {
+                modal.hidden = true;
+                syncModalOpenState();
+                pendingSubmitter = null;
+                if (previouslyFocused) previouslyFocused.focus();
+            }
+
+            function openDeleteModal(submitter) {
+                const deleteType = submitter.dataset.confirmDelete;
+                const group = submitter.closest('.visit-country-group');
+                const countryItems = group
+                    ? Array.from(group.querySelectorAll('.visit-select'))
+                    : [];
+                const selectedItems = countryItems.filter(function (checkbox) {
+                    return checkbox.checked;
+                });
+                const countryName = group
+                    ? group.querySelector('.country-modal-header h2').textContent.trim()
+                    : '';
+
+                if (deleteType === 'selected') {
+                    updateSelectedValues(selectedItems);
+                    modalMessage.textContent = selectedItems.length
+                        ? '¿Eliminar ' + selectedItems.length + ' visita' + (selectedItems.length === 1 ? ' seleccionada?' : 's seleccionadas?')
+                        : 'No hay visitas seleccionadas.';
+                    confirmDelete.hidden = selectedItems.length === 0;
+                } else if (deleteType === 'country') {
+                    updateSelectedValues(countryItems);
+                    modalMessage.textContent = '¿Eliminar ' + (
+                        countryItems.length === 1
+                            ? 'la visita de '
+                            : 'las ' + countryItems.length + ' visitas de '
+                    ) + countryName + '? Esta acción no se puede deshacer.';
+                    confirmDelete.hidden = false;
+                } else if (deleteType === 'filtered') {
+                    modalMessage.textContent = '¿Eliminar todas las visitas del filtro actual? Si no hay filtros activos, se eliminarán todas. Esta acción no se puede deshacer.';
+                    confirmDelete.hidden = false;
+                } else {
+                    modalMessage.textContent = '¿Eliminar esta visita? Esta acción no se puede deshacer.';
+                    confirmDelete.hidden = false;
+                }
+
+                pendingSubmitter = submitter;
+                previouslyFocused = document.activeElement;
+                modal.hidden = false;
+                syncModalOpenState();
+                (confirmDelete.hidden ? cancelDelete : confirmDelete).focus();
+            }
+
+            function closeCountryModal() {
+                if (!activeCountryModal) return;
+                activeCountryModal.hidden = true;
+                activeCountryModal = null;
+                syncModalOpenState();
+                if (countryModalOpener) countryModalOpener.focus();
+                countryModalOpener = null;
+            }
+
+            document.querySelectorAll('[data-country-modal-target]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const countryModal = document.getElementById(button.dataset.countryModalTarget);
+                    if (!countryModal) return;
+                    activeCountryModal = countryModal;
+                    countryModalOpener = button;
+                    countryModal.hidden = false;
+                    syncModalOpenState();
+                    countryModal.querySelector('.country-modal-close').focus();
+                });
+            });
+
+            countryModals.forEach(function (countryModal) {
+                countryModal.querySelectorAll('[data-close-country-modal]').forEach(function (button) {
+                    button.addEventListener('click', closeCountryModal);
+                });
+            });
+
+            document.querySelectorAll('[data-confirm-delete]').forEach(function (button) {
+                button.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    openDeleteModal(button);
+                });
+            });
+
+            confirmDelete.addEventListener('click', function () {
+                const submitter = pendingSubmitter;
+                if (!submitter) return;
+                modal.hidden = true;
+                syncModalOpenState();
+                pendingSubmitter = null;
+                deleteForm.requestSubmit(submitter);
+            });
+
+            cancelDelete.addEventListener('click', closeDeleteModal);
+            modal.querySelector('[data-close-delete-modal]').addEventListener('click', closeDeleteModal);
+            document.addEventListener('keydown', function (event) {
+                if (event.key !== 'Escape') return;
+                if (!modal.hidden) {
+                    closeDeleteModal();
+                } else {
+                    closeCountryModal();
+                }
+            });
+
+            syncSelectionState();
         })();
     </script>
     <script src="{% static 'js/background_motion.js' %}"></script>

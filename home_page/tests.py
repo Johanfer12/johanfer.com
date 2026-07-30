@@ -164,7 +164,7 @@ class VisitsViewTests(TestCase):
         self.assertContains(response, '2 visitas')
         self.assertContains(response, '(1 tuya)')
 
-    def test_country_panels_are_closed_by_default(self):
+    def test_country_cards_open_hidden_visit_modals(self):
         VisitLog.objects.create(
             ip_address='203.0.113.20',
             country_code='CO',
@@ -174,8 +174,72 @@ class VisitsViewTests(TestCase):
 
         response = self.client.get('/visitas/')
 
-        self.assertContains(response, '<details class="visit-country-group">')
-        self.assertNotContains(response, '<details class="visit-country-group" open>')
+        self.assertContains(response, 'class="country-card-open"')
+        self.assertContains(response, 'data-country-modal-target="country-visits-1"')
+        self.assertContains(
+            response,
+            'class="country-visits-modal" id="country-visits-1"',
+        )
+        self.assertContains(response, 'aria-haspopup="dialog"')
+
+    def test_each_country_group_has_a_select_all_control(self):
+        VisitLog.objects.create(
+            ip_address='203.0.113.21',
+            country_code='CO',
+            country='Colombia',
+            path='/',
+        )
+        VisitLog.objects.create(
+            ip_address='203.0.113.22',
+            country_code='TR',
+            country='Turkey',
+            path='/',
+        )
+
+        response = self.client.get('/visitas/')
+
+        self.assertContains(response, 'class="select-country-visits"', count=2)
+        self.assertContains(response, 'Seleccionar todas las visitas de Colombia')
+        self.assertContains(response, 'Seleccionar todas las visitas de Turkey')
+
+    def test_local_and_unknown_countries_use_distinct_icons(self):
+        VisitLog.objects.create(
+            ip_address='127.0.0.1',
+            country='Local',
+            path='/local/',
+        )
+        VisitLog.objects.create(
+            ip_address='203.0.113.24',
+            country='',
+            country_code='',
+            path='/unknown/',
+        )
+
+        response = self.client.get('/visitas/')
+
+        groups = {group['country']: group for group in response.context['visit_groups']}
+        self.assertTrue(groups['Local']['is_local'])
+        self.assertTrue(groups['País desconocido']['is_unknown'])
+        self.assertContains(response, 'class="country-type-icon"', count=2)
+        self.assertContains(response, '🏠')
+        self.assertContains(response, '🌐')
+
+    def test_delete_actions_use_custom_confirmation_modal(self):
+        VisitLog.objects.create(
+            ip_address='203.0.113.23',
+            country='Colombia',
+            path='/',
+        )
+
+        response = self.client.get('/visitas/')
+
+        self.assertContains(response, 'id="delete-confirmation-modal"')
+        self.assertContains(response, 'data-confirm-delete="selected"')
+        self.assertContains(response, 'data-confirm-delete="country"')
+        self.assertContains(response, 'data-confirm-delete="filtered"')
+        self.assertContains(response, 'data-confirm-delete="one"')
+        self.assertNotContains(response, 'id="select-all-visits"')
+        self.assertNotContains(response, 'onclick="return confirm(')
 
     def test_shows_all_visits_without_pagination(self):
         VisitLog.objects.bulk_create([
@@ -269,6 +333,27 @@ class VisitsViewTests(TestCase):
             VisitLog.objects.order_by('pk'),
             [visits[1]],
         )
+
+    def test_delete_all_respects_the_active_filters(self):
+        colombia_visit = VisitLog.objects.create(
+            ip_address='203.0.113.70',
+            country='Colombia',
+            path='/delete-colombia/',
+        )
+        japan_visit = VisitLog.objects.create(
+            ip_address='203.0.113.71',
+            country='Japan',
+            path='/keep-japan/',
+        )
+
+        response = self.client.post('/visitas/', {
+            'action': 'delete_all_filtered',
+            'country': 'Colombia',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(VisitLog.objects.filter(pk=colombia_visit.pk).exists())
+        self.assertTrue(VisitLog.objects.filter(pk=japan_visit.pk).exists())
 
     @override_settings(DEBUG=True, VISITS_ALLOW_LOCAL_WITHOUT_LOGIN=True)
     def test_local_development_flag_allows_access_without_login(self):

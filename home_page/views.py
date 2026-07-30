@@ -239,6 +239,8 @@ def _group_visits_by_country(visits, current_visitor_id, current_ip):
                 'country': country_label,
                 'country_flag': visit.country_flag,
                 'country_iso2': visit.country_iso2,
+                'is_local': country_label.casefold() == 'local',
+                'is_unknown': country_label == 'País desconocido',
                 'visits': [],
                 'visit_count': 0,
                 'self_count': 0,
