@@ -158,6 +158,49 @@ class ElChapuzasDisqusCommentExtractorTests(SimpleTestCase):
         self.assertEqual(get_mock.call_args_list[1].args[0], 'https://disqus.com/embed/comments/')
 
     @patch('my_news.comment_extractors.requests.get')
+    def test_uses_article_guid_to_query_disqus_directly(self, get_mock):
+        article_url = (
+            'https://elchapuzasinformatico.com/2026/07/'
+            'compra-geforce-rtx-5070-ti-recibe-botella-de-agua/'
+        )
+        thread_data = {
+            'cursor': {'total': 1},
+            'response': {
+                'posts': [{
+                    'id': '57',
+                    'raw_message': 'Comentario directo',
+                    'createdAt': '2026-07-30T13:00:00',
+                    'author': {'name': 'Grace'},
+                    'parent': None,
+                    'depth': 0,
+                    'points': 1,
+                    'likes': 1,
+                    'dislikes': 0,
+                    'isDeleted': False,
+                }],
+                'thread': {'posts': 1},
+            },
+        }
+        get_mock.return_value = response_with_text(
+            '<script type="text/json" id="disqus-threadData">'
+            f'{json.dumps(thread_data)}</script>'
+        )
+
+        result = ElChapuzasDisqusCommentExtractor().extract(
+            article_url,
+            guid='https://elchapuzasinformatico.com/?p=662601',
+            title='Compra una GeForce RTX 5070 Ti',
+        )
+
+        self.assertEqual(result['comments'][0]['comment'], 'Comentario directo')
+        self.assertEqual(get_mock.call_count, 1)
+        self.assertEqual(get_mock.call_args.args[0], 'https://disqus.com/embed/comments/')
+        self.assertEqual(
+            get_mock.call_args.kwargs['params']['t_i'],
+            '662601 https://elchapuzasinformatico.com/?p=662601',
+        )
+
+    @patch('my_news.comment_extractors.requests.get')
     def test_uses_rss_fallback_when_article_is_blocked(self, get_mock):
         article_url = (
             'https://elchapuzasinformatico.com/2026/07/'
@@ -280,7 +323,11 @@ class NewsCommentsViewTests(TestCase):
 
         self.assertEqual(cached_response.status_code, 200)
         self.assertEqual(cached_response.headers['X-Comments-Cache'], 'HIT')
-        extract_mock.assert_called_once_with(article.link)
+        extract_mock.assert_called_once_with(
+            article.link,
+            guid=article.guid,
+            title=article.title,
+        )
 
     def test_endpoint_rejects_unregistered_source(self):
         article = self.create_news(link='https://example.com/prueba')

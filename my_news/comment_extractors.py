@@ -157,7 +157,13 @@ class CommentExtractor(ABC):
         return bool(host) and any(_host_matches(host, domain) for domain in self.domains)
 
     @abstractmethod
-    def extract(self, url: str) -> dict[str, Any]:
+    def extract(
+        self,
+        url: str,
+        *,
+        guid: str | None = None,
+        title: str | None = None,
+    ) -> dict[str, Any]:
         """Devuelve ``source``, ``total`` y una lista normalizada ``comments``."""
 
 
@@ -167,7 +173,13 @@ class WebediaCommentExtractor(CommentExtractor):
     source_name = "Webedia"
     domains = ("xataka.com", "3djuegos.com", "vidaextra.com")
 
-    def extract(self, url: str) -> dict[str, Any]:
+    def extract(
+        self,
+        url: str,
+        *,
+        guid: str | None = None,
+        title: str | None = None,
+    ) -> dict[str, Any]:
         data = _extract_assigned_json(
             _request_html(url),
             "AML.Comments.config.data =",
@@ -217,6 +229,26 @@ class ElChapuzasDisqusCommentExtractor(CommentExtractor):
     source_name = "Disqus"
     domains = ("elchapuzasinformatico.com",)
 
+    def _embed_from_article_metadata(
+        self,
+        url: str,
+        *,
+        guid: str | None,
+        title: str | None,
+    ) -> dict[str, Any] | None:
+        guid = str(guid or "").strip()
+        parsed_guid = urlparse(guid)
+        post_id = (parse_qs(parsed_guid.query).get("p") or [""])[0].strip()
+        if not post_id or not _host_matches((parsed_guid.hostname or "").lower(), self.domains[0]):
+            return None
+
+        return {
+            "disqusShortname": "elchapuzasinformatico",
+            "disqusIdentifier": f"{post_id} {guid}",
+            "disqusUrl": url,
+            "disqusTitle": str(title or "").strip(),
+        }
+
     def _embed_from_feed(self, url: str) -> dict[str, Any]:
         """Reconstruye la configuración Disqus desde el RSS de WordPress."""
         parsed_url = urlparse(url)
@@ -248,7 +280,17 @@ class ElChapuzasDisqusCommentExtractor(CommentExtractor):
 
         raise CommentExtractionError("La noticia no aparece en el RSS de la fuente.")
 
-    def _get_embed_config(self, url: str) -> dict[str, Any]:
+    def _get_embed_config(
+        self,
+        url: str,
+        *,
+        guid: str | None = None,
+        title: str | None = None,
+    ) -> dict[str, Any]:
+        metadata_embed = self._embed_from_article_metadata(url, guid=guid, title=title)
+        if metadata_embed is not None:
+            return metadata_embed
+
         # El parámetro evita el bloqueo que la portada aplica a algunas
         # peticiones automatizadas, sin alterar el contenido del artículo.
         try:
@@ -259,8 +301,14 @@ class ElChapuzasDisqusCommentExtractor(CommentExtractor):
             # el RSS del mismo sitio siga disponible.
             return self._embed_from_feed(url)
 
-    def extract(self, url: str) -> dict[str, Any]:
-        embed = self._get_embed_config(url)
+    def extract(
+        self,
+        url: str,
+        *,
+        guid: str | None = None,
+        title: str | None = None,
+    ) -> dict[str, Any]:
+        embed = self._get_embed_config(url, guid=guid, title=title)
 
         shortname = str(embed.get("disqusShortname") or "").strip()
         identifier = str(embed.get("disqusIdentifier") or "").strip()
@@ -374,8 +422,13 @@ def supports_comment_extraction(url: str) -> bool:
     return get_comment_extractor(url) is not None
 
 
-def extract_comments(url: str) -> dict[str, Any]:
+def extract_comments(
+    url: str,
+    *,
+    guid: str | None = None,
+    title: str | None = None,
+) -> dict[str, Any]:
     extractor = get_comment_extractor(url)
     if extractor is None:
         raise CommentExtractionError("Esta fuente todavía no tiene extractor de comentarios.")
-    return extractor.extract(url)
+    return extractor.extract(url, guid=guid, title=title)

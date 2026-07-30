@@ -174,7 +174,11 @@ def news_comments(request, pk):
 
     started_at = time.monotonic()
     try:
-        result = extract_comments(article.link)
+        result = extract_comments(
+            article.link,
+            guid=article.guid,
+            title=article.title,
+        )
     except CommentExtractionError as exc:
         logger.warning("No se pudieron extraer comentarios de la noticia %s: %s", article.id, exc)
         return JsonResponse(
