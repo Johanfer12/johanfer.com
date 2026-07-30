@@ -255,17 +255,24 @@
         return request;
     };
 
-    const schedulePrefetch = (button) => {
+    const startPrefetch = (button) => {
+        const url = button.dataset.commentsUrl;
+        cancelPrefetch(button);
+        if (!url || responseCache.has(url) || pendingRequests.has(url)) return;
+        fetchComments(url).catch(() => {
+            // El modal mostrará el error si el usuario decide abrirlo.
+        });
+    };
+
+    const schedulePrefetch = (button, delay = 300) => {
         const url = button.dataset.commentsUrl;
         if (!url || responseCache.has(url) || pendingRequests.has(url) || prefetchTimers.has(button)) {
             return;
         }
         const timer = window.setTimeout(() => {
             prefetchTimers.delete(button);
-            fetchComments(url).catch(() => {
-                // El modal mostrará el error si el usuario decide abrirlo.
-            });
-        }, 180);
+            startPrefetch(button);
+        }, delay);
         prefetchTimers.set(button, timer);
     };
 
@@ -306,17 +313,29 @@
 
     document.addEventListener('pointerover', (event) => {
         const button = event.target.closest('.comments-btn');
-        if (button && !button.contains(event.relatedTarget)) schedulePrefetch(button);
+        if (button && !button.contains(event.relatedTarget)) {
+            startPrefetch(button);
+            return;
+        }
+
+        const card = event.target.closest('.news-card-container');
+        if (card && !card.contains(event.relatedTarget)) {
+            const cardCommentsButton = card.querySelector('.comments-btn');
+            if (cardCommentsButton) schedulePrefetch(cardCommentsButton);
+        }
     });
 
     document.addEventListener('pointerout', (event) => {
-        const button = event.target.closest('.comments-btn');
-        if (button && !button.contains(event.relatedTarget)) cancelPrefetch(button);
+        const card = event.target.closest('.news-card-container');
+        if (card && !card.contains(event.relatedTarget)) {
+            const cardCommentsButton = card.querySelector('.comments-btn');
+            if (cardCommentsButton) cancelPrefetch(cardCommentsButton);
+        }
     });
 
     document.addEventListener('focusin', (event) => {
         const button = event.target.closest('.comments-btn');
-        if (button) schedulePrefetch(button);
+        if (button) startPrefetch(button);
     });
 
     document.addEventListener('click', (event) => {
