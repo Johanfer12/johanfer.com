@@ -98,6 +98,8 @@
         <button id="close-notification-btn" class="close-notification">&times;</button>
     </div>
 
+    {% include 'news_comments_modal.html' %}
+
     <!-- Overlay de modo lectura -->
     <div id="reader-overlay" class="reader-overlay">
         <div class="reader-content">
@@ -118,6 +120,7 @@
     {{ news_view_mode|json_script:"news-view-mode" }}
 
     <script src="{% static 'js/news_cards_common.js' %}"></script>
+    <script src="{% static 'js/news_comments.js' %}"></script>
     <script src="{% static 'js/news_script.js' %}"></script>
     <script src="{% static 'js/reader_mode.js' %}"></script>
     <script src="{% static 'js/background_motion.js' %}"></script>

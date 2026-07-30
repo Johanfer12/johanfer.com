@@ -1,4 +1,4 @@
-{% load static sanitizers %}
+{% load static sanitizers news_comments %}
 <div class="news-card-container" id="{{ card_id_prefix|default:'news' }}-{{ article.id }}" data-news-id="{{ article.id }}" data-published-at="{{ article.published_date|date:'c' }}" data-created-at="{{ article.created_at|date:'c' }}">
     <div class="news-card">
         <div class="card-front">
@@ -25,6 +25,13 @@
                 {{ article.description|sanitize }}
             </div>
             <div class="news-links">
+                {% if article.link|has_comment_extractor %}
+                <button type="button" class="news-link icon-only comments-btn" data-comments-url="{% url 'my_news:news_comments' article.id %}" title="Ver comentarios" aria-label="Ver comentarios">
+                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M5 4H19C20.1046 4 21 4.89543 21 6V15C21 16.1046 20.1046 17 19 17H10L5 20V17C3.89543 17 3 16.1046 3 15V6C3 4.89543 3.89543 4 5 4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                </button>
+                {% endif %}
                 <a href="{{ article.link }}" target="_blank" rel="noopener noreferrer" class="news-link icon-only source-link" title="Fuente" aria-label="Fuente">
                     <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <path d="M12.7076 18.3639L11.2933 19.7781C9.34072 21.7308 6.1749 21.7308 4.22228 19.7781C2.26966 17.8255 2.26966 14.6597 4.22228 12.7071L5.63649 11.2929M18.3644 12.7071L19.7786 11.2929C21.7312 9.34024 21.7312 6.17441 19.7786 4.22179C17.826 2.26917 14.6602 2.26917 12.7076 4.22179L11.2933 5.636M8.50045 15.4999L15.5005 8.49994" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>

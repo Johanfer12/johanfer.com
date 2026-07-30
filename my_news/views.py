@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from django.views.generic import ListView
 from .models import News
 from django.http import JsonResponse
@@ -10,6 +10,7 @@ from django.contrib.auth.views import LoginView
 from django.utils.decorators import method_decorator
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.urls import reverse
 from django.templatetags.static import static
 from django.core.cache import cache
 from django.conf import settings
@@ -25,6 +26,11 @@ import time
 import logging
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
+from .comment_extractors import (
+    CommentExtractionError,
+    extract_comments,
+    supports_comment_extraction,
+)
 
 # Create your views here.
 logger = logging.getLogger(__name__)
@@ -37,6 +43,7 @@ COUNT_CACHE_TTL = 5
 PAGE_CACHE_TTL = 5
 CACHE_VERSION_KEY = 'news_feed_cache_version'
 NEWS_NOTIFICATION_SETTLE_DELAY = timedelta(seconds=60)
+COMMENTS_CACHE_TTL = 120
 
 
 def _get_cache_version():
@@ -138,7 +145,52 @@ def _serialize_news_card(article):
         'similarity_score': article.similarity_score,
         'similarity_label': f"{article.similarity_score:.2f}" if article.similarity_score is not None else '',
         'is_saved': bool(article.is_saved),
+        'has_comment_extractor': supports_comment_extraction(article.link),
+        'comments_url': reverse('my_news:news_comments', args=[article.id]),
     }
+
+
+@require_GET
+def news_comments(request, pk):
+    queryset = News.objects.select_related('source')
+    if not (request.user.is_authenticated and request.user.is_superuser):
+        queryset = queryset.filter(_public_news_filter())
+
+    article = get_object_or_404(queryset, pk=pk)
+    if not supports_comment_extraction(article.link):
+        return JsonResponse(
+            {'status': 'unsupported', 'message': 'Esta fuente no tiene extractor de comentarios.'},
+            status=404,
+        )
+
+    cache_key = f"news:comments:{article.id}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return JsonResponse(cached)
+
+    try:
+        result = extract_comments(article.link)
+    except CommentExtractionError as exc:
+        logger.warning("No se pudieron extraer comentarios de la noticia %s: %s", article.id, exc)
+        return JsonResponse(
+            {'status': 'error', 'message': str(exc)},
+            status=502,
+        )
+    except Exception:
+        logger.exception("Error inesperado extrayendo comentarios de la noticia %s", article.id)
+        return JsonResponse(
+            {'status': 'error', 'message': 'No se pudieron cargar los comentarios.'},
+            status=502,
+        )
+
+    payload = {
+        'status': 'success',
+        'title': article.title,
+        'article_url': article.link,
+        **result,
+    }
+    cache.set(cache_key, payload, COMMENTS_CACHE_TTL)
+    return JsonResponse(payload)
 
 
 def _parse_created_cursor(cursor):

@@ -17,6 +17,7 @@ urlpatterns = [
     path('check-new-news/', views.check_new_news, name='check_new_news'),
     path('get-news-count/', views.get_news_count, name='get_news_count'),
     path('get-page/', views.get_page, name='get_page'),
+    path('comments/<int:pk>/', views.news_comments, name='news_comments'),
     path('redundancy-test/', views.test_redundancy, name='redundancy_test'),
     path('generate-embeddings/', views.generate_embeddings, name='generate_embeddings'),
     path('check-redundancy/', views.check_all_redundancy, name='check_redundancy'),

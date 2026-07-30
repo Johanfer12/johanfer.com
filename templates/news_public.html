@@ -61,11 +61,14 @@
         {% endif %}
     </main>
 
+    {% include 'news_comments_modal.html' %}
+
     {% include 'footer.html' %}
 
     {{ public_storage_key|json_script:"public-news-storage-key" }}
     {{ public_page_data|json_script:"public-news-page-data" }}
     <script src="{% static 'js/news_cards_common.js' %}"></script>
+    <script src="{% static 'js/news_comments.js' %}"></script>
     <script src="{% static 'js/news_public.js' %}"></script>
     <script src="{% static 'js/background_motion.js' %}"></script>
 </body>
