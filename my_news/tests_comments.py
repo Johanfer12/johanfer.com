@@ -83,6 +83,9 @@ class WebediaCommentExtractorTests(SimpleTestCase):
         self.assertEqual(result['total'], 2)
         self.assertEqual(result['comments'][0]['user'], 'Ada')
         self.assertEqual(result['comments'][0]['comment'], 'Primer\ncomentario\n.')
+        self.assertEqual(result['comments'][0]['votes'], 2)
+        self.assertIsNone(result['comments'][0]['upvotes'])
+        self.assertIsNone(result['comments'][0]['downvotes'])
         self.assertEqual(result['comments'][1]['parent_id'], '7')
         self.assertEqual(result['comments'][1]['depth'], 1)
 
@@ -110,6 +113,8 @@ class ElChapuzasDisqusCommentExtractorTests(SimpleTestCase):
                     'parent': None,
                     'depth': 0,
                     'points': 3,
+                    'likes': 4,
+                    'dislikes': 1,
                     'isDeleted': False,
                     'media': [{
                         'resolvedUrl': 'https://uploads.disquscdn.com/images/example.png',
@@ -135,6 +140,8 @@ class ElChapuzasDisqusCommentExtractorTests(SimpleTestCase):
         self.assertEqual(result['total'], 1)
         self.assertEqual(result['comments'][0]['user'], 'Grace')
         self.assertEqual(result['comments'][0]['votes'], 3)
+        self.assertEqual(result['comments'][0]['upvotes'], 4)
+        self.assertEqual(result['comments'][0]['downvotes'], 1)
         self.assertEqual(result['comments'][0]['comment'], 'Comentario desde Disqus')
         self.assertEqual(
             result['comments'][0]['media'][0]['thumbnail_url'],

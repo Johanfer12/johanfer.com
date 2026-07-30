@@ -100,16 +100,59 @@
             const metadataParts = [];
             const date = formatDate(comment.date);
             if (date) metadataParts.push(date);
-            if (Number(comment.votes)) {
-                const votes = Number(comment.votes);
-                metadataParts.push(`${votes} ${Math.abs(votes) === 1 ? 'voto' : 'votos'}`);
-            }
             if (metadataParts.length) {
                 const metadata = document.createElement('span');
                 metadata.className = 'news-comment-meta';
                 metadata.textContent = metadataParts.join(' · ');
                 header.appendChild(metadata);
             }
+
+            const votes = Number(comment.votes) || 0;
+            const voteIndicator = document.createElement('span');
+            const hasVoteBreakdown = comment.upvotes !== null && comment.upvotes !== undefined
+                && comment.downvotes !== null && comment.downvotes !== undefined;
+            const upvotes = hasVoteBreakdown ? Math.max(Number(comment.upvotes) || 0, 0) : 0;
+            const downvotes = hasVoteBreakdown ? Math.max(Number(comment.downvotes) || 0, 0) : 0;
+            voteIndicator.className = [
+                'news-comment-votes',
+                hasVoteBreakdown ? 'has-breakdown' : '',
+                upvotes > 0 ? 'has-upvotes' : '',
+                downvotes > 0 ? 'has-downvotes' : '',
+                votes > 0 ? 'is-positive' : votes < 0 ? 'is-negative' : 'is-neutral',
+            ].filter(Boolean).join(' ');
+
+            if (hasVoteBreakdown) {
+                const upLabel = `${upvotes} ${upvotes === 1 ? 'voto arriba' : 'votos arriba'}`;
+                const downLabel = `${downvotes} ${downvotes === 1 ? 'voto abajo' : 'votos abajo'}`;
+                voteIndicator.title = `${upLabel}, ${downLabel}; puntuación neta: ${votes}`;
+                voteIndicator.innerHTML = `
+                    <span class="news-comment-vote-side vote-up-side">
+                        <svg class="news-comment-vote-arrow vote-up" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 5L5 14H9V19H15V14H19L12 5Z"></path>
+                        </svg>
+                        <span class="news-comment-vote-count">${new Intl.NumberFormat('es-CO').format(upvotes)}</span>
+                    </span>
+                    <span class="news-comment-vote-side vote-down-side">
+                        <svg class="news-comment-vote-arrow vote-down" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 19L19 10H15V5H9V10H5L12 19Z"></path>
+                        </svg>
+                        <span class="news-comment-vote-count">${new Intl.NumberFormat('es-CO').format(downvotes)}</span>
+                    </span>
+                `;
+            } else {
+                voteIndicator.title = `Puntuación: ${votes} ${Math.abs(votes) === 1 ? 'voto' : 'votos'}`;
+                voteIndicator.innerHTML = `
+                    <svg class="news-comment-vote-arrow vote-up" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 5L5 14H9V19H15V14H19L12 5Z"></path>
+                    </svg>
+                    <span class="news-comment-vote-score">${new Intl.NumberFormat('es-CO').format(votes)}</span>
+                    <svg class="news-comment-vote-arrow vote-down" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 19L19 10H15V5H9V10H5L12 19Z"></path>
+                    </svg>
+                `;
+            }
+            voteIndicator.setAttribute('aria-label', voteIndicator.title);
+            header.appendChild(voteIndicator);
 
             const replyCount = threadRoots.get(comment.id) || 0;
             if (replyCount) {

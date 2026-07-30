@@ -191,6 +191,8 @@ class WebediaCommentExtractor(CommentExtractor):
                 "parent_id": str(item["parent"]) if item.get("parent") is not None else None,
                 "depth": int(item.get("tree_level") or 0),
                 "votes": int(item.get("vote_count") or 0),
+                "upvotes": None,
+                "downvotes": None,
                 "media": [{"url": media_url, "thumbnail_url": media_url} for media_url in media_urls],
             })
 
@@ -296,6 +298,8 @@ class ElChapuzasDisqusCommentExtractor(CommentExtractor):
                 "parent_id": str(item["parent"]) if item.get("parent") is not None else None,
                 "depth": int(item.get("depth") or 0),
                 "votes": int(item.get("points") or 0),
+                "upvotes": int(item.get("likes") or 0),
+                "downvotes": int(item.get("dislikes") or 0),
                 "media": media,
             })
 

@@ -542,6 +542,91 @@ body.comments-modal-open {
     font-size: 0.76rem;
 }
 
+.news-comment-votes {
+    min-width: 76px;
+    height: 27px;
+    margin-left: auto;
+    padding: 2px 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 3px;
+    border: 1px solid rgba(198, 214, 242, 0.18);
+    border-radius: 999px;
+    color: rgba(227, 233, 245, 0.72);
+    background: rgba(8, 18, 31, 0.72);
+    line-height: 1;
+}
+
+.news-comment-meta + .news-comment-votes {
+    margin-left: 0;
+}
+
+.news-comment-vote-arrow {
+    width: 19px;
+    height: 19px;
+    flex: 0 0 auto;
+    fill: rgba(198, 214, 242, 0.42);
+}
+
+.news-comment-vote-score {
+    min-width: 20px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.news-comment-votes.has-breakdown {
+    min-width: 90px;
+    gap: 7px;
+}
+
+.news-comment-vote-side {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+}
+
+.news-comment-vote-count {
+    min-width: 13px;
+    color: rgba(227, 233, 245, 0.62);
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.news-comment-votes.is-positive .vote-up {
+    fill: #ff8b60;
+}
+
+.news-comment-votes.is-negative .vote-down {
+    fill: #7193ff;
+}
+
+.news-comment-votes.has-upvotes .vote-up {
+    fill: #ff8b60;
+}
+
+.news-comment-votes.has-downvotes .vote-down {
+    fill: #7193ff;
+}
+
+.news-comment-votes.has-upvotes .vote-up-side .news-comment-vote-count {
+    color: #ffb099;
+}
+
+.news-comment-votes.has-downvotes .vote-down-side .news-comment-vote-count {
+    color: #9cb3ff;
+}
+
+.news-comment-votes.is-positive .news-comment-vote-score {
+    color: #ffb099;
+}
+
+.news-comment-votes.is-negative .news-comment-vote-score {
+    color: #9cb3ff;
+}
+
 .news-comment-thread-toggle {
     padding: 3px 8px;
     border: 1px solid rgba(115, 199, 238, 0.34);
@@ -641,6 +726,11 @@ body.comments-modal-open {
     .news-comment-meta {
         width: 100%;
         margin: 3px 0 0;
+    }
+
+    .news-comment-votes,
+    .news-comment-meta + .news-comment-votes {
+        margin-left: 0;
     }
 
     .news-comment-thread-toggle {
