@@ -8,10 +8,11 @@ y registrarlo en ``COMMENT_EXTRACTORS``.
 from __future__ import annotations
 
 import json
+import xml.etree.ElementTree as ElementTree
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone as datetime_timezone
 from typing import Any
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -216,11 +217,50 @@ class ElChapuzasDisqusCommentExtractor(CommentExtractor):
     source_name = "Disqus"
     domains = ("elchapuzasinformatico.com",)
 
-    def extract(self, url: str) -> dict[str, Any]:
+    def _embed_from_feed(self, url: str) -> dict[str, Any]:
+        """Reconstruye la configuración Disqus desde el RSS de WordPress."""
+        parsed_url = urlparse(url)
+        feed_url = urlunparse(parsed_url._replace(path="/feed/", params="", query="", fragment=""))
+        feed_xml = _request_html(feed_url)
+
+        try:
+            root = ElementTree.fromstring(feed_xml)
+        except ElementTree.ParseError as exc:
+            raise CommentExtractionError("El RSS de la fuente no es válido.") from exc
+
+        expected_url = url.rstrip("/")
+        for item in root.findall(".//item"):
+            item_url = (item.findtext("link") or "").strip()
+            if item_url.rstrip("/") != expected_url:
+                continue
+
+            guid = (item.findtext("guid") or "").strip()
+            post_id = (parse_qs(urlparse(guid).query).get("p") or [""])[0].strip()
+            if not post_id or not guid:
+                break
+
+            return {
+                "disqusShortname": "elchapuzasinformatico",
+                "disqusIdentifier": f"{post_id} {guid}",
+                "disqusUrl": item_url,
+                "disqusTitle": (item.findtext("title") or "").strip(),
+            }
+
+        raise CommentExtractionError("La noticia no aparece en el RSS de la fuente.")
+
+    def _get_embed_config(self, url: str) -> dict[str, Any]:
         # El parámetro evita el bloqueo que la portada aplica a algunas
         # peticiones automatizadas, sin alterar el contenido del artículo.
-        article_html = _request_html(_with_query_parameter(url, "output", "1"))
-        embed = _extract_assigned_json(article_html, "var embedVars =")
+        try:
+            article_html = _request_html(_with_query_parameter(url, "output", "1"))
+            return _extract_assigned_json(article_html, "var embedVars =")
+        except CommentExtractionError:
+            # Cloudflare puede desafiar la huella TLS de la Raspberry aunque
+            # el RSS del mismo sitio siga disponible.
+            return self._embed_from_feed(url)
+
+    def extract(self, url: str) -> dict[str, Any]:
+        embed = self._get_embed_config(url)
 
         shortname = str(embed.get("disqusShortname") or "").strip()
         identifier = str(embed.get("disqusIdentifier") or "").strip()

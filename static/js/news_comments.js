@@ -11,8 +11,10 @@
     const list = document.getElementById('news-comments-list');
     const sourceLink = document.getElementById('news-comments-source-link');
     const responseCache = new Map();
+    const pendingRequests = new Map();
+    const prefetchTimers = new Map();
     let opener = null;
-    let requestController = null;
+    let activeRequestUrl = null;
 
     const formatDate = (value) => {
         if (!value) return '';
@@ -231,10 +233,52 @@
         status.textContent = message || 'No se pudieron cargar los comentarios.';
     };
 
+    const fetchComments = (url) => {
+        if (responseCache.has(url)) return Promise.resolve(responseCache.get(url));
+        if (pendingRequests.has(url)) return pendingRequests.get(url);
+
+        const request = fetch(url, {
+            credentials: 'same-origin',
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+        })
+            .then(async (response) => {
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || payload.status !== 'success') {
+                    throw new Error(payload.message || 'No se pudieron cargar los comentarios.');
+                }
+                responseCache.set(url, payload);
+                return payload;
+            })
+            .finally(() => pendingRequests.delete(url));
+
+        pendingRequests.set(url, request);
+        return request;
+    };
+
+    const schedulePrefetch = (button) => {
+        const url = button.dataset.commentsUrl;
+        if (!url || responseCache.has(url) || pendingRequests.has(url) || prefetchTimers.has(button)) {
+            return;
+        }
+        const timer = window.setTimeout(() => {
+            prefetchTimers.delete(button);
+            fetchComments(url).catch(() => {
+                // El modal mostrará el error si el usuario decide abrirlo.
+            });
+        }, 180);
+        prefetchTimers.set(button, timer);
+    };
+
+    const cancelPrefetch = (button) => {
+        const timer = prefetchTimers.get(button);
+        if (timer === undefined) return;
+        window.clearTimeout(timer);
+        prefetchTimers.delete(button);
+    };
+
     const closeModal = () => {
         if (modal.hidden) return;
-        requestController?.abort();
-        requestController = null;
+        activeRequestUrl = null;
         modal.hidden = true;
         document.body.classList.remove('comments-modal-open');
         opener?.focus({preventScroll: true});
@@ -246,36 +290,34 @@
         if (!url) return;
 
         opener = button;
+        activeRequestUrl = url;
         setLoading();
         modal.hidden = false;
         document.body.classList.add('comments-modal-open');
         panel.focus({preventScroll: true});
 
-        if (responseCache.has(url)) {
-            renderComments(responseCache.get(url));
-            return;
-        }
-
-        requestController?.abort();
-        requestController = new AbortController();
         try {
-            const response = await fetch(url, {
-                credentials: 'same-origin',
-                headers: {'X-Requested-With': 'XMLHttpRequest'},
-                signal: requestController.signal,
-            });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok || payload.status !== 'success') {
-                throw new Error(payload.message || 'No se pudieron cargar los comentarios.');
-            }
-            responseCache.set(url, payload);
-            renderComments(payload);
+            const payload = await fetchComments(url);
+            if (activeRequestUrl === url && !modal.hidden) renderComments(payload);
         } catch (error) {
-            if (error.name !== 'AbortError') renderError(error.message);
-        } finally {
-            requestController = null;
+            if (activeRequestUrl === url && !modal.hidden) renderError(error.message);
         }
     };
+
+    document.addEventListener('pointerover', (event) => {
+        const button = event.target.closest('.comments-btn');
+        if (button && !button.contains(event.relatedTarget)) schedulePrefetch(button);
+    });
+
+    document.addEventListener('pointerout', (event) => {
+        const button = event.target.closest('.comments-btn');
+        if (button && !button.contains(event.relatedTarget)) cancelPrefetch(button);
+    });
+
+    document.addEventListener('focusin', (event) => {
+        const button = event.target.closest('.comments-btn');
+        if (button) schedulePrefetch(button);
+    });
 
     document.addEventListener('click', (event) => {
         const threadToggle = event.target.closest('.news-comment-thread-toggle');
@@ -289,6 +331,7 @@
         if (button) {
             event.preventDefault();
             event.stopPropagation();
+            cancelPrefetch(button);
             openModal(button);
             return;
         }

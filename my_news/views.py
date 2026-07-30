@@ -43,7 +43,9 @@ COUNT_CACHE_TTL = 5
 PAGE_CACHE_TTL = 5
 CACHE_VERSION_KEY = 'news_feed_cache_version'
 NEWS_NOTIFICATION_SETTLE_DELAY = timedelta(seconds=60)
-COMMENTS_CACHE_TTL = 120
+# Los comentarios se consultan bajo demanda a sitios externos. Diez minutos
+# reducen consultas repetidas sin dejar el modal desactualizado durante horas.
+COMMENTS_CACHE_TTL = 600
 
 
 def _get_cache_version():
@@ -166,8 +168,11 @@ def news_comments(request, pk):
     cache_key = f"news:comments:{article.id}"
     cached = cache.get(cache_key)
     if cached is not None:
-        return JsonResponse(cached)
+        response = JsonResponse(cached)
+        response['X-Comments-Cache'] = 'HIT'
+        return response
 
+    started_at = time.monotonic()
     try:
         result = extract_comments(article.link)
     except CommentExtractionError as exc:
@@ -190,7 +195,10 @@ def news_comments(request, pk):
         **result,
     }
     cache.set(cache_key, payload, COMMENTS_CACHE_TTL)
-    return JsonResponse(payload)
+    response = JsonResponse(payload)
+    response['X-Comments-Cache'] = 'MISS'
+    response['Server-Timing'] = f"comments;dur={(time.monotonic() - started_at) * 1000:.1f}"
+    return response
 
 
 def _parse_created_cursor(cursor):

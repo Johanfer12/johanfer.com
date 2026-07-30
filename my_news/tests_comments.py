@@ -2,6 +2,7 @@ import json
 import uuid
 from unittest.mock import Mock, patch
 
+import requests
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
@@ -20,6 +21,12 @@ def response_with_text(text):
     response = Mock()
     response.text = text
     response.raise_for_status.return_value = None
+    return response
+
+
+def response_with_http_error():
+    response = Mock()
+    response.raise_for_status.side_effect = requests.HTTPError('403 Client Error')
     return response
 
 
@@ -150,6 +157,62 @@ class ElChapuzasDisqusCommentExtractorTests(SimpleTestCase):
         self.assertIn('output=1', get_mock.call_args_list[0].args[0])
         self.assertEqual(get_mock.call_args_list[1].args[0], 'https://disqus.com/embed/comments/')
 
+    @patch('my_news.comment_extractors.requests.get')
+    def test_uses_rss_fallback_when_article_is_blocked(self, get_mock):
+        article_url = (
+            'https://elchapuzasinformatico.com/2026/07/'
+            'compra-geforce-rtx-5070-ti-recibe-botella-de-agua/'
+        )
+        feed_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
+            <rss version="2.0">
+                <channel>
+                    <item>
+                        <title>Compra una GeForce RTX 5070 Ti</title>
+                        <link>{article_url}</link>
+                        <guid isPermaLink="false">
+                            https://elchapuzasinformatico.com/?p=662601
+                        </guid>
+                    </item>
+                </channel>
+            </rss>
+        '''
+        thread_data = {
+            'cursor': {'total': 1},
+            'response': {
+                'posts': [{
+                    'id': '56',
+                    'raw_message': 'Comentario recuperado',
+                    'createdAt': '2026-07-30T13:00:00',
+                    'author': {'name': 'Ada'},
+                    'parent': None,
+                    'depth': 0,
+                    'points': 1,
+                    'likes': 1,
+                    'dislikes': 0,
+                    'isDeleted': False,
+                }],
+                'thread': {'posts': 1},
+            },
+        }
+        get_mock.side_effect = [
+            response_with_http_error(),
+            response_with_text(feed_xml),
+            response_with_text(
+                '<script type="text/json" id="disqus-threadData">'
+                f'{json.dumps(thread_data)}</script>'
+            ),
+        ]
+
+        result = ElChapuzasDisqusCommentExtractor().extract(article_url)
+
+        self.assertEqual(result['total'], 1)
+        self.assertEqual(result['comments'][0]['comment'], 'Comentario recuperado')
+        self.assertEqual(get_mock.call_args_list[1].args[0], 'https://elchapuzasinformatico.com/feed/')
+        self.assertEqual(get_mock.call_args_list[2].kwargs['params']['t_i'], (
+            '662601 https://elchapuzasinformatico.com/?p=662601'
+        ))
+        self.assertEqual(get_mock.call_args_list[2].kwargs['params']['t_u'], article_url)
+
 
 class NewsCommentsViewTests(TestCase):
     def setUp(self):
@@ -210,6 +273,14 @@ class NewsCommentsViewTests(TestCase):
         self.assertEqual(payload['status'], 'success')
         self.assertEqual(payload['comments'][0]['user'], 'Usuario')
         self.assertEqual(payload['article_url'], article.link)
+        self.assertEqual(response.headers['X-Comments-Cache'], 'MISS')
+        self.assertIn('comments;dur=', response.headers['Server-Timing'])
+
+        cached_response = self.client.get(reverse('my_news:news_comments', args=[article.id]))
+
+        self.assertEqual(cached_response.status_code, 200)
+        self.assertEqual(cached_response.headers['X-Comments-Cache'], 'HIT')
+        extract_mock.assert_called_once_with(article.link)
 
     def test_endpoint_rejects_unregistered_source(self):
         article = self.create_news(link='https://example.com/prueba')
