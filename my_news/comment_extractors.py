@@ -7,6 +7,7 @@ y registrarlo en ``COMMENT_EXTRACTORS``.
 
 from __future__ import annotations
 
+import html
 import json
 import xml.etree.ElementTree as ElementTree
 from abc import ABC, abstractmethod
@@ -48,7 +49,7 @@ def _host_matches(host: str, domain: str) -> bool:
 def _plain_text(value: Any) -> str:
     if value is None:
         return ""
-    text = str(value)
+    text = html.unescape(str(value))
     if "<" not in text:
         return text.strip()
     return BeautifulSoup(text, "html.parser").get_text("\n", strip=True)

@@ -168,7 +168,7 @@ class ElChapuzasDisqusCommentExtractorTests(SimpleTestCase):
             'response': {
                 'posts': [{
                     'id': '57',
-                    'raw_message': 'Comentario directo',
+                    'raw_message': 'En mi máquina &quot;funciona&quot;',
                     'createdAt': '2026-07-30T13:00:00',
                     'author': {'name': 'Grace'},
                     'parent': None,
@@ -192,7 +192,7 @@ class ElChapuzasDisqusCommentExtractorTests(SimpleTestCase):
             title='Compra una GeForce RTX 5070 Ti',
         )
 
-        self.assertEqual(result['comments'][0]['comment'], 'Comentario directo')
+        self.assertEqual(result['comments'][0]['comment'], 'En mi máquina "funciona"')
         self.assertEqual(get_mock.call_count, 1)
         self.assertEqual(get_mock.call_args.args[0], 'https://disqus.com/embed/comments/')
         self.assertEqual(
