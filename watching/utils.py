@@ -28,6 +28,7 @@ SIMKL_GROUPS = (
 # clave: id de Simkl -> {tmdb_id, season}
 SIMKL_WORK_ALIASES = {
     1670325: {'tmdb_id': 69346, 'season': 2},  # Youjo Senki II = Saga of Tanya the Evil T2
+    2671730: {'tmdb_id': 1669841},             # Bleach: Kashin Tan; en la BD es película
 }
 
 
@@ -274,6 +275,14 @@ def refresh_watching_from_simkl(full=False):
     movie_tmdb_ids = set(
         WatchedItem.objects.filter(media_type='movie').values_list('tmdb_id', flat=True)
     )
+    # Título ya establecido para cada obra. Simkl nombra distinto que Trakt (sobre todo
+    # el anime: "Youjo Senki II" por "Saga of Tanya the Evil"), y como la tarjeta toma el
+    # título del evento más reciente, un episodio nuevo le cambiaría el nombre a la serie.
+    known_titles = dict(
+        WatchedItem.objects.exclude(tmdb_id__isnull=True)
+        .order_by('watched_at')
+        .values_list('tmdb_id', 'title')
+    )
     tmdb_cache = {}
     title_cache = {}
     created = 0
@@ -341,7 +350,7 @@ def refresh_watching_from_simkl(full=False):
                     dedup_key=dedup_key,
                     source='simkl',
                     media_type=media_type,
-                    title=(media.get('title') or '').strip() or 'Sin título',
+                    title=known_titles.get(tmdb_id) or (media.get('title') or '').strip() or 'Sin título',
                     episode_title=titles.get((season, episode), ''),
                     season=season,
                     episode=episode,

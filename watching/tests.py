@@ -222,6 +222,26 @@ class RefreshFromSimklTests(TestCase):
         self.assertEqual((item.season, item.episode), (2, 4))
         self.assertEqual(item.dedup_key, 'show:69346:s02e04')
 
+    def test_keeps_the_title_the_work_already_had(self, _episodes, _playback):
+        """Simkl nombra distinto que Trakt; la tarjeta no debe cambiar de nombre."""
+        WatchedItem.objects.create(
+            dedup_key='show:69346:s02e03', source='trakt', media_type='episode',
+            title='Saga of Tanya the Evil', season=2, episode=3,
+            watched_at=timezone.now() - timedelta(days=10), tmdb_id=69346,
+        )
+        with patch.dict('watching.utils.SIMKL_WORK_ALIASES',
+                        {1670325: {'tmdb_id': 69346, 'season': 2}}):
+            self._sync({'anime': [{
+                'last_watched_at': '2026-07-30T03:01:00Z',
+                'show': {'title': 'Youjo Senki II', 'ids': {'simkl': 1670325}},
+                'seasons': [{'number': 1, 'episodes': [{'number': 4, 'watched_at': '2026-07-30T03:01:00Z'}]}],
+            }]})
+
+        self.assertEqual(
+            WatchedItem.objects.get(dedup_key='show:69346:s02e04').title,
+            'Saga of Tanya the Evil',
+        )
+
     def test_skips_items_without_any_resolvable_id(self, _episodes, _playback):
         created, _ = self._sync({'shows': [{
             'last_watched_at': '2026-07-02T03:00:00Z',
