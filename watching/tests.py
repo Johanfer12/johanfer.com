@@ -168,8 +168,8 @@ class RefreshFromSimklTests(TestCase):
 
     def test_takes_episode_titles_from_simkl(self, mock_episodes, _playback, _detail):
         mock_episodes.return_value = [
-            {'season': 1, 'episode': 1, 'title': 'Horizontes'},
-            {'season': 1, 'episode': 2, 'title': 'Interconectividad'},
+            {'season': 1, 'episode': 1, 'type': 'episode', 'title': 'Horizontes'},
+            {'season': 1, 'episode': 2, 'type': 'episode', 'title': 'Interconectividad'},
         ]
 
         self._sync({'shows': [SIMKL_SHOW]})
@@ -215,7 +215,10 @@ class RefreshFromSimklTests(TestCase):
         temporada real, que es la numeración que ya usan los registros de Trakt.
         """
         mock_episodes.return_value = [
-            {'episode': 4, 'season': None, 'title': 'Episode 4', 'tvdb': {'season': 2, 'episode': 4}},
+            {'episode': 4, 'season': None, 'type': 'episode', 'title': 'Episode 4',
+             'tvdb': {'season': 2, 'episode': 4}},
+            # Los specials repiten la numeración: no deben pisar al episodio real.
+            {'episode': 4, 'season': None, 'type': 'special', 'title': 'Mini-Episode 4', 'tvdb': None},
         ]
         with patch('watching.utils.simkl.fetch_detail',
                    return_value={'ids': {'simkl': 1670325, 'tmdb': '69346', 'tvdb': '315500'}}) as detail:
@@ -262,7 +265,8 @@ class RefreshFromSimklTests(TestCase):
             watched_at=timezone.now() - timedelta(days=10), tmdb_id=69346,
         )
         _episodes.return_value = [
-            {'episode': 4, 'season': None, 'title': 'Episode 4', 'tvdb': {'season': 2, 'episode': 4}},
+            {'episode': 4, 'season': None, 'type': 'episode', 'title': 'Episode 4',
+             'tvdb': {'season': 2, 'episode': 4}},
         ]
         with patch('watching.utils.simkl.fetch_detail',
                    return_value={'ids': {'tmdb': '69346'}}):

@@ -190,7 +190,10 @@ def _episode_index(cache, simkl_id, is_anime):
     try:
         for episode in simkl.fetch_episodes(simkl_id, is_anime=is_anime):
             number = episode.get('episode')
-            if not number:
+            # Los specials repiten la numeración de los episodios normales (una serie
+            # con 8 capítulos devuelve además 8 "Mini-Episode N"): si se indexaran,
+            # pisarían al episodio real y se perdería su equivalencia con TVDB.
+            if not number or episode.get('type') != 'episode':
                 continue
             listed_season = 1 if is_anime else (episode.get('season') or 1)
             tvdb = episode.get('tvdb') or {}
