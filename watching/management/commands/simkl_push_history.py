@@ -8,14 +8,19 @@ Trakt alcanzó a sincronizar, con las fechas correctas, así que se empuja desde
     python manage.py simkl_push_history --apply
     python manage.py simkl_push_history --apply --limit 2  # prueba con 2 obras
 
-Es idempotente en la práctica: volver a marcar lo ya visto no duplica en Simkl. Respeta
-el límite de 1 POST/s de la API.
+**Fue una migración de una sola vez y no debería repetirse** (se abstiene solo; hay que
+pasar --force). Al empujar por `tmdb_id`, el anime en numeración absoluta cae en la
+entrada equivocada: mandar "temporada 1 episodio 77" de Re:Zero, o los 12 de Stone Ocean
+por el tmdb de la franquicia JoJo, hizo que Simkl marcara temporadas enteras que nunca se
+vieron. Limpiar eso costó 32 filas y 41 marcas.
+
+Respeta el límite de 1 POST/s de la API.
 """
 
 import time
 from collections import defaultdict
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from watching import simkl
 from watching.models import WatchedItem
@@ -31,8 +36,18 @@ class Command(BaseCommand):
         parser.add_argument('--apply', action='store_true', help="Ejecuta de verdad.")
         parser.add_argument('--limit', type=int, help="Sube solo las primeras N obras (prueba).")
         parser.add_argument('--skip-ratings', action='store_true', help="No subir mis calificaciones.")
+        parser.add_argument('--force', action='store_true',
+                            help="Corre aunque la cuenta de Simkl ya tenga historial.")
 
     def handle(self, *args, **options):
+        # Seguro contra la segunda corrida: ver el aviso del encabezado.
+        if not options['force'] and (simkl.fetch_activities() or {}).get('all'):
+            raise CommandError(
+                "La cuenta de Simkl ya tiene historial: este volcado era de una sola vez y "
+                "repetirlo vuelve a marcar temporadas enteras de anime que nunca se vieron. "
+                "Usá --force solo si sabés lo que hacés."
+            )
+
         shows, movies, ratings = self._build_payloads(options.get('limit'))
 
         total_episodes = sum(
