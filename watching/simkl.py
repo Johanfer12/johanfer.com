@@ -156,6 +156,17 @@ def add_to_history(payload):
     return _post('/sync/history', payload)
 
 
+def fetch_detail(simkl_id, is_anime=False):
+    """Ficha completa de una obra.
+
+    `/sync/all-items` devuelve los ids abreviados y a veces sin `tmdb`; la ficha sí lo
+    trae (junto con tvdb, mal, anilist…). Sirve para rescatar obras que si no se
+    descartarían, típicamente las secuelas de anime.
+    """
+    kind = 'anime' if is_anime else 'tv'
+    return _get(f'/{kind}/{simkl_id}', authenticated=False, extended='full') or {}
+
+
 def fetch_user_settings():
     """Datos de la cuenta dueña del token. Útil para verificar la conexión."""
     return _get('/users/settings') or {}

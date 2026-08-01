@@ -22,14 +22,6 @@ SIMKL_GROUPS = (
     ('movies', 'movie', False),
 )
 
-# Simkl parte el anime por temporada: las secuelas son entradas separadas y suelen venir
-# sin `ids.tmdb`, así que el sync las descartaría. Acá se mapean a mano a la obra que ya
-# existe en la BD (donde Trakt las agrupaba en una sola serie con temporadas).
-# clave: id de Simkl -> {tmdb_id, season}
-SIMKL_WORK_ALIASES = {
-    1670325: {'tmdb_id': 69346, 'season': 2},  # Youjo Senki II = Saga of Tanya the Evil T2
-    2671730: {'tmdb_id': 1669841},             # Bleach: Kashin Tan; en la BD es película
-}
 
 
 # --- TMDB ----------------------------------------------------------------------
@@ -178,33 +170,64 @@ def _parse_stamp(value):
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
-def _episode_titles(cache, simkl_id, is_anime):
-    """{(temporada, episodio): título} desde Simkl, que sí trae los títulos.
+def _episode_index(cache, simkl_id, is_anime):
+    """Índice de episodios de una obra, desde Simkl.
 
-    En series normales cada episodio declara `season` y `episode`. En anime la
-    numeración es absoluta y `/sync/all-items` los reporta como temporada 1, así que
-    se indexa igual.
+    Devuelve {(temporada, episodio) del listado: {'title', 'season', 'episode'}}, donde
+    `season`/`episode` son la ubicación real dentro de la obra agrupada.
+
+    Hace falta porque Simkl parte el anime por temporada y numera en absoluto: la
+    segunda temporada de una serie es otra entrada cuyos episodios empiezan en 1. Cada
+    episodio declara su equivalencia en TVDB, que es la numeración que ya usan los
+    registros heredados de Trakt, así que se usa esa para ubicarlos.
     """
     if not simkl_id:
         return {}
     if simkl_id in cache:
         return cache[simkl_id]
 
-    titles = {}
+    index = {}
     try:
         for episode in simkl.fetch_episodes(simkl_id, is_anime=is_anime):
             number = episode.get('episode')
             if not number:
                 continue
-            season = 1 if is_anime else (episode.get('season') or 1)
-            title = (episode.get('title') or '').strip()
-            if title:
-                titles[(season, number)] = title
+            listed_season = 1 if is_anime else (episode.get('season') or 1)
+            tvdb = episode.get('tvdb') or {}
+            index[(listed_season, number)] = {
+                'title': (episode.get('title') or '').strip(),
+                'season': tvdb.get('season') or episode.get('season') or listed_season,
+                'episode': tvdb.get('episode') or number,
+            }
     except requests.RequestException:
-        logger.warning("No se pudieron traer los títulos de episodio de simkl %s", simkl_id)
+        logger.warning("No se pudo traer el índice de episodios de simkl %s", simkl_id)
 
-    cache[simkl_id] = titles
-    return titles
+    cache[simkl_id] = index
+    return index
+
+
+def _resolve_tmdb_id(ids, is_anime):
+    """Saca el id de TMDB de una obra, insistiendo si el listado no lo trae.
+
+    `/sync/all-items` devuelve los ids abreviados y las secuelas de anime suelen llegar
+    sin `tmdb`; la ficha completa sí lo tiene. Antes esas obras se descartaban y la
+    serie se quedaba sin sus episodios nuevos.
+    """
+    raw = ids.get('tmdb')
+    if not raw and ids.get('simkl'):
+        try:
+            detail_ids = (simkl.fetch_detail(ids['simkl'], is_anime=is_anime) or {}).get('ids') or {}
+        except requests.RequestException:
+            logger.warning("No se pudo consultar la ficha de simkl %s", ids.get('simkl'))
+            detail_ids = {}
+        raw = detail_ids.get('tmdb')
+        if raw:
+            logger.info("TMDB %s recuperado de la ficha de simkl %s", raw, ids['simkl'])
+
+    try:
+        return int(raw) if raw else None
+    except (TypeError, ValueError):  # en anime llega como string
+        return None
 
 
 def _detail_url(media_type, ids, is_anime=False):
@@ -220,24 +243,32 @@ def _detail_url(media_type, ids, is_anime=False):
     return f"https://simkl.com/{kind}/{simkl_id}/{slug}/" if slug else f"https://simkl.com/{kind}/{simkl_id}/"
 
 
-def _work_rows(item, media_type, is_anime, forced_season=None):
+def _work_rows(item, media_type, episode_index):
     """Expande un ítem de Simkl a los eventos que le corresponden en el modelo.
 
-    Devuelve [(season, episode, watched_at)]; para películas, [(None, None, fecha)].
-    `forced_season` reubica los episodios de una secuela de anime en la temporada que
-    le corresponde dentro de la obra agrupada (ver SIMKL_WORK_ALIASES).
+    Devuelve [(season, episode, watched_at, título del episodio)]; para películas,
+    [(None, None, fecha, '')]. La temporada y el número salen del índice cuando existe,
+    que es lo que reubica las secuelas de anime en su temporada real.
     """
     if media_type == 'movie':
         watched_at = _parse_stamp(item.get('last_watched_at'))
-        return [(None, None, watched_at)] if watched_at else []
+        return [(None, None, watched_at, '')] if watched_at else []
 
     rows = []
     for season in item.get('seasons') or []:
-        season_number = forced_season or season.get('number')
+        listed_season = season.get('number')
         for episode in season.get('episodes') or []:
             watched_at = _parse_stamp(episode.get('watched_at'))
-            if season_number is not None and episode.get('number') and watched_at:
-                rows.append((season_number, episode['number'], watched_at))
+            listed_episode = episode.get('number')
+            if listed_season is None or not listed_episode or not watched_at:
+                continue
+            placement = episode_index.get((listed_season, listed_episode)) or {}
+            rows.append((
+                placement.get('season') or listed_season,
+                placement.get('episode') or listed_episode,
+                watched_at,
+                placement.get('title') or '',
+            ))
     return rows
 
 
@@ -286,7 +317,7 @@ def refresh_watching_from_simkl(full=False):
         .values_list('tmdb_id', 'title', 'year')
     }
     tmdb_cache = {}
-    title_cache = {}
+    episode_cache = {}
     created = 0
     updated = 0
     skipped = 0
@@ -299,14 +330,7 @@ def refresh_watching_from_simkl(full=False):
             ids = media.get('ids') or {}
             tmdb_type = 'movie' if media_type == 'movie' else 'tv'
 
-            alias = SIMKL_WORK_ALIASES.get(ids.get('simkl')) or {}
-            forced_season = alias.get('season')
-
-            tmdb_id = alias.get('tmdb_id') or ids.get('tmdb')
-            try:
-                tmdb_id = int(tmdb_id) if tmdb_id else None
-            except (TypeError, ValueError):  # en anime llega como string
-                tmdb_id = None
+            tmdb_id = _resolve_tmdb_id(ids, is_anime)
             if not tmdb_id:
                 tmdb_id, _ = fetch_tmdb_id_by_imdb(ids.get('imdb'))
             if tmdb_id and media_type == 'episode' and tmdb_id in movie_tmdb_ids:
@@ -322,12 +346,15 @@ def refresh_watching_from_simkl(full=False):
                 skipped += 1
                 continue
 
-            rows = _work_rows(item, media_type, is_anime, forced_season)
+            episode_index = (
+                _episode_index(episode_cache, ids.get('simkl'), is_anime)
+                if media_type == 'episode' else {}
+            )
+            rows = _work_rows(item, media_type, episode_index)
             if not rows:
                 continue
 
             metadata = _get_tmdb_metadata(tmdb_cache, tmdb_type, tmdb_id)
-            titles = _episode_titles(title_cache, ids.get('simkl'), is_anime) if media_type == 'episode' else {}
             # Se acumula: varias entradas de Simkl pueden mapear a una sola obra nuestra
             # (el anime viene partido por temporada). Si se sobrescribiera, los
             # contadores de una secuela pasarían por los de la serie entera.
@@ -340,7 +367,7 @@ def refresh_watching_from_simkl(full=False):
 
             known_title, known_year = known_works.get(tmdb_id, (None, None))
 
-            for season, episode, watched_at in rows:
+            for season, episode, watched_at, episode_title in rows:
                 dedup_key = WatchedItem.build_dedup_key(media_type, tmdb_id, season, episode)
                 seen_keys.add(dedup_key)
                 known = existing.get(dedup_key)
@@ -359,7 +386,7 @@ def refresh_watching_from_simkl(full=False):
                     source='simkl',
                     media_type=media_type,
                     title=known_title or (media.get('title') or '').strip() or 'Sin título',
-                    episode_title=titles.get((season, episode), ''),
+                    episode_title=episode_title,
                     season=season,
                     episode=episode,
                     year=known_year or media.get('year'),
