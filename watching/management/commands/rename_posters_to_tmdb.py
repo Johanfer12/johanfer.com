@@ -31,6 +31,8 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--apply', action='store_true', help="Ejecuta de verdad.")
+        parser.add_argument('--force', action='store_true',
+                            help="Corre aunque parezca que la migración ya se hizo.")
 
     def handle(self, *args, **options):
         folder = os.path.join(settings.MEDIA_ROOT, 'Posters')
@@ -38,7 +40,7 @@ class Command(BaseCommand):
             raise CommandError(f"No existe {folder}")
 
         # Una fila por obra basta: todos los episodios de una serie comparten el póster.
-        works = (
+        works = list(
             WatchedItem.objects
             .exclude(trakt_id__isnull=True)
             .exclude(tmdb_id__isnull=True)
@@ -46,6 +48,24 @@ class Command(BaseCommand):
             .order_by()  # sin esto el Meta.ordering se cuela en el SELECT y distinct() no deduplica
             .distinct()
         )
+
+        # Seguro contra la segunda corrida. Los espacios de ids se cruzan, así que tras
+        # migrar, el "nombre viejo" de una obra puede ser el nombre final legítimo de
+        # otra: correr de nuevo movería esa portada y dejaría dos obras mal ilustradas.
+        # No se puede distinguir por nombres de archivo, así que se mide el conjunto.
+        finals_present = sum(
+            1 for media_type, _trakt_id, tmdb_id in works
+            if os.path.exists(os.path.join(
+                folder, f"{'show' if media_type == 'episode' else 'movie'}_{tmdb_id}.webp"
+            ))
+        )
+        total_works = len(works)
+        if total_works and not options['force'] and finals_present >= total_works * 0.9:
+            self.stdout.write(self.style.SUCCESS(
+                f"Nada por hacer: {finals_present} de {total_works} obras ya tienen su "
+                f"póster nombrado por tmdb_id. Usá --force si de verdad querés re-correrlo."
+            ))
+            return
 
         apply = options['apply']
         renamed = missing = already = shared = 0
