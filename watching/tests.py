@@ -1,69 +1,57 @@
 from datetime import timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import WatchedItem
-from .utils import fetch_tmdb_media_details, parse_history_item, refresh_watching_data
+from .models import SimklSyncState, WatchedItem
+from .utils import fetch_tmdb_media_details, refresh_watching_from_simkl
 
-SAMPLE_MOVIE_EVENT = {
-    'id': 111,
-    'watched_at': '2026-07-01T02:10:00.000Z',
-    'type': 'movie',
+SIMKL_MOVIE = {
+    'last_watched_at': '2026-07-01T02:10:00Z',
+    'user_rating': 9,
     'movie': {
         'title': 'Dune: Part Two',
         'year': 2024,
-        'overview': 'Paul Atreides se une a los Fremen.',
-        'ids': {'trakt': 12345, 'slug': 'dune-part-two-2024', 'tmdb': 693134},
+        'ids': {'simkl': 111, 'slug': 'dune-part-two', 'imdb': 'tt15239678', 'tmdb': 693134},
     },
 }
 
-SAMPLE_EPISODE_EVENT = {
-    'id': 222,
-    'watched_at': '2026-07-02T03:00:00.000Z',
-    'type': 'episode',
-    'episode': {
-        'season': 1,
-        'number': 3,
-        'title': 'El largo y oscuro té de la tarde del alma',
-        'overview': 'Sinopsis del episodio.',
-        'ids': {'trakt': 999},
-    },
+SIMKL_SHOW = {
+    'last_watched_at': '2026-07-03T03:00:00Z',
+    'user_rating': 8,
+    'status': 'watching',
+    'watched_episodes_count': 2,
+    'total_episodes_count': 8,
+    'not_aired_episodes_count': 2,
     'show': {
         'title': 'Dirk Gently',
         'year': 2016,
-        'overview': 'Sinopsis de la serie.',
-        'ids': {'trakt': 55555, 'slug': 'dirk-gently', 'tmdb': 67386},
+        'ids': {'simkl': 222, 'slug': 'dirk-gently', 'tmdb': 67386},
     },
+    'seasons': [{
+        'number': 1,
+        'episodes': [
+            {'number': 1, 'watched_at': '2026-07-02T03:00:00Z'},
+            {'number': 2, 'watched_at': '2026-07-03T03:00:00Z'},
+        ],
+    }],
 }
 
-
-class ParseHistoryItemTests(TestCase):
-    def test_parses_movie_event(self):
-        data = parse_history_item(SAMPLE_MOVIE_EVENT)
-
-        self.assertEqual(data['media_type'], 'movie')
-        self.assertEqual(data['title'], 'Dune: Part Two')
-        self.assertEqual(data['trakt_id'], 12345)
-        self.assertEqual(data['tmdb_id'], 693134)
-        self.assertEqual(data['trakt_url'], 'https://trakt.tv/movies/dune-part-two-2024')
-
-    def test_parses_episode_event_with_show_data(self):
-        data = parse_history_item(SAMPLE_EPISODE_EVENT)
-
-        self.assertEqual(data['media_type'], 'episode')
-        self.assertEqual(data['title'], 'Dirk Gently')
-        self.assertEqual(data['season'], 1)
-        self.assertEqual(data['episode'], 3)
-        self.assertEqual(data['trakt_id'], 55555)
-        self.assertEqual(data['overview'], 'Sinopsis de la serie.')
-        self.assertEqual(data['trakt_url'], 'https://trakt.tv/shows/dirk-gently')
-
-    def test_rejects_unknown_or_incomplete_events(self):
-        self.assertIsNone(parse_history_item({'id': 1, 'type': 'season', 'watched_at': '2026-07-01T00:00:00Z'}))
-        self.assertIsNone(parse_history_item({'type': 'movie', 'watched_at': 'no-es-fecha'}))
+# En anime el id de TMDB llega como string y la numeración es absoluta.
+SIMKL_ANIME = {
+    'last_watched_at': '2021-11-30T15:00:00Z',
+    'watched_episodes_count': 1,
+    'total_episodes_count': 12,
+    'not_aired_episodes_count': 0,
+    'show': {
+        'title': 'JoJo no Kimyou na Bouken: Stone Ocean',
+        'year': 2021,
+        'ids': {'simkl': 1599907, 'slug': 'stone-ocean', 'imdb': 'tt2359704', 'tmdb': '45790'},
+    },
+    'seasons': [{'number': 1, 'episodes': [{'number': 1, 'watched_at': '2021-11-30T15:00:00Z'}]}],
+}
 
 
 @override_settings(TMDB_API_KEY='test-tmdb')
@@ -76,11 +64,6 @@ class TmdbDetailsTests(TestCase):
             'poster_path': '/poster.jpg',
             'vote_average': 8.56,
             'number_of_episodes': 18,
-            'seasons': [
-                {'season_number': 0, 'episode_count': 2},
-                {'season_number': 1, 'episode_count': 10},
-                {'season_number': 2, 'episode_count': 8},
-            ],
         }
         response.raise_for_status.return_value = None
         mock_get.return_value = response
@@ -90,142 +73,157 @@ class TmdbDetailsTests(TestCase):
         self.assertEqual(data['overview'], 'Sinopsis en español.')
         self.assertEqual(data['public_rating'], 8.6)
         self.assertEqual(data['available_episodes'], 18)
-        self.assertEqual(data['season_counts'], {1: 10, 2: 8})
         self.assertTrue(data['poster_url'].endswith('/poster.jpg'))
         self.assertEqual(mock_get.call_args.kwargs['params']['language'], 'es-ES')
 
 
-@override_settings(TRAKT_CLIENT_ID='test-client', TRAKT_USERNAME='johan', TMDB_API_KEY=None)
-class RefreshWatchingDataTests(TestCase):
-    def _mock_response(self, payload):
-        response = MagicMock()
-        response.json.return_value = payload
-        response.raise_for_status.return_value = None
-        return response
+@override_settings(TMDB_API_KEY=None)
+@patch('watching.utils.simkl.fetch_playback', return_value=[])
+@patch('watching.utils.simkl.fetch_episodes', return_value=[])
+class RefreshFromSimklTests(TestCase):
+    def _sync(self, payload, activities=None, full=False):
+        with patch('watching.utils.simkl.fetch_activities',
+                   return_value=activities or {'all': '2026-07-03T03:00:00Z'}), \
+             patch('watching.utils.simkl.fetch_all_items', return_value=payload) as all_items:
+            created = refresh_watching_from_simkl(full=full)
+        return created, all_items
 
-    @patch('watching.utils.requests.get')
-    def test_creates_items_and_deduplicates_on_second_run(self, mock_get):
-        # Página 1 con eventos, página 2 vacía (fin del historial)
-        mock_get.side_effect = [
-            self._mock_response([]),
-            self._mock_response([]),
-            self._mock_response([SAMPLE_MOVIE_EVENT, SAMPLE_EPISODE_EVENT]),
-            self._mock_response([]),
-        ]
-        created = refresh_watching_data()
+    def test_expands_movies_and_episodes_into_rows(self, _episodes, _playback):
+        created, _ = self._sync({'movies': [SIMKL_MOVIE], 'shows': [SIMKL_SHOW]})
 
-        self.assertEqual(created, 2)
-        self.assertEqual(WatchedItem.objects.count(), 2)
+        self.assertEqual(created, 3)  # una película + dos episodios
+        self.assertEqual(WatchedItem.objects.count(), 3)
 
-        # Segunda corrida: los mismos eventos no deben duplicarse
-        mock_get.side_effect = [
-            self._mock_response([]),
-            self._mock_response([]),
-            self._mock_response([SAMPLE_MOVIE_EVENT, SAMPLE_EPISODE_EVENT]),
-        ]
-        created_again = refresh_watching_data()
+        movie = WatchedItem.objects.get(media_type='movie')
+        self.assertEqual(movie.dedup_key, 'movie:693134')
+        self.assertEqual(movie.source, 'simkl')
+        self.assertEqual(movie.user_rating, 9)
+        self.assertEqual(movie.imdb_id, 'tt15239678')
+        self.assertEqual(movie.detail_url, 'https://simkl.com/movies/111/dune-part-two/')
+
+        episode = WatchedItem.objects.get(media_type='episode', episode=2)
+        self.assertEqual(episode.dedup_key, 'show:67386:s01e02')
+        self.assertEqual(episode.title, 'Dirk Gently')
+        self.assertEqual(episode.user_rating, 8)
+        # emitidos = total (8) - sin emitir (2)
+        self.assertEqual(episode.available_episodes, 6)
+        # vistos: se cuentan en local, no se toman de Simkl a secas
+        self.assertEqual(episode.total_episodes, 2)
+
+    def test_second_run_does_not_duplicate(self, _episodes, _playback):
+        self._sync({'shows': [SIMKL_SHOW]})
+        created_again, _ = self._sync({'shows': [SIMKL_SHOW]}, activities={'all': 'otro-timestamp'})
 
         self.assertEqual(created_again, 0)
         self.assertEqual(WatchedItem.objects.count(), 2)
 
-    @patch('watching.utils.requests.get')
-    def test_stops_when_page_has_no_new_events(self, mock_get):
-        mock_get.side_effect = [
-            self._mock_response([]),
-            self._mock_response([]),
-            self._mock_response([SAMPLE_MOVIE_EVENT]),
-            self._mock_response([]),
-        ]
-        refresh_watching_data()
+    def test_skips_download_when_simkl_reports_no_changes(self, _episodes, _playback):
+        self._sync({'shows': [SIMKL_SHOW]}, activities={'all': 'sello-1'})
+        _, all_items = self._sync({'shows': [SIMKL_SHOW]}, activities={'all': 'sello-1'})
 
-        # Calificaciones + totales + dos páginas de historial (la segunda vacía corta el bucle)
-        self.assertEqual(mock_get.call_count, 4)
+        all_items.assert_not_called()
 
-    @patch('watching.utils.requests.get')
-    def test_fetches_and_applies_trakt_ratings(self, mock_get):
-        mock_get.side_effect = [
-            self._mock_response([
-                {'type': 'movie', 'rating': 9, 'movie': {'ids': {'trakt': 12345}}},
-                {'type': 'show', 'rating': 8, 'show': {'ids': {'trakt': 55555}}},
-            ]),
-            self._mock_response([]),
-            self._mock_response([SAMPLE_MOVIE_EVENT, SAMPLE_EPISODE_EVENT]),
-            self._mock_response([]),
-        ]
+    def test_full_run_ignores_the_gate(self, _episodes, _playback):
+        self._sync({'shows': [SIMKL_SHOW]}, activities={'all': 'sello-1'})
+        _, all_items = self._sync({'shows': [SIMKL_SHOW]}, activities={'all': 'sello-1'}, full=True)
 
-        refresh_watching_data()
+        all_items.assert_called_once()
 
-        self.assertEqual(WatchedItem.objects.get(media_type='movie').user_rating, 9)
-        self.assertEqual(WatchedItem.objects.get(media_type='episode').user_rating, 8)
+    def test_handles_anime_with_string_tmdb_id(self, _episodes, _playback):
+        created, _ = self._sync({'anime': [SIMKL_ANIME]})
 
-    @patch('watching.utils.requests.get')
-    def test_fetches_and_applies_show_episode_totals(self, mock_get):
-        mock_get.side_effect = [
-            self._mock_response([]),
-            self._mock_response([
-                {'show': {'ids': {'trakt': 55555}}, 'plays': 21},
-            ]),
-            self._mock_response([SAMPLE_EPISODE_EVENT]),
-            self._mock_response([]),
-        ]
+        self.assertEqual(created, 1)
+        item = WatchedItem.objects.get()
+        self.assertEqual(item.tmdb_id, 45790)
+        self.assertEqual(item.dedup_key, 'show:45790:s01e01')
 
-        refresh_watching_data()
+    def test_keeps_the_date_of_rows_inherited_from_trakt(self, _episodes, _playback):
+        real_date = timezone.now() - timedelta(days=900)
+        WatchedItem.objects.create(
+            dedup_key='show:67386:s01e01', source='trakt', media_type='episode',
+            title='Dirk Gently', season=1, episode=1, watched_at=real_date, tmdb_id=67386,
+        )
 
-        self.assertEqual(WatchedItem.objects.get(media_type='episode').total_episodes, 21)
+        self._sync({'shows': [SIMKL_SHOW]})
 
-    @override_settings(TMDB_API_KEY='test-tmdb')
-    @patch('watching.utils.requests.get')
-    def test_infers_previous_seasons_as_seen_from_latest_episode(self, mock_get):
-        tmdb_response = self._mock_response({
-            'overview': 'Sinopsis en español.',
-            'vote_average': 8.5,
-            'seasons': [
-                {'season_number': 1, 'episode_count': 10},
-                {'season_number': 2, 'episode_count': 8},
-                {'season_number': 3, 'episode_count': 8},
-            ],
-        })
-        mock_get.side_effect = [
-            self._mock_response([]),
-            self._mock_response([]),
-            self._mock_response([SAMPLE_EPISODE_EVENT | {
-                'episode': SAMPLE_EPISODE_EVENT['episode'] | {'season': 3, 'number': 3},
-            }]),
-            tmdb_response,
-            self._mock_response([]),
+        untouched = WatchedItem.objects.get(dedup_key='show:67386:s01e01')
+        self.assertEqual(untouched.watched_at, real_date)
+        self.assertEqual(untouched.source, 'trakt')
+
+    def test_reconciliation_never_deletes_trakt_rows(self, _episodes, _playback):
+        WatchedItem.objects.create(
+            dedup_key='movie:999', source='trakt', media_type='movie',
+            title='Peli vieja de Trakt', watched_at=timezone.now(), tmdb_id=999,
+        )
+        self._sync({'movies': [SIMKL_MOVIE]}, full=True)
+        self.assertEqual(WatchedItem.objects.count(), 2)
+
+        # La película de Simkl desaparece de la fuente: se borra solo esa.
+        self._sync({}, activities={'all': 'sello-2'}, full=True)
+
+        self.assertEqual(WatchedItem.objects.count(), 1)
+        self.assertEqual(WatchedItem.objects.get().source, 'trakt')
+
+    def test_takes_episode_titles_from_simkl(self, mock_episodes, _playback):
+        mock_episodes.return_value = [
+            {'season': 1, 'episode': 1, 'title': 'Horizontes'},
+            {'season': 1, 'episode': 2, 'title': 'Interconectividad'},
         ]
 
-        refresh_watching_data()
+        self._sync({'shows': [SIMKL_SHOW]})
 
-        self.assertEqual(WatchedItem.objects.get(media_type='episode').total_episodes, 21)
+        self.assertEqual(WatchedItem.objects.get(episode=2).episode_title, 'Interconectividad')
+
+    def test_stores_in_progress_ids_for_the_watching_ribbon(self, _episodes, mock_playback):
+        mock_playback.return_value = [{
+            'progress': 42.0,
+            'episode': {'season': 1, 'number': 3},
+            'show': {'ids': {'tmdb': '67386'}},
+        }]
+
+        self._sync({'shows': [SIMKL_SHOW]})
+
+        self.assertEqual(SimklSyncState.load().in_progress_tmdb_ids, {67386})
+
+    def test_skips_items_without_any_resolvable_id(self, _episodes, _playback):
+        created, _ = self._sync({'shows': [{
+            'last_watched_at': '2026-07-02T03:00:00Z',
+            'show': {'title': 'Sin ids', 'ids': {'simkl': 5}},
+            'seasons': [{'number': 1, 'episodes': [{'number': 1, 'watched_at': '2026-07-02T03:00:00Z'}]}],
+        }]})
+
+        self.assertEqual(created, 0)
+        self.assertEqual(WatchedItem.objects.count(), 0)
 
 
 class WatchingViewTests(TestCase):
-    def _create_episode(self, history_id, show_trakt_id, season, episode, watched_at, title='Avenue 5'):
+    def _create_episode(self, tmdb_id, season, episode, watched_at, title='Avenue 5', suffix=''):
         return WatchedItem.objects.create(
-            trakt_history_id=history_id,
+            dedup_key=f"show:{tmdb_id}:s{season:02d}e{episode:02d}{suffix}",
+            source='simkl',
             media_type='episode',
             title=title,
             season=season,
             episode=episode,
             watched_at=watched_at,
-            trakt_id=show_trakt_id,
+            tmdb_id=tmdb_id,
         )
 
-    def _create_movie(self, history_id, trakt_id, watched_at, title='Blade Runner 2049'):
+    def _create_movie(self, tmdb_id, watched_at, title='Blade Runner 2049', suffix=''):
         return WatchedItem.objects.create(
-            trakt_history_id=history_id,
+            dedup_key=f"movie:{tmdb_id}{suffix}",
+            source='simkl',
             media_type='movie',
             title=title,
             year=2017,
             watched_at=watched_at,
-            trakt_id=trakt_id,
+            tmdb_id=tmdb_id,
         )
 
     def test_default_view_shows_series_and_hides_movies(self):
         now = timezone.now()
-        self._create_episode(1, 500, 1, 1, now)
-        self._create_movie(2, 42, now)
+        self._create_episode(500, 1, 1, now)
+        self._create_movie(42, now)
 
         response = self.client.get(reverse('watching:index'))
 
@@ -233,19 +231,20 @@ class WatchingViewTests(TestCase):
         self.assertEqual(response.context['active_tipo'], 'series')
         self.assertContains(response, 'Avenue 5')
         self.assertNotContains(response, 'Blade Runner 2049')
-        self.assertContains(response, '1 series')
+        # El header singulariza: "1 serie", "2 series"
+        self.assertContains(response, '1 serie')
 
     def test_movies_tab_shows_movies_and_counter_label(self):
         now = timezone.now()
-        self._create_episode(1, 500, 1, 1, now)
-        self._create_movie(2, 42, now)
+        self._create_episode(500, 1, 1, now)
+        self._create_movie(42, now)
 
         response = self.client.get(reverse('watching:index'), {'tipo': 'peliculas'})
 
         self.assertEqual(response.context['active_tipo'], 'peliculas')
         self.assertContains(response, 'Blade Runner 2049')
         self.assertNotContains(response, 'Avenue 5')
-        self.assertContains(response, '1 películas')
+        self.assertContains(response, '1 película')
 
     def test_invalid_tipo_falls_back_to_series(self):
         response = self.client.get(reverse('watching:index'), {'tipo': 'podcasts'})
@@ -254,9 +253,9 @@ class WatchingViewTests(TestCase):
 
     def test_episodes_of_same_show_group_into_one_card(self):
         now = timezone.now()
-        self._create_episode(1, 500, 1, 1, now - timedelta(days=2))
-        self._create_episode(2, 500, 1, 2, now - timedelta(days=1))
-        self._create_episode(3, 500, 1, 3, now)
+        self._create_episode(500, 1, 1, now - timedelta(days=2))
+        self._create_episode(500, 1, 2, now - timedelta(days=1))
+        self._create_episode(500, 1, 3, now)
 
         response = self.client.get(reverse('watching:index'))
 
@@ -271,8 +270,8 @@ class WatchingViewTests(TestCase):
 
     def test_rewatched_episode_counts_as_one_seen_episode(self):
         now = timezone.now()
-        self._create_episode(1, 500, 1, 1, now - timedelta(days=1))
-        self._create_episode(2, 500, 1, 1, now)
+        self._create_episode(500, 1, 1, now - timedelta(days=1))
+        self._create_episode(500, 1, 1, now, suffix='#2')
 
         response = self.client.get(reverse('watching:index'))
 
@@ -282,7 +281,7 @@ class WatchingViewTests(TestCase):
         self.assertEqual(card['episode_total'], 1)
 
     def test_show_card_uses_total_episodes_when_available(self):
-        item = self._create_episode(1, 500, 1, 1, timezone.now())
+        item = self._create_episode(500, 1, 1, timezone.now())
         item.total_episodes = 21
         item.save(update_fields=['total_episodes'])
 
@@ -293,8 +292,8 @@ class WatchingViewTests(TestCase):
 
     def test_recent_show_gets_watching_ribbon_and_old_show_does_not(self):
         now = timezone.now()
-        self._create_episode(1, 500, 1, 1, now, title='Serie Reciente')
-        self._create_episode(2, 600, 2, 5, now - timedelta(days=40), title='Serie Vieja')
+        self._create_episode(500, 1, 1, now, title='Serie Reciente')
+        self._create_episode(600, 2, 5, now - timedelta(days=40), title='Serie Vieja')
 
         response = self.client.get(reverse('watching:index'))
 
@@ -303,9 +302,24 @@ class WatchingViewTests(TestCase):
         self.assertFalse(cards['Serie Vieja']['is_watching'])
         self.assertContains(response, 'watching-ribbon', count=1)
 
+    def test_simkl_progress_decides_the_ribbon_when_available(self):
+        now = timezone.now()
+        # La reciente no está a medias en Simkl; la vieja sí: manda el dato, no la ventana.
+        self._create_episode(500, 1, 1, now, title='Serie Reciente')
+        self._create_episode(600, 2, 5, now - timedelta(days=40), title='Serie Vieja')
+        state = SimklSyncState.load()
+        state.in_progress_ids = '600'
+        state.save(update_fields=['in_progress_ids'])
+
+        response = self.client.get(reverse('watching:index'))
+
+        cards = {card['latest'].title: card for card in response.context['cards']}
+        self.assertFalse(cards['Serie Reciente']['is_watching'])
+        self.assertTrue(cards['Serie Vieja']['is_watching'])
+
     def test_recent_complete_show_does_not_get_watching_ribbon(self):
         now = timezone.now()
-        item = self._create_episode(1, 500, 1, 8, now, title='Serie Completa')
+        item = self._create_episode(500, 1, 8, now, title='Serie Completa')
         item.total_episodes = 8
         item.available_episodes = 8
         item.save(update_fields=['total_episodes', 'available_episodes'])
@@ -318,7 +332,7 @@ class WatchingViewTests(TestCase):
     def test_rewatched_movie_groups_and_shows_play_count(self):
         now = timezone.now()
         for i in range(2):
-            self._create_movie(10 + i, 77, now - timedelta(days=i), title='Interstellar')
+            self._create_movie(77, now - timedelta(days=i), title='Interstellar', suffix=f"#{i}")
 
         response = self.client.get(reverse('watching:index'), {'tipo': 'peliculas'})
 
@@ -339,7 +353,7 @@ class WatchingViewTests(TestCase):
         self.assertContains(response, 'Aún no hay series')
 
     def test_ratings_render_as_five_star_scale(self):
-        item = self._create_episode(1, 500, 1, 1, timezone.now())
+        item = self._create_episode(500, 1, 1, timezone.now())
         item.user_rating = 9
         item.public_rating = 8.6
         item.save(update_fields=['user_rating', 'public_rating'])
@@ -349,3 +363,15 @@ class WatchingViewTests(TestCase):
         self.assertContains(response, 'Mi Calificación')
         self.assertContains(response, 'Calificación General')
         self.assertContains(response, '4.5 de 5')
+
+    def test_stats_page_groups_by_tmdb_id(self):
+        now = timezone.now()
+        self._create_episode(500, 1, 1, now)
+        self._create_episode(500, 1, 2, now)
+        self._create_movie(42, now)
+
+        response = self.client.get(reverse('watching:stats'))
+
+        self.assertEqual(response.status_code, 200)
+        # Dos episodios de la misma serie cuentan como una sola serie en el año
+        self.assertContains(response, '[1]')

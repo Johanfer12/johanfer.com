@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mi TV</title>
-    <meta name="description" content="Películas y series vistas por Johan, sincronizadas desde Trakt.">
+    <meta name="description" content="Películas y series vistas por Johan, sincronizadas desde Simkl.">
     <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
@@ -32,7 +32,7 @@
                 </div>
 
                 <div class="book-info">
-                    <a href="{{ card.latest.trakt_url|default:'#' }}"
+                    <a href="{{ card.latest.detail_url|default:'#' }}"
                        class="book-title"
                        target="_blank"
                        rel="noopener noreferrer">
@@ -111,7 +111,7 @@
         </div>
         {% empty %}
         <p class="total" style="grid-column: 1 / -1; text-align: center;">
-            Aún no hay {{ watch_label }} sincronizadas desde Trakt.
+            Aún no hay {{ watch_label }} sincronizadas desde Simkl.
         </p>
         {% endfor %}
     </div>

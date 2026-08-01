@@ -11,14 +11,18 @@ from django.utils import timezone
 from Bookshelf.html_sanitizer import sanitize_html
 from home_page.templatetags.sanitizers import rating_stars
 
-from .models import WatchedItem
+from .models import SimklSyncState, WatchedItem
 
 # Una serie con actividad en esta ventana se considera "en curso" (listón Viendo)
 WATCHING_WINDOW_DAYS = 14
 
 
 def _group_by_media(items):
-    """Agrupa los eventos por obra (trakt_id): una tarjeta por serie/película.
+    """Agrupa los eventos por obra (tmdb_id): una tarjeta por serie/película.
+
+    Se agrupa por TMDB y no por el id de la fuente porque el historial viene de dos
+    épocas (Trakt hasta julio 2026, Simkl desde agosto) y TMDB es el único id que
+    ambas comparten.
 
     El queryset llega ordenado por (-watched_at, -season, -episode), así que el
     primer evento de cada obra es el más reciente; ante fechas empatadas gana el
@@ -30,9 +34,9 @@ def _group_by_media(items):
         watched_year = timezone.localtime(item.watched_at).year
         if item.media_type == 'episode':
             episode_key = (item.season, item.episode)
-            entry = shows.get(item.trakt_id)
+            entry = shows.get(item.tmdb_id)
             if entry is None:
-                shows[item.trakt_id] = {
+                shows[item.tmdb_id] = {
                     'latest': item,
                     'plays': 1,
                     'episode_keys': {episode_key},
@@ -58,9 +62,9 @@ def _group_by_media(items):
             continue
 
         bucket = movies
-        entry = bucket.get(item.trakt_id)
+        entry = bucket.get(item.tmdb_id)
         if entry is None:
-            bucket[item.trakt_id] = {'latest': item, 'plays': 1, 'watched_years': {watched_year}}
+            bucket[item.tmdb_id] = {'latest': item, 'plays': 1, 'watched_years': {watched_year}}
         else:
             entry['plays'] += 1
             entry['watched_years'].add(watched_year)
@@ -94,12 +98,19 @@ def watching(request):
     items = list(WatchedItem.objects.order_by('-watched_at', '-season', '-episode'))
     show_cards, movie_cards = _group_by_media(items)
 
+    # Simkl reporta lo que está a medias; el sync lo deja guardado para no llamar a la
+    # API en cada render. Si no hay dato (antes del primer sync), se cae a la heurística
+    # de "actividad reciente y serie incompleta".
+    in_progress = SimklSyncState.load().in_progress_tmdb_ids
     watching_cutoff = timezone.now() - timedelta(days=WATCHING_WINDOW_DAYS)
     for card in show_cards:
         available = card.get('available_episodes')
         seen_total = card.get('episode_total') or card.get('episode_count') or 0
         is_complete = bool(available and seen_total >= available)
-        card['is_watching'] = card['latest'].watched_at >= watching_cutoff and not is_complete
+        if in_progress:
+            card['is_watching'] = card['latest'].tmdb_id in in_progress
+        else:
+            card['is_watching'] = card['latest'].watched_at >= watching_cutoff and not is_complete
 
     if tipo == 'peliculas':
         cards, watch_label, watch_noun = movie_cards, 'películas', 'película'
@@ -127,7 +138,7 @@ def watching(request):
                 'title': latest.title,
                 'media_type': latest.media_type,
                 'poster_url': f"{settings.MEDIA_URL}Posters/{latest.poster_name}",
-                'trakt_url': latest.trakt_url or '#',
+                'detail_url': latest.detail_url or '#',
                 'year': latest.year,
                 'episode_total': card.get('episode_total'),
                 'display_label': latest.display_label,
@@ -158,7 +169,7 @@ def watching(request):
 
 
 def _stars_label(rating):
-    """Nota Trakt 1-10 -> estrellas del sitio (5 con medias), ej. 7 -> ★★★½."""
+    """Nota 1-10 (misma escala en Trakt y Simkl) -> estrellas del sitio, ej. 7 -> ★★★½."""
     five_star = rating / 2
     label = '★' * int(five_star)
     if five_star % 1:
@@ -171,11 +182,11 @@ def watching_stats(request):
     # permite usar la zona horaria local (SQLite no convierte fechas solo).
     shows_by_year = defaultdict(set)
     movies_by_year = defaultdict(set)
-    work_ratings = {}  # una obra (tipo, trakt_id) -> mi nota
-    release_years = {}  # una obra (tipo, trakt_id) -> año de estreno
+    work_ratings = {}  # una obra (tipo, tmdb_id) -> mi nota
+    release_years = {}  # una obra (tipo, tmdb_id) -> año de estreno
 
     for item in WatchedItem.objects.all():
-        work_key = (item.media_type == 'episode', item.trakt_id)
+        work_key = (item.media_type == 'episode', item.tmdb_id)
         if item.year:
             release_years.setdefault(work_key, item.year)
         if item.user_rating:
@@ -186,9 +197,9 @@ def watching_stats(request):
         if local_dt.year <= 1970:
             continue
         if item.media_type == 'episode':
-            shows_by_year[local_dt.year].add(item.trakt_id)
+            shows_by_year[local_dt.year].add(item.tmdb_id)
         else:
-            movies_by_year[local_dt.year].add(item.trakt_id)
+            movies_by_year[local_dt.year].add(item.tmdb_id)
 
     years = sorted(set(shows_by_year) | set(movies_by_year))
     rating_counts = Counter(work_ratings.values())

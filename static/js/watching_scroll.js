@@ -52,7 +52,7 @@ const createWatchItem = (card) => {
                 ${card.is_watching ? '<div class="watching-ribbon"><span>Viendo</span></div>' : ''}
             </div>
             <div class="book-info">
-                <a href="${escapeHtml(card.trakt_url)}"
+                <a href="${escapeHtml(card.detail_url)}"
                    class="book-title"
                    target="_blank"
                    rel="noopener noreferrer">

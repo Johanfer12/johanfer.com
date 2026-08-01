@@ -214,8 +214,13 @@ GEMINI_EMBEDDING_DIM = int(os.getenv('GEMINI_EMBEDDING_DIM', 768))
 QDRANT_URL = os.getenv('QDRANT_URL', 'http://localhost:6333')
 QDRANT_COLLECTION = os.getenv('QDRANT_COLLECTION', 'news_embeddings_gemini001_d768_v1')
 
-# Trakt (historial de películas/series; API v2, sin OAuth para perfiles públicos)
-# Crear app en https://trakt.tv/oauth/applications para obtener el Client ID.
+# Simkl (historial de películas/series; reemplazó a Trakt en agosto 2026).
+# Crear app en https://simkl.com/settings/developer/ y obtener el token con
+# `python manage.py simkl_auth` (dura ~5 años, no hay refresh).
+SIMKL_CLIENT_ID = os.getenv('SIMKL_CLIENT_ID')
+SIMKL_ACCESS_TOKEN = os.getenv('SIMKL_ACCESS_TOKEN')
+# Trakt (fuente anterior; su API devuelve 403 desde julio 2026 y se conserva solo
+# porque los registros históricos guardan su id y su URL).
 TRAKT_CLIENT_ID = os.getenv('TRAKT_CLIENT_ID')
 TRAKT_USERNAME = os.getenv('TRAKT_USERNAME')
 # TMDB (pósters; API key gratuita en https://www.themoviedb.org/settings/api)

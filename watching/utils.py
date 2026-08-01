@@ -1,95 +1,29 @@
 import logging
 import os
+from datetime import datetime, timezone
 
 import requests
 from django.conf import settings
-from django.utils.dateparse import parse_datetime
 
 from home_page.utils import convert_to_webp
-from .models import WatchedItem
+
+from . import simkl
+from .models import SimklSyncState, WatchedItem
 
 logger = logging.getLogger(__name__)
 
-TRAKT_API_BASE = 'https://api.trakt.tv'
 TMDB_API_BASE = 'https://api.themoviedb.org/3'
 TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w342'
 
-
-def _trakt_headers():
-    client_id = getattr(settings, 'TRAKT_CLIENT_ID', None)
-    if not client_id:
-        raise ValueError(
-            "TRAKT_CLIENT_ID no configurado. Crea una app en "
-            "https://trakt.tv/oauth/applications y agrega el Client ID al .env."
-        )
-    return {
-        'Content-Type': 'application/json',
-        'trakt-api-version': '2',
-        'trakt-api-key': client_id,
-    }
+# Cada entrada: clave en la respuesta de Simkl, tipo de medio del modelo, si es anime.
+SIMKL_GROUPS = (
+    ('shows', 'episode', False),
+    ('anime', 'episode', True),
+    ('movies', 'movie', False),
+)
 
 
-def fetch_trakt_history(page=1, limit=100):
-    """Descarga una página del historial público del usuario en Trakt."""
-    username = getattr(settings, 'TRAKT_USERNAME', None)
-    if not username:
-        raise ValueError("TRAKT_USERNAME no configurado en el .env.")
-    response = requests.get(
-        f"{TRAKT_API_BASE}/users/{username}/history",
-        params={'page': page, 'limit': limit, 'extended': 'full'},
-        headers=_trakt_headers(),
-        timeout=15,
-    )
-    response.raise_for_status()
-    return response.json()
-
-
-def fetch_trakt_ratings():
-    """Devuelve calificaciones públicas del usuario agrupadas por tipo e ID Trakt."""
-    username = getattr(settings, 'TRAKT_USERNAME', None)
-    if not username:
-        raise ValueError("TRAKT_USERNAME no configurado en el .env.")
-    response = requests.get(
-        f"{TRAKT_API_BASE}/users/{username}/ratings/all",
-        headers=_trakt_headers(),
-        timeout=15,
-    )
-    response.raise_for_status()
-
-    ratings = {'movie': {}, 'show': {}, 'episode': {}}
-    for item in response.json() or []:
-        media_type = item.get('type')
-        rating = item.get('rating')
-        payload = item.get(media_type) or {}
-        ids = payload.get('ids') or {}
-        trakt_id = ids.get('trakt')
-        if media_type in ratings and trakt_id and rating:
-            ratings[media_type][trakt_id] = rating
-    return ratings
-
-
-def fetch_trakt_watched_show_totals():
-    """Total de episodios vistos por serie según Trakt."""
-    username = getattr(settings, 'TRAKT_USERNAME', None)
-    if not username:
-        raise ValueError("TRAKT_USERNAME no configurado en el .env.")
-    response = requests.get(
-        f"{TRAKT_API_BASE}/users/{username}/watched/shows",
-        headers=_trakt_headers(),
-        timeout=15,
-    )
-    response.raise_for_status()
-
-    totals = {}
-    for item in response.json() or []:
-        show = item.get('show') or {}
-        ids = show.get('ids') or {}
-        trakt_id = ids.get('trakt')
-        plays = item.get('plays')
-        if trakt_id and plays:
-            totals[trakt_id] = plays
-    return totals
-
+# --- TMDB ----------------------------------------------------------------------
 
 def fetch_tmdb_media_details(tmdb_type, tmdb_id):
     """Metadatos de TMDB: textos en español pero carátula en inglés. tmdb_type: 'movie' | 'tv'."""
@@ -116,12 +50,38 @@ def fetch_tmdb_media_details(tmdb_type, tmdb_id):
             'overview': (payload.get('overview') or '').strip(),
             'public_rating': _normalize_tmdb_rating(payload.get('vote_average')),
             'available_episodes': payload.get('number_of_episodes'),
-            'season_counts': _extract_season_counts(payload),
             'poster_url': f"{TMDB_IMAGE_BASE}{poster_path}" if poster_path else None,
         }
     except Exception:
         logger.exception("Error consultando metadatos en TMDB (%s %s)", tmdb_type, tmdb_id)
         return {}
+
+
+def fetch_tmdb_id_by_imdb(imdb_id):
+    """Resuelve un id de IMDB a TMDB. Devuelve (tmdb_id, tmdb_type) o (None, None).
+
+    Solo se usa cuando Simkl no trae `ids.tmdb`, que es raro.
+    """
+    api_key = getattr(settings, 'TMDB_API_KEY', None)
+    if not api_key or not imdb_id:
+        return None, None
+    try:
+        response = requests.get(
+            f"{TMDB_API_BASE}/find/{imdb_id}",
+            params={'api_key': api_key, 'external_source': 'imdb_id'},
+            timeout=15,
+        )
+        response.raise_for_status()
+        payload = response.json() or {}
+    except Exception:
+        logger.exception("Error resolviendo %s en TMDB", imdb_id)
+        return None, None
+
+    for key, tmdb_type in (('tv_results', 'tv'), ('movie_results', 'movie')):
+        results = payload.get(key) or []
+        if results and results[0].get('id'):
+            return results[0]['id'], tmdb_type
+    return None, None
 
 
 def _pick_english_poster(payload):
@@ -135,11 +95,6 @@ def _pick_english_poster(payload):
     return payload.get('poster_path')
 
 
-def fetch_tmdb_poster_url(tmdb_type, tmdb_id):
-    """URL del póster en TMDB o None. tmdb_type: 'movie' | 'tv'."""
-    return fetch_tmdb_media_details(tmdb_type, tmdb_id).get('poster_url')
-
-
 def _normalize_tmdb_rating(value):
     if value is None:
         return None
@@ -149,15 +104,16 @@ def _normalize_tmdb_rating(value):
         return None
 
 
-def _extract_season_counts(payload):
-    season_counts = {}
-    for season in payload.get('seasons') or []:
-        season_number = season.get('season_number')
-        episode_count = season.get('episode_count')
-        if season_number and episode_count:
-            season_counts[season_number] = episode_count
-    return season_counts
+def _get_tmdb_metadata(cache, tmdb_type, tmdb_id):
+    if not tmdb_id:
+        return {}
+    key = (tmdb_type, tmdb_id)
+    if key not in cache:
+        cache[key] = fetch_tmdb_media_details(tmdb_type, tmdb_id)
+    return cache[key]
 
+
+# --- Pósters -------------------------------------------------------------------
 
 def download_poster(poster_url, file_name, force=False):
     folder = os.path.join(settings.MEDIA_ROOT, 'Posters')
@@ -179,185 +135,14 @@ def download_poster(poster_url, file_name, force=False):
             os.remove(temp_path)
 
 
-def parse_history_item(item, ratings=None):
-    """Normaliza un evento del historial de Trakt (movie o episode) a campos del modelo."""
-    ratings = ratings or {}
-    media_type = item.get('type')
-    watched_at = parse_datetime(item.get('watched_at') or '')
-    history_id = item.get('id')
-    if not history_id or not watched_at or media_type not in ('movie', 'episode'):
-        return None
-
-    if media_type == 'movie':
-        movie = item.get('movie') or {}
-        ids = movie.get('ids') or {}
-        slug = ids.get('slug') or ''
-        return {
-            'trakt_history_id': history_id,
-            'media_type': 'movie',
-            'title': (movie.get('title') or '').strip() or 'Sin título',
-            'episode_title': '',
-            'season': None,
-            'episode': None,
-            'year': movie.get('year'),
-            'overview': (movie.get('overview') or '').strip(),
-            'user_rating': (ratings.get('movie') or {}).get(ids.get('trakt')),
-            'public_rating': None,
-            'total_episodes': None,
-            'available_episodes': None,
-            'watched_at': watched_at,
-            'trakt_id': ids.get('trakt') or 0,
-            'tmdb_id': ids.get('tmdb'),
-            'trakt_url': f"https://trakt.tv/movies/{slug}" if slug else '',
-        }
-
-    episode = item.get('episode') or {}
-    show = item.get('show') or {}
-    show_ids = show.get('ids') or {}
-    slug = show_ids.get('slug') or ''
-    show_overview = (show.get('overview') or '').strip()
-    episode_overview = (episode.get('overview') or '').strip()
-    return {
-        'trakt_history_id': history_id,
-        'media_type': 'episode',
-        'title': (show.get('title') or '').strip() or 'Sin título',
-        'episode_title': (episode.get('title') or '').strip(),
-        'season': episode.get('season'),
-        'episode': episode.get('number'),
-        'year': show.get('year'),
-        'overview': show_overview or episode_overview,
-        'user_rating': (ratings.get('show') or {}).get(show_ids.get('trakt')),
-        'public_rating': None,
-        'total_episodes': None,
-        'available_episodes': None,
-        'watched_at': watched_at,
-        'trakt_id': show_ids.get('trakt') or 0,
-        'tmdb_id': show_ids.get('tmdb'),
-        'trakt_url': f"https://trakt.tv/shows/{slug}" if slug else '',
-    }
-
-
-def refresh_watching_data(max_pages=5, stop_when_page_has_no_new=True):
-    """Sincroniza el historial de Trakt: crea eventos nuevos, actualiza la fecha de
-    los que cambiaron y (solo en crawl completo) elimina los que ya no están en Trakt."""
-    existing = {w.trakt_history_id: w for w in WatchedItem.objects.only(
-        'id', 'trakt_history_id', 'watched_at'
-    )}
-    created = 0
-    updated = 0
-    seen_ids = set()
-    tmdb_cache = {}
-    reached_end = False
-    had_error = False
-    try:
-        ratings = fetch_trakt_ratings()
-    except requests.RequestException:
-        logger.exception("Error descargando calificaciones de Trakt; se continúa sin notas.")
-        ratings = {}
-    try:
-        show_totals = fetch_trakt_watched_show_totals()
-    except requests.RequestException:
-        logger.exception("Error descargando totales de series de Trakt; se continúa sin totales.")
-        show_totals = {}
-
-    for page in range(1, max_pages + 1):
-        try:
-            history = fetch_trakt_history(page=page)
-        except requests.RequestException:
-            logger.exception("Error descargando historial de Trakt (página %s); se procesa lo recolectado.", page)
-            had_error = True
-            break
-        if not history:
-            reached_end = True
-            break
-
-        page_had_new = False
-        for raw_item in history:
-            data = parse_history_item(raw_item, ratings)
-            if not data:
-                continue
-            history_id = data['trakt_history_id']
-            seen_ids.add(history_id)
-
-            existing_obj = existing.get(history_id)
-            if existing_obj is not None:
-                # Ya existe: solo actualizar la fecha si la cambiaron en Trakt.
-                if existing_obj.watched_at != data['watched_at']:
-                    existing_obj.watched_at = data['watched_at']
-                    existing_obj.save(update_fields=['watched_at'])
-                    updated += 1
-                continue
-
-            tmdb_type = 'tv' if data['media_type'] == 'episode' else 'movie'
-            metadata = _get_tmdb_metadata(tmdb_cache, tmdb_type, data.get('tmdb_id'))
-            if metadata.get('overview'):
-                data['overview'] = metadata['overview']
-            if metadata.get('public_rating') is not None:
-                data['public_rating'] = metadata['public_rating']
-            if data['media_type'] == 'episode':
-                data['available_episodes'] = metadata.get('available_episodes')
-            watched = WatchedItem.objects.create(**data)
-            existing[watched.trakt_history_id] = watched
-            created += 1
-            page_had_new = True
-
-            poster_path = os.path.join(settings.MEDIA_ROOT, 'Posters', watched.poster_name)
-            if not os.path.exists(poster_path):
-                poster_url = metadata.get('poster_url')
-                if poster_url:
-                    download_poster(poster_url, watched.poster_name)
-
-        # Página completa ya conocida: lo que sigue es aún más viejo, no hay que seguir.
-        if stop_when_page_has_no_new and not page_had_new:
-            break
-
-    if ratings:
-        _update_existing_ratings(ratings)
-    _update_existing_overviews(tmdb_cache)
-    _update_existing_episode_totals(show_totals, tmdb_cache)
-
-    # Solo si recorrimos TODO el historial sin errores podemos afirmar que lo que
-    # falta en Trakt fue eliminado allá (fechas re-scrobbleadas, borrados, etc.).
-    deleted = 0
-    crawl_complete = reached_end and not had_error and not stop_when_page_has_no_new
-    if crawl_complete:
-        stale_ids = set(existing) - seen_ids
-        # Salvaguarda: si "sobrara" una fracción grande es señal de un crawl anómalo;
-        # no borramos en masa para no arrasar el historial por un fallo imprevisto.
-        if stale_ids and len(stale_ids) <= max(5, len(existing) // 5):
-            deleted, _ = WatchedItem.objects.filter(trakt_history_id__in=stale_ids).delete()
-        elif stale_ids:
-            logger.warning(
-                "Reconciliación abortada: %s de %s marcados como sobrantes (posible crawl anómalo).",
-                len(stale_ids), len(existing),
-            )
-
-    logger.info(
-        "Trakt sincronizado: %s nuevos, %s con fecha actualizada, %s eliminados",
-        created, updated, deleted,
-    )
-    return created
-
-
-def _get_tmdb_metadata(cache, tmdb_type, tmdb_id):
-    if not tmdb_id:
-        return {}
-    key = (tmdb_type, tmdb_id)
-    if key not in cache:
-        cache[key] = fetch_tmdb_media_details(tmdb_type, tmdb_id)
-    return cache[key]
-
-
 def refresh_posters(force=False):
     """Re-descarga la carátula de cada obra distinta. Con force=True sobrescribe
     las existentes (útil tras cambiar el idioma de las carátulas)."""
     tmdb_cache = {}
     seen = set()
     updated = 0
-    for item in WatchedItem.objects.exclude(tmdb_id__isnull=True).only(
-        'media_type', 'trakt_id', 'tmdb_id'
-    ):
-        key = (item.media_type, item.trakt_id)
+    for item in WatchedItem.objects.exclude(tmdb_id__isnull=True).only('media_type', 'tmdb_id'):
+        key = (item.media_type, item.tmdb_id)
         if key in seen:
             continue
         seen.add(key)
@@ -370,85 +155,287 @@ def refresh_posters(force=False):
     return updated
 
 
-def _update_existing_ratings(ratings):
-    movie_ratings = ratings.get('movie') or {}
-    show_ratings = ratings.get('show') or {}
+# --- Sincronización con Simkl --------------------------------------------------
 
-    for item in WatchedItem.objects.all().only('id', 'media_type', 'trakt_id', 'user_rating'):
-        if item.media_type == 'movie':
-            rating = movie_ratings.get(item.trakt_id)
-        else:
-            rating = show_ratings.get(item.trakt_id)
-        if rating and item.user_rating != rating:
-            item.user_rating = rating
-            item.save(update_fields=['user_rating'])
-
-
-def _update_existing_overviews(tmdb_cache):
-    works = WatchedItem.objects.exclude(tmdb_id__isnull=True).values(
-        'media_type',
-        'trakt_id',
-        'tmdb_id',
-    ).distinct()
-
-    for work in works:
-        tmdb_type = 'tv' if work['media_type'] == 'episode' else 'movie'
-        metadata = _get_tmdb_metadata(tmdb_cache, tmdb_type, work['tmdb_id'])
-        overview = metadata.get('overview')
-        public_rating = metadata.get('public_rating')
-        available_episodes = metadata.get('available_episodes') if work['media_type'] == 'episode' else None
-        updates = {}
-        if overview:
-            updates['overview'] = overview
-        if public_rating is not None:
-            updates['public_rating'] = public_rating
-        if available_episodes:
-            updates['available_episodes'] = available_episodes
-        if not updates:
-            continue
-        WatchedItem.objects.filter(
-            media_type=work['media_type'],
-            trakt_id=work['trakt_id'],
-        ).exclude(**updates).update(**updates)
+def _parse_stamp(value):
+    """'2026-08-01T20:08:30Z' -> datetime con tzinfo UTC. None si no se puede."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+    except ValueError:
+        logger.warning("Fecha ilegible de Simkl: %r", value)
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
-def _update_existing_episode_totals(show_totals, tmdb_cache):
-    works = WatchedItem.objects.filter(media_type='episode').exclude(tmdb_id__isnull=True).values(
-        'trakt_id',
-        'tmdb_id',
-    ).distinct()
+def _episode_titles(cache, simkl_id, is_anime):
+    """{(temporada, episodio): título} desde Simkl, que sí trae los títulos.
 
-    for work in works:
-        qs = WatchedItem.objects.filter(media_type='episode', trakt_id=work['trakt_id'])
-        metadata = _get_tmdb_metadata(tmdb_cache, 'tv', work['tmdb_id'])
-        total_episodes = _infer_seen_episode_total(
-            qs.values('season', 'episode'),
-            metadata.get('season_counts') or {},
-            show_totals.get(work['trakt_id']),
+    En series normales cada episodio declara `season` y `episode`. En anime la
+    numeración es absoluta y `/sync/all-items` los reporta como temporada 1, así que
+    se indexa igual.
+    """
+    if not simkl_id:
+        return {}
+    if simkl_id in cache:
+        return cache[simkl_id]
+
+    titles = {}
+    try:
+        for episode in simkl.fetch_episodes(simkl_id, is_anime=is_anime):
+            number = episode.get('episode')
+            if not number:
+                continue
+            season = 1 if is_anime else (episode.get('season') or 1)
+            title = (episode.get('title') or '').strip()
+            if title:
+                titles[(season, number)] = title
+    except requests.RequestException:
+        logger.warning("No se pudieron traer los títulos de episodio de simkl %s", simkl_id)
+
+    cache[simkl_id] = titles
+    return titles
+
+
+def _detail_url(media_type, ids, is_anime=False):
+    """Ficha en Simkl. El anime vive bajo /anime/, no bajo /tv/."""
+    slug = ids.get('slug') or ''
+    simkl_id = ids.get('simkl')
+    if not simkl_id:
+        return ''
+    if media_type == 'movie':
+        kind = 'movies'
+    else:
+        kind = 'anime' if is_anime else 'tv'
+    return f"https://simkl.com/{kind}/{simkl_id}/{slug}/" if slug else f"https://simkl.com/{kind}/{simkl_id}/"
+
+
+def _work_rows(item, media_type, is_anime):
+    """Expande un ítem de Simkl a los eventos que le corresponden en el modelo.
+
+    Devuelve [(season, episode, watched_at)]; para películas, [(None, None, fecha)].
+    """
+    if media_type == 'movie':
+        watched_at = _parse_stamp(item.get('last_watched_at'))
+        return [(None, None, watched_at)] if watched_at else []
+
+    rows = []
+    for season in item.get('seasons') or []:
+        season_number = season.get('number')
+        for episode in season.get('episodes') or []:
+            watched_at = _parse_stamp(episode.get('watched_at'))
+            if season_number is not None and episode.get('number') and watched_at:
+                rows.append((season_number, episode['number'], watched_at))
+    return rows
+
+
+def refresh_watching_from_simkl(full=False):
+    """Sincroniza el historial desde Simkl.
+
+    Gatea con /sync/activities: si Simkl no reporta cambios, no descarga nada (la
+    documentación advierte que pedir /sync/all-items en un timer puede costar la
+    suspensión de la app). Con `full=True` ignora el gate y pide todo, que es la
+    única forma de saber qué se borró del otro lado.
+
+    Nunca toca la fecha de los registros heredados de Trakt: para lo ya visto, las
+    fechas de Trakt son las reales y las de Simkl pueden venir de una importación.
+    """
+    state = SimklSyncState.load()
+    activities = simkl.fetch_activities()
+    stamp = activities.get('all')
+
+    if not full and stamp and stamp == state.last_activity_at:
+        logger.info("Simkl sin cambios desde %s: no se descarga nada.", stamp)
+        return 0
+
+    date_from = None if full else (state.last_activity_at or None)
+    payload = simkl.fetch_all_items(date_from=date_from)
+
+    existing = {
+        item.dedup_key: item
+        for item in WatchedItem.objects.only(
+            'id', 'dedup_key', 'watched_at', 'source', 'user_rating', 'episode_title'
         )
-        if total_episodes:
-            qs.exclude(total_episodes=total_episodes).update(total_episodes=total_episodes)
+    }
+    tmdb_cache = {}
+    title_cache = {}
+    created = 0
+    updated = 0
+    skipped = 0
+    seen_keys = set()
+    touched_works = {}  # (media_type, tmdb_id) -> datos de la obra en Simkl
 
+    for group_key, media_type, is_anime in SIMKL_GROUPS:
+        for item in payload.get(group_key) or []:
+            media = item.get('show') or item.get('movie') or {}
+            ids = media.get('ids') or {}
+            tmdb_type = 'movie' if media_type == 'movie' else 'tv'
 
-def _infer_seen_episode_total(episodes, season_counts, trakt_total=None):
-    seen = [
-        (episode['season'], episode['episode'])
-        for episode in episodes
-        if episode.get('season') is not None and episode.get('episode') is not None
-    ]
-    if not seen:
-        return trakt_total
+            tmdb_id = ids.get('tmdb')
+            try:
+                tmdb_id = int(tmdb_id) if tmdb_id else None
+            except (TypeError, ValueError):  # en anime llega como string
+                tmdb_id = None
+            if not tmdb_id:
+                tmdb_id, _ = fetch_tmdb_id_by_imdb(ids.get('imdb'))
+            if not tmdb_id:
+                logger.warning(
+                    "Sin id de TMDB para %r (simkl=%s, imdb=%s): se omite.",
+                    media.get('title'), ids.get('simkl'), ids.get('imdb'),
+                )
+                skipped += 1
+                continue
 
-    unique_seen = set(seen)
-    max_season = max(season for season, _ in unique_seen)
-    max_episode_in_season = max(episode for season, episode in unique_seen if season == max_season)
-    prior_seasons_total = sum(
-        count
-        for season, count in season_counts.items()
-        if season < max_season
+            rows = _work_rows(item, media_type, is_anime)
+            if not rows:
+                continue
+
+            metadata = _get_tmdb_metadata(tmdb_cache, tmdb_type, tmdb_id)
+            titles = _episode_titles(title_cache, ids.get('simkl'), is_anime) if media_type == 'episode' else {}
+            touched_works[(media_type, tmdb_id)] = {
+                'user_rating': item.get('user_rating'),
+                'watched_episodes_count': item.get('watched_episodes_count') or 0,
+                'available_episodes': _available_episodes(item, metadata),
+            }
+
+            for season, episode, watched_at in rows:
+                dedup_key = WatchedItem.build_dedup_key(media_type, tmdb_id, season, episode)
+                seen_keys.add(dedup_key)
+                known = existing.get(dedup_key)
+
+                if known is not None:
+                    # Solo se corrige la fecha de lo que vino de Simkl: los registros
+                    # de Trakt conservan la suya, que es la real.
+                    if known.source == 'simkl' and known.watched_at != watched_at:
+                        known.watched_at = watched_at
+                        known.save(update_fields=['watched_at'])
+                        updated += 1
+                    continue
+
+                watched = WatchedItem.objects.create(
+                    dedup_key=dedup_key,
+                    source='simkl',
+                    media_type=media_type,
+                    title=(media.get('title') or '').strip() or 'Sin título',
+                    episode_title=titles.get((season, episode), ''),
+                    season=season,
+                    episode=episode,
+                    year=media.get('year'),
+                    overview=metadata.get('overview', ''),
+                    public_rating=metadata.get('public_rating'),
+                    watched_at=watched_at,
+                    tmdb_id=tmdb_id,
+                    imdb_id=ids.get('imdb') or '',
+                    simkl_id=ids.get('simkl'),
+                    detail_url=_detail_url(media_type, ids, is_anime),
+                )
+                existing[dedup_key] = watched
+                created += 1
+
+                poster_path = os.path.join(settings.MEDIA_ROOT, 'Posters', watched.poster_name)
+                if not os.path.exists(poster_path) and metadata.get('poster_url'):
+                    download_poster(metadata['poster_url'], watched.poster_name)
+
+    _update_work_aggregates(touched_works)
+    deleted = _reconcile(seen_keys) if full else 0
+
+    in_progress = fetch_in_progress()
+    state.in_progress_ids = ','.join(str(tmdb_id) for tmdb_id in sorted(in_progress))
+    if stamp:
+        state.last_activity_at = stamp
+    state.save(update_fields=['last_activity_at', 'in_progress_ids', 'last_synced_at'])
+
+    logger.info(
+        "Simkl sincronizado: %s nuevos, %s con fecha corregida, %s eliminados, %s omitidos",
+        created, updated, deleted, skipped,
     )
-    inferred_total = prior_seasons_total + max_episode_in_season
-    candidates = [len(unique_seen), inferred_total]
-    if trakt_total:
-        candidates.append(trakt_total)
-    return max(candidates)
+    return created
+
+
+def _available_episodes(item, metadata):
+    """Episodios ya emitidos: lo que Simkl sabe, con TMDB como respaldo."""
+    total = item.get('total_episodes_count')
+    not_aired = item.get('not_aired_episodes_count') or 0
+    if total:
+        aired = total - not_aired
+        if aired > 0:
+            return aired
+    return metadata.get('available_episodes')
+
+
+def _update_work_aggregates(touched_works):
+    """Actualiza nota, episodios vistos y disponibles en todas las filas de cada obra.
+
+    Los episodios vistos se cuentan en local y no se toman de Simkl a secas: Simkl
+    arrancó vacío, así que su `watched_episodes_count` de una serie vieja solo
+    refleja lo nuevo.
+    """
+    for (media_type, tmdb_id), data in touched_works.items():
+        rows = WatchedItem.objects.filter(media_type=media_type, tmdb_id=tmdb_id)
+        updates = {}
+
+        if media_type == 'episode':
+            local_count = rows.count()
+            updates['total_episodes'] = max(local_count, data['watched_episodes_count'])
+            if data['available_episodes']:
+                updates['available_episodes'] = data['available_episodes']
+        if data['user_rating']:
+            updates['user_rating'] = data['user_rating']
+
+        if updates:
+            rows.exclude(**updates).update(**updates)
+
+
+def _reconcile(seen_keys):
+    """Borra lo que ya no está en Simkl, solo entre las filas cuya fuente es Simkl.
+
+    Los registros heredados de Trakt no están en Simkl por definición: borrarlos
+    arrasaría el historial. Y si "sobrara" una fracción grande de los de Simkl es
+    señal de un pull anómalo, así que tampoco se borra en masa.
+    """
+    simkl_rows = dict(
+        WatchedItem.objects.filter(source='simkl').values_list('dedup_key', 'id')
+    )
+    stale = [row_id for key, row_id in simkl_rows.items() if key not in seen_keys]
+    if not stale:
+        return 0
+    if len(stale) > max(5, len(simkl_rows) // 5):
+        logger.warning(
+            "Reconciliación abortada: %s de %s filas de Simkl marcadas como sobrantes.",
+            len(stale), len(simkl_rows),
+        )
+        return 0
+    deleted, _ = WatchedItem.objects.filter(id__in=stale).delete()
+    return deleted
+
+
+def fetch_in_progress():
+    """Lo que está a medias en Simkl, para el listón 'Viendo'.
+
+    Devuelve {tmdb_id: {'season', 'episode', 'progress'}}. Es dato real, no la
+    heurística de "actividad en los últimos N días".
+    """
+    in_progress = {}
+    try:
+        entries = simkl.fetch_playback()
+    except requests.RequestException:
+        logger.warning("No se pudo consultar /sync/playback; el listón Viendo cae a la heurística.")
+        return in_progress
+
+    for entry in entries or []:
+        media = entry.get('show') or entry.get('anime') or entry.get('movie') or {}
+        ids = media.get('ids') or {}
+        try:
+            tmdb_id = int(ids.get('tmdb')) if ids.get('tmdb') else None
+        except (TypeError, ValueError):
+            tmdb_id = None
+        if not tmdb_id:
+            continue
+        episode = entry.get('episode') or {}
+        in_progress[tmdb_id] = {
+            'season': episode.get('season'),
+            'episode': episode.get('number'),
+            'progress': entry.get('progress'),
+        }
+    return in_progress
