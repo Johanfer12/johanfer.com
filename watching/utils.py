@@ -278,11 +278,13 @@ def refresh_watching_from_simkl(full=False):
     # Título ya establecido para cada obra. Simkl nombra distinto que Trakt (sobre todo
     # el anime: "Youjo Senki II" por "Saga of Tanya the Evil"), y como la tarjeta toma el
     # título del evento más reciente, un episodio nuevo le cambiaría el nombre a la serie.
-    known_titles = dict(
-        WatchedItem.objects.exclude(tmdb_id__isnull=True)
+    # Lo mismo con el año de estreno, que alimenta el gráfico de décadas.
+    known_works = {
+        tmdb_id: (title, year)
+        for tmdb_id, title, year in WatchedItem.objects.exclude(tmdb_id__isnull=True)
         .order_by('watched_at')
-        .values_list('tmdb_id', 'title')
-    )
+        .values_list('tmdb_id', 'title', 'year')
+    }
     tmdb_cache = {}
     title_cache = {}
     created = 0
@@ -336,6 +338,8 @@ def refresh_watching_from_simkl(full=False):
             work['watched_episodes_count'] += item.get('watched_episodes_count') or 0
             work['available_episodes'] += _available_episodes(item, metadata) or 0
 
+            known_title, known_year = known_works.get(tmdb_id, (None, None))
+
             for season, episode, watched_at in rows:
                 dedup_key = WatchedItem.build_dedup_key(media_type, tmdb_id, season, episode)
                 seen_keys.add(dedup_key)
@@ -354,11 +358,11 @@ def refresh_watching_from_simkl(full=False):
                     dedup_key=dedup_key,
                     source='simkl',
                     media_type=media_type,
-                    title=known_titles.get(tmdb_id) or (media.get('title') or '').strip() or 'Sin título',
+                    title=known_title or (media.get('title') or '').strip() or 'Sin título',
                     episode_title=titles.get((season, episode), ''),
                     season=season,
                     episode=episode,
-                    year=media.get('year'),
+                    year=known_year or media.get('year'),
                     overview=metadata.get('overview', ''),
                     public_rating=metadata.get('public_rating'),
                     watched_at=watched_at,
