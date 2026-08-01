@@ -326,11 +326,15 @@ def refresh_watching_from_simkl(full=False):
 
             metadata = _get_tmdb_metadata(tmdb_cache, tmdb_type, tmdb_id)
             titles = _episode_titles(title_cache, ids.get('simkl'), is_anime) if media_type == 'episode' else {}
-            touched_works[(media_type, tmdb_id)] = {
-                'user_rating': item.get('user_rating'),
-                'watched_episodes_count': item.get('watched_episodes_count') or 0,
-                'available_episodes': _available_episodes(item, metadata),
-            }
+            # Se acumula: varias entradas de Simkl pueden mapear a una sola obra nuestra
+            # (el anime viene partido por temporada). Si se sobrescribiera, los
+            # contadores de una secuela pasarían por los de la serie entera.
+            work = touched_works.setdefault((media_type, tmdb_id), {
+                'user_rating': None, 'watched_episodes_count': 0, 'available_episodes': 0,
+            })
+            work['user_rating'] = work['user_rating'] or item.get('user_rating')
+            work['watched_episodes_count'] += item.get('watched_episodes_count') or 0
+            work['available_episodes'] += _available_episodes(item, metadata) or 0
 
             for season, episode, watched_at in rows:
                 dedup_key = WatchedItem.build_dedup_key(media_type, tmdb_id, season, episode)
@@ -387,14 +391,14 @@ def refresh_watching_from_simkl(full=False):
 
 
 def _available_episodes(item, metadata):
-    """Episodios ya emitidos: lo que Simkl sabe, con TMDB como respaldo."""
-    total = item.get('total_episodes_count')
-    not_aired = item.get('not_aired_episodes_count') or 0
-    if total:
-        aired = total - not_aired
-        if aired > 0:
-            return aired
-    return metadata.get('available_episodes')
+    """Episodios que tiene la obra, **incluidos los que aún no se emiten**.
+
+    Alimenta el listón "Viendo": la vista considera terminada una serie cuando ya viste
+    tantos episodios como tiene. Si se descontaran los no emitidos, una serie en curso
+    de la que estás al día (Silo: 25 vistos de 25 emitidos, con 5 por salir) se daría
+    por terminada y perdería el listón.
+    """
+    return item.get('total_episodes_count') or metadata.get('available_episodes')
 
 
 def _update_work_aggregates(touched_works):

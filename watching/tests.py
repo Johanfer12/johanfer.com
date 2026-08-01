@@ -105,8 +105,9 @@ class RefreshFromSimklTests(TestCase):
         self.assertEqual(episode.dedup_key, 'show:67386:s01e02')
         self.assertEqual(episode.title, 'Dirk Gently')
         self.assertEqual(episode.user_rating, 8)
-        # emitidos = total (8) - sin emitir (2)
-        self.assertEqual(episode.available_episodes, 6)
+        # Cuenta los 8, incluidos los 2 sin emitir: si no, una serie en curso de la que
+        # estás al día se daría por terminada y perdería el listón "Viendo".
+        self.assertEqual(episode.available_episodes, 8)
         # vistos: se cuentan en local, no se toman de Simkl a secas
         self.assertEqual(episode.total_episodes, 2)
 
@@ -221,6 +222,27 @@ class RefreshFromSimklTests(TestCase):
         self.assertEqual(item.tmdb_id, 69346)
         self.assertEqual((item.season, item.episode), (2, 4))
         self.assertEqual(item.dedup_key, 'show:69346:s02e04')
+
+    def test_sums_counters_when_several_simkl_entries_map_to_one_work(self, _episodes, _playback):
+        """El anime viene partido por temporada: la secuela no debe pisar a la obra."""
+        temporada_1 = {
+            'last_watched_at': '2026-07-01T03:00:00Z',
+            'watched_episodes_count': 12, 'total_episodes_count': 12, 'not_aired_episodes_count': 0,
+            'show': {'title': 'Saga of Tanya the Evil', 'ids': {'simkl': 1, 'tmdb': '69346'}},
+            'seasons': [{'number': 1, 'episodes': [{'number': 1, 'watched_at': '2026-07-01T03:00:00Z'}]}],
+        }
+        temporada_2 = {
+            'last_watched_at': '2026-07-30T03:01:00Z',
+            'watched_episodes_count': 4, 'total_episodes_count': 12, 'not_aired_episodes_count': 8,
+            'show': {'title': 'Youjo Senki II', 'ids': {'simkl': 1670325}},
+            'seasons': [{'number': 1, 'episodes': [{'number': 4, 'watched_at': '2026-07-30T03:01:00Z'}]}],
+        }
+        with patch.dict('watching.utils.SIMKL_WORK_ALIASES',
+                        {1670325: {'tmdb_id': 69346, 'season': 2}}):
+            self._sync({'anime': [temporada_1, temporada_2]})
+
+        item = WatchedItem.objects.filter(tmdb_id=69346).first()
+        self.assertEqual(item.available_episodes, 24)  # 12 + 12, no los 12 de la secuela
 
     def test_keeps_the_title_the_work_already_had(self, _episodes, _playback):
         """Simkl nombra distinto que Trakt; la tarjeta no debe cambiar de nombre."""
