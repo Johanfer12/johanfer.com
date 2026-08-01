@@ -185,6 +185,43 @@ class RefreshFromSimklTests(TestCase):
 
         self.assertEqual(SimklSyncState.load().in_progress_tmdb_ids, {67386})
 
+    def test_ignores_anime_films_that_simkl_lists_as_one_episode_series(self, _episodes, _playback):
+        """Si la obra ya existe como película, no se crea además como serie.
+
+        Simkl cataloga las películas de anime como series de un episodio. Dejarlas pasar
+        duplicaba la obra y pedía el id de película por la ruta /tv/ de TMDB, que
+        devuelve otra obra distinta (una película quedó con el póster de otra serie).
+        """
+        WatchedItem.objects.create(
+            dedup_key='movie:15370', source='trakt', media_type='movie',
+            title='Neko no Ongaeshi', watched_at=timezone.now(), tmdb_id=15370,
+        )
+        created, _ = self._sync({'anime': [{
+            'last_watched_at': '2026-07-18T22:11:00Z',
+            'show': {'title': 'Neko no Ongaeshi', 'ids': {'simkl': 55, 'tmdb': '15370'}},
+            'seasons': [{'number': 1, 'episodes': [{'number': 1, 'watched_at': '2026-07-18T22:11:00Z'}]}],
+        }]})
+
+        self.assertEqual(created, 0)
+        self.assertEqual(WatchedItem.objects.count(), 1)
+        self.assertEqual(WatchedItem.objects.get().media_type, 'movie')
+
+    def test_maps_anime_sequels_that_come_without_tmdb_id(self, _episodes, _playback):
+        """Simkl parte el anime por temporada y las secuelas suelen no traer tmdb."""
+        with patch.dict('watching.utils.SIMKL_WORK_ALIASES',
+                        {1670325: {'tmdb_id': 69346, 'season': 2}}):
+            created, _ = self._sync({'anime': [{
+                'last_watched_at': '2026-07-30T03:01:00Z',
+                'show': {'title': 'Youjo Senki II', 'ids': {'simkl': 1670325}},
+                'seasons': [{'number': 1, 'episodes': [{'number': 4, 'watched_at': '2026-07-30T03:01:00Z'}]}],
+            }]})
+
+        self.assertEqual(created, 1)
+        item = WatchedItem.objects.get()
+        self.assertEqual(item.tmdb_id, 69346)
+        self.assertEqual((item.season, item.episode), (2, 4))
+        self.assertEqual(item.dedup_key, 'show:69346:s02e04')
+
     def test_skips_items_without_any_resolvable_id(self, _episodes, _playback):
         created, _ = self._sync({'shows': [{
             'last_watched_at': '2026-07-02T03:00:00Z',

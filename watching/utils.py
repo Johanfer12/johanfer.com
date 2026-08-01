@@ -22,6 +22,14 @@ SIMKL_GROUPS = (
     ('movies', 'movie', False),
 )
 
+# Simkl parte el anime por temporada: las secuelas son entradas separadas y suelen venir
+# sin `ids.tmdb`, así que el sync las descartaría. Acá se mapean a mano a la obra que ya
+# existe en la BD (donde Trakt las agrupaba en una sola serie con temporadas).
+# clave: id de Simkl -> {tmdb_id, season}
+SIMKL_WORK_ALIASES = {
+    1670325: {'tmdb_id': 69346, 'season': 2},  # Youjo Senki II = Saga of Tanya the Evil T2
+}
+
 
 # --- TMDB ----------------------------------------------------------------------
 
@@ -211,10 +219,12 @@ def _detail_url(media_type, ids, is_anime=False):
     return f"https://simkl.com/{kind}/{simkl_id}/{slug}/" if slug else f"https://simkl.com/{kind}/{simkl_id}/"
 
 
-def _work_rows(item, media_type, is_anime):
+def _work_rows(item, media_type, is_anime, forced_season=None):
     """Expande un ítem de Simkl a los eventos que le corresponden en el modelo.
 
     Devuelve [(season, episode, watched_at)]; para películas, [(None, None, fecha)].
+    `forced_season` reubica los episodios de una secuela de anime en la temporada que
+    le corresponde dentro de la obra agrupada (ver SIMKL_WORK_ALIASES).
     """
     if media_type == 'movie':
         watched_at = _parse_stamp(item.get('last_watched_at'))
@@ -222,7 +232,7 @@ def _work_rows(item, media_type, is_anime):
 
     rows = []
     for season in item.get('seasons') or []:
-        season_number = season.get('number')
+        season_number = forced_season or season.get('number')
         for episode in season.get('episodes') or []:
             watched_at = _parse_stamp(episode.get('watched_at'))
             if season_number is not None and episode.get('number') and watched_at:
@@ -258,6 +268,12 @@ def refresh_watching_from_simkl(full=False):
             'id', 'dedup_key', 'watched_at', 'source', 'user_rating', 'episode_title'
         )
     }
+    # Simkl cataloga las películas de anime como series de un episodio, así que al
+    # leerlas volverían como T01E01 y duplicarían la película que ya existe. Manda lo
+    # que ya está en la BD: si esa obra es una película, no se crean episodios de ella.
+    movie_tmdb_ids = set(
+        WatchedItem.objects.filter(media_type='movie').values_list('tmdb_id', flat=True)
+    )
     tmdb_cache = {}
     title_cache = {}
     created = 0
@@ -272,13 +288,21 @@ def refresh_watching_from_simkl(full=False):
             ids = media.get('ids') or {}
             tmdb_type = 'movie' if media_type == 'movie' else 'tv'
 
-            tmdb_id = ids.get('tmdb')
+            alias = SIMKL_WORK_ALIASES.get(ids.get('simkl')) or {}
+            forced_season = alias.get('season')
+
+            tmdb_id = alias.get('tmdb_id') or ids.get('tmdb')
             try:
                 tmdb_id = int(tmdb_id) if tmdb_id else None
             except (TypeError, ValueError):  # en anime llega como string
                 tmdb_id = None
             if not tmdb_id:
                 tmdb_id, _ = fetch_tmdb_id_by_imdb(ids.get('imdb'))
+            if tmdb_id and media_type == 'episode' and tmdb_id in movie_tmdb_ids:
+                # Es una película que Simkl cataloga como serie de un episodio. Si se
+                # dejara pasar, se duplicaría la obra y además se pediría a TMDB el id
+                # de película por la ruta /tv/, que devuelve otra obra distinta.
+                continue
             if not tmdb_id:
                 logger.warning(
                     "Sin id de TMDB para %r (simkl=%s, imdb=%s): se omite.",
@@ -287,7 +311,7 @@ def refresh_watching_from_simkl(full=False):
                 skipped += 1
                 continue
 
-            rows = _work_rows(item, media_type, is_anime)
+            rows = _work_rows(item, media_type, is_anime, forced_season)
             if not rows:
                 continue
 
