@@ -96,6 +96,53 @@ class VectorIndexService:
         )
         return len(point_ids)
 
+    @staticmethod
+    def _first_vector(raw):
+        """Qdrant devuelve un dict si la colección usa vectores con nombre."""
+        if isinstance(raw, dict):
+            return next(iter(raw.values()), None)
+        return raw
+
+    # Lotes para `retrieve`: acota el tamaño de la respuesta sin perder la
+    # ventaja de agrupar (con 200 noticias basta una sola petición).
+    RETRIEVE_BATCH = 256
+
+    def vectors_for_guids(self, guids) -> dict:
+        """Vectores de varias noticias a la vez, indexados por guid.
+
+        Medido en la Pi con 200 noticias sobre una colección de 1003 puntos:
+        0,49 s por esta vía, frente a 2,14 s pidiéndolos de uno en uno y 2,19 s
+        recorriendo la colección entera con scroll. El scroll pierde porque
+        transfiere los 1003 vectores para quedarse con 200; `retrieve` solo mueve
+        los que se piden y en una única petición.
+        """
+        import numpy as np
+
+        pendientes = [g for g in guids if g]
+        if not pendientes:
+            return {}
+
+        por_punto = {
+            str(uuid.uuid5(uuid.NAMESPACE_URL, guid)): guid for guid in pendientes
+        }
+        ids = list(por_punto)
+
+        encontrados = {}
+        for inicio in range(0, len(ids), self.RETRIEVE_BATCH):
+            lote = ids[inicio : inicio + self.RETRIEVE_BATCH]
+            puntos = self.client.retrieve(
+                self.collection,
+                ids=lote,
+                with_vectors=True,
+                with_payload=False,
+            )
+            for punto in puntos:
+                guid = por_punto.get(str(punto.id))
+                vector = self._first_vector(getattr(punto, "vector", None))
+                if guid and vector:
+                    encontrados[guid] = np.asarray(vector, dtype=np.float32)
+        return encontrados
+
     def get_vector(self, guid: str) -> Optional[List[float]]:
         """Recupera el vector ya indexado de una noticia, o None si no está."""
         point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, guid))
@@ -107,13 +154,9 @@ class VectorIndexService:
         )
         if not points:
             return None
-        vector = getattr(points[0], "vector", None)
-        # Qdrant devuelve un dict cuando la colección usa vectores con nombre.
-        if isinstance(vector, dict):
-            vector = next(iter(vector.values()), None)
-        return vector
+        return self._first_vector(getattr(points[0], "vector", None))
 
-    def scroll_points(self, limit: int = 256):
+    def scroll_points(self, limit: int = 256, with_vectors: bool = False):
         offset = None
         while True:
             points, next_offset = self.client.scroll(
@@ -121,7 +164,7 @@ class VectorIndexService:
                 limit=limit,
                 offset=offset,
                 with_payload=True,
-                with_vectors=False,
+                with_vectors=with_vectors,
             )
             for point in points:
                 yield point

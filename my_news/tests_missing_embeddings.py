@@ -1,3 +1,4 @@
+import numpy as np
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -147,3 +148,81 @@ class RetryMissingEmbeddingsTests(TestCase):
             self.assertEqual(retry_missing_embeddings(), 0)
 
         self.assertEqual(index.upserted, {})
+
+
+class RescoreVisibleNewsTests(TestCase):
+    """El repuntuado del feed, que ahora corre al final de cada cron."""
+
+    def setUp(self):
+        self.source = FeedSource.objects.create(
+            name="Fuente", url="https://example.com/rss", similarity_threshold=0.85
+        )
+        self.counter = 0
+
+    def make_news(self, **kwargs):
+        self.counter += 1
+        defaults = {
+            "guid": f"guid-r{self.counter}",
+            "title": f"Noticia {self.counter}",
+            "description": "Cuerpo",
+            "link": f"https://example.com/r{self.counter}",
+            "published_date": timezone.now(),
+            "source": self.source,
+            "is_ai_processed": True,
+        }
+        defaults.update(kwargs)
+        return News.objects.create(**defaults)
+
+    def test_sin_votos_suficientes_no_toca_qdrant(self):
+        """Es el caso de produccion recien desplegada: debe salir gratis."""
+        from my_news.tasks import rescore_visible_news
+
+        self.make_news()
+        with patch("my_news.tasks.FeedService.initialize_vector_index") as init:
+            self.assertEqual(rescore_visible_news(), 0)
+            init.assert_not_called()
+
+    def test_puntua_las_visibles_en_una_sola_pasada(self):
+        from my_news.interest import InterestModel
+        from my_news.tasks import rescore_visible_news
+
+        noticias = [self.make_news() for _ in range(3)]
+        vectores = {n.guid: np.array([1.0, 0.0], dtype=np.float32) for n in noticias}
+
+        index = FakeVectorIndex()
+        index.vectors_for_guids = lambda guids: vectores
+
+        modelo = InterestModel(
+            np.array([[1.0, 0.0]], dtype=np.float32) * np.ones((5, 2), dtype=np.float32),
+            np.array([[0.0, 1.0]], dtype=np.float32) * np.ones((5, 2), dtype=np.float32),
+        )
+        with patch("my_news.tasks.InterestModel.load", return_value=modelo), \
+             patch("my_news.tasks.FeedService.initialize_vector_index", return_value=index):
+            puntuadas = rescore_visible_news()
+
+        self.assertEqual(puntuadas, 3)
+        for n in noticias:
+            n.refresh_from_db()
+            self.assertIsNotNone(n.interest_score)
+
+    def test_no_puntua_las_ya_leidas(self):
+        from my_news.interest import InterestModel
+        from my_news.tasks import rescore_visible_news
+
+        leida = self.make_news(is_deleted=True)
+        index = FakeVectorIndex()
+        pedidos = {}
+
+        def fake_bulk(guids):
+            pedidos["guids"] = list(guids)
+            return {}
+
+        index.vectors_for_guids = fake_bulk
+        modelo = InterestModel(
+            np.ones((5, 2), dtype=np.float32), np.ones((5, 2), dtype=np.float32)
+        )
+        with patch("my_news.tasks.InterestModel.load", return_value=modelo), \
+             patch("my_news.tasks.FeedService.initialize_vector_index", return_value=index):
+            rescore_visible_news()
+
+        self.assertNotIn(leida.guid, pedidos.get("guids", []))

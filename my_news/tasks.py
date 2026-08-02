@@ -1,4 +1,6 @@
 from .services import EmbeddingService, FeedService, DEFAULT_AI_MODEL
+from .interest import INTEREST_DISTRIBUTION_CACHE_KEY, InterestModel
+from django.core.cache import cache
 from django.utils import timezone
 from datetime import timedelta
 from .models import News
@@ -147,6 +149,78 @@ def retry_missing_embeddings(limit: int = 25, days: int = 15):
         return 0
 
 
+def rescore_visible_news(limit: int = 0):
+    """Repuntúa el feed visible con los votos que haya ahora mismo.
+
+    Cada noticia se puntúa al entrar, pero conserva ese valor para siempre: sin
+    esto, votar no cambiaría nada de lo que ya está publicado y el feed quedaría
+    describiendo unos gustos viejos.
+
+    Es barato porque solo mira lo visible (lo leído se borra, así que en
+    producción son unas pocas decenas) y porque los vectores se piden todos de
+    golpe: medido en la Pi, 0,49 s frente a 2,14 s uno por uno. Si el modelo aún
+    no tiene votos suficientes se sale sin llegar a hablar con Qdrant.
+
+    Va al final del cron y después de la purga, para no robarle tiempo a la
+    ingesta ni gastarlo en noticias que están a punto de borrarse.
+    """
+    try:
+        model = InterestModel.load()
+        if not model.is_trained:
+            positives, negatives = model.label_counts
+            logger.info(
+                "Sin votos suficientes para puntuar (%s a favor / %s en contra); "
+                "no se repuntúa.",
+                positives,
+                negatives,
+            )
+            return 0
+
+        vector_index = FeedService.initialize_vector_index()
+        if vector_index is None:
+            logger.warning("Qdrant no disponible; no se repuntúa el feed.")
+            return 0
+
+        queryset = News.visible.all().order_by('-published_date')
+        if limit and limit > 0:
+            queryset = queryset[:limit]
+        objetivo = list(queryset)
+        if not objetivo:
+            return 0
+
+        vectores = vector_index.vectors_for_guids([n.guid for n in objetivo])
+
+        pendientes = []
+        puntuadas = 0
+        for news in objetivo:
+            vector = vectores.get(news.guid)
+            if vector is None:
+                continue
+            news.interest_score = model.score(vector)
+            pendientes.append(news)
+            puntuadas += 1
+            if len(pendientes) >= 200:
+                News.objects.bulk_update(pendientes, ['interest_score'])
+                pendientes = []
+
+        if pendientes:
+            News.objects.bulk_update(pendientes, ['interest_score'])
+
+        # El percentil de la tarjeta se calcula sobre una distribución cacheada.
+        cache.delete(INTEREST_DISTRIBUTION_CACHE_KEY)
+
+        sin_vector = len(objetivo) - puntuadas
+        logger.info(
+            "Feed repuntuado: %s noticias%s",
+            puntuadas,
+            f" ({sin_vector} sin vector, omitidas)" if sin_vector else "",
+        )
+        return puntuadas
+    except Exception:
+        logger.exception("Error repuntuando el feed")
+        return 0
+
+
 def update_news_cron():
     # En BASE_DIR y no en /tmp: ahí el sistema puede borrarlo en limpiezas/reinicios.
     lock_path = os.path.join(settings.BASE_DIR, 'my_news_update.lock')
@@ -167,6 +241,13 @@ def update_news_cron():
                 logger.exception("Error reintentando embeddings pendientes tras el cron")
             # Ejecutar limpieza tras actualización
             purge_old_news(15)
+            # Lo último, y después de la purga: así no gasta trabajo en noticias
+            # que se van a borrar y no puede retrasar la ingesta, que es lo que
+            # tiene que llegar a tiempo.
+            try:
+                rescore_visible_news()
+            except Exception:
+                logger.exception("Error repuntuando el feed tras el cron")
     except portalocker.exceptions.LockException:
         logger.warning("Actualización de noticias omitida: ya hay otra ejecución en curso.")
     except Exception:
