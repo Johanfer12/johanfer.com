@@ -15,8 +15,12 @@
             {% endif %}
             <div class="news-meta">
                 <span class="meta-info">{{ article.source.name }} - {{ article.published_date|date:"d/m/Y H:i" }}</span>
-                {% if show_interest_score and article.interest_score is not None %}
-                    <span class="interest-score {% if article.interest_score >= 0 %}is-positive{% else %}is-negative{% endif %}" title="Interés estimado a partir de tus pulgares">{{ article.interest_score|interest_percent }}</span>
+                {% if show_interest_score %}
+                    {% with pct=article.interest_score|interest_percentile %}
+                    {% if pct is not None %}
+                    <span class="interest-score {% if pct >= 66 %}is-high{% elif pct >= 33 %}is-mid{% else %}is-low{% endif %}" title="Encaja contigo más que el {{ pct }}% del feed, según tus pulgares">{{ pct }}%</span>
+                    {% endif %}
+                    {% endwith %}
                 {% endif %}
                 {% if show_similarity_score and article.similarity_score %}
                     <span class="similarity-score">{{ article.similarity_score|floatformat:2 }}</span>

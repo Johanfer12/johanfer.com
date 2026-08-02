@@ -708,9 +708,9 @@
                         <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
                     </svg>
                 </button>`;
-        const interest = data.interest_label
-            ? `<span class="interest-score ${(data.interest_score ?? 0) >= 0 ? 'is-positive' : 'is-negative'}" title="Interés estimado a partir de tus pulgares">${escapeHtml(data.interest_label)}</span>`
-            : '';
+        const interest = data.interest_percentile === null || data.interest_percentile === undefined
+            ? ''
+            : `<span class="interest-score ${escapeHtml(data.interest_bucket || '')}" title="Encaja contigo más que el ${escapeHtml(data.interest_percentile)}% del feed, según tus pulgares">${escapeHtml(data.interest_percentile)}%</span>`;
         const fallbackImage = USER_FLAGS.default_image_url;
         return `<div class="news-card-container" id="news-${escapeHtml(data.id)}" data-news-id="${escapeHtml(data.id)}" data-published-at="${escapeHtml(data.published_at || '')}" data-created-at="${escapeHtml(data.created_at || '')}">
     <div class="news-card">

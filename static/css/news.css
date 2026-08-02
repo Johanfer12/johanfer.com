@@ -230,11 +230,15 @@ html.instagram-webview .news-card-container {
     white-space: nowrap;
 }
 
-.interest-score.is-positive {
+.interest-score.is-high {
     color: #35b56a;
 }
 
-.interest-score.is-negative {
+.interest-score.is-mid {
+    color: #aaa;
+}
+
+.interest-score.is-low {
     color: #e0803a;
 }
 

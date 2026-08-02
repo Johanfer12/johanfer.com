@@ -123,6 +123,16 @@ class NewsFeedback(models.Model):
     vote = models.SmallIntegerField(choices=VOTE_CHOICES, verbose_name="Voto")
     # float32 crudo, ya normalizado L2 (igual que lo que se sube a Qdrant).
     vector = models.BinaryField(verbose_name="Embedding")
+    # Sin esto, cambiar de modelo de embeddings mezclaría en silencio vectores no
+    # comparables: si el nuevo modelo tiene también 768 dimensiones, el
+    # guardarraíl de dimensiones no lo detectaría. El titular se conserva
+    # precisamente para poder regenerarlos (ver reembed_interest_labels).
+    model_version = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="Modelo de embeddings",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

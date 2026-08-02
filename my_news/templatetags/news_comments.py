@@ -1,6 +1,7 @@
 from django import template
 
 from my_news.comment_extractors import supports_comment_extraction
+from my_news.interest import percentile_of
 
 
 register = template.Library()
@@ -12,11 +13,10 @@ def has_comment_extractor(url):
 
 
 @register.filter
-def interest_percent(score):
-    """Formatea el score de interés ([-1, 1]) como porcentaje con signo."""
-    if score is None:
-        return ''
-    try:
-        return f"{float(score) * 100:+.0f}%"
-    except (TypeError, ValueError):
-        return ''
+def interest_percentile(score):
+    """Posición de la noticia dentro del feed, en percentil.
+
+    No se muestra el score crudo porque su origen se mueve con el número de
+    votos de cada clase; el percentil sí es estable.
+    """
+    return percentile_of(score)

@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.http import HttpResponse
 from django.views.decorators.http import require_POST, require_GET
 from .services import FeedService, EmbeddingService
-from .interest import VectorUnavailable, record_vote
+from .interest import VectorUnavailable, percentile_of, record_vote
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.views import LoginView
 from django.utils.decorators import method_decorator
@@ -131,15 +131,21 @@ def _get_total_news_and_pages(search_query=None, saved_only=False):
     return result
 
 
-def _interest_label(score):
-    """El score vive en [-1, 1]; se muestra como porcentaje para leerlo de un vistazo."""
-    if score is None:
+def _interest_bucket(percentile):
+    """Franja de color, alineada con las clases CSS de la tarjeta."""
+    if percentile is None:
         return ''
-    return f"{score * 100:+.0f}%"
+    if percentile >= 66:
+        return 'is-high'
+    if percentile >= 33:
+        return 'is-mid'
+    return 'is-low'
 
 
 def _serialize_news_card(article):
     published_local = timezone.localtime(article.published_date) if article.published_date else None
+    # La distribución va cacheada, así que resolverla por tarjeta no pega a la BD.
+    interest_percentile = percentile_of(article.interest_score)
     return {
         'id': article.id,
         'title': article.title or '',
@@ -156,8 +162,8 @@ def _serialize_news_card(article):
         'similarity_label': f"{article.similarity_score:.2f}" if article.similarity_score is not None else '',
         'is_saved': bool(article.is_saved),
         'user_vote': int(article.user_vote or 0),
-        'interest_score': article.interest_score,
-        'interest_label': _interest_label(article.interest_score),
+        'interest_percentile': interest_percentile,
+        'interest_bucket': _interest_bucket(interest_percentile),
         'has_comment_extractor': supports_comment_extraction(article.link),
         'comments_url': reverse('my_news:news_comments', args=[article.id]),
     }

@@ -56,6 +56,12 @@ class VectorUnavailable(Exception):
     """No hay embedding disponible para etiquetar la noticia."""
 
 
+def current_model_version():
+    from django.conf import settings
+
+    return getattr(settings, "GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
+
+
 def pack_vector(vector):
     """Serializa un embedding a bytes float32 normalizados L2."""
     if vector is None:
@@ -106,20 +112,37 @@ class InterestModel:
         """Construye el modelo desde la base de datos. Nunca lanza excepción."""
         from .models import NewsFeedback
 
+        actual = current_model_version()
         try:
-            rows = NewsFeedback.objects.values_list("vote", "vector")
+            rows = NewsFeedback.objects.values_list("vote", "vector", "model_version")
         except Exception:
             logger.exception("No se pudieron leer las etiquetas de interés")
             return cls(None, None)
 
         labelled = []
         dim_counts = {}
-        for vote, blob in rows.iterator(chunk_size=500):
+        descartadas_por_modelo = 0
+        for vote, blob, model_version in rows.iterator(chunk_size=500):
+            # Un vector de otro modelo de embeddings no es comparable con los
+            # actuales aunque tenga el mismo número de dimensiones. Las etiquetas
+            # antiguas sin marcar se dan por buenas: son de antes de que existiera
+            # el campo, y por tanto del modelo de entonces, que es el de ahora.
+            if model_version and model_version != actual:
+                descartadas_por_modelo += 1
+                continue
             arr = unpack_vector(blob)
             if arr is None:
                 continue
             labelled.append((vote, arr))
             dim_counts[arr.size] = dim_counts.get(arr.size, 0) + 1
+
+        if descartadas_por_modelo:
+            logger.warning(
+                "Ignoradas %s etiquetas de interés generadas con otro modelo de "
+                "embeddings (el actual es %s). Recupéralas con reembed_interest_labels.",
+                descartadas_por_modelo,
+                actual,
+            )
 
         if not labelled:
             return cls(None, None)
@@ -178,6 +201,58 @@ class InterestModel:
             self.negatives, arr
         )
         return float(np.clip(score, -1.0, 1.0))
+
+
+# El score crudo no es comparable en el tiempo: es una resta de similitudes cuyo
+# origen se desplaza según cuántas etiquetas haya de cada clase (medido: con 4
+# positivos y 4 negativos todo sale por encima de cero; con 4 y 21, por debajo).
+# Lo único estable es la posición relativa dentro del feed, que es lo que se
+# enseña. Por eso tampoco puede haber un umbral fijo que oculte noticias.
+INTEREST_DISTRIBUTION_CACHE_KEY = "news:interest:distribution"
+INTEREST_DISTRIBUTION_TTL = 30
+
+
+def interest_distribution():
+    """Scores del feed visible, ordenados, para situar cada noticia."""
+    from django.core.cache import cache
+
+    from .models import News
+
+    cached = cache.get(INTEREST_DISTRIBUTION_CACHE_KEY)
+    if cached is not None:
+        return cached
+
+    scores = sorted(
+        News.visible.exclude(interest_score=None).values_list("interest_score", flat=True)
+    )
+    cache.set(INTEREST_DISTRIBUTION_CACHE_KEY, scores, INTEREST_DISTRIBUTION_TTL)
+    return scores
+
+
+def percentile_of(score, distribution=None):
+    """Porcentaje del feed que queda por debajo de ``score``.
+
+    Devuelve None si no hay score o si hay tan pocas noticias puntuadas que el
+    percentil no significaría nada.
+    """
+    import bisect
+
+    if score is None:
+        return None
+
+    if distribution is None:
+        distribution = interest_distribution()
+
+    total = len(distribution)
+    if total < 10:
+        return None
+
+    # El punto medio del rango de empates evita que la mejor noticia salga 100%
+    # y la peor 0%, que se leerían como certezas que el modelo no tiene.
+    izquierda = bisect.bisect_left(distribution, score)
+    derecha = bisect.bisect_right(distribution, score)
+    posicion = (izquierda + derecha) / 2
+    return int(round(100 * posicion / total))
 
 
 def resolve_vector(news, *, allow_generation=True):
@@ -243,10 +318,12 @@ def record_vote(news, vote):
             defaults={
                 "news": news,
                 # Copia del titular para poder auditar el voto en el admin
-                # cuando la purga ya se haya llevado la noticia por delante.
+                # cuando la purga ya se haya llevado la noticia por delante, y
+                # para regenerar el vector si se cambia de modelo.
                 "title": news.title[:500],
                 "vote": vote,
                 "vector": packed,
+                "model_version": current_model_version(),
             },
         )
 

@@ -5,9 +5,10 @@ una tanda grande de votos, o si se quiere ver el efecto de un cambio en el
 scoring sin esperar al siguiente cron.
 """
 
+from django.core.cache import cache
 from django.core.management.base import BaseCommand
 
-from my_news.interest import InterestModel
+from my_news.interest import INTEREST_DISTRIBUTION_CACHE_KEY, InterestModel
 from my_news.models import News
 from my_news.services import FeedService
 
@@ -72,6 +73,10 @@ class Command(BaseCommand):
 
         if pending:
             News.objects.bulk_update(pending, ["interest_score"])
+
+        # Los percentiles se calculan sobre una distribución cacheada; sin esto
+        # el feed seguiría situando las noticias con los scores viejos.
+        cache.delete(INTEREST_DISTRIBUTION_CACHE_KEY)
 
         self.stdout.write(self.style.SUCCESS(f"Noticias puntuadas: {scored}"))
         if missing_vector:

@@ -146,3 +146,124 @@ class RecordVoteTests(TestCase):
         self.assertIsNone(feedback.news_id)
         self.assertEqual(feedback.vote, -1)
         self.assertEqual(feedback.title, "Una noticia")
+
+
+class PercentileTests(TestCase):
+    """El percentil es lo único estable: el score crudo mueve su origen."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.source = FeedSource.objects.create(name="Fuente", url="https://example.com/rss")
+
+    def make_scored(self, scores):
+        for i, score in enumerate(scores):
+            News.objects.create(
+                guid=f"guid-p{i}",
+                title=f"Noticia {i}",
+                description="Cuerpo",
+                link=f"https://example.com/p{i}",
+                published_date=timezone.now(),
+                source=self.source,
+                is_ai_processed=True,
+                interest_score=score,
+            )
+
+    def test_sin_suficientes_noticias_no_hay_percentil(self):
+        from .interest import percentile_of
+
+        self.make_scored([0.01 * i for i in range(5)])
+        self.assertIsNone(percentile_of(0.02))
+
+    def test_situa_cada_noticia_en_su_posicion(self):
+        from .interest import percentile_of
+
+        scores = [i / 100 for i in range(20)]
+        self.make_scored(scores)
+
+        self.assertGreater(percentile_of(0.19), percentile_of(0.10))
+        self.assertGreater(percentile_of(0.10), percentile_of(0.00))
+        # Ni la mejor sale 100% ni la peor 0%: el modelo no da para esa certeza.
+        self.assertLess(percentile_of(0.19), 100)
+        self.assertGreater(percentile_of(0.00), 0)
+
+    def test_el_percentil_no_depende_del_signo_del_score(self):
+        """Mismo orden desplazado: los percentiles deben ser los mismos."""
+        from django.core.cache import cache
+
+        from .interest import percentile_of
+
+        scores = [i / 100 for i in range(20)]
+        self.make_scored(scores)
+        antes = [percentile_of(s) for s in scores]
+
+        # Se desplaza todo el rango a negativo, como pasa al acumular votos
+        # en contra, sin cambiar el orden relativo.
+        for news in News.objects.all():
+            news.interest_score -= 0.5
+            news.save(update_fields=["interest_score"])
+        cache.clear()
+
+        despues = [percentile_of(s - 0.5) for s in scores]
+        self.assertEqual(antes, despues)
+
+    def test_sin_score_no_hay_percentil(self):
+        from .interest import percentile_of
+
+        self.make_scored([i / 100 for i in range(20)])
+        self.assertIsNone(percentile_of(None))
+
+
+class ModelVersionTests(TestCase):
+    def add_label(self, idx, vote, vector, model_version):
+        NewsFeedback.objects.create(
+            guid=f"guid-mv{idx}",
+            title=f"Titular {idx}",
+            vote=vote,
+            vector=pack_vector(vector),
+            model_version=model_version,
+        )
+
+    def test_ignora_etiquetas_de_otro_modelo(self):
+        from .interest import current_model_version
+
+        actual = current_model_version()
+        for i in range(MIN_LABELS_PER_CLASS):
+            self.add_label(i, 1, make_vector(i), actual)
+            self.add_label(100 + i, -1, make_vector(100 + i), actual)
+        # Etiquetas de un modelo distinto con la MISMA dimension: el guardarrail
+        # de dimensiones no las vería, solo las caza el model_version.
+        for i in range(20):
+            self.add_label(200 + i, 1, make_vector(200 + i), "otro-modelo-v2")
+
+        model = InterestModel.load()
+        self.assertEqual(model.label_counts, (MIN_LABELS_PER_CLASS, MIN_LABELS_PER_CLASS))
+
+    def test_las_etiquetas_sin_marcar_se_dan_por_buenas(self):
+        for i in range(MIN_LABELS_PER_CLASS):
+            self.add_label(i, 1, make_vector(i), "")
+            self.add_label(100 + i, -1, make_vector(100 + i), "")
+
+        model = InterestModel.load()
+        self.assertEqual(model.label_counts, (MIN_LABELS_PER_CLASS, MIN_LABELS_PER_CLASS))
+
+    def test_el_voto_guarda_el_modelo_usado(self):
+        from .interest import current_model_version, record_vote
+
+        source = FeedSource.objects.create(name="F", url="https://example.com/f")
+        news = News.objects.create(
+            guid="guid-voto-mv",
+            title="Una noticia",
+            description="Cuerpo",
+            link="https://example.com/mv",
+            published_date=timezone.now(),
+            source=source,
+        )
+        news._embedding_vector = make_vector(7).tolist()
+        record_vote(news, 1)
+
+        self.assertEqual(
+            NewsFeedback.objects.get(guid="guid-voto-mv").model_version,
+            current_model_version(),
+        )
