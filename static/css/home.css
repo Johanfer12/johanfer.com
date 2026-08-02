@@ -49,7 +49,10 @@ html::before {
         radial-gradient(circle at 88% 72%, rgba(194, 222, 255, 0.58) 0 1px, transparent 2px);
     background-size: 340px 340px, 460px 460px, 620px 620px, 760px 760px, 980px 980px, 1240px 1240px;
     opacity: 0.46;
-    animation: starDrift 80s linear infinite, starTwinkleSlow 18s ease-in-out infinite alternate;
+    will-change: transform, opacity;
+    /* starDrift va y vuelve (alternate): con `linear infinite` el campo de
+       estrellas saltaba de golpe del final al principio en cada ciclo. */
+    animation: starDrift 80s ease-in-out infinite alternate, starTwinkleSlow 18s ease-in-out infinite alternate;
 }
 
 html::after {
