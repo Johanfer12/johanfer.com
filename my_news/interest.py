@@ -18,6 +18,13 @@ razones prácticas:
 Coste en la Raspberry: la matriz de etiquetas son ``n × 768`` float32 (3 MB por
 cada mil votos) y puntuar es un producto matriz-vector. Con 2.000 etiquetas son
 ~1,5 millones de multiplicaciones, del orden de milisegundos.
+
+Qué cuenta como etiqueta y qué no
+---------------------------------
+Solo cuentan los pulgares y las palabras filtro. En particular ``is_deleted`` NO
+es una señal negativa: aquí borrar significa "ya la leí", y sirve para saber qué
+queda pendiente. Tomarlo por rechazo enseñaría al modelo exactamente lo contrario
+de lo que ocurre, porque se borra justo lo que sí se ha leído.
 """
 
 import logging
