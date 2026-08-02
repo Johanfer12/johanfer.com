@@ -1,0 +1,90 @@
+#!/bin/sh
+# Instalar en /usr/local/sbin/fail2ban-nginx-map (root:root, 0755).
+#
+# Lo invoca la accion nginx-block-map-safe de fail2ban. En vez de tocar
+# iptables, mantiene el fichero /etc/nginx/blacklisted-ips.map que lee el `geo`
+# de nginx, y recarga nginx solo si la configuracion valida. Cada jaula tiene su
+# propio fichero de estado en /run, y el mapa final es la union de todos: asi
+# desbanear en una jaula no borra los baneos de las otras.
+set -eu
+
+operation="${1:?operation required}"
+jail="${2:?jail required}"
+map_file="${3:?map file required}"
+ip="${4:-}"
+state_dir=/run/fail2ban-nginx-map
+lock_file=/run/lock/fail2ban-nginx-map.lock
+
+case "$jail" in
+    *[!A-Za-z0-9_.-]*|'')
+        echo "invalid jail name: $jail" >&2
+        exit 2
+        ;;
+esac
+case "$map_file" in
+    /etc/nginx/*.map) ;;
+    *)
+        echo "refusing unexpected map path: $map_file" >&2
+        exit 2
+        ;;
+esac
+
+mkdir -p "$state_dir" /run/lock
+exec 9>"$lock_file"
+flock -x 9
+state_file="$state_dir/$jail.ips"
+
+rebuild_map() {
+    tmp_file="${map_file}.tmp.$$"
+    trap 'rm -f "$tmp_file"' EXIT HUP INT TERM
+    find "$state_dir" -maxdepth 1 -type f -name '*.ips' -exec cat {} + 2>/dev/null \
+        | LC_ALL=C sort -u \
+        | awk 'NF == 1 && $1 ~ /^[0-9A-Fa-f:.\/]+$/ { print $1 " 1;" }' \
+        > "$tmp_file"
+    chmod 0644 "$tmp_file"
+    chown root:root "$tmp_file"
+    mv -f "$tmp_file" "$map_file"
+    trap - EXIT HUP INT TERM
+
+    if [ -s /run/nginx.pid ] && kill -0 "$(cat /run/nginx.pid)" 2>/dev/null; then
+        if /usr/sbin/nginx -t -q; then
+            /usr/sbin/nginx -s reload
+        else
+            echo "nginx validation failed; map was updated but not reloaded" >&2
+            return 1
+        fi
+    fi
+}
+
+case "$operation" in
+    start)
+        rm -f "$state_file"
+        : > "$state_file"
+        ;;
+    flush|stop)
+        rm -f "$state_file"
+        ;;
+    add)
+        case "$ip" in
+            *[!0-9A-Fa-f:./]*|'')
+                echo "invalid address: $ip" >&2
+                exit 2
+                ;;
+        esac
+        touch "$state_file"
+        grep -Fqx -- "$ip" "$state_file" 2>/dev/null || printf '%s\n' "$ip" >> "$state_file"
+        ;;
+    del)
+        if [ -f "$state_file" ]; then
+            state_tmp="${state_file}.tmp.$$"
+            grep -Fvx -- "$ip" "$state_file" > "$state_tmp" || true
+            mv -f "$state_tmp" "$state_file"
+        fi
+        ;;
+    *)
+        echo "unknown operation: $operation" >&2
+        exit 2
+        ;;
+esac
+
+rebuild_map

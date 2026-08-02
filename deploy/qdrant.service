@@ -1,0 +1,39 @@
+# Base de datos vectorial. Guarda los embeddings de las noticias, que son la
+# base de la detección de duplicados y del modelo de interés.
+#
+# Instalar en /etc/systemd/system/qdrant.service
+#
+# Binario: /opt/qdrant/qdrant (v1.15.4, descargado de los releases de GitHub,
+# NO viene por apt). Escucha SOLO en 127.0.0.1: no debe quedar expuesto.
+#
+#   sudo mkdir -p /opt/qdrant /var/lib/qdrant/storage
+#   sudo curl -L -o /opt/qdrant/qdrant \
+#     https://github.com/qdrant/qdrant/releases/download/v1.15.4/qdrant-aarch64-unknown-linux-musl
+#   sudo chmod +x /opt/qdrant/qdrant
+#   sudo chown -R johan:johan /var/lib/qdrant
+#   sudo systemctl enable --now qdrant
+#
+# El storage (/var/lib/qdrant/storage, ~37 MB) son DATOS, no configuración:
+# entra en la copia de seguridad. Si se pierde, los vectores se pueden
+# regenerar con `qdrant_backfill` y `retry_missing_embeddings`, pero cuesta una
+# llamada a Gemini por noticia.
+
+[Unit]
+Description=Qdrant Vector DB
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=johan
+Group=johan
+Environment=QDRANT__STORAGE__STORAGE_PATH=/var/lib/qdrant/storage
+Environment=QDRANT__SERVICE__HOST=127.0.0.1
+Environment=QDRANT__SERVICE__HTTP_PORT=6333
+WorkingDirectory=/var/lib/qdrant
+ExecStart=/opt/qdrant/qdrant
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

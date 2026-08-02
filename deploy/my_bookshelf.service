@@ -1,0 +1,27 @@
+# Gunicorn sirviendo Django. Instalar en /etc/systemd/system/my_bookshelf.service
+#
+#   sudo systemctl daemon-reload && sudo systemctl enable --now my_bookshelf
+#
+# Sobre los parámetros, que están ajustados a una Pi 3 con 1 GB:
+#   --workers 1 --threads 4  : un solo proceso; cuatro procesos no caben en RAM.
+#   --preload                : comparte la memoria del import inicial.
+#   --max-requests 500       : recicla el worker periódicamente y así acota las
+#                              fugas de memoria sin tener que vigilarlas.
+#   --timeout 120            : el arranque en frío de la primera petición puede
+#                              irse a 20 s en esta máquina.
+
+[Unit]
+Description=My Bookshelf Django application
+After=network.target
+
+[Service]
+User=johan
+Group=www-data
+WorkingDirectory=/home/johan/My_Bookshelf
+Environment="PATH=/home/johan/My_Bookshelf/env/bin"
+ExecStart=/home/johan/My_Bookshelf/env/bin/gunicorn --bind 127.0.0.1:8080 --worker-class gthread --workers 1 --threads 4 --preload --timeout 120 --graceful-timeout 30 --max-requests 500 --max-requests-jitter 50 Bookshelf.wsgi:application
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -184,3 +184,7 @@ cython_debug/
 
 # Perfil temporal del navegador del preview de Claude
 /.edge-cdp-profile/
+
+# Valores afinados de fail2ban: revelan a que ritmo puede sondear un escaner
+# sin que lo baneen, y el repositorio es publico. Van en la copia cifrada.
+deploy/fail2ban/jail.d/*.local
