@@ -88,6 +88,13 @@ AXES_ONLY_ADMIN_SITE = True
 # reproduce el `cd <proyecto> &&` que antes se escribía a mano, para que el job
 # corra con el directorio del proyecto como cwd.
 CRONTAB_COMMAND_PREFIX = f'cd {BASE_DIR} &&'
+# Sin este sufijo la salida del cron se pierde: django-crontab no redirige nada y
+# la Pi no tiene MTA, así que ni siquiera llega al buzón local. Los avisos que
+# emiten las tareas (fallos de embedding, resúmenes pendientes, errores de Simkl)
+# eran invisibles. Fuera de BASE_DIR a propósito, porque deploy.sh hace
+# `git checkout .` sobre el repo. Rotación: /etc/logrotate.d/bookshelf-cron.
+CRON_LOG_PATH = os.getenv('CRON_LOG_PATH', str(BASE_DIR.parent / 'log_cron_bookshelf.txt'))
+CRONTAB_COMMAND_SUFFIX = f'>> {CRON_LOG_PATH} 2>&1'
 CRONJOBS = [
     ('0 0 * * *', 'home_page.tasks.update_books_cron'),       # Libros: medianoche
     ('30 0 * * *', 'watching.tasks.update_watching_cron'),    # Series/pelis (Simkl): 00:30, para no chocar con los libros

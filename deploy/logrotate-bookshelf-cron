@@ -1,0 +1,23 @@
+# Rotación del log del cron de Bookshelf (CRONTAB_COMMAND_SUFFIX en settings.py).
+#
+# Mismas directivas que /etc/logrotate.d/johan-scripts, que es la convención ya
+# usada en la Pi para los logs de /home/johan (log_cron_cloudflare.txt y
+# wifi_watchdog.log). Va en un fichero aparte para no pisar aquel, que está
+# mantenido a mano fuera del repo.
+#
+# Instalar:
+#   sudo cp deploy/logrotate-bookshelf-cron /etc/logrotate.d/bookshelf-cron
+#   sudo /usr/sbin/logrotate --debug /etc/logrotate.d/bookshelf-cron   # en seco
+#
+# Sin esto el log crece sin freno: el cron de noticias corre 29 veces al día y
+# escribe una línea por noticia procesada, lo que en una tarjeta SD importa.
+# Tope: 5 MB por fichero y 4 rotaciones comprimidas.
+
+/home/johan/log_cron_bookshelf.txt {
+    size 5M
+    rotate 4
+    compress
+    missingok
+    notifempty
+    copytruncate
+}
