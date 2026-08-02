@@ -1,8 +1,8 @@
 """Recalcula ``interest_score`` para las noticias que ya están en la base.
 
-El pipeline puntúa cada noticia al ingerirla, así que esto solo hace falta
-después de sembrar el modelo, tras una tanda grande de votos, o si se quiere ver
-el efecto de un cambio en el scoring sin esperar al siguiente cron.
+El pipeline puntúa cada noticia al ingerirla, así que esto solo hace falta tras
+una tanda grande de votos, o si se quiere ver el efecto de un cambio en el
+scoring sin esperar al siguiente cron.
 """
 
 from django.core.management.base import BaseCommand
@@ -30,7 +30,7 @@ class Command(BaseCommand):
             self.stderr.write(
                 self.style.WARNING(
                     f"Modelo sin datos suficientes ({positives} a favor / {negatives} en contra). "
-                    "Vota más noticias o ejecuta seed_interest_feedback."
+                    "Hacen falta al menos 5 votos de cada signo; vota en el feed."
                 )
             )
             return

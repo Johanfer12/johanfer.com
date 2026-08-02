@@ -21,10 +21,18 @@ cada mil votos) y puntuar es un producto matriz-vector. Con 2.000 etiquetas son
 
 Qué cuenta como etiqueta y qué no
 ---------------------------------
-Solo cuentan los pulgares y las palabras filtro. En particular ``is_deleted`` NO
-es una señal negativa: aquí borrar significa "ya la leí", y sirve para saber qué
-queda pendiente. Tomarlo por rechazo enseñaría al modelo exactamente lo contrario
-de lo que ocurre, porque se borra justo lo que sí se ha leído.
+Solo los pulgares. Nada más se usa como señal, y las dos alternativas que se
+descartaron conviene dejarlas escritas para no volver sobre ellas:
+
+* ``is_deleted`` NO es negativo. Aquí borrar significa "ya la leí", y es la forma
+  de saber qué queda pendiente. Tomarlo por rechazo enseñaría al modelo justo lo
+  contrario de lo que pasa, porque se borra precisamente lo que sí se ha leído.
+
+* Vectorizar las palabras filtro tampoco aporta. Se midió: el vector de una
+  palabra suelta sí distingue bien (las noticias sobre el tema suben a ~0.82 de
+  similitud frente a ~0.73 de media), pero las noticias que penalizaría no llegan
+  nunca al feed, porque la palabra filtro ya las bloqueó antes. Como negativos
+  sumarían casi una constante a todo, no capacidad de discriminar.
 """
 
 import logging
