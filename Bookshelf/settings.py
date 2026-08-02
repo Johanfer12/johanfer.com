@@ -83,10 +83,16 @@ AXES_RESET_ON_SUCCESS = True
 AXES_LOCKOUT_PARAMETERS = ['ip_address', 'username']
 AXES_ONLY_ADMIN_SITE = True
 
+# Estas cuatro entradas son la única fuente de verdad del cron: se regeneran con
+# `python manage.py crontab remove && python manage.py crontab add`. El prefijo
+# reproduce el `cd <proyecto> &&` que antes se escribía a mano, para que el job
+# corra con el directorio del proyecto como cwd.
+CRONTAB_COMMAND_PREFIX = f'cd {BASE_DIR} &&'
 CRONJOBS = [
-    ('55 12 * * *', 'home_page.tasks.update_books_cron'),
-    ('*/30 * * * *', 'my_news.tasks.update_news_cron'),
-    ('25 13 * * *', 'watching.tasks.update_watching_cron'),  # Series/pelis desde Trakt
+    ('0 0 * * *', 'home_page.tasks.update_books_cron'),       # Libros: medianoche
+    ('30 0 * * *', 'watching.tasks.update_watching_cron'),    # Series/pelis (Simkl): 00:30, para no chocar con los libros
+    ('*/30 8-21 * * *', 'my_news.tasks.update_news_cron'),    # Noticias: cada 30 min mientras hay actividad
+    ('0 22 * * *', 'my_news.tasks.update_news_cron'),         # Noticias: última pasada del día
 ]
 
 ROOT_URLCONF = 'Bookshelf.urls'
