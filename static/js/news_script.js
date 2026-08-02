@@ -89,6 +89,7 @@
         currentPage: parseInt(new URLSearchParams(location.search).get('page') || '1', 10),
         deletingNews: new Set(), // IDs de noticias siendo eliminadas
         savingNews: new Set(), // IDs de noticias siendo guardadas/desguardadas
+        votingNews: new Set(), // IDs de noticias con un voto (pulgar) en vuelo
         restoringNews: false,
         syncingFromDb: false, // evita refrescos simultaneos al recuperar foco/conexion
         lastDbSyncAt: 0, // timestamp del ultimo sync fuerte con DB
@@ -696,6 +697,20 @@
                         <path d="M5 4H19C20.1046 4 21 4.89543 21 6V15C21 16.1046 20.1046 17 19 17H10L5 20V17C3.89543 17 3 16.1046 3 15V6C3 4.89543 3.89543 4 5 4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
                     </svg>
                 </button>` : '';
+        const voteButtons = `
+                <button type="button" class="news-link icon-only vote-btn vote-up ${data.user_vote === 1 ? 'is-active' : ''}" data-id="${escapeHtml(data.id)}" data-vote="1" title="Me interesa" aria-label="Me interesa" aria-pressed="${data.user_vote === 1 ? 'true' : 'false'}">
+                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                </button>
+                <button type="button" class="news-link icon-only vote-btn vote-down ${data.user_vote === -1 ? 'is-active' : ''}" data-id="${escapeHtml(data.id)}" data-vote="-1" title="No me interesa" aria-label="No me interesa" aria-pressed="${data.user_vote === -1 ? 'true' : 'false'}">
+                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                </button>`;
+        const interest = data.interest_label
+            ? `<span class="interest-score ${(data.interest_score ?? 0) >= 0 ? 'is-positive' : 'is-negative'}" title="Interés estimado a partir de tus pulgares">${escapeHtml(data.interest_label)}</span>`
+            : '';
         const fallbackImage = USER_FLAGS.default_image_url;
         return `<div class="news-card-container" id="news-${escapeHtml(data.id)}" data-news-id="${escapeHtml(data.id)}" data-published-at="${escapeHtml(data.published_at || '')}" data-created-at="${escapeHtml(data.created_at || '')}">
     <div class="news-card">
@@ -707,6 +722,7 @@
             ${shortAnswer}
             <div class="news-meta">
                 <span class="meta-info">${escapeHtml(data.source_name)} - ${escapeHtml(data.published_label || '')}</span>
+                ${interest}
                 ${similarity}
             </div>
         </div>
@@ -719,6 +735,7 @@
                         <path d="M12.7076 18.3639L11.2933 19.7781C9.34072 21.7308 6.1749 21.7308 4.22228 19.7781C2.26966 17.8255 2.26966 14.6597 4.22228 12.7071L5.63649 11.2929M18.3644 12.7071L19.7786 11.2929C21.7312 9.34024 21.7312 6.17441 19.7786 4.22179C17.826 2.26917 14.6602 2.26917 12.7076 4.22179L11.2933 5.636M8.50045 15.4999L15.5005 8.49994" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
                     </svg>
                 </a>
+                ${voteButtons}
                 ${saveButton}
                 ${deleteButton}
             </div>
@@ -1159,6 +1176,45 @@
             });
     };
 
+    const serverVoteNews = (newsId, vote) => fetchJson(`/noticias/vote/${newsId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `vote=${vote}`,
+    });
+
+    const applyVoteVisual = (container, userVote) => {
+        $$('.vote-btn', container).forEach((button) => {
+            const isActive = Number(button.dataset.vote) === Number(userVote);
+            button.classList.toggle('is-active', isActive);
+            button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+    };
+
+    const voteNews = (newsId, vote, triggerButton = null) => {
+        if (STATE.votingNews.has(newsId)) return;
+        const container = $(`#news-${newsId}`);
+        if (!container) return;
+
+        STATE.votingNews.add(newsId);
+        setButtonBusy(triggerButton, true);
+        serverVoteNews(newsId, vote)
+            .then(data => {
+                if (data.status !== 'success') throw new Error(data.message || 'Error al votar');
+                applyVoteVisual(container, data.user_vote);
+            })
+            .catch(e => {
+                err('Error al votar noticia:', e);
+                alert('No se pudo registrar el voto.');
+            })
+            .finally(() => {
+                setButtonBusy(triggerButton, false);
+                STATE.votingNews.delete(newsId);
+            });
+    };
+
     const deleteNews = (newsId, triggerButton = null) => {
         const normalizedNewsId = normalizeId(newsId);
         STATE.cancelledDeletes.delete(normalizedNewsId);
@@ -1584,6 +1640,15 @@
             const container = saveBtn.closest('.news-card-container');
             const id = saveBtn.dataset.id || container?.id?.replace('news-', '');
             if (id) toggleSaveNews(id);
+            return;
+        }
+
+        const voteBtn = e.target.closest('.vote-btn');
+        if (voteBtn) {
+            e.stopPropagation();
+            const container = voteBtn.closest('.news-card-container');
+            const id = voteBtn.dataset.id || container?.id?.replace('news-', '');
+            if (id) voteNews(id, voteBtn.dataset.vote, voteBtn);
             return;
         }
 

@@ -96,6 +96,23 @@ class VectorIndexService:
         )
         return len(point_ids)
 
+    def get_vector(self, guid: str) -> Optional[List[float]]:
+        """Recupera el vector ya indexado de una noticia, o None si no está."""
+        point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, guid))
+        points = self.client.retrieve(
+            self.collection,
+            ids=[point_id],
+            with_vectors=True,
+            with_payload=False,
+        )
+        if not points:
+            return None
+        vector = getattr(points[0], "vector", None)
+        # Qdrant devuelve un dict cuando la colección usa vectores con nombre.
+        if isinstance(vector, dict):
+            vector = next(iter(vector.values()), None)
+        return vector
+
     def scroll_points(self, limit: int = 256):
         offset = None
         while True:

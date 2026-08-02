@@ -224,6 +224,20 @@ html.instagram-webview .news-card-container {
     color: #aaa;
 }
 
+.interest-score {
+    margin-left: 8px;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.interest-score.is-positive {
+    color: #35b56a;
+}
+
+.interest-score.is-negative {
+    color: #e0803a;
+}
+
 .news-description {
     color: rgba(227, 233, 245, 0.86);
     font-size: var(--news-description-size);
@@ -274,8 +288,10 @@ html.instagram-webview .news-card-container {
 /* Enlaces */
 .news-links {
     display: flex;
-    gap: 8px;
+    /* Hueco ajustado: con los pulgares la fila puede llegar a seis botones. */
+    gap: 5px;
     justify-content: center;
+    flex-wrap: wrap;
     margin-top: auto;
 }
 
@@ -292,10 +308,10 @@ html.instagram-webview .news-card-container {
 }
 
 .news-link.icon-only {
-    width: 34px;
-    min-width: 34px;
-    height: 30px;
-    padding: 4px;
+    width: 28px;
+    min-width: 28px;
+    height: 27px;
+    padding: 3px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -303,8 +319,8 @@ html.instagram-webview .news-card-container {
 }
 
 .news-link .news-icon {
-    width: 17px;
-    height: 17px;
+    width: 15px;
+    height: 15px;
     display: block;
     transform: none !important;
     pointer-events: none;
@@ -317,16 +333,16 @@ html.instagram-webview .news-card-container {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 34px;
-    min-height: 30px;
-    padding: 6px 9px;
+    min-width: 28px;
+    min-height: 27px;
+    padding: 5px 7px;
     line-height: 1;
     color: #c6d6f5;
 }
 
 .news-link.share-opener .share-icon {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     display: block;
     fill: currentColor;
     transform: none !important;
@@ -389,6 +405,43 @@ html.instagram-webview .news-card-container {
 
 .news-link.save-btn.is-saved:hover {
     background-color: #35b56a;
+    color: #06101f;
+}
+
+/* Pulgares: en reposo son discretos para no competir con guardar/eliminar;
+   al votar se encienden con el color de su signo. */
+.news-link.vote-btn {
+    border: 1px solid rgba(198, 214, 245, 0.45);
+    color: rgba(198, 214, 245, 0.75);
+    background-color: rgba(15, 27, 43, 0.72);
+}
+
+.news-link.vote-btn:hover {
+    background-color: #8fb4e8;
+    color: #06101f;
+}
+
+.news-link.vote-btn.is-active {
+    background-color: transparent;
+}
+
+.news-link.vote-up.is-active {
+    border-color: #35b56a;
+    color: #35b56a;
+}
+
+.news-link.vote-up.is-active:hover {
+    background-color: #35b56a;
+    color: #06101f;
+}
+
+.news-link.vote-down.is-active {
+    border-color: #e0803a;
+    color: #e0803a;
+}
+
+.news-link.vote-down.is-active:hover {
+    background-color: #e0803a;
     color: #06101f;
 }
 

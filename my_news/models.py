@@ -58,6 +58,21 @@ class News(models.Model):
     ai_filter_reason = models.TextField(null=True, blank=True, verbose_name="Razón Filtro IA")
     is_ai_filtered = models.BooleanField(default=False, verbose_name="Filtro IA")
     is_ai_processed = models.BooleanField(default=False, verbose_name="Procesada por IA")
+
+    # Modelo de interés personal (pulgares). El voto se desnormaliza aquí para
+    # pintar la tarjeta sin un JOIN extra; la etiqueta persistente vive en
+    # NewsFeedback, que sobrevive a la purga de noticias antiguas.
+    user_vote = models.SmallIntegerField(
+        default=0,
+        choices=[(1, "Me interesa"), (0, "Sin voto"), (-1, "No me interesa")],
+        verbose_name="Voto",
+    )
+    interest_score = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name="Interés",
+        help_text="Estimación en [-1, 1] a partir de los pulgares. Solo informativa: no filtra nada.",
+    )
     
     # Managers
     objects = models.Manager()  # Manager por defecto
@@ -78,6 +93,43 @@ class News(models.Model):
     
     def __str__(self):
         return self.title
+
+class NewsFeedback(models.Model):
+    """Etiqueta de interés (pulgar arriba/abajo) con su vector congelado.
+
+    Guarda una copia del embedding porque ``purge_old_news`` borra las noticias
+    de más de 15 días junto con sus vectores en Qdrant: sin esta copia el modelo
+    olvidaría cada quincena todo lo aprendido. 768 floats en float32 son ~3 KB
+    por etiqueta, así que mil votos ocupan unos 3 MB en SQLite.
+    """
+
+    VOTE_CHOICES = [(1, "Me interesa"), (-1, "No me interesa")]
+
+    news = models.OneToOneField(
+        News,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="feedback",
+        verbose_name="Noticia",
+    )
+    guid = models.CharField(max_length=500, unique=True)
+    title = models.CharField(max_length=500, verbose_name="Titular")
+    vote = models.SmallIntegerField(choices=VOTE_CHOICES, verbose_name="Voto")
+    # float32 crudo, ya normalizado L2 (igual que lo que se sube a Qdrant).
+    vector = models.BinaryField(verbose_name="Embedding")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Voto de interés"
+        verbose_name_plural = "Votos de interés"
+        ordering = ["-updated_at"]
+        indexes = [models.Index(fields=["vote"], name="newsfeedback_vote_idx")]
+
+    def __str__(self):
+        return f"{'+1' if self.vote > 0 else '-1'} {self.title[:80]}"
+
 
 class FilterWord(models.Model):
     word = models.CharField(

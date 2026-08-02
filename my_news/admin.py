@@ -3,7 +3,7 @@ from django import forms
 from django.utils import timezone
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources
-from .models import FeedSource, News, FilterWord, AIFilterInstruction, AIModelSetting
+from .models import FeedSource, News, FilterWord, AIFilterInstruction, AIModelSetting, NewsFeedback
 
 # --- Resource para FeedSource ---
 class FeedSourceResource(resources.ModelResource):
@@ -61,10 +61,10 @@ class FeedSourceAdmin(ImportExportModelAdmin):
 @admin.register(News)
 class NewsAdmin(admin.ModelAdmin):
     list_display = ('title', 'source', 'published_date', 'created_at', 'is_deleted', 'deleted_at', 'is_filtered', 'is_ai_filtered', 'is_redundant', 'filtered_by', 'similarity_score', 'ai_filter_reason')
-    list_filter = ('source', 'published_date', 'is_deleted', 'is_filtered', 'is_ai_filtered', 'is_redundant', 'filtered_by')
+    list_filter = ('source', 'published_date', 'is_deleted', 'is_filtered', 'is_ai_filtered', 'is_redundant', 'filtered_by', 'user_vote')
     search_fields = ('title', 'description')
     date_hierarchy = 'published_date'
-    readonly_fields = ('similar_to', 'similarity_score', 'is_redundant', 'filtered_by', 'ai_filter_reason', 'is_ai_filtered')
+    readonly_fields = ('similar_to', 'similarity_score', 'is_redundant', 'filtered_by', 'ai_filter_reason', 'is_ai_filtered', 'interest_score')
     actions = ['mark_as_deleted_by_user', 'restore_news']
 
     def mark_as_deleted_by_user(self, request, queryset):
@@ -90,6 +90,21 @@ class AIFilterInstructionAdmin(ImportExportModelAdmin):
     list_filter = ('active',)
     search_fields = ('instruction',)
     list_editable = ('active',)
+
+@admin.register(NewsFeedback)
+class NewsFeedbackAdmin(admin.ModelAdmin):
+    list_display = ('title', 'vote', 'created_at', 'updated_at')
+    list_filter = ('vote',)
+    search_fields = ('title',)
+    # El vector es un blob de 3 KB: no tiene sentido pintarlo ni editarlo.
+    exclude = ('vector',)
+    readonly_fields = ('news', 'guid', 'title', 'created_at', 'updated_at')
+
+    def has_add_permission(self, request):
+        # Las etiquetas se crean votando en el feed, que es donde se resuelve el
+        # embedding; a mano quedarían sin vector y serían inservibles.
+        return False
+
 
 @admin.register(AIModelSetting)
 class AIModelSettingAdmin(admin.ModelAdmin):

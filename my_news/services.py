@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 import pytz
 from .models import News, FeedSource, FilterWord, AIFilterInstruction, AIModelSetting
+from .interest import InterestModel
 import re
 from google import genai
 from google.genai import types
@@ -900,6 +901,18 @@ class FeedService:
         cerebras_client = FeedService.initialize_cerebras()
         vector_index = FeedService.initialize_vector_index()
 
+        # Modelo de interés: se carga una sola vez por pasada y se reutiliza para
+        # todas las noticias de la tanda.
+        interest_model = InterestModel.load()
+        positives, negatives = interest_model.label_counts
+        if interest_model.is_trained:
+            logger.info(f"Modelo de interés cargado: {positives} a favor / {negatives} en contra")
+        else:
+            logger.info(
+                f"Modelo de interés sin datos suficientes ({positives} a favor / {negatives} en contra); "
+                "no se puntuará esta tanda."
+            )
+
         # Obtener modelo de IA desde el admin (base de datos) o usar default
         try:
             ai_model_setting = AIModelSetting.objects.first()
@@ -1280,6 +1293,11 @@ class FeedService:
                 logger.warning(f"Gemini devolvió un valor para ai_filter ({ai_filter_reason}) pero no es la instrucción esperada. No se filtrará.")
             # <<<<< FIN LÓGICA FILTRADO IA >>>>>
 
+            # Puntuación de interés personal: el embedding ya está calculado, así
+            # que solo cuesta un producto matriz-vector. Es informativa; no
+            # descarta nada ni sustituye a las palabras filtro.
+            interest_score = interest_model.score(embedding) if embedding else None
+
             # Crear la nueva noticia (si no fue filtrada por IA ni por palabra)
             try:
                 news_item = News.objects.create(
@@ -1292,6 +1310,7 @@ class FeedService:
                     source=source,
                     image_url=image_url,
                     is_ai_processed=ai_was_processed,
+                    interest_score=interest_score,
                     # Conservar la referencia a la más parecida aunque no supere el umbral
                     similar_to=similar_news,
                     similarity_score=similarity_score if similar_news else None,
