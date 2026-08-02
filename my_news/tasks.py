@@ -1,4 +1,4 @@
-from .services import FeedService, DEFAULT_AI_MODEL
+from .services import EmbeddingService, FeedService, DEFAULT_AI_MODEL
 from django.utils import timezone
 from datetime import timedelta
 from .models import News
@@ -52,6 +52,101 @@ def purge_orphan_vectors(batch_size: int = 256):
         logger.exception("Error limpiando vectores huérfanos en Qdrant")
         return 0
 
+def retry_missing_embeddings(limit: int = 25, days: int = 15):
+    """Indexa las noticias que se quedaron sin vector por un fallo puntual.
+
+    Una noticia sin embedding es invisible para la detección de duplicados de
+    todas las que vengan después, así que conviene recuperarla aunque su propio
+    control de duplicados ya no se pueda deshacer.
+
+    A propósito NO marca nada como redundante a posteriori: la noticia ya se
+    publicó y el usuario puede haberla leído; hacerla desaparecer de la rejilla
+    tiempo después sería peor que dejar pasar un duplicado. Se guarda la
+    referencia a la más parecida y su puntuación, que es información suficiente
+    para revisarlo desde el admin.
+
+    ``limit`` acota las llamadas a Gemini por pasada.
+    """
+    try:
+        vector_index = FeedService.initialize_vector_index()
+        if vector_index is None:
+            logger.warning("Qdrant no disponible; no se reintentan los embeddings pendientes.")
+            return 0
+
+        indexados = set()
+        for point in vector_index.scroll_points(limit=256):
+            news_id = (getattr(point, 'payload', {}) or {}).get('news_id')
+            if news_id is not None:
+                try:
+                    indexados.add(int(news_id))
+                except (TypeError, ValueError):
+                    continue
+
+        cutoff = timezone.now() - timedelta(days=days)
+        # Se excluyen las que no se indexan por diseño: filtradas por palabra
+        # (el filtro corta antes del embedding), redundantes y filtradas por IA.
+        pendientes = (
+            News.objects.filter(
+                published_date__gte=cutoff,
+                filtered_by__isnull=True,
+                is_redundant=False,
+                is_ai_filtered=False,
+            )
+            .exclude(id__in=indexados)
+            .order_by('-published_date')[:limit]
+        )
+
+        if not pendientes:
+            return 0
+
+        gemini_client = FeedService.initialize_gemini()
+        recuperadas = 0
+        for news in pendientes:
+            texto = f"{news.title} {news.description or ''}"
+            embedding = EmbeddingService.generate_embedding(texto, gemini_client)
+            if not embedding:
+                logger.warning(
+                    "Sigue sin poder generarse el embedding de la noticia %s", news.id
+                )
+                continue
+
+            try:
+                vector_index.ensure_collection(len(embedding))
+                vector_index.upsert(
+                    news.guid, embedding, FeedService.build_vector_payload(news)
+                )
+            except Exception:
+                logger.exception("Error indexando la noticia %s en el reintento", news.id)
+                continue
+
+            recuperadas += 1
+
+            # Solo informativo: se anota el parecido, sin ocultar nada.
+            if news.similarity_score is None:
+                news._embedding_vector = embedding
+                try:
+                    _, similar, score = EmbeddingService.check_redundancy(
+                        news, gemini_client, None, vector_index
+                    )
+                except Exception:
+                    logger.exception("Error calculando similitud de la noticia %s", news.id)
+                    continue
+                if similar is not None:
+                    news.similar_to = similar
+                    news.similarity_score = score
+                    news.save(update_fields=['similar_to', 'similarity_score'])
+
+        logger.info(
+            "Reintento de embeddings: %s noticias indexadas de %s pendientes revisadas",
+            recuperadas,
+            len(pendientes),
+        )
+        return recuperadas
+    except Exception:
+        logger.exception("Error reintentando embeddings pendientes")
+        return 0
+
+
 def update_news_cron():
     # En BASE_DIR y no en /tmp: ahí el sistema puede borrarlo en limpiezas/reinicios.
     lock_path = os.path.join(settings.BASE_DIR, 'my_news_update.lock')
@@ -64,6 +159,12 @@ def update_news_cron():
                 logger.exception("Error reintentando resúmenes pendientes antes del cron")
             FeedService.fetch_and_save_news(max_ai_items=20)
             logger.info("Noticias actualizadas correctamente")
+            # Recuperar las que se quedaron sin vector en pasadas anteriores, para
+            # que vuelvan a contar en la detección de duplicados.
+            try:
+                retry_missing_embeddings(limit=25, days=15)
+            except Exception:
+                logger.exception("Error reintentando embeddings pendientes tras el cron")
             # Ejecutar limpieza tras actualización
             purge_old_news(15)
     except portalocker.exceptions.LockException:

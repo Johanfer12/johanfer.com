@@ -484,6 +484,27 @@ class FeedService:
         return FeedService._VECTOR_INDEX
 
     @staticmethod
+    def build_vector_payload(news_item):
+        """Payload de Qdrant para una noticia indexable.
+
+        Los flags van a False a propósito: solo se indexan noticias que pasaron
+        los filtros, y ``VectorIndexService.search`` los exige así.
+        """
+        published_ts = (
+            int(news_item.published_date.timestamp())
+            if news_item.published_date
+            else int(time.time())
+        )
+        return {
+            'news_id': news_item.id,
+            'source_id': news_item.source_id,
+            'published_ts': published_ts,
+            'is_filtered': False,
+            'is_redundant': False,
+            'model_version': getattr(settings, 'GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001'),
+        }
+
+    @staticmethod
     def build_filter_instructions_text(instructions):
         instructions_list = list(instructions or [])
         lines = []
@@ -1028,6 +1049,9 @@ class FeedService:
         # Contador para noticias redundantes
         redundant_count = 0
         ai_attempts = 0
+        # Fallos de vectorización: hasta ahora se perdían en silencio.
+        embedding_failures = 0
+        indexing_failures = 0
         
         # Procesar todas las entradas en orden (de más antigua a más reciente)
         for item in all_entries:
@@ -1332,18 +1356,31 @@ class FeedService:
                 if vector_index is not None:
                     try:
                         vector_index.ensure_collection(len(embedding))
-                        published_ts = int(news_item.published_date.timestamp()) if news_item.published_date else int(time.time())
-                        payload = {
-                            'news_id': news_item.id,
-                            'source_id': news_item.source_id,
-                            'published_ts': published_ts,
-                            'is_filtered': False,
-                            'is_redundant': False,
-                            'model_version': getattr(settings, 'GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001'),
-                        }
-                        vector_index.upsert(news_item.guid, embedding, payload)
+                        vector_index.upsert(
+                            news_item.guid,
+                            embedding,
+                            FeedService.build_vector_payload(news_item),
+                        )
                     except Exception:
-                        pass
+                        # No se silencia: una noticia sin indexar no participa en
+                        # la detección de duplicados de las siguientes, y el fallo
+                        # era invisible hasta ahora.
+                        indexing_failures += 1
+                        logger.exception(
+                            "Error indexando en Qdrant. news_id=%s título=%s",
+                            news_item.id,
+                            news_item.title[:100],
+                        )
+            else:
+                # Sin embedding esta noticia no pasó por el control de duplicados
+                # y tampoco servirá para comparar las futuras.
+                embedding_failures += 1
+                logger.warning(
+                    "Noticia guardada SIN embedding (se salta el control de duplicados). "
+                    "news_id=%s título=%s",
+                    news_item.id,
+                    news_item.title[:100],
+                )
 
         
         # Actualizar la fecha de última obtención para todas las fuentes con una sola escritura
@@ -1359,5 +1396,13 @@ class FeedService:
         logger.info(f"\nProceso completado en {total_time:.2f} segundos")
         logger.info(f"Total de nuevas noticias: {new_articles_count}")
         logger.info(f"Noticias redundantes eliminadas: {redundant_count}")
+        if embedding_failures or indexing_failures:
+            logger.warning(
+                "Vectorización con fallos: %s sin embedding y %s sin indexar. "
+                "Esas noticias no pasaron el control de duplicados; "
+                "retry_missing_embeddings las recuperará.",
+                embedding_failures,
+                indexing_failures,
+            )
         
         return new_articles_count 

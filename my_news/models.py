@@ -25,9 +25,14 @@ class FeedSource(models.Model):
         help_text="Obtener el contenido completo del artículo desde la URL original"
     )
     similarity_threshold = models.FloatField(
-        default=0.92,
+        default=0.85,
         verbose_name="Umbral de Similitud",
-        help_text="Valor entre 0 y 1 (e.g., 0.92). Noticias con similitud mayor o igual serán marcadas como redundantes."
+        help_text=(
+            "Valor entre 0 y 1. Noticias con similitud mayor o igual serán marcadas como "
+            "redundantes. 0.85 es el punto medido sobre el histórico: por encima son "
+            "duplicados reales y por debajo son noticias distintas. Con 0.92 solo se caza "
+            "un tercio de los duplicados."
+        )
     )
     
     def __str__(self):
