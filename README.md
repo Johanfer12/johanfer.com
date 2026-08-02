@@ -1,10 +1,16 @@
 # Mi Bitácora: Libros, Series, Noticias y Música en Django
 
-Este proyecto Django incluye cuatro aplicaciones principales: una biblioteca que se sincroniza con la lista de lectura de Goodreads vía RSS, una sección de series y películas que se sincroniza con el historial de Trakt, una aplicación de noticias que recopila artículos de fuentes RSS con procesamiento IA, y una aplicación que muestra datos archivados de Spotify.
+Este proyecto Django incluye cuatro aplicaciones principales: una biblioteca que se sincroniza con la lista de lectura de Goodreads vía RSS, una sección de series y películas que se sincroniza con el historial de Simkl, una aplicación de noticias que recopila artículos de fuentes RSS con procesamiento IA, y una aplicación que muestra datos archivados de Spotify.
+
+![Portada del dashboard con los accesos a Mis Libros, Mi Música, Mi TV y Noticias](screenshots/home.webp)
+
+> Las capturas de este README se tomaron de la instancia en producción ([johanfer.com](https://johanfer.com)), que corre en una Raspberry Pi casera.
 
 ## Aplicación de Libros
 
 Esta aplicación sincroniza la lista de lectura de Goodreads a través de su feed RSS oficial y la almacena en una base de datos, incluyendo procesamiento de imágenes y seguimiento de cambios.
+
+![Biblioteca en /bookshelf/: rejilla de portadas con el listón "Leyendo" en el libro en curso](screenshots/bookshelf.webp)
 
 ### Características
 
@@ -25,6 +31,12 @@ Esta aplicación sincroniza la lista de lectura de Goodreads a través de su fee
   - Registra libros eliminados de la lista de lectura para análisis histórico.
   - Mantiene metadatos completos de los libros incluso después de eliminarlos.
 
+### Estadísticas de lectura
+
+La ruta `/bookshelf/stats/` (icono de gráfico en la cabecera) resume el histórico: libros leídos por año, reparto de calificaciones en estrellas y páginas leídas por año.
+
+![Estadísticas de lectura: libros por año, cantidad de estrellas y páginas leídas por año](screenshots/bookshelf-stats.webp)
+
 ### Modelos principales
 
 - **Book**: Almacena la información completa de cada libro (título, autor, portada, calificaciones, fecha, enlaces, descripción, flag de lectura en curso).
@@ -32,26 +44,41 @@ Esta aplicación sincroniza la lista de lectura de Goodreads a través de su fee
 
 ## Aplicación de Series y Películas (watching)
 
-Sección "Mi TV": sincroniza el historial de visualización desde la API pública de Trakt (v2, sin OAuth para perfiles públicos) y muestra las series y películas vistas con sus pósters.
+Sección "Mi TV": sincroniza el historial de visualización desde la API de Simkl y muestra las series y películas vistas con sus pósters.
+
+> La fuente fue Trakt hasta julio de 2026, cuando su API empezó a devolver 403 para perfiles públicos y pasó a exigir VIP. Desde agosto de 2026 los datos vienen de Simkl (API gratuita, token del flujo PIN que dura ~5 años y no necesita refresh). Los registros heredados de Trakt se conservan tal cual, con su `trakt_id` y su URL; lo que une ambas épocas es el `tmdb_id`.
+
+![Sección Mi TV en /viendo/: rejilla de pósters con el listón "Viendo" en las series activas](screenshots/watching.webp)
 
 ### Características
 
-- Sincronización con la API de Trakt:
-  - Historial completo de películas y episodios con deduplicación por evento.
+- Sincronización con la API de Simkl:
+  - Historial completo de películas y episodios, deduplicado por `tmdb_id` + temporada/episodio.
+  - Consulta primero `/sync/activities`: si Simkl no reporta cambios, no descarga nada (la propia API advierte que golpear `/sync/all-items` en un timer puede costar la suspensión de la app).
+  - La corrida diaria hace un pull completo para detectar además lo que se borró del otro lado.
   - Calificaciones personales y totales de episodios vistos por serie.
-  - Corta la paginación al llegar a eventos ya guardados.
+  - El anime se resuelve aparte: Simkl lo parte por temporada y lo numera en absoluto, así que se consulta su índice de episodios para traducirlo a la numeración real.
 - Pósters y metadatos desde TMDB (calificación pública, episodios disponibles, sinopsis en español), convertidos a WebP en `media/Posters` (un póster por obra; los episodios comparten el de su serie).
 - Una tarjeta por obra: los episodios de una serie se agrupan mostrando cuántos llevas y el último visto (ej. `T01E08`).
 - Listón diagonal "Viendo" en series con actividad reciente que aún tienen episodios pendientes.
 - Botones flotantes para alternar entre series y películas (`/viendo/?tipo=...`).
 
+### Estadísticas de mi TV
+
+La ruta `/viendo/stats/` compara series y películas por año, muestra el reparto de calificaciones propias (con medias estrellas) en un gráfico polar y agrupa lo visto por década de estreno.
+
+![Estadísticas de mi TV: series y películas por año, calificaciones y décadas de estreno](screenshots/watching-stats.webp)
+
 ### Modelos principales
 
-- **WatchedItem**: Un evento del historial (película o episodio) con temporada/episodio, calificaciones, fecha y IDs de Trakt/TMDB.
+- **WatchedItem**: Un evento del historial (película o episodio) con temporada/episodio, calificaciones, fecha, fuente (`simkl` o el histórico `trakt`) e IDs de Simkl/TMDB/IMDB.
+- **SimklSyncState**: Guarda el sello de `/sync/activities` de la última sincronización, para no volver a descargar la biblioteca si nada cambió.
 
 ## Aplicación de Noticias (my_news)
 
 Esta aplicación permite recopilar, filtrar y visualizar noticias de diferentes fuentes RSS con capacidades avanzadas de procesamiento mediante IA.
+
+![Feed de noticias en /noticias/: tarjetas con imagen, titular, respuesta corta generada por IA y fuente](screenshots/news.webp)
 
 ### Características
 
@@ -89,6 +116,8 @@ Esta aplicación permite recopilar, filtrar y visualizar noticias de diferentes 
 
 Esta aplicación muestra los datos musicales del usuario. La sincronización con la API de Spotify fue retirada (los cambios en la API la dejaron detrás de un plan de pago), por lo que los datos guardados son un archivo histórico que ya no se actualiza. La playlist actual se muestra mediante un iframe embebido de Spotify.
 
+![Dashboard de Mi Música en /spotify/ con la playlist embebida](screenshots/spotify.webp)
+
 ### Características
 
 - Dashboard con la playlist actual embebida vía iframe oficial de Spotify (siempre al día, sin API).
@@ -97,6 +126,10 @@ Esta aplicación muestra los datos musicales del usuario. La sincronización con
   - Top 5 artistas con conteo de canciones.
   - Gráfico temporal de canciones añadidas por mes.
 - Historial de canciones que fueron eliminadas de favoritos mientras la sincronización estuvo activa.
+
+Las estadísticas viven en `/spotify/stats/`:
+
+![Estadísticas de mi música: top 5 géneros, top 5 artistas y canciones añadidas por mes](screenshots/spotify-stats.webp)
 
 ### Modelos principales
 
@@ -163,12 +196,19 @@ GOODREADS_RSS_URL=https://www.goodreads.com/review/list_rss/27786474?shelf=read
 GOODREADS_RSS_PER_PAGE=200
 ```
 
-Para la sección de series y películas (Trakt + TMDB):
+Para la sección de series y películas (Simkl + TMDB):
 
 ```
-TRAKT_CLIENT_ID=...   # Client ID de una app creada en https://trakt.tv/oauth/applications
-TRAKT_USERNAME=...    # Usuario de Trakt (el perfil y el historial deben ser públicos)
-TMDB_API_KEY=...      # API key gratuita de https://www.themoviedb.org/settings/api
+SIMKL_CLIENT_ID=...     # Client ID de una app creada en https://simkl.com/settings/developer/
+SIMKL_ACCESS_TOKEN=...  # Token del flujo PIN (ver abajo); dura ~5 años y no tiene refresh
+TMDB_API_KEY=...        # API key gratuita de https://www.themoviedb.org/settings/api
+```
+
+El token se obtiene con un comando de gestión que imprime un PIN para escribir en
+<https://simkl.com/pin>:
+
+```
+python manage.py simkl_auth
 ```
 
 ## Uso
@@ -179,14 +219,17 @@ El proyecto utiliza `django-crontab` para gestionar tareas programadas que actua
 
 ```python
 CRONJOBS = [
-    # Actualiza los libros una vez al día a las 12:55 PM
-    ('55 12 * * *', 'home_page.tasks.update_books_cron'),
+    # Libros: una vez al día a medianoche (RSS de Goodreads)
+    ('0 0 * * *', 'home_page.tasks.update_books_cron'),
 
-    # Actualiza las noticias cada 30 minutos
-    ('*/30 * * * *', 'my_news.tasks.update_news_cron'),
+    # Series y películas: una vez al día a las 00:30 (API de Simkl)
+    ('30 0 * * *', 'watching.tasks.update_watching_cron'),
 
-    # Actualiza series y películas desde Trakt una vez al día
-    ('25 13 * * *', 'watching.tasks.update_watching_cron'),
+    # Noticias: cada 30 minutos entre las 08:00 y las 21:30
+    ('*/30 8-21 * * *', 'my_news.tasks.update_news_cron'),
+
+    # Noticias: última pasada del día a las 22:00
+    ('0 22 * * *', 'my_news.tasks.update_news_cron'),
 ]
 ```
 
@@ -215,15 +258,9 @@ CRONJOBS = [
 
 Las tareas se ejecutan automáticamente en segundo plano según su programación:
 
-- **Libros**: Se actualizan una vez al día (12:55 PM) leyendo el feed RSS de Goodreads.
-- **Noticias**: Se actualizan cada 30 minutos para mantener el feed de noticias actualizado.
-- **Series y películas**: Se actualizan una vez al día (1:25 PM) desde la API de Trakt.
-
-Nota de producción (Raspberry):
-
-- Actualmente la tarea de noticias se limita a la franja `08:00` a `22:00` (hora del servidor):
-  - `*/30 8-21 * * * ... #News`
-  - `0 22 * * * ... #News`
+- **Libros**: Se actualizan una vez al día (00:00) leyendo el feed RSS de Goodreads.
+- **Series y películas**: Se actualizan una vez al día (00:30) desde la API de Simkl.
+- **Noticias**: Se actualizan cada 30 minutos dentro de la franja `08:00`–`22:00` (hora del servidor), para no trabajar de madrugada.
 
 En ambientes de desarrollo local, puede ser más conveniente ejecutar estos comandos manualmente en lugar de configurar los cronjobs.
 
@@ -234,14 +271,16 @@ En ambientes de desarrollo local, puede ser más conveniente ejecutar estos coma
    `python manage.py shell -c "from home_page.utils import refresh_books_data; refresh_books_data()"`
 3. Los datos se leen del feed RSS de Goodreads y se almacenan en la base de datos.
 4. Las portadas de los libros se guardarán en la carpeta `media/Covers`.
+5. En `/bookshelf/stats/` están los gráficos de lectura (libros por año, estrellas y páginas).
 
 ### Aplicación de Series y Películas
 
-1. Crea una app en Trakt y configura las variables de entorno (ver arriba).
+1. Crea una app en Simkl, obtén el token con `python manage.py simkl_auth` y configura las variables de entorno (ver arriba).
 2. La sincronización corre automáticamente por cron, o puedes lanzarla manualmente:
-   `python manage.py shell -c "from watching.utils import refresh_watching_data; refresh_watching_data()"`
+   `python manage.py shell -c "from watching.tasks import update_watching_cron; update_watching_cron()"`
 3. Accede a la ruta `/viendo/` para ver la sección "Mi TV"; los botones flotantes alternan entre series y películas.
 4. Los pósters se guardan en la carpeta `media/Posters`.
+5. En `/viendo/stats/` están los gráficos de series y películas (por año, calificaciones y décadas).
 
 ### Aplicación de Noticias
 
