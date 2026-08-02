@@ -45,13 +45,9 @@
                     </a>
                     <p><strong>Autor</strong><br>{{ book.author }}</p>
                     {% if not book.is_reading %}
-                    <p><strong>Mi Calificación</strong><br>
-                        {% for _ in "x"|ljust:book.my_rating %}
-                            <span class="stars">★</span>
-                        {% endfor %}
-                    </p>
+                    <p><strong>Mi Calificación</strong><br>{{ book.my_rating|rating_stars:5 }}</p>
                     {% endif %}
-                    <p><strong>Calificación General</strong><br>{{ book.public_rating }}</p>
+                    <p><strong>Calificación General</strong><br>{{ book.public_rating|rating_stars:5 }}</p>
                     {% if not book.is_reading %}
                     <p><strong>Lo leí el...</strong><br>{{ book.date_read|date:"d/m/Y" }}</p>
                     {% endif %}
@@ -76,13 +72,9 @@
                             <div>
                                 <p><strong>Autor:</strong> {{ book.author }}</p>
                                 {% if not book.is_reading %}
-                                <p><strong>Mi Calificación</strong>
-                                    {% for _ in "x"|ljust:book.my_rating %}
-                                        <span class="stars">★</span>
-                                    {% endfor %}
-                                </p>
+                                <p><strong>Mi Calificación:</strong> {{ book.my_rating|rating_stars:5 }}</p>
                                 {% endif %}
-                                <p><strong>Calificación General:</strong> {{ book.public_rating }}</p>
+                                <p><strong>Calificación General:</strong> {{ book.public_rating|rating_stars:5 }}</p>
                             </div>
                             <div>
                                 {% if book.num_pages %}

@@ -13,14 +13,19 @@ def sanitize(value):
 
 
 @register.filter(name='rating_stars')
-def rating_stars(value):
-    """Renderiza una nota 0-10 como 5 estrellas, redondeada a media estrella."""
+def rating_stars(value, max_value=10):
+    """Renderiza una nota como 5 estrellas, redondeada a media estrella.
+
+    `max_value` es la escala de la nota de origen: 10 en Simkl/TMDB, 5 en Goodreads.
+    """
     if value in (None, ''):
         return ''
     try:
-        five_star_rating = round((float(value) / 2) * 2) / 2
-    except (TypeError, ValueError):
+        scaled = float(value) * 5 / float(max_value)
+    except (TypeError, ValueError, ZeroDivisionError):
         return ''
+
+    five_star_rating = min(5.0, max(0.0, round(scaled * 2) / 2))
 
     full_stars = int(five_star_rating)
     has_half_star = (five_star_rating - full_stars) >= 0.5

@@ -28,7 +28,7 @@ const createBookItem = (book) => {
         : '';
     const ratingRow = book.is_reading
         ? ''
-        : `<p><strong>Mi Calificación</strong><br>${'★'.repeat(book.my_rating)}</p>`;
+        : `<p><strong>Mi Calificación</strong><br>${book.my_rating_html || ''}</p>`;
     const dateRow = book.is_reading
         ? ''
         : `<p><strong>Lo leí el...</strong><br>${escapeHtml(formatDate(book.date_read))}</p>`;
@@ -43,7 +43,7 @@ const createBookItem = (book) => {
             <a href="${escapeHtml(book.book_link)}" class="book-title" target="_blank">${escapeHtml(book.title)}</a>
                 <p><strong>Autor</strong><br>${escapeHtml(book.author)}</p>
                 ${ratingRow}
-                <p><strong>Calificación General</strong><br>${escapeHtml(book.public_rating)}</p>
+                <p><strong>Calificación General</strong><br>${book.public_rating_html || ''}</p>
                 ${dateRow}
             </div>
         </div>
@@ -70,8 +70,8 @@ const createBookModal = (book) => {
                     <div class="book-modal-metadata">
                         <div>
                             <p><strong>Autor:</strong> ${escapeHtml(book.author)}</p>
-                            ${book.is_reading ? '' : `<p><strong>Mi Calificación</strong> <span class="stars">${'★'.repeat(book.my_rating)}</span></p>`}
-                            <p><strong>Calificación General:</strong> ${escapeHtml(book.public_rating)}</p>
+                            ${book.is_reading ? '' : `<p><strong>Mi Calificación:</strong> ${book.my_rating_html || ''}</p>`}
+                            <p><strong>Calificación General:</strong> ${book.public_rating_html || ''}</p>
                         </div>
                         <div>
                             ${book.num_pages ? `<p><strong>Páginas:</strong> ${escapeHtml(String(book.num_pages))}</p>` : ''}

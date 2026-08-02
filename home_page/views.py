@@ -12,6 +12,7 @@ from django.urls import reverse
 from django.utils import timezone as dj_timezone
 from django.conf import settings
 from Bookshelf.html_sanitizer import sanitize_html
+from home_page.templatetags.sanitizers import rating_stars
 import json
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode, urlparse
@@ -80,8 +81,8 @@ def bookshelf(request):
             book_data.append({
                 'title': book.title,
                 'author': book.author,
-                'my_rating': book.my_rating,
-                'public_rating': book.public_rating,
+                'my_rating_html': rating_stars(book.my_rating, 5),
+                'public_rating_html': rating_stars(book.public_rating, 5),
                 'date_read': book.date_read.strftime('%Y-%m-%d') if book.date_read else None,
                 'is_reading': book.is_reading,
                 'book_link': book.goodreads_url,
