@@ -95,6 +95,11 @@ CRONTAB_COMMAND_PREFIX = f'cd {BASE_DIR} &&'
 # `git checkout .` sobre el repo. Rotación: /etc/logrotate.d/bookshelf-cron.
 CRON_LOG_PATH = os.getenv('CRON_LOG_PATH', str(BASE_DIR.parent / 'log_cron_bookshelf.txt'))
 CRONTAB_COMMAND_SUFFIX = f'>> {CRON_LOG_PATH} 2>&1'
+# Se probó a añadir `--skip-checks` como sufijo y NO sirve de nada aquí: los
+# system checks cuestan 24 s porque cargan todos los modelos y el admin, lo que
+# arrastra el stack pesado (google-genai, Cerebras, bs4, feedparser, numpy), y
+# `crontab run` tiene que importar esa misma pila para ejecutar la tarea. Medido:
+# la pasada tarda lo mismo con flag (55,0 s) que sin él (55,4 s).
 CRONJOBS = [
     ('0 0 * * *', 'home_page.tasks.update_books_cron'),       # Libros: medianoche
     ('30 0 * * *', 'watching.tasks.update_watching_cron'),    # Series/pelis (Simkl): 00:30, para no chocar con los libros
