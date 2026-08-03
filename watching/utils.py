@@ -15,6 +15,21 @@ logger = logging.getLogger(__name__)
 TMDB_API_BASE = 'https://api.themoviedb.org/3'
 TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w342'
 
+# Ids que Simkl declara mal y que ningún rescate automático resuelve. Se usan SOLO
+# para pedir metadatos a TMDB: la identidad de la obra (`dedup_key`, `poster_name`)
+# sigue colgando del id original, así que no hay filas que migrar ni carátulas que
+# renombrar. El archivo se llama igual que antes, solo cambia su contenido.
+#
+# ('tv', 329809): Simkl da ese id para "Bleach: Sennen Kessen Hen", pero en TMDB no
+# es una serie —/tv/329809 responde 404— sino la película francesa "Courted" (2015).
+# TMDB no tiene entrada propia para Thousand-Year Blood War: la modela como la
+# temporada 2 de tv/30984 (Bleach). Se comprobó que no hay salida automática: ni
+# find por imdb (tt14986406) ni find por tvdb (458864) devuelven nada, y buscar por
+# título tampoco pasa de tv/30984. De ahí que la corrección vaya a mano.
+TMDB_METADATA_OVERRIDES = {
+    ('tv', 329809): 30984,
+}
+
 # Cada entrada: clave en la respuesta de Simkl, tipo de medio del modelo, si es anime.
 SIMKL_GROUPS = (
     ('shows', 'episode', False),
@@ -27,7 +42,12 @@ SIMKL_GROUPS = (
 # --- TMDB ----------------------------------------------------------------------
 
 def fetch_tmdb_media_details(tmdb_type, tmdb_id):
-    """Metadatos de TMDB: textos en español pero carátula en inglés. tmdb_type: 'movie' | 'tv'."""
+    """Metadatos de TMDB: textos en español pero carátula en inglés. tmdb_type: 'movie' | 'tv'.
+
+    Devuelve None —y no {}— cuando TMDB no conoce el id, para que el llamador pueda
+    distinguir "nos dieron un id inválido", que no se arregla solo, de "la consulta
+    falló esta vez", que se arregla en la pasada siguiente.
+    """
     api_key = getattr(settings, 'TMDB_API_KEY', None)
     if not api_key or not tmdb_id:
         return {}
@@ -44,6 +64,8 @@ def fetch_tmdb_media_details(tmdb_type, tmdb_id):
             },
             timeout=15,
         )
+        if response.status_code == 404:
+            return None
         response.raise_for_status()
         payload = response.json() or {}
         poster_path = _pick_english_poster(payload)
@@ -58,10 +80,13 @@ def fetch_tmdb_media_details(tmdb_type, tmdb_id):
         return {}
 
 
-def fetch_tmdb_id_by_imdb(imdb_id):
+def fetch_tmdb_id_by_imdb(imdb_id, expected_type=None):
     """Resuelve un id de IMDB a TMDB. Devuelve (tmdb_id, tmdb_type) o (None, None).
 
-    Solo se usa cuando Simkl no trae `ids.tmdb`, que es raro.
+    Solo se usa cuando Simkl no trae `ids.tmdb`, que es raro. Con `expected_type` se
+    exige que la coincidencia esté en el espacio que toca: los dos espacios de ids son
+    independientes, así que un id de película colocado en una serie da un 404 en /tv/ y
+    deja la obra sin carátula ni sinopsis.
     """
     api_key = getattr(settings, 'TMDB_API_KEY', None)
     if not api_key or not imdb_id:
@@ -79,6 +104,8 @@ def fetch_tmdb_id_by_imdb(imdb_id):
         return None, None
 
     for key, tmdb_type in (('tv_results', 'tv'), ('movie_results', 'movie')):
+        if expected_type and tmdb_type != expected_type:
+            continue
         results = payload.get(key) or []
         if results and results[0].get('id'):
             return results[0]['id'], tmdb_type
@@ -105,13 +132,38 @@ def _normalize_tmdb_rating(value):
         return None
 
 
-def _get_tmdb_metadata(cache, tmdb_type, tmdb_id):
+def _get_tmdb_metadata(cache, tmdb_type, tmdb_id, title=''):
+    """Metadatos de la obra, pidiéndolos por el id corregido si hay override.
+
+    Si TMDB no conoce el id se avisa por WARNING nombrando la obra. Antes esto se
+    degradaba en silencio: la obra se quedaba sin carátula ni sinopsis y lo único que
+    lo delataba era una traza de 404 en el log del cron, que ni existía hasta hace poco.
+    """
     if not tmdb_id:
         return {}
-    key = (tmdb_type, tmdb_id)
+    lookup_id = TMDB_METADATA_OVERRIDES.get((tmdb_type, tmdb_id), tmdb_id)
+    key = (tmdb_type, lookup_id)
     if key not in cache:
-        cache[key] = fetch_tmdb_media_details(tmdb_type, tmdb_id)
+        details = fetch_tmdb_media_details(tmdb_type, lookup_id)
+        if details is None:
+            logger.warning(
+                "TMDB no conoce %s/%s (%r): la obra se queda sin carátula ni sinopsis. "
+                "Si el id lo da mal la fuente, añádelo a TMDB_METADATA_OVERRIDES.",
+                tmdb_type, lookup_id, title or '?',
+            )
+            details = {}
+        cache[key] = details
     return cache[key]
+
+
+def metadata_for_work(cache, media_type, tmdb_id, title=''):
+    """Metadatos de una obra del modelo, traduciendo `media_type` al espacio de TMDB.
+
+    `cache` es un dict que el llamador reutiliza entre obras para no pedir dos veces la
+    misma ficha; el anime llega partido por temporada y varias entradas caen en la misma.
+    """
+    tmdb_type = 'tv' if media_type == 'episode' else 'movie'
+    return _get_tmdb_metadata(cache, tmdb_type, tmdb_id, title)
 
 
 # --- Pósters -------------------------------------------------------------------
@@ -142,13 +194,13 @@ def refresh_posters(force=False):
     tmdb_cache = {}
     seen = set()
     updated = 0
-    for item in WatchedItem.objects.exclude(tmdb_id__isnull=True).only('media_type', 'tmdb_id'):
+    for item in WatchedItem.objects.exclude(tmdb_id__isnull=True).only('media_type', 'tmdb_id', 'title'):
         key = (item.media_type, item.tmdb_id)
         if key in seen:
             continue
         seen.add(key)
-        tmdb_type = 'tv' if item.media_type == 'episode' else 'movie'
-        poster_url = _get_tmdb_metadata(tmdb_cache, tmdb_type, item.tmdb_id).get('poster_url')
+        metadata = metadata_for_work(tmdb_cache, item.media_type, item.tmdb_id, item.title)
+        poster_url = metadata.get('poster_url')
         if poster_url:
             download_poster(poster_url, item.poster_name, force=force)
             updated += 1
@@ -335,7 +387,7 @@ def refresh_watching_from_simkl(full=False):
 
             tmdb_id = _resolve_tmdb_id(ids, is_anime)
             if not tmdb_id:
-                tmdb_id, _ = fetch_tmdb_id_by_imdb(ids.get('imdb'))
+                tmdb_id, _ = fetch_tmdb_id_by_imdb(ids.get('imdb'), expected_type=tmdb_type)
             if tmdb_id and media_type == 'episode' and tmdb_id in movie_tmdb_ids:
                 # Es una película que Simkl cataloga como serie de un episodio. Si se
                 # dejara pasar, se duplicaría la obra y además se pediría a TMDB el id
@@ -357,7 +409,9 @@ def refresh_watching_from_simkl(full=False):
             if not rows:
                 continue
 
-            metadata = _get_tmdb_metadata(tmdb_cache, tmdb_type, tmdb_id)
+            metadata = _get_tmdb_metadata(
+                tmdb_cache, tmdb_type, tmdb_id, (media.get('title') or '').strip()
+            )
             # Se acumula: varias entradas de Simkl pueden mapear a una sola obra nuestra
             # (el anime viene partido por temporada). Si se sobrescribiera, los
             # contadores de una secuela pasarían por los de la serie entera.

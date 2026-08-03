@@ -1,12 +1,18 @@
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
+import requests
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from .models import SimklSyncState, WatchedItem
-from .utils import fetch_tmdb_media_details, refresh_watching_from_simkl
+from .utils import (
+    fetch_tmdb_id_by_imdb,
+    fetch_tmdb_media_details,
+    metadata_for_work,
+    refresh_watching_from_simkl,
+)
 
 SIMKL_MOVIE = {
     'last_watched_at': '2026-07-01T02:10:00Z',
@@ -75,6 +81,52 @@ class TmdbDetailsTests(TestCase):
         self.assertEqual(data['available_episodes'], 18)
         self.assertTrue(data['poster_url'].endswith('/poster.jpg'))
         self.assertEqual(mock_get.call_args.kwargs['params']['language'], 'es-ES')
+
+    @patch('watching.utils.requests.get')
+    def test_unknown_id_is_told_apart_from_a_passing_failure(self, mock_get):
+        """Un id que TMDB no conoce no se arregla en la pasada siguiente; un fallo de red sí.
+
+        Devolver {} en los dos casos era lo que dejaba la tarjeta vacía en silencio.
+        """
+        not_found = MagicMock(status_code=404)
+        mock_get.return_value = not_found
+        self.assertIsNone(fetch_tmdb_media_details('tv', 329809))
+
+        broken = MagicMock(status_code=500)
+        broken.raise_for_status.side_effect = requests.HTTPError('500')
+        mock_get.return_value = broken
+        self.assertEqual(fetch_tmdb_media_details('tv', 123), {})
+
+    @patch('watching.utils.requests.get')
+    def test_override_redirects_the_lookup_but_not_the_identity(self, mock_get):
+        """Bleach TYBW: Simkl da tmdb 329809, que en TMDB no es una serie sino otra película.
+
+        Los metadatos se piden por el id corregido (30984), pero la obra sigue siendo
+        329809, así que no hay dedup_key que migrar ni carátula que renombrar.
+        """
+        response = MagicMock(status_code=200)
+        response.json.return_value = {'overview': 'Sinopsis de Bleach.', 'poster_path': '/b.jpg'}
+        response.raise_for_status.return_value = None
+        mock_get.return_value = response
+
+        cache = {}
+        data = metadata_for_work(cache, 'episode', 329809, 'Bleach: Sennen Kessen Hen')
+
+        self.assertEqual(data['overview'], 'Sinopsis de Bleach.')
+        self.assertIn('/tv/30984', mock_get.call_args.args[0])
+        self.assertNotIn('329809', mock_get.call_args.args[0])
+
+    @patch('watching.utils.requests.get')
+    def test_imdb_fallback_rejects_a_hit_in_the_wrong_namespace(self, mock_get):
+        """Los dos espacios de ids son independientes: un id de película puesto en una
+        serie da un 404 en /tv/ y deja la obra sin carátula ni sinopsis."""
+        response = MagicMock(status_code=200)
+        response.json.return_value = {'tv_results': [], 'movie_results': [{'id': 329809}]}
+        response.raise_for_status.return_value = None
+        mock_get.return_value = response
+
+        self.assertEqual(fetch_tmdb_id_by_imdb('tt14986406', expected_type='tv'), (None, None))
+        self.assertEqual(fetch_tmdb_id_by_imdb('tt14986406', expected_type='movie'), (329809, 'movie'))
 
 
 @override_settings(TMDB_API_KEY=None)
