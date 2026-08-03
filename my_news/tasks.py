@@ -161,9 +161,9 @@ def rescore_recent_news(limit: int = 0):
     lee, y así todas las noticias con las que se compara están puntuadas por el
     mismo modelo en la misma pasada.
 
-    El coste medido con 164 noticias es de medio segundo, porque los vectores se
-    piden todos de golpe. Si el modelo aún no tiene votos suficientes se sale sin
-    llegar a hablar con Qdrant.
+    Coste medido en la Pi con la ventana de 15 días (886 noticias): 4,9 s, de los
+    que 2,2 s son traer los vectores y 2,0 s escribir en SQLite. Si el modelo aún
+    no tiene votos suficientes se sale sin llegar a hablar con Qdrant.
 
     Va al final del cron y después de la purga, para no robarle tiempo a la
     ingesta ni gastarlo en noticias que están a punto de borrarse.

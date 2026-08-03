@@ -216,11 +216,15 @@ INTEREST_DISTRIBUTION_TTL = 30
 # cambiaría solo porque se borraron otras, que es exactamente la inestabilidad
 # que el percentil venía a resolver.
 #
-# Tres días es el equilibrio medido: da unas 160 noticias, suficientes para que
-# la posición signifique algo, y es una ventana corta como para que todas se
-# hayan puntuado con un modelo parecido (el origen del score se desplaza según
-# se vota, así que mezclar semanas volvería a descalibrar la comparación).
-INTEREST_WINDOW_DAYS = 3
+# 15 días, los mismos que conserva purge_old_news, para no tener dos horizontes
+# distintos conviviendo en el sistema. Con eso la referencia son ~886 noticias
+# en vez de ~160.
+#
+# Antes eran 3 días por miedo a mezclar épocas del modelo, y ese miedo era
+# infundado: rescore_recent_news repuntúa la ventana entera en cada pasada, así
+# que todo lo que se compara entre sí está calculado con el mismo modelo en el
+# mismo instante, dure lo que dure la ventana.
+INTEREST_WINDOW_DAYS = 15
 
 
 def scored_population():
