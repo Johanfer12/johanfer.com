@@ -150,8 +150,8 @@ class RetryMissingEmbeddingsTests(TestCase):
         self.assertEqual(index.upserted, {})
 
 
-class RescoreVisibleNewsTests(TestCase):
-    """El repuntuado del feed, que ahora corre al final de cada cron."""
+class RescoreRecentNewsTests(TestCase):
+    """El repuntuado de la ventana, que corre al final de cada cron."""
 
     def setUp(self):
         self.source = FeedSource.objects.create(
@@ -175,16 +175,16 @@ class RescoreVisibleNewsTests(TestCase):
 
     def test_sin_votos_suficientes_no_toca_qdrant(self):
         """Es el caso de produccion recien desplegada: debe salir gratis."""
-        from my_news.tasks import rescore_visible_news
+        from my_news.tasks import rescore_recent_news
 
         self.make_news()
         with patch("my_news.tasks.FeedService.initialize_vector_index") as init:
-            self.assertEqual(rescore_visible_news(), 0)
+            self.assertEqual(rescore_recent_news(), 0)
             init.assert_not_called()
 
     def test_puntua_las_visibles_en_una_sola_pasada(self):
         from my_news.interest import InterestModel
-        from my_news.tasks import rescore_visible_news
+        from my_news.tasks import rescore_recent_news
 
         noticias = [self.make_news() for _ in range(3)]
         vectores = {n.guid: np.array([1.0, 0.0], dtype=np.float32) for n in noticias}
@@ -198,18 +198,24 @@ class RescoreVisibleNewsTests(TestCase):
         )
         with patch("my_news.tasks.InterestModel.load", return_value=modelo), \
              patch("my_news.tasks.FeedService.initialize_vector_index", return_value=index):
-            puntuadas = rescore_visible_news()
+            puntuadas = rescore_recent_news()
 
         self.assertEqual(puntuadas, 3)
         for n in noticias:
             n.refresh_from_db()
             self.assertIsNotNone(n.interest_score)
 
-    def test_no_puntua_las_ya_leidas(self):
+    def test_puntua_tambien_las_ya_leidas(self):
+        """Las leidas son parte de la referencia del percentil.
+
+        Si solo se puntuara lo pendiente, la referencia encogeria segun se lee y
+        el percentil de una noticia cambiaria por lo que se borro a su lado.
+        """
         from my_news.interest import InterestModel
-        from my_news.tasks import rescore_visible_news
+        from my_news.tasks import rescore_recent_news
 
         leida = self.make_news(is_deleted=True)
+        sin_leer = self.make_news()
         index = FakeVectorIndex()
         pedidos = {}
 
@@ -223,6 +229,34 @@ class RescoreVisibleNewsTests(TestCase):
         )
         with patch("my_news.tasks.InterestModel.load", return_value=modelo), \
              patch("my_news.tasks.FeedService.initialize_vector_index", return_value=index):
-            rescore_visible_news()
+            rescore_recent_news()
 
-        self.assertNotIn(leida.guid, pedidos.get("guids", []))
+        self.assertIn(leida.guid, pedidos.get("guids", []))
+        self.assertIn(sin_leer.guid, pedidos.get("guids", []))
+
+    def test_no_puntua_las_filtradas_ni_las_redundantes(self):
+        from my_news.interest import InterestModel
+        from my_news.tasks import rescore_recent_news
+
+        redundante = self.make_news(is_redundant=True)
+        filtrada = self.make_news(is_ai_filtered=True, is_filtered=True)
+        buena = self.make_news()
+        index = FakeVectorIndex()
+        pedidos = {}
+
+        def fake_bulk(guids):
+            pedidos["guids"] = list(guids)
+            return {}
+
+        index.vectors_for_guids = fake_bulk
+        modelo = InterestModel(
+            np.ones((5, 2), dtype=np.float32), np.ones((5, 2), dtype=np.float32)
+        )
+        with patch("my_news.tasks.InterestModel.load", return_value=modelo), \
+             patch("my_news.tasks.FeedService.initialize_vector_index", return_value=index):
+            rescore_recent_news()
+
+        pedidas = pedidos.get("guids", [])
+        self.assertIn(buena.guid, pedidas)
+        self.assertNotIn(redundante.guid, pedidas)
+        self.assertNotIn(filtrada.guid, pedidas)

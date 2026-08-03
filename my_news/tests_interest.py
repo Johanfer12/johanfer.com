@@ -267,3 +267,72 @@ class ModelVersionTests(TestCase):
             NewsFeedback.objects.get(guid="guid-voto-mv").model_version,
             current_model_version(),
         )
+
+
+class DistributionWindowTests(TestCase):
+    """La referencia del percentil no puede depender de lo que ya has leído."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.source = FeedSource.objects.create(name="Fuente", url="https://example.com/rss")
+
+    def make(self, idx, score, **kwargs):
+        defaults = {
+            "guid": f"guid-w{idx}",
+            "title": f"Noticia {idx}",
+            "description": "Cuerpo",
+            "link": f"https://example.com/w{idx}",
+            "published_date": timezone.now(),
+            "source": self.source,
+            "is_ai_processed": True,
+            "interest_score": score,
+        }
+        defaults.update(kwargs)
+        return News.objects.create(**defaults)
+
+    def test_las_leidas_siguen_contando_en_la_distribucion(self):
+        from django.core.cache import cache
+
+        from .interest import interest_distribution, percentile_of
+
+        for i in range(20):
+            self.make(i, i / 100)
+        antes = [percentile_of(i / 100) for i in range(20)]
+        self.assertEqual(len(interest_distribution()), 20)
+
+        # Se leen (borran) casi todas: el percentil de las que quedan no debe
+        # moverse, porque la referencia es la ventana, no lo pendiente.
+        News.objects.filter(interest_score__lt=0.15).update(is_deleted=True)
+        cache.clear()
+
+        self.assertEqual(len(interest_distribution()), 20)
+        self.assertEqual(antes, [percentile_of(i / 100) for i in range(20)])
+
+    def test_fuera_de_la_ventana_no_cuenta(self):
+        from datetime import timedelta
+
+        from .interest import INTEREST_WINDOW_DAYS, interest_distribution
+
+        for i in range(12):
+            self.make(i, i / 100)
+        for i in range(12, 20):
+            self.make(
+                i,
+                i / 100,
+                published_date=timezone.now() - timedelta(days=INTEREST_WINDOW_DAYS + 1),
+            )
+
+        self.assertEqual(len(interest_distribution()), 12)
+
+    def test_las_filtradas_no_entran_en_la_referencia(self):
+        from .interest import interest_distribution
+
+        for i in range(12):
+            self.make(i, i / 100)
+        self.make(90, 0.9, is_redundant=True)
+        self.make(91, 0.9, is_ai_filtered=True)
+        self.make(92, 0.9, is_filtered=True)
+
+        self.assertEqual(len(interest_distribution()), 12)

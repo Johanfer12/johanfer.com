@@ -211,19 +211,47 @@ class InterestModel:
 INTEREST_DISTRIBUTION_CACHE_KEY = "news:interest:distribution"
 INTEREST_DISTRIBUTION_TTL = 30
 
+# Ventana de referencia del percentil. NO son solo las no leídas: si la
+# referencia encogiera según se va leyendo, el percentil de una noticia
+# cambiaría solo porque se borraron otras, que es exactamente la inestabilidad
+# que el percentil venía a resolver.
+#
+# Tres días es el equilibrio medido: da unas 160 noticias, suficientes para que
+# la posición signifique algo, y es una ventana corta como para que todas se
+# hayan puntuado con un modelo parecido (el origen del score se desplaza según
+# se vota, así que mezclar semanas volvería a descalibrar la comparación).
+INTEREST_WINDOW_DAYS = 3
 
-def interest_distribution():
-    """Scores del feed visible, ordenados, para situar cada noticia."""
-    from django.core.cache import cache
+
+def scored_population():
+    """Noticias que forman la referencia del percentil, leídas incluidas."""
+    from datetime import timedelta
+
+    from django.utils import timezone
 
     from .models import News
+
+    return News.objects.filter(
+        published_date__gte=timezone.now() - timedelta(days=INTEREST_WINDOW_DAYS),
+        is_filtered=False,
+        is_ai_filtered=False,
+        is_redundant=False,
+        is_ai_processed=True,
+    )
+
+
+def interest_distribution():
+    """Scores de la ventana de referencia, ordenados, para situar cada noticia."""
+    from django.core.cache import cache
 
     cached = cache.get(INTEREST_DISTRIBUTION_CACHE_KEY)
     if cached is not None:
         return cached
 
     scores = sorted(
-        News.visible.exclude(interest_score=None).values_list("interest_score", flat=True)
+        scored_population()
+        .exclude(interest_score=None)
+        .values_list("interest_score", flat=True)
     )
     cache.set(INTEREST_DISTRIBUTION_CACHE_KEY, scores, INTEREST_DISTRIBUTION_TTL)
     return scores

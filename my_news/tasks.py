@@ -1,5 +1,5 @@
 from .services import EmbeddingService, FeedService, DEFAULT_AI_MODEL
-from .interest import INTEREST_DISTRIBUTION_CACHE_KEY, InterestModel
+from .interest import INTEREST_DISTRIBUTION_CACHE_KEY, InterestModel, scored_population
 from django.core.cache import cache
 from django.utils import timezone
 from datetime import timedelta
@@ -149,17 +149,21 @@ def retry_missing_embeddings(limit: int = 25, days: int = 15):
         return 0
 
 
-def rescore_visible_news(limit: int = 0):
-    """Repuntúa el feed visible con los votos que haya ahora mismo.
+def rescore_recent_news(limit: int = 0):
+    """Repuntúa la ventana de referencia con los votos que haya ahora mismo.
 
     Cada noticia se puntúa al entrar, pero conserva ese valor para siempre: sin
-    esto, votar no cambiaría nada de lo que ya está publicado y el feed quedaría
+    esto, votar no cambiaría nada de lo ya publicado y el feed quedaría
     describiendo unos gustos viejos.
 
-    Es barato porque solo mira lo visible (lo leído se borra, así que en
-    producción son unas pocas decenas) y porque los vectores se piden todos de
-    golpe: medido en la Pi, 0,49 s frente a 2,14 s uno por uno. Si el modelo aún
-    no tiene votos suficientes se sale sin llegar a hablar con Qdrant.
+    Cubre la ventana entera (``INTEREST_WINDOW_DAYS``), no solo lo que queda sin
+    leer. Son dos motivos: la referencia del percentil no puede encoger según se
+    lee, y así todas las noticias con las que se compara están puntuadas por el
+    mismo modelo en la misma pasada.
+
+    El coste medido con 164 noticias es de medio segundo, porque los vectores se
+    piden todos de golpe. Si el modelo aún no tiene votos suficientes se sale sin
+    llegar a hablar con Qdrant.
 
     Va al final del cron y después de la purga, para no robarle tiempo a la
     ingesta ni gastarlo en noticias que están a punto de borrarse.
@@ -181,7 +185,7 @@ def rescore_visible_news(limit: int = 0):
             logger.warning("Qdrant no disponible; no se repuntúa el feed.")
             return 0
 
-        queryset = News.visible.all().order_by('-published_date')
+        queryset = scored_population().order_by('-published_date')
         if limit and limit > 0:
             queryset = queryset[:limit]
         objetivo = list(queryset)
@@ -211,7 +215,7 @@ def rescore_visible_news(limit: int = 0):
 
         sin_vector = len(objetivo) - puntuadas
         logger.info(
-            "Feed repuntuado: %s noticias%s",
+            "Ventana de referencia repuntuada: %s noticias%s",
             puntuadas,
             f" ({sin_vector} sin vector, omitidas)" if sin_vector else "",
         )
@@ -245,7 +249,7 @@ def update_news_cron():
             # que se van a borrar y no puede retrasar la ingesta, que es lo que
             # tiene que llegar a tiempo.
             try:
-                rescore_visible_news()
+                rescore_recent_news()
             except Exception:
                 logger.exception("Error repuntuando el feed tras el cron")
     except portalocker.exceptions.LockException:
