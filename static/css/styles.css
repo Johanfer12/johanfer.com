@@ -1032,6 +1032,104 @@ a:hover {
     }
 }
 
+/* Indicador de carga compartido (scroll infinito de libros y Mi TV, modal de
+   comentarios). La pastilla de cristal reutiliza los tokens de --glass-* y el
+   satélite en órbita sigue el motivo espacial del fondo. */
+.feed-loader {
+    display: none;
+    justify-content: center;
+    padding: 24px 16px 36px;
+}
+
+.feed-loader.is-visible {
+    display: flex;
+}
+
+.feed-loader-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 20px 9px 15px;
+    border-radius: 999px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    backdrop-filter: blur(12px) saturate(140%);
+    box-shadow: 0 10px 26px rgba(2, 8, 18, 0.38);
+    color: var(--text-secondary);
+    font-family: 'Ubuntu', sans-serif;
+    font-size: 0.88rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.feed-loader-orbit {
+    position: relative;
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid rgba(198, 214, 242, 0.22);
+    animation: orbitSpin 1.5s linear infinite;
+}
+
+/* Núcleo: centrado, así que gira con el padre sin que se note. */
+.feed-loader-orbit::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 5px;
+    height: 5px;
+    margin: -2.5px 0 0 -2.5px;
+    border-radius: 50%;
+    background: rgba(198, 214, 242, 0.5);
+}
+
+/* Satélite */
+.feed-loader-orbit::after {
+    content: '';
+    position: absolute;
+    top: -3.5px;
+    left: 50%;
+    width: 7px;
+    height: 7px;
+    margin-left: -3.5px;
+    border-radius: 50%;
+    background: var(--accent-strong);
+    box-shadow: 0 0 10px rgba(143, 180, 232, 0.85);
+}
+
+.feed-loader-text {
+    animation: loaderPulse 1.8s ease-in-out infinite;
+}
+
+/* Con movimiento reducido no gira nada: la órbita solo respira. */
+@media (prefers-reduced-motion: reduce) {
+    .feed-loader-orbit {
+        animation: loaderPulse 2.4s ease-in-out infinite;
+    }
+
+    .feed-loader-text {
+        animation: none;
+    }
+}
+
+@keyframes orbitSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes loaderPulse {
+    0%, 100% {
+        opacity: 0.58;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
 @keyframes zoomIn {
     from {
         transform: scale(0.7);
@@ -1172,5 +1270,11 @@ a:hover {
     .book-scroll-top-btn,
     .header {
         box-shadow: 0 2px 8px rgba(2, 8, 18, 0.24) !important;
+    }
+
+    /* Sin blur la pastilla se vería translúcida: se opaca, como el header. */
+    .feed-loader-pill {
+        background: rgba(11, 20, 44, 0.92) !important;
+        box-shadow: 0 4px 12px rgba(2, 8, 18, 0.26) !important;
     }
 }

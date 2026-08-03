@@ -10,7 +10,12 @@
             <button type="button" class="news-comments-close" data-comments-close aria-label="Cerrar comentarios">&times;</button>
         </header>
         <div class="news-comments-body">
-            <div class="news-comments-status" id="news-comments-status" role="status">Cargando comentarios…</div>
+            <div class="news-comments-status is-loading" id="news-comments-status" role="status" aria-live="polite">
+                <span class="feed-loader-pill">
+                    <span class="feed-loader-orbit" aria-hidden="true"></span>
+                    <span class="feed-loader-text">Cargando comentarios…</span>
+                </span>
+            </div>
             <ol class="news-comments-list" id="news-comments-list"></ol>
         </div>
         <footer class="news-comments-footer">

@@ -16,6 +16,14 @@ const escapeHtml = (value) => {
     return div.innerHTML;
 };
 
+// El indicador se muestra con una clase, no con style.display: la pastilla
+// necesita display:flex y un estilo en línea lo pisaría.
+const setLoadingVisible = (visible) => {
+    if (loadingDiv) {
+        loadingDiv.classList.toggle('is-visible', visible);
+    }
+};
+
 const posterImg = (card) => `
     <img src="${escapeHtml(card.poster_url)}"
          alt="${escapeHtml(card.title)}"
@@ -123,7 +131,7 @@ function loadMoreCards() {
     if (loading || !hasNext) return;
 
     loading = true;
-    loadingDiv.style.display = 'block';
+    setLoadingVisible(true);
 
     const params = new URLSearchParams();
     params.set('page', String(page + 1));
@@ -147,7 +155,7 @@ function loadMoreCards() {
             page += 1;
             hasNext = Boolean(data.has_next);
             loading = false;
-            loadingDiv.style.display = 'none';
+            setLoadingVisible(false);
             if (!hasNext) {
                 window.removeEventListener('scroll', handleScroll);
             }
@@ -155,7 +163,7 @@ function loadMoreCards() {
         .catch((error) => {
             console.error('Error al cargar más tarjetas:', error);
             loading = false;
-            loadingDiv.style.display = 'none';
+            setLoadingVisible(false);
         });
 }
 
@@ -210,7 +218,7 @@ window.watchingApplySearch = function (query) {
     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
 
     loading = true;
-    loadingDiv.style.display = 'block';
+    setLoadingVisible(true);
 
     return fetch(`/viendo/?${params.toString()}`, {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -227,7 +235,7 @@ window.watchingApplySearch = function (query) {
             setWatchedTotalLabel(data.total_watched);
             syncToggleLinks();
             loading = false;
-            loadingDiv.style.display = 'none';
+            setLoadingVisible(false);
 
             window.removeEventListener('scroll', handleScroll);
             if (hasNext) {
@@ -238,7 +246,7 @@ window.watchingApplySearch = function (query) {
         .catch((error) => {
             console.error('Error al aplicar búsqueda:', error);
             loading = false;
-            loadingDiv.style.display = 'none';
+            setLoadingVisible(false);
             throw error;
         });
 };

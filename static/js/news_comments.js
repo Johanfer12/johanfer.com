@@ -26,13 +26,39 @@
         }).format(date);
     };
 
+    // Mensaje de texto plano (vacío o error): quita la pastilla de carga, que
+    // es lo único que mete nodos hijos en el status.
+    const setStatusMessage = (message, {error = false} = {}) => {
+        status.hidden = false;
+        status.classList.remove('is-loading');
+        status.classList.toggle('is-error', error);
+        status.textContent = message;
+    };
+
+    const buildLoaderPill = (text) => {
+        const pill = document.createElement('span');
+        pill.className = 'feed-loader-pill';
+
+        const orbit = document.createElement('span');
+        orbit.className = 'feed-loader-orbit';
+        orbit.setAttribute('aria-hidden', 'true');
+
+        const label = document.createElement('span');
+        label.className = 'feed-loader-text';
+        label.textContent = text;
+
+        pill.append(orbit, label);
+        return pill;
+    };
+
     const setLoading = () => {
         title.textContent = 'Comentarios';
         summary.textContent = '';
         list.replaceChildren();
         status.hidden = false;
         status.classList.remove('is-error');
-        status.textContent = 'Cargando comentarios…';
+        status.classList.add('is-loading');
+        status.replaceChildren(buildLoaderPill('Cargando comentarios…'));
         sourceLink.hidden = true;
     };
 
@@ -50,13 +76,13 @@
             : `${total} ${total === 1 ? 'comentario' : 'comentarios'}${source}`;
 
         if (!comments.length) {
-            status.hidden = false;
-            status.classList.remove('is-error');
-            status.textContent = 'Esta noticia todavía no tiene comentarios.';
+            setStatusMessage('Esta noticia todavía no tiene comentarios.');
             return;
         }
 
         status.hidden = true;
+        status.classList.remove('is-loading');
+        status.replaceChildren();
 
         const normalizedComments = comments.map((comment, index) => ({
             ...comment,
@@ -228,9 +254,7 @@
     const renderError = (message) => {
         list.replaceChildren();
         summary.textContent = '';
-        status.hidden = false;
-        status.classList.add('is-error');
-        status.textContent = message || 'No se pudieron cargar los comentarios.';
+        setStatusMessage(message || 'No se pudieron cargar los comentarios.', {error: true});
     };
 
     const fetchComments = (url) => {

@@ -556,6 +556,13 @@ body.comments-modal-open {
     text-align: center;
 }
 
+/* Estado de carga: la pastilla con la órbita de styles.css en lugar del texto
+   suelto. Los estados de vacío y error siguen siendo solo texto. */
+.news-comments-status.is-loading {
+    display: flex;
+    justify-content: center;
+}
+
 .news-comments-status.is-error {
     color: #ff9b9b;
 }

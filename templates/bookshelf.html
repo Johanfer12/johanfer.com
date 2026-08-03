@@ -103,7 +103,12 @@
         
     </div>
 
-    <div id="loading" style="display: none;">Loading more books...</div>
+    <div id="loading" class="feed-loader" role="status" aria-live="polite">
+        <span class="feed-loader-pill">
+            <span class="feed-loader-orbit" aria-hidden="true"></span>
+            <span class="feed-loader-text">Cargando más libros…</span>
+        </span>
+    </div>
 
     <button class="book-scroll-top-btn" id="bookScrollTopBtn" title="Volver arriba" aria-label="Volver arriba">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" aria-hidden="true">

@@ -116,7 +116,12 @@
         {% endfor %}
     </div>
 
-    <div id="loading" style="display: none;">Cargando más...</div>
+    <div id="loading" class="feed-loader" role="status" aria-live="polite">
+        <span class="feed-loader-pill">
+            <span class="feed-loader-orbit" aria-hidden="true"></span>
+            <span class="feed-loader-text">Cargando más {{ watch_label }}…</span>
+        </span>
+    </div>
 
     <button class="book-sort-btn" id="sortBtn" title="Ordenar" aria-label="Ordenar">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true">
