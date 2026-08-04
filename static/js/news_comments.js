@@ -257,6 +257,48 @@
         setStatusMessage(message || 'No se pudieron cargar los comentarios.', {error: true});
     };
 
+    const totalOf = (payload) => {
+        const comments = Array.isArray(payload?.comments) ? payload.comments : [];
+        const total = Number(payload?.total);
+        return Number.isFinite(total) && total >= 0 ? total : comments.length;
+    };
+
+    // La insignia se pinta con lo que ya trae la precarga: el contador no
+    // cuesta una petición extra, solo aprovecha la que iba a hacerse igual.
+    const paintBadge = (button, total) => {
+        let badge = button.querySelector('.comments-badge');
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'comments-badge';
+            badge.setAttribute('aria-hidden', 'true');
+            button.appendChild(badge);
+        }
+        const text = total > 99 ? '99+' : String(total);
+        if (badge.textContent !== text) badge.textContent = text;
+
+        const label = total === 0
+            ? 'Comentarios (ninguno todavía)'
+            : `Ver comentarios (${total})`;
+        button.title = label;
+        button.setAttribute('aria-label', label);
+    };
+
+    // Se pintan todos los botones que apunten a la misma noticia: la rejilla
+    // puede tener el mismo enlace en más de una tarjeta tras un refresco.
+    const paintBadgesFor = (url, total) => {
+        document.querySelectorAll('.comments-btn').forEach((button) => {
+            if (button.dataset.commentsUrl === url) paintBadge(button, total);
+        });
+    };
+
+    // Un refresco parcial reemplaza el nodo del botón y se lleva la insignia
+    // por delante, así que se repinta desde el caché al volver a tocarlo.
+    const hydrateBadge = (button) => {
+        const url = button.dataset.commentsUrl;
+        const cached = url ? responseCache.get(url) : null;
+        if (cached) paintBadge(button, totalOf(cached));
+    };
+
     const fetchComments = (url) => {
         if (responseCache.has(url)) return Promise.resolve(responseCache.get(url));
         if (pendingRequests.has(url)) return pendingRequests.get(url);
@@ -271,6 +313,7 @@
                     throw new Error(payload.message || 'No se pudieron cargar los comentarios.');
                 }
                 responseCache.set(url, payload);
+                paintBadgesFor(url, totalOf(payload));
                 return payload;
             })
             .finally(() => pendingRequests.delete(url));
@@ -282,6 +325,7 @@
     const startPrefetch = (button) => {
         const url = button.dataset.commentsUrl;
         cancelPrefetch(button);
+        hydrateBadge(button);
         if (!url || responseCache.has(url) || pendingRequests.has(url)) return;
         fetchComments(url).catch(() => {
             // El modal mostrará el error si el usuario decide abrirlo.
@@ -290,6 +334,7 @@
 
     const schedulePrefetch = (button, delay = 300) => {
         const url = button.dataset.commentsUrl;
+        hydrateBadge(button);
         if (!url || responseCache.has(url) || pendingRequests.has(url) || prefetchTimers.has(button)) {
             return;
         }
@@ -350,11 +395,39 @@
     });
 
     document.addEventListener('pointerout', (event) => {
+        // El dedo también "sale" de la tarjeta al levantarlo, justo después de
+        // darle la vuelta. Cancelar ahí dejaría el táctil sin contador.
+        if (event.pointerType === 'touch') return;
+
         const card = event.target.closest('.news-card-container');
         if (card && !card.contains(event.relatedTarget)) {
             const cardCommentsButton = card.querySelector('.comments-btn');
             if (cardCommentsButton) cancelPrefetch(cardCommentsButton);
         }
+    });
+
+    // En móvil no hay hover: el reverso se descubre tocando. Observar el giro
+    // cubre las dos formas de llegar al botón con un solo disparador, y
+    // mantiene el mismo retardo para no lanzar peticiones al pasar de largo.
+    const flipObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            const card = mutation.target;
+            if (!card.classList?.contains('news-card')) return;
+
+            const button = card.querySelector('.comments-btn');
+            if (!button) return;
+
+            if (card.classList.contains('is-flipped')) {
+                schedulePrefetch(button);
+            } else {
+                cancelPrefetch(button);
+            }
+        });
+    });
+    flipObserver.observe(document.body, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class'],
     });
 
     document.addEventListener('focusin', (event) => {

@@ -366,6 +366,58 @@ html.instagram-webview .news-card-container {
     appearance: none;
     font-family: inherit;
     background: transparent;
+    position: relative;
+    overflow: visible;
+}
+
+/* Contador de comentarios sobre el botón. Va en el azul del feed y no en rojo
+   a propósito: no avisa de nada urgente, solo adelanta un dato para no abrir
+   el modal en balde. El cero usa el mismo fondo que cualquier otra cifra. */
+.comments-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    box-sizing: border-box;
+    border: 1px solid rgba(9, 16, 28, 0.85);
+    border-radius: 999px;
+    background: #8fb4e8;
+    color: #06101f;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 14px;
+    letter-spacing: -0.02em;
+    text-align: center;
+    pointer-events: none;
+    box-shadow: 0 1px 3px rgba(2, 8, 18, 0.45);
+    animation: comments-badge-pop 0.18s ease-out;
+}
+
+/* Al pasar el ratón el botón se rellena de azul, así que la insignia invierte
+   sus colores para no fundirse con el fondo. */
+.news-link.comments-btn:hover .comments-badge {
+    background: #06101f;
+    color: #8fb4e8;
+    border-color: rgba(143, 180, 232, 0.55);
+}
+
+@keyframes comments-badge-pop {
+    from {
+        transform: scale(0.4);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .comments-badge {
+        animation: none;
+    }
 }
 
 .news-link:hover,
