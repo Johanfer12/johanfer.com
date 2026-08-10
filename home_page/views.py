@@ -395,7 +395,10 @@ def service_worker(request):
         'precache_urls': mark_safe(json.dumps(precache)),
     }, content_type='application/javascript; charset=utf-8')
     response['Service-Worker-Allowed'] = '/'
-    response['Cache-Control'] = 'no-cache'
+    # `no-cache` a secas no basta: Cloudflare cachea .js por extensión y
+    # reescribía esto a max-age=172800, así que un service worker nuevo podía
+    # quedarse dos días atrapado en el edge.
+    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     return response
 
 
