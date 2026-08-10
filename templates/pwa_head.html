@@ -1,0 +1,13 @@
+{% load static %}
+{# Etiquetas comunes de PWA. Se incluye dentro del <head> de cada plantilla. #}
+<meta name="theme-color" content="#070715">
+<meta name="application-name" content="{{ site_name }}">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="{{ site_name }}">
+<link rel="manifest" href="{% url 'home_page:manifest' %}">
+<link rel="apple-touch-icon" href="{% static 'Img/apple-touch-icon.png' %}">
+<link rel="icon" type="image/png" sizes="192x192" href="{% static 'Img/pwa-icon-192.png' %}">
+<link rel="icon" type="image/png" sizes="512x512" href="{% static 'Img/pwa-icon-512.png' %}">
+<script src="{% static 'js/pwa.js' %}" defer></script>

@@ -10,14 +10,27 @@ from django.db.models import Count, Sum
 from django.db.models import F, Q
 from django.urls import reverse
 from django.utils import timezone as dj_timezone
+from django.utils.safestring import mark_safe
+from django.templatetags.static import static
 from django.conf import settings
 from Bookshelf.html_sanitizer import sanitize_html
 from home_page.templatetags.sanitizers import rating_stars
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode, urlparse
 
 SESSION_VISITOR_KEY = 'visit_visitor_id'
+
+# PWA: color de marca y estáticos que el service worker guarda al instalarse.
+PWA_THEME_COLOR = '#070715'
+PWA_PRECACHE_STATIC = (
+    'favicon.ico',
+    'Img/pwa-icon-192.png',
+    'Img/pwa-icon-512.png',
+    'Img/pwa-icon-maskable-512.png',
+    'Img/apple-touch-icon.png',
+)
 
 
 def _iso2_to_flag(iso2):
@@ -325,6 +338,69 @@ def visits(request):
         'current_visitor_id': current_visitor_id,
         'filters': filters,
     })
+
+
+def manifest_webmanifest(request):
+    """Manifiesto de la PWA. Se genera aquí y no como plantilla para no depender
+    del escapado HTML de Django dentro de un JSON."""
+    icon = lambda name, size: {
+        'src': static(f'Img/{name}'),
+        'sizes': f'{size}x{size}',
+        'type': 'image/png',
+    }
+    shortcut_icon = [icon('pwa-icon-192.png', 192)]
+
+    manifest = {
+        'id': '/',
+        'name': settings.SITE_NAME,
+        'short_name': settings.SITE_NAME,
+        'description': settings.SITE_META_DESCRIPTION,
+        'lang': 'es',
+        'dir': 'ltr',
+        'start_url': '/',
+        'scope': '/',
+        'display': 'standalone',
+        'display_override': ['standalone', 'minimal-ui'],
+        'background_color': PWA_THEME_COLOR,
+        'theme_color': PWA_THEME_COLOR,
+        'orientation': 'any',
+        'icons': [
+            dict(icon('pwa-icon-192.png', 192), purpose='any'),
+            dict(icon('pwa-icon-512.png', 512), purpose='any'),
+            dict(icon('pwa-icon-maskable-512.png', 512), purpose='maskable'),
+        ],
+        'shortcuts': [
+            {'name': 'Mis Noticias', 'url': '/noticias/', 'icons': shortcut_icon},
+            {'name': 'Mis Libros', 'url': reverse('home_page:bookshelf'), 'icons': shortcut_icon},
+            {'name': 'Mi TV', 'url': '/viendo/', 'icons': shortcut_icon},
+        ],
+    }
+    response = JsonResponse(manifest, json_dumps_params={'ensure_ascii': False, 'indent': 2})
+    response['Content-Type'] = 'application/manifest+json'
+    return response
+
+
+def service_worker(request):
+    """El service worker se sirve desde la raíz para que su ámbito sea todo el
+    sitio; bajo /static/ solo controlaría /static/."""
+    precache = [static(path) for path in PWA_PRECACHE_STATIC]
+    offline_url = reverse('home_page:offline')
+    # La versión cuelga de las URLs cacheadas: al cambiar el hash de un estático
+    # cambia el nombre de la caché y la anterior se descarta sola.
+    version = hashlib.md5('|'.join(precache + [offline_url]).encode()).hexdigest()[:12]
+
+    response = render(request, 'sw.js', {
+        'sw_version': version,
+        'offline_url': offline_url,
+        'precache_urls': mark_safe(json.dumps(precache)),
+    }, content_type='application/javascript; charset=utf-8')
+    response['Service-Worker-Allowed'] = '/'
+    response['Cache-Control'] = 'no-cache'
+    return response
+
+
+def offline(request):
+    return render(request, 'offline.html')
 
 
 def robots_txt(request):

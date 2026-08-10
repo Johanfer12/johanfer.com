@@ -47,6 +47,10 @@ class VisitLogMiddleware:
         '/robots.txt',
         '/sitemap.xml',
         '/visitas/',
+        # Peticiones de la PWA, no visitas de nadie.
+        '/manifest.webmanifest',
+        '/sw.js',
+        '/offline/',
     )
 
     def __init__(self, get_response):

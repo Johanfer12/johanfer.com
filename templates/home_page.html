@@ -20,6 +20,7 @@
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     <link rel="stylesheet" href="{% static 'css/home.css' %}">
+    {% include 'pwa_head.html' %}
 </head>
 <body>
     <div class="content-container">

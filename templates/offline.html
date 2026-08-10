@@ -1,0 +1,70 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#070715">
+    <meta name="color-scheme" content="dark">
+    <title>Sin conexión | {{ site_name }}</title>
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    <!-- Los estilos van embebidos: esta página tiene que pintarse sin red. -->
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        body {
+            background: #070715;
+            color: #e6e8f0;
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 24px;
+            box-sizing: border-box;
+        }
+        img {
+            width: 96px;
+            height: 96px;
+            opacity: .9;
+        }
+        h1 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin: 20px 0 8px;
+        }
+        p {
+            margin: 0 0 24px;
+            color: #a8adc0;
+            line-height: 1.5;
+        }
+        button {
+            background: #2b3350;
+            color: #e6e8f0;
+            border: 1px solid #3c456a;
+            border-radius: 999px;
+            padding: 10px 24px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #374063;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <img src="{% static 'Img/pwa-icon-192.png' %}" alt="">
+        <h1>Sin conexión</h1>
+        <p>No hay red ahora mismo.<br>Cuando vuelva, esta página se recarga sola.</p>
+        <button type="button" onclick="location.reload()">Reintentar</button>
+    </main>
+    <script>
+        window.addEventListener('online', function () {
+            location.reload();
+        });
+    </script>
+</body>
+</html>

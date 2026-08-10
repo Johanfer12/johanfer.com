@@ -4,7 +4,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#000000">
     <meta name="color-scheme" content="dark">
     <script>
         if (/Instagram/i.test(navigator.userAgent || '')) {
@@ -29,6 +28,7 @@
     <link rel="stylesheet" href="{% static 'css/news.css' %}">
     <link rel="stylesheet" href="{% static 'css/news_public.css' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    {% include 'pwa_head.html' %}
 </head>
 <body class="has-header">
     {% include 'news_public_header.html' %}
