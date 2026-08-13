@@ -13,8 +13,9 @@ from home_page.templatetags.sanitizers import rating_stars
 
 from .models import SimklSyncState, WatchedItem
 
-# Una serie con actividad en esta ventana se considera "en curso" (listón Viendo)
-WATCHING_WINDOW_DAYS = 14
+# Ventana de actividad para el listón "Viendo": una serie con episodios pendientes que
+# no se toca en tres semanas deja de contar como en curso.
+WATCHING_WINDOW_DAYS = 21
 
 
 def _group_by_media(items):
@@ -42,7 +43,6 @@ def _group_by_media(items):
                     'episode_keys': {episode_key},
                     'episode_count': 1,
                     'episode_total': item.total_episodes or 1,
-                    'available_episodes': item.available_episodes,
                     'watched_years': {watched_year},
                 }
             else:
@@ -54,11 +54,6 @@ def _group_by_media(items):
                     item.total_episodes or entry['episode_count'],
                 )
                 entry['watched_years'].add(watched_year)
-                if item.available_episodes:
-                    entry['available_episodes'] = max(
-                        entry['available_episodes'] or 0,
-                        item.available_episodes,
-                    )
             continue
 
         bucket = movies
@@ -98,19 +93,17 @@ def watching(request):
     items = list(WatchedItem.objects.order_by('-watched_at', '-season', '-episode'))
     show_cards, movie_cards = _group_by_media(items)
 
-    # Simkl reporta lo que está a medias; el sync lo deja guardado para no llamar a la
-    # API en cada render. Si no hay dato (antes del primer sync), se cae a la heurística
-    # de "actividad reciente y serie incompleta".
-    in_progress = SimklSyncState.load().in_progress_tmdb_ids
+    # "Viendo" = le quedan episodios por delante del último que vi (los calcula el sync
+    # con el catálogo de Simkl) y lo vi hace poco. Hacen falta las dos condiciones: sin
+    # la ventana, el listón resucitaría en cuanto Simkl añada los episodios de una
+    # temporada anunciada; sin los pendientes, lo llevaría todo lo recién terminado.
+    pending_works = SimklSyncState.load().pending_tmdb_ids
     watching_cutoff = timezone.now() - timedelta(days=WATCHING_WINDOW_DAYS)
     for card in show_cards:
-        available = card.get('available_episodes')
-        seen_total = card.get('episode_total') or card.get('episode_count') or 0
-        is_complete = bool(available and seen_total >= available)
-        if in_progress:
-            card['is_watching'] = card['latest'].tmdb_id in in_progress
-        else:
-            card['is_watching'] = card['latest'].watched_at >= watching_cutoff and not is_complete
+        card['is_watching'] = (
+            card['latest'].tmdb_id in pending_works
+            and card['latest'].watched_at >= watching_cutoff
+        )
 
     if tipo == 'peliculas':
         cards, watch_label, watch_noun = movie_cards, 'películas', 'película'

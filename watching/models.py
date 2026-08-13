@@ -85,18 +85,19 @@ class WatchedItem(models.Model):
 
 
 class SimklSyncState(models.Model):
-    """Guarda el `activities.all` de la última sincronización.
+    """Guarda el `activities.all` de la última sincronización y lo que queda pendiente.
 
-    Sirve de doble propósito: gatear el pull (si Simkl no reporta cambios, no se
-    descarga nada) y alimentar `date_from` para pedir solo lo modificado. Vive en la
-    BD y no en un archivo para que no se pierda en un despliegue.
+    El `activities.all` sirve de doble propósito: gatear el pull (si Simkl no reporta
+    cambios, no se descarga nada) y alimentar `date_from` para pedir solo lo modificado.
+    Vive en la BD y no en un archivo para que no se pierda en un despliegue.
     """
 
     last_activity_at = models.CharField(max_length=40, blank=True, default='', verbose_name="Última actividad")
     last_synced_at = models.DateTimeField(auto_now=True, verbose_name="Última corrida")
-    # Ids de TMDB que Simkl reporta a medias (/sync/playback), separados por coma. Se
-    # guardan en el sync para que la vista no tenga que llamar a la API en cada render.
-    in_progress_ids = models.TextField(blank=True, default='', verbose_name="En curso")
+    # Ids de TMDB a los que les quedan episodios por delante del último visto, separados
+    # por coma. Se calculan en el sync, que es quien tiene el catálogo de episodios de
+    # Simkl, para que la vista no llame a la API en cada render.
+    pending_ids = models.TextField(blank=True, default='', verbose_name="Con episodios pendientes")
 
     class Meta:
         verbose_name = 'Estado de sync Simkl'
@@ -108,8 +109,8 @@ class SimklSyncState(models.Model):
         return state
 
     @property
-    def in_progress_tmdb_ids(self):
-        return {int(part) for part in self.in_progress_ids.split(',') if part.strip().isdigit()}
+    def pending_tmdb_ids(self):
+        return {int(part) for part in self.pending_ids.split(',') if part.strip().isdigit()}
 
     def __str__(self):
         return f"Simkl @ {self.last_activity_at or 'nunca'}"

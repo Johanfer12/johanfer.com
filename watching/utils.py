@@ -30,6 +30,20 @@ TMDB_METADATA_OVERRIDES = {
     ('tv', 329809): 30984,
 }
 
+# Entradas de Simkl que son la continuación de una obra que ya tenemos, y que por su
+# id de TMDB abrirían una tarjeta aparte. Clave: id de Simkl -> id de TMDB de la obra.
+# Esto SÍ cambia la identidad (`dedup_key`, `poster_name`), al revés que
+# TMDB_METADATA_OVERRIDES.
+#
+# 2671730 ("Bleach: Sennen Kessen Hen - Kashin Tan"): Simkl parte el anime por cour y
+# este declara tmdb 30984, que es Bleach entero, mientras que los 13 episodios que ya
+# tenemos cuelgan de 329809. Sin esto saldría una segunda tarjeta "Bleach" en cuanto se
+# viera un episodio. La numeración encaja sola porque ambos cours comparten temporada en
+# TVDB: los que hay son S17E01-13 y los nuevos son S17E41-48.
+SIMKL_WORK_OVERRIDES = {
+    2671730: 329809,
+}
+
 # Cada entrada: clave en la respuesta de Simkl, tipo de medio del modelo, si es anime.
 SIMKL_GROUPS = (
     ('shows', 'episode', False),
@@ -378,6 +392,7 @@ def refresh_watching_from_simkl(full=False):
     skipped = 0
     seen_keys = set()
     touched_works = {}  # (media_type, tmdb_id) -> datos de la obra en Simkl
+    pending_works = set()  # tmdb_id de las obras a las que les queda algo por ver
 
     for group_key, media_type, is_anime in SIMKL_GROUPS:
         for item in payload.get(group_key) or []:
@@ -385,7 +400,7 @@ def refresh_watching_from_simkl(full=False):
             ids = media.get('ids') or {}
             tmdb_type = 'movie' if media_type == 'movie' else 'tv'
 
-            tmdb_id = _resolve_tmdb_id(ids, is_anime)
+            tmdb_id = SIMKL_WORK_OVERRIDES.get(ids.get('simkl')) or _resolve_tmdb_id(ids, is_anime)
             if not tmdb_id:
                 tmdb_id, _ = fetch_tmdb_id_by_imdb(ids.get('imdb'), expected_type=tmdb_type)
             if tmdb_id and media_type == 'episode' and tmdb_id in movie_tmdb_ids:
@@ -405,6 +420,15 @@ def refresh_watching_from_simkl(full=False):
                 _episode_index(episode_cache, ids.get('simkl'), is_anime)
                 if media_type == 'episode' else {}
             )
+            # Antes del corte por `rows`: el cour que se está emitiendo aún no tiene
+            # ningún episodio visto, y es justo el que dice que la obra sigue en curso.
+            if (
+                media_type == 'episode'
+                and item.get('status') == 'watching'
+                and _pending_after_last_watched(item, episode_index)
+            ):
+                pending_works.add(tmdb_id)
+
             rows = _work_rows(item, media_type, episode_index)
             if not rows:
                 continue
@@ -465,11 +489,13 @@ def refresh_watching_from_simkl(full=False):
     _update_work_aggregates(touched_works)
     deleted = _reconcile(seen_keys) if full else 0
 
-    in_progress = fetch_in_progress()
-    state.in_progress_ids = ','.join(str(tmdb_id) for tmdb_id in sorted(in_progress))
+    # Solo se reescribe en el pull completo: uno incremental trae únicamente lo tocado
+    # desde la última vez, así que dejaría fuera a las obras que no se movieron.
+    if full:
+        state.pending_ids = ','.join(str(tmdb_id) for tmdb_id in sorted(pending_works))
     if stamp:
         state.last_activity_at = stamp
-    state.save(update_fields=['last_activity_at', 'in_progress_ids', 'last_synced_at'])
+    state.save(update_fields=['last_activity_at', 'pending_ids', 'last_synced_at'])
 
     logger.info(
         "Simkl sincronizado: %s nuevos, %s con fecha corregida, %s eliminados, %s omitidos",
@@ -535,32 +561,26 @@ def _reconcile(seen_keys):
     return deleted
 
 
-def fetch_in_progress():
-    """Lo que está a medias en Simkl, para el listón 'Viendo'.
+def _pending_after_last_watched(item, episode_index):
+    """Episodios que quedan POR DELANTE del último visto, emitidos o no.
 
-    Devuelve {tmdb_id: {'season', 'episode', 'progress'}}. Es dato real, no la
-    heurística de "actividad en los últimos N días".
+    Se cuenta por posición y no como "total menos vistos" a propósito: las temporadas
+    viejas que nunca se marcaron en Simkl inflarían el pendiente y dejarían la serie
+    para siempre en "Viendo". House of the Dragon era el caso: al día con la T3 pero
+    con la T1 y la T2 sin marcar, salían 18 pendientes que no existían.
+
+    Los que aún no se han emitido cuentan: una serie en curso de la que estás al día
+    (Silo) sigue siendo algo que estás viendo. Lo que evita que el listón reviva al
+    anunciarse una temporada nueva es la ventana de la vista, no este conteo.
     """
-    in_progress = {}
-    try:
-        entries = simkl.fetch_playback()
-    except requests.RequestException:
-        logger.warning("No se pudo consultar /sync/playback; el listón Viendo cae a la heurística.")
-        return in_progress
-
-    for entry in entries or []:
-        media = entry.get('show') or entry.get('anime') or entry.get('movie') or {}
-        ids = media.get('ids') or {}
-        try:
-            tmdb_id = int(ids.get('tmdb')) if ids.get('tmdb') else None
-        except (TypeError, ValueError):
-            tmdb_id = None
-        if not tmdb_id:
-            continue
-        episode = entry.get('episode') or {}
-        in_progress[tmdb_id] = {
-            'season': episode.get('season'),
-            'episode': episode.get('number'),
-            'progress': entry.get('progress'),
-        }
-    return in_progress
+    if not episode_index:  # sin catálogo no se inventa nada
+        return 0
+    watched = [
+        (season.get('number'), episode.get('number'))
+        for season in item.get('seasons') or []
+        for episode in season.get('episodes') or []
+        if season.get('number') is not None and episode.get('number')
+    ]
+    if not watched:
+        return len(episode_index)
+    return sum(1 for key in episode_index if key > max(watched))

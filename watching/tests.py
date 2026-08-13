@@ -131,7 +131,6 @@ class TmdbDetailsTests(TestCase):
 
 @override_settings(TMDB_API_KEY=None)
 @patch('watching.utils.simkl.fetch_detail', return_value={})
-@patch('watching.utils.simkl.fetch_playback', return_value=[])
 @patch('watching.utils.simkl.fetch_episodes', return_value=[])
 class RefreshFromSimklTests(TestCase):
     def _sync(self, payload, activities=None, full=False):
@@ -141,7 +140,7 @@ class RefreshFromSimklTests(TestCase):
             created = refresh_watching_from_simkl(full=full)
         return created, all_items
 
-    def test_expands_movies_and_episodes_into_rows(self, _episodes, _playback, _detail):
+    def test_expands_movies_and_episodes_into_rows(self, _episodes, _detail):
         created, _ = self._sync({'movies': [SIMKL_MOVIE], 'shows': [SIMKL_SHOW]})
 
         self.assertEqual(created, 3)  # una película + dos episodios
@@ -164,26 +163,26 @@ class RefreshFromSimklTests(TestCase):
         # vistos: se cuentan en local, no se toman de Simkl a secas
         self.assertEqual(episode.total_episodes, 2)
 
-    def test_second_run_does_not_duplicate(self, _episodes, _playback, _detail):
+    def test_second_run_does_not_duplicate(self, _episodes, _detail):
         self._sync({'shows': [SIMKL_SHOW]})
         created_again, _ = self._sync({'shows': [SIMKL_SHOW]}, activities={'all': 'otro-timestamp'})
 
         self.assertEqual(created_again, 0)
         self.assertEqual(WatchedItem.objects.count(), 2)
 
-    def test_skips_download_when_simkl_reports_no_changes(self, _episodes, _playback, _detail):
+    def test_skips_download_when_simkl_reports_no_changes(self, _episodes, _detail):
         self._sync({'shows': [SIMKL_SHOW]}, activities={'all': 'sello-1'})
         _, all_items = self._sync({'shows': [SIMKL_SHOW]}, activities={'all': 'sello-1'})
 
         all_items.assert_not_called()
 
-    def test_full_run_ignores_the_gate(self, _episodes, _playback, _detail):
+    def test_full_run_ignores_the_gate(self, _episodes, _detail):
         self._sync({'shows': [SIMKL_SHOW]}, activities={'all': 'sello-1'})
         _, all_items = self._sync({'shows': [SIMKL_SHOW]}, activities={'all': 'sello-1'}, full=True)
 
         all_items.assert_called_once()
 
-    def test_handles_anime_with_string_tmdb_id(self, _episodes, _playback, _detail):
+    def test_handles_anime_with_string_tmdb_id(self, _episodes, _detail):
         created, _ = self._sync({'anime': [SIMKL_ANIME]})
 
         self.assertEqual(created, 1)
@@ -191,7 +190,7 @@ class RefreshFromSimklTests(TestCase):
         self.assertEqual(item.tmdb_id, 45790)
         self.assertEqual(item.dedup_key, 'show:45790:s01e01')
 
-    def test_keeps_the_date_of_rows_inherited_from_trakt(self, _episodes, _playback, _detail):
+    def test_keeps_the_date_of_rows_inherited_from_trakt(self, _episodes, _detail):
         real_date = timezone.now() - timedelta(days=900)
         WatchedItem.objects.create(
             dedup_key='show:67386:s01e01', source='trakt', media_type='episode',
@@ -204,7 +203,7 @@ class RefreshFromSimklTests(TestCase):
         self.assertEqual(untouched.watched_at, real_date)
         self.assertEqual(untouched.source, 'trakt')
 
-    def test_reconciliation_never_deletes_trakt_rows(self, _episodes, _playback, _detail):
+    def test_reconciliation_never_deletes_trakt_rows(self, _episodes, _detail):
         WatchedItem.objects.create(
             dedup_key='movie:999', source='trakt', media_type='movie',
             title='Peli vieja de Trakt', watched_at=timezone.now(), tmdb_id=999,
@@ -218,7 +217,7 @@ class RefreshFromSimklTests(TestCase):
         self.assertEqual(WatchedItem.objects.count(), 1)
         self.assertEqual(WatchedItem.objects.get().source, 'trakt')
 
-    def test_takes_episode_titles_from_simkl(self, mock_episodes, _playback, _detail):
+    def test_takes_episode_titles_from_simkl(self, mock_episodes, _detail):
         mock_episodes.return_value = [
             {'season': 1, 'episode': 1, 'type': 'episode', 'title': 'Horizontes'},
             {'season': 1, 'episode': 2, 'type': 'episode', 'title': 'Interconectividad'},
@@ -228,18 +227,67 @@ class RefreshFromSimklTests(TestCase):
 
         self.assertEqual(WatchedItem.objects.get(episode=2).episode_title, 'Interconectividad')
 
-    def test_stores_in_progress_ids_for_the_watching_ribbon(self, _episodes, mock_playback, _detail):
-        mock_playback.return_value = [{
-            'progress': 42.0,
-            'episode': {'season': 1, 'number': 3},
-            'show': {'ids': {'tmdb': '67386'}},
-        }]
+    def test_stores_the_works_with_episodes_ahead_of_the_last_watched(self, mock_episodes, _detail):
+        mock_episodes.return_value = [
+            {'season': 1, 'episode': n, 'type': 'episode', 'title': f'Ep {n}'} for n in range(1, 5)
+        ]
 
-        self._sync({'shows': [SIMKL_SHOW]})
+        self._sync({'shows': [SIMKL_SHOW]}, full=True)
 
-        self.assertEqual(SimklSyncState.load().in_progress_tmdb_ids, {67386})
+        # Vistos el 1 y el 2 de 4: quedan dos por delante.
+        self.assertEqual(SimklSyncState.load().pending_tmdb_ids, {67386})
 
-    def test_ignores_anime_films_that_simkl_lists_as_one_episode_series(self, _episodes, _playback, _detail):
+    def test_a_work_watched_up_to_the_last_episode_is_not_pending(self, mock_episodes, _detail):
+        mock_episodes.return_value = [
+            {'season': 1, 'episode': n, 'type': 'episode', 'title': f'Ep {n}'} for n in range(1, 3)
+        ]
+
+        self._sync({'shows': [SIMKL_SHOW]}, full=True)
+
+        self.assertEqual(SimklSyncState.load().pending_tmdb_ids, set())
+
+    def test_unmarked_old_seasons_do_not_count_as_pending(self, mock_episodes, _detail):
+        """El caso de House of the Dragon: al día con la última temporada, pero con las
+        anteriores sin marcar en Simkl. Contar "total menos vistos" la dejaba en Viendo
+        para siempre; se cuenta por posición."""
+        mock_episodes.return_value = [
+            {'season': season, 'episode': n, 'type': 'episode', 'title': f'Ep {n}'}
+            for season in (1, 2) for n in range(1, 3)
+        ]
+        payload = dict(SIMKL_SHOW, seasons=[{
+            'number': 2,
+            'episodes': [
+                {'number': 1, 'watched_at': '2026-07-02T03:00:00Z'},
+                {'number': 2, 'watched_at': '2026-07-03T03:00:00Z'},
+            ],
+        }])
+
+        self._sync({'shows': [payload]}, full=True)
+
+        self.assertEqual(SimklSyncState.load().pending_tmdb_ids, set())
+
+    def test_an_airing_cour_with_nothing_watched_marks_the_work_as_pending(self, mock_episodes, _detail):
+        """Bleach: el cour en emisión es otra entrada de Simkl, sin ningún episodio visto
+        y con un id de TMDB que abriría una tarjeta aparte. `SIMKL_WORK_OVERRIDES` lo
+        devuelve a su obra, y es él quien dice que la serie sigue en curso."""
+        mock_episodes.return_value = [
+            {'season': None, 'episode': n, 'type': 'episode', 'title': f'Ep {n}',
+             'tvdb': {'season': 17, 'episode': 40 + n}} for n in range(1, 9)
+        ]
+        cour = {
+            'status': 'watching',
+            'watched_episodes_count': 0,
+            'total_episodes_count': 8,
+            'show': {'title': 'Bleach: Sennen Kessen Hen - Kashin Tan', 'ids': {'simkl': 2671730}},
+            'seasons': [],
+        }
+
+        created, _ = self._sync({'anime': [cour]}, full=True)
+
+        self.assertEqual(created, 0)  # nada visto todavía: no crea eventos
+        self.assertEqual(SimklSyncState.load().pending_tmdb_ids, {329809})
+
+    def test_ignores_anime_films_that_simkl_lists_as_one_episode_series(self, _episodes, _detail):
         """Si la obra ya existe como película, no se crea además como serie.
 
         Simkl cataloga las películas de anime como series de un episodio. Dejarlas pasar
@@ -260,7 +308,7 @@ class RefreshFromSimklTests(TestCase):
         self.assertEqual(WatchedItem.objects.count(), 1)
         self.assertEqual(WatchedItem.objects.get().media_type, 'movie')
 
-    def test_resolves_anime_sequels_from_the_detail_endpoint(self, mock_episodes, _playback, _detail):
+    def test_resolves_anime_sequels_from_the_detail_endpoint(self, mock_episodes, _detail):
         """Las secuelas de anime llegan sin tmdb en el listado, pero la ficha sí lo trae.
 
         Y sus episodios reempiezan en 1: la equivalencia con TVDB los reubica en la
@@ -288,7 +336,7 @@ class RefreshFromSimklTests(TestCase):
         self.assertEqual(item.dedup_key, 'show:69346:s02e04')
         self.assertEqual(item.episode_title, 'Episode 4')
 
-    def test_sums_counters_when_several_simkl_entries_map_to_one_work(self, _episodes, _playback, _detail):
+    def test_sums_counters_when_several_simkl_entries_map_to_one_work(self, _episodes, _detail):
         """El anime viene partido por temporada: la secuela no debe pisar a la obra."""
         temporada_1 = {
             'last_watched_at': '2026-07-01T03:00:00Z',
@@ -309,7 +357,7 @@ class RefreshFromSimklTests(TestCase):
         item = WatchedItem.objects.filter(tmdb_id=69346).first()
         self.assertEqual(item.available_episodes, 24)  # 12 + 12, no los 12 de la secuela
 
-    def test_keeps_the_title_the_work_already_had(self, _episodes, _playback, _detail):
+    def test_keeps_the_title_the_work_already_had(self, _episodes, _detail):
         """Simkl nombra distinto que Trakt; la tarjeta no debe cambiar de nombre."""
         WatchedItem.objects.create(
             dedup_key='show:69346:s02e03', source='trakt', media_type='episode',
@@ -335,7 +383,7 @@ class RefreshFromSimklTests(TestCase):
         # El año también: la secuela es de 2026, pero la obra es de 2017.
         self.assertEqual(WatchedItem.objects.get(dedup_key='show:69346:s02e04').year, 2017)
 
-    def test_skips_items_without_any_resolvable_id(self, _episodes, _playback, _detail):
+    def test_skips_items_without_any_resolvable_id(self, _episodes, _detail):
         created, _ = self._sync({'shows': [{
             'last_watched_at': '2026-07-02T03:00:00Z',
             'show': {'title': 'Sin ids', 'ids': {'simkl': 5}},
@@ -440,39 +488,28 @@ class WatchingViewTests(TestCase):
         self.assertEqual(response.context['cards'][0]['episode_total'], 21)
         self.assertContains(response, '21')
 
-    def test_recent_show_gets_watching_ribbon_and_old_show_does_not(self):
+    def _set_pending(self, *tmdb_ids):
+        state = SimklSyncState.load()
+        state.pending_ids = ','.join(str(tmdb_id) for tmdb_id in tmdb_ids)
+        state.save(update_fields=['pending_ids'])
+
+    def test_ribbon_needs_pending_episodes_and_recent_activity(self):
         now = timezone.now()
         self._create_episode(500, 1, 1, now, title='Serie Reciente')
         self._create_episode(600, 2, 5, now - timedelta(days=40), title='Serie Vieja')
+        self._set_pending(500, 600)
 
         response = self.client.get(reverse('watching:index'))
 
         cards = {card['latest'].title: card for card in response.context['cards']}
         self.assertTrue(cards['Serie Reciente']['is_watching'])
+        # Con pendientes, pero abandonada: sin la ventana el listón volvería solo en
+        # cuanto Simkl anunciara una temporada nueva.
         self.assertFalse(cards['Serie Vieja']['is_watching'])
         self.assertContains(response, 'watching-ribbon', count=1)
 
-    def test_simkl_progress_decides_the_ribbon_when_available(self):
-        now = timezone.now()
-        # La reciente no está a medias en Simkl; la vieja sí: manda el dato, no la ventana.
-        self._create_episode(500, 1, 1, now, title='Serie Reciente')
-        self._create_episode(600, 2, 5, now - timedelta(days=40), title='Serie Vieja')
-        state = SimklSyncState.load()
-        state.in_progress_ids = '600'
-        state.save(update_fields=['in_progress_ids'])
-
-        response = self.client.get(reverse('watching:index'))
-
-        cards = {card['latest'].title: card for card in response.context['cards']}
-        self.assertFalse(cards['Serie Reciente']['is_watching'])
-        self.assertTrue(cards['Serie Vieja']['is_watching'])
-
-    def test_recent_complete_show_does_not_get_watching_ribbon(self):
-        now = timezone.now()
-        item = self._create_episode(500, 1, 8, now, title='Serie Completa')
-        item.total_episodes = 8
-        item.available_episodes = 8
-        item.save(update_fields=['total_episodes', 'available_episodes'])
+    def test_recent_show_without_pending_episodes_does_not_get_the_ribbon(self):
+        self._create_episode(500, 3, 8, timezone.now(), title='Serie Terminada')
 
         response = self.client.get(reverse('watching:index'))
 

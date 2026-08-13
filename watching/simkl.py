@@ -107,15 +107,6 @@ def fetch_all_items(date_from=None):
     ) or {}
 
 
-def fetch_playback():
-    """Lo que está a medias, con episodio exacto, porcentaje y paused_at.
-
-    Un episodio recién empezado aparece SOLO acá: no entra al historial hasta que
-    Simkl lo considera visto.
-    """
-    return _get('/sync/playback') or []
-
-
 def fetch_episodes(simkl_id, is_anime=False):
     """Episodios de una obra: número, título, sinopsis y fecha de emisión.
 
