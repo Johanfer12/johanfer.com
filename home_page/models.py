@@ -91,6 +91,8 @@ class VisitLog(models.Model):
     user_agent = models.TextField(blank=True, default='')
     referrer = models.TextField(blank=True, default='')
     visited_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    # Se sella al abrir /visitas/: lo ya mirado deja de contar en la cabecera.
+    seen_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:
         ordering = ['-visited_at']

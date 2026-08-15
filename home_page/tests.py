@@ -489,6 +489,39 @@ class VisitsBadgeTests(TestCase):
         response = self.client.get('/bookshelf/')
         self.assertContains(response, 'visits-badge')
 
+    def test_opening_the_visits_page_turns_the_badge_off(self):
+        self.client.force_login(self.admin)
+        self._colombian_visit('181.50.0.9')
+        self.assertEqual(badge_count(), 1)
+
+        self.client.get('/visitas/')
+        cache.clear()
+
+        self.assertEqual(badge_count(), 0)
+        # La visita sigue ahí: verla no es borrarla.
+        self.assertEqual(VisitLog.objects.count(), 1)
+
+    def test_a_visit_arriving_after_the_review_lights_the_badge_again(self):
+        self.client.force_login(self.admin)
+        self._colombian_visit('181.50.0.9')
+        self.client.get('/visitas/')
+        cache.clear()
+
+        self._colombian_visit('181.50.0.20')
+        cache.clear()
+
+        self.assertEqual(badge_count(), 1)
+
+    def test_a_filtered_review_leaves_the_rest_pending(self):
+        self.client.force_login(self.admin)
+        self._colombian_visit('181.50.0.9')
+        self._colombian_visit('181.50.0.20')
+
+        self.client.get('/visitas/?ip=181.50.0.9')
+        cache.clear()
+
+        self.assertEqual(badge_count(), 1)
+
     def test_badge_is_not_computed_for_anonymous_visitors(self):
         self._colombian_visit('181.50.0.9')
 

@@ -7,7 +7,7 @@ from .models import Book
 from .models import VisitLog
 from .models import OwnerSignature
 from .middleware import get_client_ip
-from .visit_stats import invalidate_badge
+from .visit_stats import invalidate_badge, mark_seen
 from django.db.models import Count, Sum
 from django.db.models import F, Q
 from django.urls import reverse
@@ -342,6 +342,11 @@ def visits(request):
         return redirect(request.path)
 
     visits_list = list(filtered_qs.order_by('-visited_at'))
+
+    # Entrar aquí es haberlas mirado: la insignia de la cabecera se apaga.
+    # Solo lo que se está viendo; con un filtro activo, el resto sigue pendiente.
+    mark_seen(filtered_qs)
+
     current_ip = get_client_ip(request)
     current_visitor_id = _get_visitor_id(request)
     visit_groups = _group_visits_by_country(

@@ -1,10 +1,11 @@
 """Contador de visitas ajenas desde Colombia (el que se pinta en la cabecera).
 
-La cuenta es la misma que se ve en /visitas/: como las visitas se van borrando
-desde esa página, lo que queda sin borrar es justo lo que falta por mirar.
+Cuenta lo que aún no se ha mirado: abrir /visitas/ sella las visitas como
+vistas y la insignia se apaga, sin necesidad de borrar nada.
 """
 from django.core.cache import cache
 from django.db.models import Q
+from django.utils import timezone as dj_timezone
 
 from .models import OwnerSignature, VisitLog
 
@@ -39,12 +40,29 @@ def foreign_colombian_visits():
     return exclude_owner(VisitLog.objects.filter(colombian_filter()))
 
 
+def mark_seen(visit_qs=None):
+    """Sella lo que se acaba de mirar en /visitas/.
+
+    Se sella solo lo que se ha visto de verdad: con un filtro activo, las
+    visitas que quedaron fuera siguen pendientes. Devuelve cuántas se sellaron.
+    """
+    if visit_qs is None:
+        visit_qs = VisitLog.objects.all()
+
+    marked = visit_qs.filter(seen_at__isnull=True).update(
+        seen_at=dj_timezone.now(),
+    )
+    if marked:
+        invalidate_badge()
+    return marked
+
+
 def badge_count():
     cached = cache.get(BADGE_CACHE_KEY)
     if cached is not None:
         return cached
 
-    count = foreign_colombian_visits().count()
+    count = foreign_colombian_visits().filter(seen_at__isnull=True).count()
     cache.set(BADGE_CACHE_KEY, count, BADGE_CACHE_TTL)
     return count
 
