@@ -337,6 +337,41 @@ class VisitsViewTests(TestCase):
             [visits[1]],
         )
 
+    def test_offers_deleting_only_my_visits_in_the_country_modal(self):
+        VisitLog.objects.create(
+            ip_address='190.0.0.1',
+            visitor_id='visitor-owner',
+            country_code='CO',
+            country='Colombia',
+            path='/bookshelf/',
+        )
+        VisitLog.objects.create(
+            ip_address='181.50.0.9',
+            visitor_id='visitor-other',
+            country_code='CO',
+            country='Colombia',
+            path='/',
+        )
+
+        response = self.client.get('/visitas/')
+
+        self.assertContains(response, 'Eliminar mías')
+        # El botón se lleva las marcadas: una sola fila la lleva.
+        self.assertContains(response, 'data-self="1"', count=1)
+
+    def test_hides_the_delete_mine_button_when_no_visit_is_mine(self):
+        VisitLog.objects.create(
+            ip_address='181.50.0.9',
+            visitor_id='visitor-other',
+            country_code='CO',
+            country='Colombia',
+            path='/',
+        )
+
+        response = self.client.get('/visitas/')
+
+        self.assertNotContains(response, 'Eliminar mías')
+
     def test_delete_all_respects_the_active_filters(self):
         colombia_visit = VisitLog.objects.create(
             ip_address='203.0.113.70',

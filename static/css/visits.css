@@ -632,4 +632,9 @@ body.modal-open {
         grid-column: 2;
         grid-row: 2;
     }
+
+    .country-delete-self {
+        grid-column: 1 / -1;
+        grid-row: 3;
+    }
 }

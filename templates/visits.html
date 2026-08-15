@@ -102,6 +102,9 @@
                                         <span>Seleccionar país</span>
                                     </label>
                                     <button class="btn danger country-delete-selected" type="submit" name="action" value="delete_selected" data-confirm-delete="selected">Eliminar seleccionadas</button>
+                                    {% if group.self_count %}
+                                    <button class="btn danger country-delete-self" type="submit" name="action" value="delete_selected" data-confirm-delete="self">Eliminar mías</button>
+                                    {% endif %}
                                     <button class="btn danger country-delete-all" type="submit" name="action" value="delete_selected" data-confirm-delete="country">Eliminar país</button>
                                     <button class="country-modal-close" type="button" data-close-country-modal aria-label="Cerrar visitas de {{ group.country }}">&times;</button>
                                 </div>
@@ -130,7 +133,7 @@
                                         {% for visit in group.visits %}
                                         <tr>
                                             <td>{{ visit.visited_at|date:"Y-m-d H:i:s" }}</td>
-                                            <td class="visit-check"><input class="visit-select" type="checkbox" value="{{ visit.id }}" aria-label="Seleccionar visita"></td>
+                                            <td class="visit-check"><input class="visit-select" type="checkbox" value="{{ visit.id }}" aria-label="Seleccionar visita"{% if visit.is_self %} data-self="1"{% endif %}></td>
                                             <td>
                                                 {{ visit.ip_address }}
                                                 {% if visit.is_self %}
@@ -251,6 +254,19 @@
                         ? '¿Eliminar ' + selectedItems.length + ' visita' + (selectedItems.length === 1 ? ' seleccionada?' : 's seleccionadas?')
                         : 'No hay visitas seleccionadas.';
                     confirmDelete.hidden = selectedItems.length === 0;
+                } else if (deleteType === 'self') {
+                    const ownItems = countryItems.filter(function (checkbox) {
+                        return checkbox.dataset.self === '1';
+                    });
+                    updateSelectedValues(ownItems);
+                    modalMessage.textContent = ownItems.length
+                        ? '¿Eliminar ' + (
+                            ownItems.length === 1
+                                ? 'tu única visita de '
+                                : 'tus ' + ownItems.length + ' visitas de '
+                        ) + countryName + '? Esta acción no se puede deshacer.'
+                        : 'No hay visitas tuyas en ' + countryName + '.';
+                    confirmDelete.hidden = ownItems.length === 0;
                 } else if (deleteType === 'country') {
                     updateSelectedValues(countryItems);
                     modalMessage.textContent = '¿Eliminar ' + (
