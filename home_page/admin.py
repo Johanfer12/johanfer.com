@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Book, DeletedBook, VisitLog
+from .models import Book, DeletedBook, OwnerSignature, VisitLog
 
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
@@ -18,3 +18,9 @@ class VisitLogAdmin(admin.ModelAdmin):
     list_display = ('visited_at', 'ip_address', 'visitor_id', 'country_code', 'country', 'path')
     search_fields = ('ip_address', 'visitor_id', 'country_code', 'country', 'path', 'user_agent')
     list_filter = ('country_code', 'country', 'visited_at')
+
+
+@admin.register(OwnerSignature)
+class OwnerSignatureAdmin(admin.ModelAdmin):
+    list_display = ('ip_address', 'visitor_id', 'first_seen', 'last_seen')
+    search_fields = ('ip_address', 'visitor_id')

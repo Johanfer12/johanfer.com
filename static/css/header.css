@@ -69,6 +69,29 @@
     background: rgba(255, 255, 255, 0.1);
 }
 
+/* Contador de visitas ajenas desde Colombia sobre el icono de visitas */
+.header-nav a.visits-link {
+    position: relative;
+    overflow: visible;
+}
+
+.visits-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: #e0483c;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    box-shadow: 0 0 0 2px rgba(11, 20, 44, 0.92);
+}
+
 .total {
     margin: 4px 0 0;
     color: rgba(227, 233, 245, 0.76);
@@ -176,6 +199,17 @@
     .header-nav a svg {
         width: 14px;
         height: 14px;
+    }
+
+    .visits-badge {
+        top: -5px;
+        right: -5px;
+        min-width: 15px;
+        height: 15px;
+        padding: 0 4px;
+        border-radius: 8px;
+        font-size: 10px;
+        line-height: 15px;
     }
 }
 

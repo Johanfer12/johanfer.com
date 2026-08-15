@@ -60,6 +60,28 @@ class DeletedBook(models.Model):
         return f"{self.title} - {self.author}"
 
 
+class OwnerSignature(models.Model):
+    """Rastro de quien ha pasado por el login: nadie más lo usa, así que soy yo.
+
+    Se guardan las dos señas porque ninguna basta sola: la IP cambia al salir de
+    casa (móvil, otra red) y el visitor_id muere si se borran las cookies. Con
+    cualquiera de las dos que coincida, la visita se descuenta del contador.
+    """
+    ip_address = models.CharField(max_length=45, blank=True, default='', db_index=True)
+    visitor_id = models.CharField(max_length=64, blank=True, default='', db_index=True)
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-last_seen']
+        unique_together = [('ip_address', 'visitor_id')]
+        verbose_name = 'Seña propia'
+        verbose_name_plural = 'Señas propias'
+
+    def __str__(self):
+        return self.ip_address or self.visitor_id
+
+
 class VisitLog(models.Model):
     ip_address = models.CharField(max_length=45, db_index=True)
     visitor_id = models.CharField(max_length=64, db_index=True, blank=True, default='')

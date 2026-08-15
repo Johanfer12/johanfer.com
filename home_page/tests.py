@@ -6,8 +6,11 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.utils import timezone as dj_timezone
 
-from .models import Book, VisitLog
+from django.core.cache import cache
+
+from .models import Book, OwnerSignature, VisitLog
 from .utils import build_shelf_url, sync_currently_reading
+from .visit_stats import badge_count
 
 READING_ENTRY = {
     'book_id': '777',
@@ -371,3 +374,89 @@ class VisitsViewTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn('/noticias/login/', response.url)
+
+
+class VisitsBadgeTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = get_user_model().objects.create_superuser(
+            username='admin-contador',
+            email='admin-contador@example.com',
+            password='test-password',
+        )
+
+    def setUp(self):
+        cache.clear()
+
+    def _colombian_visit(self, ip, visitor_id='visitor-ajeno'):
+        return VisitLog.objects.create(
+            ip_address=ip,
+            visitor_id=visitor_id,
+            country_code='CO',
+            country='Colombia',
+            path='/bookshelf/',
+        )
+
+    def test_login_records_the_owner_signature(self):
+        session = self.client.session
+        session['visit_visitor_id'] = 'visitor-propio'
+        session.save()
+
+        self.client.post(
+            '/noticias/login/',
+            {'username': 'admin-contador', 'password': 'test-password'},
+            REMOTE_ADDR='190.0.0.1',
+        )
+
+        self.assertTrue(
+            OwnerSignature.objects.filter(
+                ip_address='190.0.0.1',
+                visitor_id='visitor-propio',
+            ).exists()
+        )
+
+    def test_counts_only_foreign_colombian_visits(self):
+        OwnerSignature.objects.create(ip_address='190.0.0.1', visitor_id='visitor-propio')
+
+        self._colombian_visit('181.50.0.9')
+        self._colombian_visit('181.50.0.10')
+        self._colombian_visit('190.0.0.1', visitor_id='otro-navegador')  # misma IP: mía
+        self._colombian_visit('190.0.0.55', visitor_id='visitor-propio')  # otra IP: mía
+        VisitLog.objects.create(
+            ip_address='203.0.113.4',
+            visitor_id='visitor-ajeno',
+            country_code='NL',
+            country='Netherlands',
+            path='/',
+        )
+
+        self.assertEqual(badge_count(), 2)
+
+    def test_counts_old_rows_without_country_code(self):
+        VisitLog.objects.create(
+            ip_address='181.50.0.9',
+            country_code='',
+            country='Colombia',
+            path='/',
+        )
+
+        self.assertEqual(badge_count(), 1)
+
+    def test_header_shows_the_badge_only_when_there_is_something_to_see(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get('/bookshelf/')
+        self.assertNotContains(response, 'visits-badge')
+
+        self._colombian_visit('181.50.0.9')
+        cache.clear()
+
+        response = self.client.get('/bookshelf/')
+        self.assertContains(response, 'visits-badge')
+
+    def test_badge_is_not_computed_for_anonymous_visitors(self):
+        self._colombian_visit('181.50.0.9')
+
+        response = self.client.get('/bookshelf/')
+
+        self.assertNotIn('visits_badge_count', response.context)

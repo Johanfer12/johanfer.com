@@ -6,6 +6,7 @@ from urllib.request import urlopen, Request
 from django.core.cache import cache
 
 from .models import VisitLog
+from .visit_stats import invalidate_badge
 
 
 def get_client_ip(request):
@@ -102,6 +103,9 @@ class VisitLogMiddleware:
             user_agent=(request.headers.get('User-Agent') or '')[:1500],
             referrer=(request.headers.get('Referer') or '')[:1500],
         )
+
+        # El contador de la cabecera se recalcula en la siguiente página.
+        invalidate_badge()
 
     @staticmethod
     def _is_public_ip(value):

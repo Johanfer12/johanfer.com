@@ -5,7 +5,9 @@ from django.http import HttpResponse
 from django.contrib.auth.decorators import user_passes_test
 from .models import Book
 from .models import VisitLog
+from .models import OwnerSignature
 from .middleware import get_client_ip
+from .visit_stats import invalidate_badge
 from django.db.models import Count, Sum
 from django.db.models import F, Q
 from django.urls import reverse
@@ -228,8 +230,21 @@ def _apply_visits_filters(filters):
     return visit_qs
 
 
+def _owner_signatures():
+    """IPs y visitor_id que han pasado por el login; es decir, míos."""
+    ips = set()
+    visitor_ids = set()
+    for ip, visitor_id in OwnerSignature.objects.values_list('ip_address', 'visitor_id'):
+        if ip:
+            ips.add(ip)
+        if visitor_id:
+            visitor_ids.add(visitor_id)
+    return ips, visitor_ids
+
+
 def _group_visits_by_country(visits, current_visitor_id, current_ip):
     groups = {}
+    owner_ips, owner_visitor_ids = _owner_signatures()
 
     for visit in visits:
         iso2 = (visit.country_code or '').upper()
@@ -242,6 +257,8 @@ def _group_visits_by_country(visits, current_visitor_id, current_ip):
         is_self = (
             bool(current_visitor_id and visit.visitor_id == current_visitor_id)
             or bool(current_ip and visit.ip_address == current_ip)
+            or (visit.ip_address in owner_ips)
+            or bool(visit.visitor_id and visit.visitor_id in owner_visitor_ids)
         )
 
         visit.country_flag = _iso2_to_flag(iso2)
@@ -316,6 +333,8 @@ def visits(request):
                 filtered_qs.filter(id__in=selected_ids).delete()
         elif action == 'delete_all_filtered':
             filtered_qs.delete()
+
+        invalidate_badge()
 
         query_string = urlencode({k: v for k, v in filters.items() if v})
         if query_string:

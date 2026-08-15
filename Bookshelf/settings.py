@@ -124,6 +124,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.media',
                 'Bookshelf.context_processors.site_branding',
+                'home_page.context_processors.visits_badge',
             ],
         },
     },
