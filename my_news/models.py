@@ -207,3 +207,68 @@ class AIModelSetting(models.Model):
     class Meta:
         verbose_name = "Configuración Global de Modelo IA"
         verbose_name_plural = "Configuraciones Globales de Modelo IA"
+
+
+class IngestionStatus(models.Model):
+    """Resultado de la última pasada de ingesta, para poder verlo desde el feed.
+
+    Existe porque el cron corre en otro proceso: el caché por defecto es LocMem
+    y no cruza de django-crontab a gunicorn, así que la única forma de que la
+    web sepa qué pasó en la última pasada es dejarlo escrito en la base.
+
+    Hasta ahora un fallo de la IA solo se notaba porque el feed dejaba de traer
+    noticias, y había que entrar por SSH a leer el log para saber por qué.
+
+    Es una fila única (``pk=1``); se sobrescribe en cada pasada.
+    """
+
+    STATE_OK = 'ok'
+    STATE_PAUSED = 'paused'
+    STATE_ERROR = 'error'
+    STATE_CHOICES = [
+        (STATE_OK, 'Correcta'),
+        (STATE_PAUSED, 'Pausada'),
+        (STATE_ERROR, 'Con error'),
+    ]
+
+    SINGLETON_PK = 1
+
+    state = models.CharField(
+        max_length=10,
+        choices=STATE_CHOICES,
+        default=STATE_OK,
+        verbose_name="Estado",
+    )
+    reason = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name="Motivo",
+        help_text="Resumen corto y legible de por qué se pausó o falló.",
+    )
+    detail = models.TextField(
+        blank=True,
+        verbose_name="Detalle",
+        help_text="Mensaje técnico del proveedor, para diagnosticar sin abrir el log.",
+    )
+    new_count = models.IntegerField(
+        default=0,
+        verbose_name="Noticias nuevas",
+    )
+    retry_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Reintento estimado",
+        help_text="Cuándo se espera que la cuota vuelva, si el proveedor lo indicó.",
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Actualizado")
+
+    class Meta:
+        verbose_name = "Estado de la ingesta"
+        verbose_name_plural = "Estado de la ingesta"
+
+    def __str__(self):
+        return f"Ingesta {self.get_state_display()} ({self.updated_at:%Y-%m-%d %H:%M})"
+
+    @property
+    def is_healthy(self):
+        return self.state == self.STATE_OK

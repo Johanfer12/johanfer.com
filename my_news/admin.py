@@ -3,7 +3,7 @@ from django import forms
 from django.utils import timezone
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources
-from .models import FeedSource, News, FilterWord, AIFilterInstruction, AIModelSetting, NewsFeedback
+from .models import FeedSource, News, FilterWord, AIFilterInstruction, AIModelSetting, NewsFeedback, IngestionStatus
 
 # --- Resource para FeedSource ---
 class FeedSourceResource(resources.ModelResource):
@@ -115,3 +115,14 @@ class AIModelSettingAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return True
+
+
+@admin.register(IngestionStatus)
+class IngestionStatusAdmin(admin.ModelAdmin):
+    """Solo lectura: lo escribe el cron al terminar cada pasada."""
+
+    list_display = ('state', 'reason', 'new_count', 'updated_at')
+    readonly_fields = ('state', 'reason', 'detail', 'new_count', 'retry_at', 'updated_at')
+
+    def has_add_permission(self, request):
+        return False

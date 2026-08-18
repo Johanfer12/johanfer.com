@@ -22,6 +22,7 @@ import html
 import logging
 from django.conf import settings
 from Bookshelf.html_sanitizer import sanitize_html
+from .ingestion_status import report_ok, report_paused
 
 try:
     from .vector_index import VectorIndexService, VectorIndexUnavailable
@@ -47,9 +48,12 @@ class CerebrasRateLimiter:
     SAFE_RPM_CAP = 250
     MAX_RETRY_SLEEP_SECONDS = 90
     MODEL_LIMITS = {
-        # Límite observado en los headers del proyecto de producción.
-        # El factor de seguridad reduce este valor a 22.500 TPM.
-        'gemma-4-31b': {'tpm': 30_000, 'rpm': 300},
+        # Valores de arranque, solo para la primera petición de cada proceso:
+        # a partir de la primera respuesta mandan las cabeceras.
+        # Medido en agosto de 2026, tras migrar la cuenta al plan gratuito:
+        # 5 peticiones por minuto (antes 300), 150 por hora y 2.400 por día;
+        # 30.000 tokens por minuto y 1.000.000 por hora y por día.
+        'gemma-4-31b': {'tpm': 30_000, 'rpm': 5},
         'gpt-oss-120b': {'tpm': 1_000_000, 'rpm': 1_000},
         'zai-glm-4.7': {'tpm': 500_000, 'rpm': 500},
     }
@@ -65,6 +69,11 @@ class CerebrasRateLimiter:
         self.reset_requests_at = None
         self.limit_tokens = None
         self.limit_requests = None
+        # Cuál de las tres ventanas (minuto/hora/día) es la que va más justa.
+        # Solo informativo, para que el aviso diga si lo agotado es la cuota
+        # del día o un pico pasajero del minuto.
+        self.tightest_tokens_window = None
+        self.tightest_requests_window = None
 
     class Deferred(Exception):
         """Señal interna: conviene pausar esta corrida y reintentar luego."""
@@ -72,10 +81,27 @@ class CerebrasRateLimiter:
 
     def get_limits(self, model_name):
         model_limits = self.MODEL_LIMITS.get(model_name or '', {})
-        tpm = int(model_limits.get('tpm') or self.DEFAULT_TPM)
-        rpm = int(model_limits.get('rpm') or self.DEFAULT_RPM)
-        safe_tpm = max(1, int(tpm * self.SAFETY_FACTOR))
-        safe_rpm = max(1, min(int(rpm * self.SAFETY_FACTOR), self.SAFE_RPM_CAP))
+        # Lo que diga la API manda sobre la tabla escrita a mano: los topes
+        # cambian al cambiar de plan y aquí se envejecen sin avisar. La tabla
+        # queda como valor de arranque, para la primera petición de un proceso
+        # nuevo, cuando todavía no ha llegado ninguna cabecera.
+        #
+        # Al valor medido no se le aplica el margen de seguridad: es exacto, y
+        # además viene acompañado del margen restante, que es un segundo freno.
+        # Recortar un 25% de un tope de 5 peticiones por minuto costaría casi la
+        # mitad del ritmo sin comprar ninguna garantía.
+        if self.limit_tokens:
+            safe_tpm = max(1, int(self.limit_tokens))
+        else:
+            tpm = int(model_limits.get('tpm') or self.DEFAULT_TPM)
+            safe_tpm = max(1, int(tpm * self.SAFETY_FACTOR))
+
+        if self.limit_requests:
+            safe_rpm = max(1, min(int(self.limit_requests), self.SAFE_RPM_CAP))
+        else:
+            rpm = int(model_limits.get('rpm') or self.DEFAULT_RPM)
+            safe_rpm = max(1, min(int(rpm * self.SAFETY_FACTOR), self.SAFE_RPM_CAP))
+
         return safe_tpm, safe_rpm
 
     def estimate_tokens(self, prompt, max_completion_tokens=1024):
@@ -109,61 +135,86 @@ class CerebrasRateLimiter:
             return None
         return headers.get(name) or headers.get(name.title()) or headers.get(name.lower())
 
+    def _read_number(self, headers, name):
+        raw = self._read_header(headers, name)
+        if raw is None:
+            return None
+        try:
+            return int(float(raw))
+        except (TypeError, ValueError):
+            return None
+
+    def tightest_window(self, headers, kind):
+        """Ventana más apretada de las tres que publica Cerebras.
+
+        Se miran minuto, hora y día y gana la que tenga menos margen. Antes solo
+        se leía la del minuto para los tokens, así que agotar la cuota diaria no
+        frenaba nada: se enviaba la petición y el límite se descubría al recibir
+        el error. Cada margen viaja junto a SU reset, porque son de duraciones
+        muy distintas — esperar el reset del minuto cuando lo agotado es el día
+        haría reintentar en vano durante horas.
+
+        Devuelve ``(margen, reset_en_segundos, ventana)`` o ``None``.
+        """
+        best = None
+        for window in ('minute', 'hour', 'day'):
+            remaining = self._read_number(headers, f'x-ratelimit-remaining-{kind}-{window}')
+            if remaining is None:
+                continue
+            reset = self.parse_reset_seconds(
+                self._read_header(headers, f'x-ratelimit-reset-{kind}-{window}')
+            )
+            if best is None or remaining < best[0]:
+                best = (remaining, reset, window)
+
+        if best is None:
+            # Formato antiguo, sin sufijo de ventana.
+            remaining = self._read_number(headers, f'x-ratelimit-remaining-{kind}')
+            if remaining is None:
+                return None
+            reset = self.parse_reset_seconds(
+                self._read_header(headers, f'x-ratelimit-reset-{kind}')
+            )
+            best = (remaining, reset, 'desconocida')
+
+        return best
+
     def update_from_headers(self, headers):
         now = time.monotonic()
-        remaining_tokens = (
-            self._read_header(headers, 'x-ratelimit-remaining-tokens-minute')
-            or self._read_header(headers, 'x-ratelimit-remaining-tokens')
-        )
-        remaining_requests = (
-            self._read_header(headers, 'x-ratelimit-remaining-requests-minute')
-            or self._read_header(headers, 'x-ratelimit-remaining-requests-hour')
-            or self._read_header(headers, 'x-ratelimit-remaining-requests-day')
-            or self._read_header(headers, 'x-ratelimit-remaining-requests')
-        )
-        limit_tokens = (
-            self._read_header(headers, 'x-ratelimit-limit-tokens-minute')
-            or self._read_header(headers, 'x-ratelimit-limit-tokens')
-        )
-        limit_requests = (
-            self._read_header(headers, 'x-ratelimit-limit-requests-minute')
-            or self._read_header(headers, 'x-ratelimit-limit-requests-hour')
-            or self._read_header(headers, 'x-ratelimit-limit-requests-day')
-            or self._read_header(headers, 'x-ratelimit-limit-requests')
-        )
-        reset_tokens = self.parse_reset_seconds(
-            self._read_header(headers, 'x-ratelimit-reset-tokens-minute')
-            or self._read_header(headers, 'x-ratelimit-reset-tokens')
-        )
-        reset_requests = self.parse_reset_seconds(
-            self._read_header(headers, 'x-ratelimit-reset-requests-minute')
-            or self._read_header(headers, 'x-ratelimit-reset-requests-hour')
-            or self._read_header(headers, 'x-ratelimit-reset-requests-day')
-            or self._read_header(headers, 'x-ratelimit-reset-requests')
-        )
 
-        try:
-            self.remaining_tokens = int(float(remaining_tokens)) if remaining_tokens is not None else None
-        except (TypeError, ValueError):
+        tokens = self.tightest_window(headers, 'tokens')
+        if tokens is None:
             self.remaining_tokens = None
+            self.reset_tokens_at = None
+            self.tightest_tokens_window = None
+        else:
+            remaining, reset, window = tokens
+            self.remaining_tokens = remaining
+            self.reset_tokens_at = now + reset if reset is not None else None
+            self.tightest_tokens_window = window
 
-        try:
-            self.remaining_requests = int(float(remaining_requests)) if remaining_requests is not None else None
-        except (TypeError, ValueError):
+        requests_left = self.tightest_window(headers, 'requests')
+        if requests_left is None:
             self.remaining_requests = None
+            self.reset_requests_at = None
+            self.tightest_requests_window = None
+        else:
+            remaining, reset, window = requests_left
+            self.remaining_requests = remaining
+            self.reset_requests_at = now + reset if reset is not None else None
+            self.tightest_requests_window = window
 
-        try:
-            self.limit_tokens = int(float(limit_tokens)) if limit_tokens is not None else None
-        except (TypeError, ValueError):
-            self.limit_tokens = None
-
-        try:
-            self.limit_requests = int(float(limit_requests)) if limit_requests is not None else None
-        except (TypeError, ValueError):
-            self.limit_requests = None
-
-        self.reset_tokens_at = now + reset_tokens if reset_tokens is not None else None
-        self.reset_requests_at = now + reset_requests if reset_requests is not None else None
+        # Los topes por minuto son los que alimentan el presupuesto local, que
+        # razona en ventanas de 60 s. Los de hora y día no sirven ahí: tomar el
+        # tope diario como si fuera por minuto permitiría una ráfaga enorme.
+        self.limit_tokens = (
+            self._read_number(headers, 'x-ratelimit-limit-tokens-minute')
+            or self._read_number(headers, 'x-ratelimit-limit-tokens')
+        )
+        self.limit_requests = (
+            self._read_number(headers, 'x-ratelimit-limit-requests-minute')
+            or self._read_number(headers, 'x-ratelimit-limit-requests')
+        )
 
     def _sleep_or_defer(self, wait_time, reason):
         if wait_time is None:
@@ -445,6 +496,10 @@ class FeedService:
 
     _GEMINI_CLIENT = None
     _CEREBRAS_CLIENT = None
+    # Último fallo al hablar con la IA, para poder explicarlo en el feed en vez
+    # de dejar solo un feed que no crece. Lo consume fetch_and_save_news al
+    # pausar la ingesta; se limpia en cuanto una llamada vuelve a funcionar.
+    _LAST_AI_FAILURE = None
     _VECTOR_INDEX = None
     _CEREBRAS_RATE_LIMITER = CerebrasRateLimiter()
 
@@ -534,6 +589,48 @@ class FeedService:
         return patterns
 
     @staticmethod
+    def _note_ai_failure(kind, reason, detail='', retry_seconds=None):
+        """Anota por qué falló la IA, en términos que se puedan leer en el feed."""
+        FeedService._LAST_AI_FAILURE = {
+            'kind': kind,
+            'reason': reason,
+            'detail': (detail or '')[:2000],
+            'retry_seconds': retry_seconds,
+        }
+
+    @staticmethod
+    def _clear_ai_failure():
+        FeedService._LAST_AI_FAILURE = None
+
+    @staticmethod
+    def _classify_ai_error(error, retry_seconds=None):
+        """Traduce el error del proveedor a un motivo entendible.
+
+        El 402 es el caso que motivó esto: la cuenta se quedó sin cuota y desde
+        fuera se veía igual que un día sin noticias.
+        """
+        texto = str(error)
+        if '402' in texto or 'payment_required' in texto.lower():
+            return (
+                'quota',
+                'La cuenta de Cerebras se quedó sin cuota (error 402). '
+                'Hay que revisar el plan o la facturación.',
+            )
+        if '429' in texto or 'rate_limit' in texto.lower():
+            limitador = FeedService._CEREBRAS_RATE_LIMITER
+            ventana = limitador.tightest_tokens_window or limitador.tightest_requests_window
+            nombres = {'minute': 'del minuto', 'hour': 'de la hora', 'day': 'del día'}
+            detalle_ventana = nombres.get(ventana, '')
+            larga = retry_seconds is not None and retry_seconds > 600
+            if detalle_ventana:
+                return (
+                    'quota' if larga else 'rate_limit',
+                    f'Se agotó la cuota {detalle_ventana} de la IA.',
+                )
+            return ('rate_limit', 'La IA está limitando las peticiones por ritmo.')
+        return ('error', 'La IA devolvió un error al generar el resumen.')
+
+    @staticmethod
     def _extract_retry_after_seconds(error):
         response = getattr(error, 'response', None)
         headers = getattr(response, 'headers', None)
@@ -545,26 +642,22 @@ class FeedService:
                     return max(1, int(float(retry_after)))
                 except (TypeError, ValueError):
                     pass
-            reset_tokens = FeedService._CEREBRAS_RATE_LIMITER.parse_reset_seconds(
-                headers.get('x-ratelimit-reset-tokens-minute')
-                or headers.get('X-Ratelimit-Reset-Tokens-Minute')
-                or headers.get('x-ratelimit-reset-tokens')
-            )
-            reset_requests = FeedService._CEREBRAS_RATE_LIMITER.parse_reset_seconds(
-                headers.get('x-ratelimit-reset-requests-minute')
-                or headers.get('x-ratelimit-reset-requests-day')
-                or headers.get('X-Ratelimit-Reset-Requests-Day')
-                or headers.get('x-ratelimit-reset-requests')
-            )
-            remaining_requests = headers.get('x-ratelimit-remaining-requests-day')
-            try:
-                requests_depleted = remaining_requests is not None and int(float(remaining_requests)) <= 0
-            except (TypeError, ValueError):
-                requests_depleted = False
-            if requests_depleted and reset_requests is not None:
-                return max(1, int(reset_requests) + 1)
-            if reset_tokens is not None:
-                return max(1, int(reset_tokens) + 1)
+            # ``update_from_headers`` ya dejó, para tokens y para peticiones, el
+            # margen de la ventana más apretada junto a su reset. Si alguno está
+            # agotado, ese reset es la espera real: puede ser medio minuto o
+            # puede ser hasta mañana, y quien decide qué hacer con una espera
+            # larga es quien llama (por encima de MAX_RETRY_SLEEP_SECONDS se
+            # pospone la noticia en vez de dormir).
+            limiter = FeedService._CEREBRAS_RATE_LIMITER
+            esperas = []
+            for restante, reset_en in (
+                (limiter.remaining_tokens, limiter.reset_tokens_at),
+                (limiter.remaining_requests, limiter.reset_requests_at),
+            ):
+                if restante is not None and restante <= 0 and reset_en is not None:
+                    esperas.append(reset_en - time.monotonic())
+            if esperas:
+                return max(1, int(max(esperas)) + 1)
 
         match = re.search(r'try again in ([0-9.]+s|(?:[0-9.]+m)?[0-9.]+s)', str(error), re.IGNORECASE)
         if match:
@@ -765,6 +858,7 @@ class FeedService:
                     processed_summary = processed_summary.replace('\n\n', '<br><br>').replace('\n', '<br>')
                     processed_summary = processed_summary.replace('', '<br>')
 
+                    FeedService._clear_ai_failure()
                     return sanitize_html(processed_summary), short_answer, ai_filter_reason
 
                 except json.JSONDecodeError as json_e:
@@ -780,6 +874,8 @@ class FeedService:
                 error_str = str(e)
                 if isinstance(e, CerebrasRateLimiter.Deferred):
                     logger.warning(str(e))
+                    kind, reason = FeedService._classify_ai_error(e)
+                    FeedService._note_ai_failure(kind, reason, error_str)
                     return None, None, None
                 if FeedService._is_cerebras_json_validation_error(e) and response_format_mode:
                     if response_format_mode == "json_schema":
@@ -797,12 +893,16 @@ class FeedService:
                             f"Cerebras pidió esperar {wait_time}s por rate limit; "
                             "se pospone esta noticia para una próxima actualización."
                         )
+                        kind, reason = FeedService._classify_ai_error(e, wait_time)
+                        FeedService._note_ai_failure(kind, reason, error_str, wait_time)
                         return None, None, None
                     if attempt >= max_retries - 1:
                         logger.warning(
                             f"Límite de peticiones Cerebras en último intento; "
                             f"se pospone esta noticia {wait_time}s para una próxima actualización."
                         )
+                        kind, reason = FeedService._classify_ai_error(e, wait_time)
+                        FeedService._note_ai_failure(kind, reason, error_str, wait_time)
                         return None, None, None
                     logger.warning(f"Límite de peticiones Cerebras (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
                     time.sleep(wait_time)
@@ -813,6 +913,8 @@ class FeedService:
                     time.sleep(wait_time)
                     continue
                 logger.exception("Error procesando contenido con Cerebras: %s", error_str)
+                kind, reason = FeedService._classify_ai_error(e)
+                FeedService._note_ai_failure(kind, reason, error_str)
                 return None, None, None
 
         logger.warning("Se agotaron los reintentos para procesar contenido con Cerebras.")
@@ -914,7 +1016,9 @@ class FeedService:
     def fetch_and_save_news(max_ai_items=None):
         logger.info("Iniciando proceso de obtención de noticias...")
         start_time = time.time()
-        
+        # Motivo por el que la pasada se cortó antes de tiempo, si se corta.
+        ai_failure = None
+
         logger.info("Inicializando modelos...")
         # Cliente Gemini solo para embeddings
         gemini_client = FeedService.initialize_gemini()
@@ -1279,6 +1383,12 @@ class FeedService:
                 logger.warning(
                     "Cerebras no generó resumen; se pausa la ingesta para reintentar luego."
                 )
+                ai_failure = FeedService._LAST_AI_FAILURE or {
+                    'kind': 'error',
+                    'reason': 'La IA no devolvió resumen y la ingesta se detuvo.',
+                    'detail': '',
+                    'retry_seconds': None,
+                }
                 break
 
             # >>>>> LÓGICA DE FILTRADO IA (después de palabra clave) <<<<<
@@ -1393,6 +1503,22 @@ class FeedService:
                 logger.info(f"Actualizada fecha de última obtención para {source.name}")
         
         total_time = time.time() - start_time
+
+        # Dejar anotado cómo fue la pasada: es lo único que verá la web, que
+        # corre en otro proceso y no tiene acceso a este log.
+        if ai_failure:
+            retry_at = None
+            if ai_failure.get('retry_seconds'):
+                retry_at = timezone.now() + timedelta(seconds=ai_failure['retry_seconds'])
+            report_paused(
+                ai_failure['reason'],
+                detail=ai_failure.get('detail', ''),
+                new_count=new_articles_count,
+                retry_at=retry_at,
+            )
+        else:
+            report_ok(new_count=new_articles_count)
+
         logger.info(f"\nProceso completado en {total_time:.2f} segundos")
         logger.info(f"Total de nuevas noticias: {new_articles_count}")
         logger.info(f"Noticias redundantes eliminadas: {redundant_count}")

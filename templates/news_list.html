@@ -20,6 +20,27 @@
     {% include 'header.html' %}
     
     <div class="main-content">
+        {% if ingestion_alert %}
+        <div class="ingest-alert ingest-alert--{{ ingestion_alert.level }}" role="status">
+            <svg class="ingest-alert__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M12 9v4"></path>
+                <path d="M12 17h.01"></path>
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            </svg>
+            <div class="ingest-alert__body">
+                <p class="ingest-alert__title">{{ ingestion_alert.title }}</p>
+                <p class="ingest-alert__message">{{ ingestion_alert.message }}</p>
+                <p class="ingest-alert__meta">Última pasada: {{ ingestion_alert.since|date:"d/m/Y H:i" }}</p>
+                {% if ingestion_alert.detail %}
+                <details class="ingest-alert__detail">
+                    <summary>Ver el error del proveedor</summary>
+                    <pre>{{ ingestion_alert.detail }}</pre>
+                </details>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
         {% include 'news_grid.html' with grid_id='news-grid' articles=page_obj card_id_prefix='news' show_save_button=True show_delete_button=user.is_staff show_similarity_score=True show_vote_buttons=True show_interest_score=True %}
 
         {% if is_paginated %}

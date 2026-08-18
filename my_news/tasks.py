@@ -6,6 +6,7 @@ from datetime import timedelta
 from .models import News
 from .models import AIModelSetting
 from .models import AIFilterInstruction
+from .ingestion_status import report_error
 from django.conf import settings
 from django.db import connection
 import os
@@ -253,9 +254,15 @@ def update_news_cron():
             except Exception:
                 logger.exception("Error repuntuando el feed tras el cron")
     except portalocker.exceptions.LockException:
+        # No es una avería: la pasada anterior sigue en marcha y terminará ella.
         logger.warning("Actualización de noticias omitida: ya hay otra ejecución en curso.")
-    except Exception:
+    except Exception as e:
         logger.exception("Error actualizando noticias")
+        # Que el fallo se vea en el feed y no solo aquí.
+        report_error(
+            'La actualización de noticias falló por completo.',
+            detail=str(e),
+        )
 
 
 def purge_old_news(days: int = 15):

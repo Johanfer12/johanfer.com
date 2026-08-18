@@ -1542,3 +1542,92 @@ body.reader-active {
     }
 }
 
+
+/* Aviso de que la ingesta de noticias no está corriendo bien. Solo se pinta en
+   la vista privada: sin él, una cuota agotada o un cron parado se ven igual que
+   un día tranquilo de noticias, y había que entrar por SSH a leer el log. */
+.ingest-alert {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    max-width: 940px;
+    margin: 0 auto 18px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(240, 185, 120, 0.5);
+    /* Casi opaco: el feed tiene un degradado de fondo y con transparencia alta
+       el aviso se fundía con él y dejaba de leerse como una alerta. */
+    background: rgba(46, 30, 16, 0.92);
+    color: #f6e3cd;
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
+.ingest-alert--error .ingest-alert__title {
+    color: #ffb4b4;
+}
+
+.ingest-alert--error {
+    border-color: rgba(240, 145, 145, 0.55);
+    background: rgba(50, 20, 20, 0.92);
+    color: #f8dada;
+}
+
+.ingest-alert__icon {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.85;
+}
+
+.ingest-alert__body {
+    min-width: 0;
+}
+
+.ingest-alert__title {
+    margin: 0 0 4px;
+    font-weight: 600;
+    color: #ffd9a8;
+}
+
+.ingest-alert__message {
+    margin: 0;
+}
+
+.ingest-alert__meta {
+    margin: 6px 0 0;
+    font-size: 0.82rem;
+    opacity: 0.7;
+}
+
+.ingest-alert__detail {
+    margin-top: 8px;
+    font-size: 0.82rem;
+}
+
+.ingest-alert__detail summary {
+    cursor: pointer;
+    opacity: 0.8;
+}
+
+.ingest-alert__detail pre {
+    margin: 8px 0 0;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.78rem;
+    opacity: 0.9;
+}
+
+@media (max-width: 768px) {
+    .ingest-alert {
+        margin: 0 12px 14px;
+        padding: 12px 14px;
+    }
+}

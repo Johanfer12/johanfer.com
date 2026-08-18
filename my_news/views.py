@@ -6,6 +6,7 @@ from django.http import HttpResponse
 from django.views.decorators.http import require_POST, require_GET
 from .services import FeedService, EmbeddingService
 from .interest import VectorUnavailable, percentile_of, record_vote
+from .ingestion_status import feed_alert
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.views import LoginView
 from django.utils.decorators import method_decorator
@@ -422,6 +423,9 @@ class NewsListView(ListView):
             'default_image_url': static('Img/News_Default.png'),
         }
         context['news_view_mode'] = {'saved_only': self.saved_only}
+        # Aviso de que la ingesta está parada o pausada. Solo en la vista
+        # privada: es información de mantenimiento, no del feed.
+        context['ingestion_alert'] = feed_alert()
 
         return context
 
