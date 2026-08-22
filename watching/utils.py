@@ -40,8 +40,16 @@ TMDB_METADATA_OVERRIDES = {
 # tenemos cuelgan de 329809. Sin esto saldría una segunda tarjeta "Bleach" en cuanto se
 # viera un episodio. La numeración encaja sola porque ambos cours comparten temporada en
 # TVDB: los que hay son S17E01-13 y los nuevos son S17E41-48.
+#
+# 2743422 ("Re:Zero kara Hajimeru Isekai Seikatsu", cour de 2026): declara tmdb 328061,
+# que en TMDB no es una serie sino la película "Ariana" (2003) —/tv/328061 responde 404—,
+# así que la obra salía en una tarjeta aparte, con el título japonés y sin carátula ni
+# sinopsis. La serie ya está aquí desde Trakt bajo tmdb 65942. La salida automática
+# tampoco existe: su imdb (tt36501927) resuelve en TMDB a un *episodio*, no a una serie,
+# así que `find` deja `tv_results` vacío.
 SIMKL_WORK_OVERRIDES = {
     2671730: 329809,
+    2743422: 65942,
 }
 
 # Cada entrada: clave en la respuesta de Simkl, tipo de medio del modelo, si es anime.
