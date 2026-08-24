@@ -1,6 +1,11 @@
 from datetime import date, datetime, time, timedelta
+import io
+import os
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
+
+from PIL import Image
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -9,7 +14,7 @@ from django.utils import timezone as dj_timezone
 from django.core.cache import cache
 
 from .models import Book, OwnerSignature, VisitLog
-from .utils import build_shelf_url, sync_currently_reading
+from .utils import build_shelf_url, download_as_webp, sync_currently_reading
 from .visit_stats import badge_count
 
 READING_ENTRY = {
@@ -528,3 +533,38 @@ class VisitsBadgeTests(TestCase):
         response = self.client.get('/bookshelf/')
 
         self.assertNotIn('visits_badge_count', response.context)
+
+
+class DownloadAsWebpTests(TestCase):
+    """La descarga de imagenes que comparten las portadas y las caratulas.
+
+    Estaba duplicada en home_page y en watching, y no la cubria ningun test,
+    justo la parte que borra el temporal pase lo que pase.
+    """
+
+    def jpeg_bytes(self):
+        buffer = io.BytesIO()
+        Image.new('RGB', (600, 900), (10, 20, 30)).save(buffer, 'JPEG')
+        return buffer.getvalue()
+
+    def test_saves_a_webp_and_leaves_no_temporary_file(self):
+        respuesta = SimpleNamespace(content=self.jpeg_bytes(), raise_for_status=lambda: None)
+
+        with tempfile.TemporaryDirectory() as carpeta:
+            destino = os.path.join(carpeta, 'portada.webp')
+            with patch('home_page.utils.requests.get', return_value=respuesta):
+                download_as_webp('https://example.com/x.jpg', destino, error_label='portada')
+
+            with Image.open(destino) as imagen:
+                self.assertEqual(imagen.format, 'WEBP')
+                self.assertEqual(imagen.size, (300, 450))
+            self.assertEqual(os.listdir(carpeta), ['portada.webp'])
+
+    def test_a_failed_download_leaves_nothing_behind(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            destino = os.path.join(carpeta, 'portada.webp')
+            with patch('home_page.utils.requests.get', side_effect=Exception('sin red')):
+                with self.assertLogs('home_page.utils', level='ERROR'):
+                    download_as_webp('https://example.com/x.jpg', destino, error_label='portada')
+
+            self.assertEqual(os.listdir(carpeta), [])

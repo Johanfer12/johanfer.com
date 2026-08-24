@@ -31,6 +31,29 @@ def convert_to_webp(source_path, destination_path):
     except Exception:
         logger.exception("Error al convertir la imagen")
 
+
+def download_as_webp(url, file_path, *, error_label):
+    """Descarga una imagen y la deja convertida a webp en `file_path`.
+
+    La usan las portadas de libros y las caratulas de Mi TV, que hacian lo
+    mismo con dos copias del mismo try/finally. El temporal se borra pase lo
+    que pase, y un fallo se registra sin tumbar la sincronizacion entera: una
+    imagen que falta se vuelve a intentar en la siguiente pasada.
+    """
+    folder = os.path.dirname(file_path)
+    temp_path = os.path.join(folder, f"temp_{os.path.basename(file_path)}.jpg")
+    try:
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        with open(temp_path, "wb") as f:
+            f.write(response.content)
+        convert_to_webp(temp_path, file_path)
+    except Exception:
+        logger.exception("Error descargando %s", error_label)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
 def parse_rss_datetime(value):
     if not value:
         return None
@@ -157,19 +180,11 @@ def download_cover_as_webp(cover_url, book_id, folder_path):
     if not cover_url or not book_id:
         return
 
-    file_path = os.path.join(folder_path, f"{book_id}.webp")
-    temp_path = os.path.join(folder_path, f"temp_{book_id}.jpg")
-    try:
-        response = requests.get(modify_cover_url(cover_url), timeout=30)
-        response.raise_for_status()
-        with open(temp_path, "wb") as f:
-            f.write(response.content)
-        convert_to_webp(temp_path, file_path)
-    except Exception:
-        logger.exception("Error al procesar portada RSS para libro %s", book_id)
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+    download_as_webp(
+        modify_cover_url(cover_url),
+        os.path.join(folder_path, f"{book_id}.webp"),
+        error_label=f"portada RSS del libro {book_id}",
+    )
 
 
 def sync_currently_reading(rss_url, folder_path):

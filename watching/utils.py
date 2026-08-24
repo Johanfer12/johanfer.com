@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import requests
 from django.conf import settings
 
-from home_page.utils import convert_to_webp
+from home_page.utils import download_as_webp
 
 from . import simkl
 from .models import SimklSyncState, WatchedItem
@@ -196,18 +196,7 @@ def download_poster(poster_url, file_name, force=False):
     file_path = os.path.join(folder, file_name)
     if os.path.exists(file_path) and not force:
         return
-    temp_path = os.path.join(folder, f"temp_{file_name}.jpg")
-    try:
-        response = requests.get(poster_url, timeout=30)
-        response.raise_for_status()
-        with open(temp_path, 'wb') as f:
-            f.write(response.content)
-        convert_to_webp(temp_path, file_path)
-    except Exception:
-        logger.exception("Error descargando póster %s", file_name)
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+    download_as_webp(poster_url, file_path, error_label=f"póster {file_name}")
 
 
 # --- Sincronización con Simkl --------------------------------------------------
