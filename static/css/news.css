@@ -1017,22 +1017,6 @@ body.comments-modal-open {
     .news-card .news-image { filter: saturate(0.95) contrast(0.98); }
 }
 
-/* Animación de eliminación (shrink + fade, barato en GPU) */
-@keyframes deleteCard {
-    0% {
-        transform: translateZ(0) scale(1);
-        opacity: 1;
-    }
-    60% {
-        transform: translateZ(0) scale(0.92);
-        opacity: 0.55;
-    }
-    100% {
-        transform: translateZ(0) scale(0.85);
-        opacity: 0;
-    }
-}
-
 .news-card-container.deleting {
     pointer-events: none !important;
     z-index: 10 !important;
