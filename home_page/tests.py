@@ -568,3 +568,29 @@ class DownloadAsWebpTests(TestCase):
                     download_as_webp('https://example.com/x.jpg', destino, error_label='portada')
 
             self.assertEqual(os.listdir(carpeta), [])
+
+
+class SitemapTests(TestCase):
+    """El sitemap tiene que listar todas las secciones publicas.
+
+    Se olvidaba Mi TV: estaba en el menu y en robots.txt como rastreable, pero
+    no en el sitemap, asi que era la unica seccion que los buscadores tenian que
+    encontrar por su cuenta.
+    """
+
+    def test_lists_every_public_section(self):
+        respuesta = self.client.get('/sitemap.xml')
+        cuerpo = respuesta.content.decode()
+
+        self.assertEqual(respuesta.status_code, 200)
+        for ruta in ('/', '/bookshelf/', '/bookshelf/stats/', '/about/',
+                     '/spotify/', '/spotify/stats/', '/spotify/deleted/',
+                     '/viendo/', '/viendo/stats/'):
+            with self.subTest(ruta=ruta):
+                self.assertIn(f'<loc>http://testserver{ruta}</loc>', cuerpo)
+
+    def test_does_not_advertise_what_robots_blocks(self):
+        cuerpo = self.client.get('/sitemap.xml').content.decode()
+
+        self.assertNotIn('/noticias/', cuerpo)
+        self.assertNotIn('/j_admin/', cuerpo)

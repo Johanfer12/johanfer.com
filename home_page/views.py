@@ -451,6 +451,8 @@ def sitemap_xml(request):
         reverse('spotify:dashboard'),
         reverse('spotify:stats'),
         reverse('spotify:deleted'),
+        reverse('watching:index'),
+        reverse('watching:stats'),
     ]
 
     body = [

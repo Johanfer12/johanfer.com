@@ -1,3 +1,12 @@
+# Qdrant para DESARROLLO LOCAL. En la Pi no se usa Docker: allí corre como
+# servicio de systemd (ver deploy/qdrant.service).
+#
+#   docker compose up -d
+#
+# El puerto y la ruta del almacenamiento salen del .env (QDRANT_URL y
+# QDRANT_STORAGE_PATH); si no hay QDRANT_STORAGE_PATH cae en ./qdrant_storage.
+# Sin esto levantado, la ingesta de noticias en local se queda sin detección de
+# duplicados y sin modelo de interés, pero no revienta.
 services:
   qdrant:
     image: qdrant/qdrant
