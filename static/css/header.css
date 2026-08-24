@@ -75,30 +75,6 @@
     overflow: visible;
 }
 
-/* Mismos tokens que .comments-badge del feed (news.css): el azul del sitio y no
-   rojo, porque adelanta un dato para no entrar en balde, no avisa de nada
-   urgente. Si cambia uno, cambiar el otro. */
-.visits-badge {
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    min-width: 16px;
-    height: 16px;
-    padding: 0 4px;
-    box-sizing: border-box;
-    border: 1px solid rgba(9, 16, 28, 0.85);
-    border-radius: 999px;
-    background: #8fb4e8;
-    color: #06101f;
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 14px;
-    letter-spacing: -0.02em;
-    text-align: center;
-    pointer-events: none;
-    box-shadow: 0 1px 3px rgba(2, 8, 18, 0.45);
-}
-
 .total {
     margin: 4px 0 0;
     color: rgba(227, 233, 245, 0.76);

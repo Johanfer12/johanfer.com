@@ -117,36 +117,6 @@ def fetch_episodes(simkl_id, is_anime=False):
     return _get(f'/{kind}/episodes/{simkl_id}', authenticated=False) or []
 
 
-def _post(path, payload):
-    query = {
-        'client_id': _client_id(),
-        'app-name': APP_NAME,
-        'app-version': APP_VERSION,
-    }
-    headers = {
-        'User-Agent': USER_AGENT,
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {_access_token()}',
-    }
-    response = requests.post(
-        f"{API_BASE}{path}", params=query, headers=headers, json=payload, timeout=120,
-    )
-    response.raise_for_status()
-    try:
-        return response.json() if response.content else None
-    except json.JSONDecodeError:
-        return None
-
-
-def add_to_history(payload):
-    """Marca como visto. El payload acepta `movies` y `shows` (anime incluido).
-
-    La forma manda: una serie sin `seasons`/`episodes` marca la serie COMPLETA, así que
-    siempre hay que bajar al episodio. Cada episodio puede llevar su propio `watched_at`.
-    """
-    return _post('/sync/history', payload)
-
-
 def fetch_detail(simkl_id, is_anime=False):
     """Ficha completa de una obra.
 

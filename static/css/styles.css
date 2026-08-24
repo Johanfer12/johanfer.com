@@ -1278,3 +1278,34 @@ a:hover {
         box-shadow: 0 4px 12px rgba(2, 8, 18, 0.26) !important;
     }
 }
+
+/* Insignias de contador: la de visitas en la cabecera y la de comentarios en
+   la tarjeta de noticia. Eran la misma regla escrita dos veces, en header.css y
+   en news.css, con un comentario en cada una pidiendo acordarse de cambiar la
+   otra. Aqui van juntas porque styles.css lo cargan las dos paginas y va antes
+   en la cascada, asi que cada hoja sigue pudiendo matizar lo suyo: el encogido
+   en movil de la de visitas y la animacion de aparicion de la de comentarios.
+
+   Azul del sitio y no rojo, a proposito: adelantan un dato para no entrar en
+   balde, no avisan de nada urgente. */
+.visits-badge,
+.comments-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    box-sizing: border-box;
+    border: 1px solid rgba(9, 16, 28, 0.85);
+    border-radius: 999px;
+    background: #8fb4e8;
+    color: #06101f;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 14px;
+    letter-spacing: -0.02em;
+    text-align: center;
+    pointer-events: none;
+    box-shadow: 0 1px 3px rgba(2, 8, 18, 0.45);
+}
