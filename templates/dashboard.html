@@ -18,6 +18,7 @@
     <meta name="twitter:description" content="Playlist de música de Johan en Spotify.">
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/spotify-icon.svg' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
     {% include 'pwa_head.html' %}

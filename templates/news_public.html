@@ -23,6 +23,7 @@
     <meta name="twitter:title" content="Noticias de Hoy | {{ site_name }}">
     <meta name="twitter:description" content="Las noticias más recientes disponibles en {{ site_name }}.">
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/news-icon.svg' %}">
+    {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/header.css' %}">
     <link rel="stylesheet" href="{% static 'css/news.css' %}">

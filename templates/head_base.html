@@ -1,0 +1,15 @@
+{% load static %}
+{% comment %}
+Base compartida del <head>. Va al PRINCIPIO, antes de la hoja de cada página.
+
+  tokens.css  la paleta de color, única declaración.
+  base.css    tipografía, reset de caja y el fondo animado de estrellas.
+
+El orden importa y no es cosmético: `body::after` de styles.css y home.css
+redefine `inset`, que la regla compartida `body::before, body::after` de
+base.css también fija. Si base.css cargara después ganaría ella y la capa de
+estrellas se descolocaría en todo el sitio. Por eso esto no vive en
+pwa_head.html, que se incluye al final del <head>.
+{% endcomment %}
+<link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'css/base.css' %}">

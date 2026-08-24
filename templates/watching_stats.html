@@ -17,6 +17,7 @@
     <meta name="twitter:title" content="Estadísticas de mi TV | {{ site_name }}">
     <meta name="twitter:description" content="Series y películas por año, mis calificaciones y décadas de estreno.">
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/watch-icon.svg' %}">
+    {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/stats.css' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">

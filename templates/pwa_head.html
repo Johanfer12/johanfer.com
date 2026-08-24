@@ -1,9 +1,6 @@
 {% load static %}
-{# Cabecera comun a las dieciseis plantillas: PWA y la paleta del sitio. #}
-{# tokens.css es la unica declaracion de los tokens de color; lo usan #}
-{# styles.css y home.css, que nunca se cargan juntas. Que vaya despues #}
-{# de ellas no importa: la cascada resuelve el valor antes de sustituir var(). #}
-<link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+{# Etiquetas comunes de PWA. Se incluye dentro del <head> de cada plantilla. #}
+{# Las hojas compartidas van en head_base.html, que se incluye antes. #}
 <meta name="theme-color" content="#070715">
 <meta name="application-name" content="{{ site_name }}">
 <meta name="mobile-web-app-capable" content="yes">

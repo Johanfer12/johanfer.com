@@ -17,6 +17,7 @@
     <meta name="twitter:title" content="Estadísticas de mi música | {{ site_name }}">
     <meta name="twitter:description" content="Géneros top, artistas top y evolución mensual de canciones.">
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/spotify-icon.svg' %}">
+    {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
     <link rel="stylesheet" href="{% static 'css/stats.css' %}">

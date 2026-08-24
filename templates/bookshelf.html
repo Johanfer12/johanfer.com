@@ -18,8 +18,8 @@
     <meta name="twitter:description" content="Lista de libros leídos por Johan con calificaciones, páginas y descripciones.">
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    <link rel="stylesheet" href="{% static 'css/header.css' %}">
     {% include 'pwa_head.html' %}
 </head>
 <body class="has-header">

@@ -18,8 +18,8 @@
     <meta name="twitter:description" content="Conoce el propósito, las secciones y la lógica detrás de libros, Spotify y noticias en {{ site_name }}.">
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    <link rel="stylesheet" href="{% static 'css/header.css' %}">
     <link rel="stylesheet" href="{% static 'css/about.css' %}">
     {% include 'pwa_head.html' %}
 </head>
