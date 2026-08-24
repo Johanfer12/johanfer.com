@@ -13,7 +13,7 @@ from django.utils import timezone
 from .models import FeedSource, News
 from .services import FeedService, CerebrasRateLimiter
 from .tasks import purge_old_news
-from .views import NEWS_NOTIFICATION_SETTLE_DELAY, PAGE_SIZE
+from .views import NEWS_NOTIFICATION_SETTLE_DELAY, PAGE_SIZE, _collapse_html_whitespace
 
 
 class FeedEntry(dict):
@@ -1034,3 +1034,99 @@ class NewsFeedOrderingTests(TestCase):
         self.assertEqual(payload['status'], 'success')
         self.assertEqual(payload['news_cards'], [])
         self.assertEqual(payload['cursor'], cursor)
+
+
+class NewsCardSingleSourceTests(TestCase):
+    """La tarjeta que llega por JSON y la que pinta la pagina son la misma.
+
+    El marcado estuvo duplicado en ``news_card.html`` y en ``renderNewsCardHTML``
+    (news_script.js), y las dos copias divergieron: al boton de guardar del JS le
+    faltaba ``type="button"`` y el ``alt`` de la imagen sin portada no coincidia.
+    Ahora el servidor renderiza la plantilla tambien para el JSON; estos tests
+    fallan si alguien vuelve a construir el marcado por otro lado.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.source = FeedSource.objects.create(
+            name='Fuente Tarjeta',
+            url='https://example.com/tarjeta.xml',
+        )
+        cls.superuser = get_user_model().objects.create_superuser(
+            username='card-admin',
+            email='card-admin@example.com',
+            password='test-pass-123',
+        )
+
+    def setUp(self):
+        cache.clear()
+
+    def make_news(self, count=1, prefix='tarjeta'):
+        base = timezone.now()
+        return [
+            News.objects.create(
+                title=f'{prefix} {i}',
+                description=f'Descripcion de {prefix} {i}',
+                link=f'https://example.com/{prefix}/{i}',
+                published_date=base - timedelta(minutes=i),
+                source=self.source,
+                guid=f'{prefix}-{uuid.uuid4().hex}-{i}',
+                is_ai_processed=True,
+            )
+            for i in range(count)
+        ]
+
+    def test_json_card_is_the_same_markup_as_the_rendered_page(self):
+        self.client.force_login(self.superuser)
+        self.make_news()
+
+        page = self.client.get(reverse('my_news:news_list'))
+        payload = self.client.get(reverse('my_news:get_page'), {'page': 1}).json()
+
+        # El JSON viaja sin la sangria de la plantilla, asi que se compara
+        # contra la pagina pasada por el mismo colapso: lo que se exige es que
+        # el marcado sea el mismo, no que lleve los mismos espacios.
+        self.assertIn(
+            payload['cards'][0]['html'],
+            _collapse_html_whitespace(page.content.decode()),
+        )
+
+    def test_json_card_carries_html_and_the_stamps_the_frontend_reads(self):
+        self.client.force_login(self.superuser)
+        article = self.make_news()[0]
+
+        card = self.client.get(reverse('my_news:get_page'), {'page': 1}).json()['cards'][0]
+
+        self.assertEqual(sorted(card), ['created_at', 'html', 'id', 'published_at'])
+        self.assertEqual(card['id'], article.id)
+        self.assertEqual(card['published_at'], article.published_date.isoformat())
+        self.assertIn(f'data-news-id="{article.id}"', card['html'])
+        self.assertIn(f'id="news-{article.id}"', card['html'])
+
+    def test_delete_button_follows_is_staff_and_ignores_another_users_cache(self):
+        self.make_news()
+        sin_staff = get_user_model().objects.create_user(
+            username='sin-staff',
+            password='test-pass-123',
+            is_superuser=True,
+            is_staff=False,
+        )
+
+        self.client.force_login(self.superuser)
+        con = self.client.get(reverse('my_news:get_page'), {'page': 1}).json()['cards'][0]['html']
+        self.client.force_login(sin_staff)
+        sin = self.client.get(reverse('my_news:get_page'), {'page': 1}).json()['cards'][0]['html']
+
+        self.assertIn('delete-btn', con)
+        self.assertNotIn('delete-btn', sin)
+
+    def test_replacement_card_after_delete_also_ships_html(self):
+        self.client.force_login(self.superuser)
+        articles = self.make_news(PAGE_SIZE + 1, prefix='reemplazo')
+
+        response = self.client.post(
+            reverse('my_news:delete_news', args=[articles[0].id]),
+            {'page': 1, 'order': 'desc'},
+        )
+
+        self.assertIn('news-card-container', response.json()['card']['html'])

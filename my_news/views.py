@@ -1,22 +1,20 @@
 from django.shortcuts import get_object_or_404, render
+from django.template.loader import render_to_string
 from django.views.generic import ListView
 from .models import News
 from django.http import JsonResponse
 from django.http import HttpResponse
 from django.views.decorators.http import require_POST, require_GET
 from .services import FeedService
-from .interest import VectorUnavailable, percentile_of, record_vote
+from .interest import VectorUnavailable, record_vote
 from .ingestion_status import feed_alert
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.views import LoginView
 from django.utils.decorators import method_decorator
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from django.urls import reverse
-from django.templatetags.static import static
 from django.core.cache import cache
 from datetime import datetime, time as datetime_time, timedelta
-from Bookshelf.html_sanitizer import sanitize_html
 import pytz
 from django.db.models import Q, Count, Max
 from .tasks import retry_summarize_pending
@@ -131,41 +129,61 @@ def _get_total_news_and_pages(search_query=None, saved_only=False):
     return result
 
 
-def _interest_bucket(percentile):
-    """Franja de color, alineada con las clases CSS de la tarjeta."""
-    if percentile is None:
-        return ''
-    if percentile >= 66:
-        return 'is-high'
-    if percentile >= 33:
-        return 'is-mid'
-    return 'is-low'
+def _collapse_html_whitespace(html):
+    """Quita la sangría que los ``{% if %}`` de la plantilla dejan por medio.
+
+    Cada línea se queda sin espacios a los lados y las vacías se caen. HTML
+    colapsa cualquier racha de espacios en uno solo, y entre dos líneas sigue
+    quedando el salto, así que lo que se ve no cambia. Es seguro porque el
+    marcado de la tarjeta no tiene ``pre`` ni ``textarea`` (ver ALLOWED_TAGS
+    del sanitizador), que son los únicos sitios donde el espacio contaría.
+
+    Sin esto la tarjeta ocupa un 18% más: la plantilla está indentada para
+    leerse, no para viajar.
+    """
+    return "\n".join(
+        stripped for line in html.splitlines() if (stripped := line.strip())
+    )
 
 
-def _serialize_news_card(article):
-    published_local = timezone.localtime(article.published_date) if article.published_date else None
-    # La distribución va cacheada, así que resolverla por tarjeta no pega a la BD.
-    interest_percentile = percentile_of(article.interest_score)
+def _card_render_flags(request):
+    """Los mismos indicadores con los que news_list.html incluye news_grid.html.
+
+    Tienen que coincidir: una tarjeta que llega por JSON acaba al lado de las
+    que pintó la plantilla, y cualquier diferencia se vería como dos estilos
+    de tarjeta en la misma rejilla.
+    """
+    return {
+        'card_id_prefix': 'news',
+        'show_save_button': True,
+        'show_delete_button': bool(request.user.is_staff),
+        'show_similarity_score': True,
+        'show_vote_buttons': True,
+        'show_interest_score': True,
+    }
+
+
+def _serialize_news_card(article, request):
+    """Tarjeta lista para insertar en la rejilla, más lo que el JS necesita.
+
+    El HTML lo pinta ``news_card.html``, la misma plantilla que usa la carga
+    inicial de la página. Antes había una segunda copia del marcado dentro de
+    ``news_script.js`` y las dos habían empezado a divergir.
+
+    No se pasa ``request`` a ``render_to_string`` a propósito: la plantilla no
+    lo usa, y hacerlo ejecutaría los context processors una vez por tarjeta.
+    """
+    html = render_to_string(
+        'news_card.html',
+        {'article': article, **_card_render_flags(request)},
+    )
     return {
         'id': article.id,
-        'title': article.title or '',
-        'description_html': sanitize_html(article.description),
-        'link': article.link or '',
-        'image_url': article.image_url or static('Img/News_Default.png'),
-        'short_answer': article.short_answer or '',
-        'source_name': article.source.name if article.source_id and article.source else '',
+        # Sellos de tiempo que el JS lee del dataset para ordenar, deduplicar
+        # y decidir si una noticia nueva entra en la página visible.
         'published_at': article.published_date.isoformat() if article.published_date else None,
-        'published_label': published_local.strftime('%d/%m/%Y %H:%M') if published_local else '',
         'created_at': article.created_at.isoformat() if article.created_at else None,
-        'created_cursor': f"{article.created_at.isoformat()}|{article.id}" if article.created_at else None,
-        'similarity_score': article.similarity_score,
-        'similarity_label': f"{article.similarity_score:.2f}" if article.similarity_score is not None else '',
-        'is_saved': bool(article.is_saved),
-        'user_vote': int(article.user_vote or 0),
-        'interest_percentile': interest_percentile,
-        'interest_bucket': _interest_bucket(interest_percentile),
-        'has_comment_extractor': supports_comment_extraction(article.link),
-        'comments_url': reverse('my_news:news_comments', args=[article.id]),
+        'html': _collapse_html_whitespace(html),
     }
 
 
@@ -241,7 +259,7 @@ def _news_notification_cutoff():
     return timezone.now() - NEWS_NOTIFICATION_SETTLE_DELAY
 
 
-def _build_page_response(*, order, page, cursor, search_query, saved_only=False):
+def _build_page_response(request, *, order, page, cursor, search_query, saved_only=False):
     base_qs = _apply_feed_filters(
         News.visible.select_related('source'),
         saved_only=saved_only,
@@ -278,7 +296,7 @@ def _build_page_response(*, order, page, cursor, search_query, saved_only=False)
     items = list(base_qs[:PAGE_SIZE + 1])
     has_more = len(items) > PAGE_SIZE
     items = items[:PAGE_SIZE]
-    cards = [_serialize_news_card(article) for article in items]
+    cards = [_serialize_news_card(article, request) for article in items]
 
     next_cursor = None
     if has_more:
@@ -333,7 +351,7 @@ def delete_news(request, pk):
         
         # Si hay una noticia para reemplazar, incluirla en la respuesta
         if next_news:
-            response_data['card'] = _serialize_news_card(next_news)
+            response_data['card'] = _serialize_news_card(next_news, request)
         
         return JsonResponse(response_data)
     except News.DoesNotExist:
@@ -417,10 +435,6 @@ class NewsListView(ListView):
         context['order'] = self.request.GET.get('order', 'desc')
         latest_created = current_queryset.order_by('-created_at', '-id').values_list('created_at', 'id').first()
         context['initial_news_cursor'] = f"{latest_created[0].isoformat()}|{latest_created[1]}" if latest_created else None
-        context['news_user_flags'] = {
-            'is_staff': bool(self.request.user.is_staff),
-            'default_image_url': static('Img/News_Default.png'),
-        }
         context['news_view_mode'] = {'saved_only': self.saved_only}
         # Aviso de que la ingesta está parada o pausada. Solo en la vista
         # privada: es información de mantenimiento, no del feed.
@@ -486,7 +500,7 @@ def check_new_news(request):
             news_qs = news_qs.none()
 
         new_news = list(news_qs.order_by('created_at', 'id')[:200])
-        news_cards = [_serialize_news_card(article) for article in new_news]
+        news_cards = [_serialize_news_card(article, request) for article in new_news]
         latest_cursor = None
         if new_news:
             last_item = new_news[-1]
@@ -549,13 +563,16 @@ def get_page(request):
         cursor = request.GET.get('cursor')
 
         version = _get_cache_version()
-        key_raw = f"{version}|{order}|{search_query or ''}|{page}|{cursor or ''}|{int(saved_only)}"
+        # is_staff entra en la clave porque desde que la tarjeta se renderiza
+        # en el servidor el boton de eliminar viaja dentro del HTML cacheado.
+        key_raw = f"{version}|{order}|{search_query or ''}|{page}|{cursor or ''}|{int(saved_only)}|{int(request.user.is_staff)}"
         cache_key = f"news:page:{hashlib.md5(key_raw.encode('utf-8')).hexdigest()}"
         cached = cache.get(cache_key)
         if cached:
             return JsonResponse(cached)
 
         payload = _build_page_response(
+            request,
             order=order,
             page=page,
             cursor=cursor,
@@ -589,7 +606,7 @@ def undo_delete(request, pk):
 
         return JsonResponse({
             'status': 'success',
-            'card': _serialize_news_card(news),
+            'card': _serialize_news_card(news, request),
             'total_news': total_news,
             'total_pages': total_pages
         })
@@ -625,7 +642,7 @@ def latest_deleted_news(request):
         return JsonResponse({
             'status': 'success',
             'news_id': latest.id,
-            'card': _serialize_news_card(latest),
+            'card': _serialize_news_card(latest, request),
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})

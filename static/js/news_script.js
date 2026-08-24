@@ -42,19 +42,6 @@
             button.tabIndex = isOpen ? 0 : -1;
         });
     };
-    const USER_FLAGS = (() => {
-        try {
-            const raw = $('#news-user-flags')?.textContent;
-            if (!raw) return {is_staff: false, default_image_url: ''};
-            const parsed = JSON.parse(raw);
-            return {
-                is_staff: !!parsed.is_staff,
-                default_image_url: parsed.default_image_url || '',
-            };
-        } catch (_) {
-            return {is_staff: false, default_image_url: ''};
-        }
-    })();
     const INITIAL_CURSOR = (() => {
         try {
             const raw = $('#initial-news-cursor')?.textContent;
@@ -641,13 +628,6 @@
         }
     };
 
-    const escapeHtml = (value) => String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-
     const isSavedView = () => !!VIEW_MODE.saved_only;
     const getSavedIconHtml = (isSaved) => (isSaved ? BOOKMARK_SAVED_HTML : BOOKMARK_DEFAULT_HTML);
     const updateSaveButtonVisual = (button, isSaved) => {
@@ -659,81 +639,7 @@
         button.setAttribute('aria-label', isSaved ? 'Guardada' : 'Guardar');
     };
 
-    const renderNewsCardHTML = (data) => {
-        if (!data || !data.id) return '';
-        const similarity = data.similarity_label
-            ? `<span class="similarity-score">${escapeHtml(data.similarity_label)}</span>`
-            : '';
-        const shortAnswer = data.short_answer
-            ? `<div class="short-answer">${escapeHtml(data.short_answer)}</div>`
-            : '';
-        const saveButton = `<button class="news-link icon-only save-btn ${data.is_saved ? 'is-saved' : ''}" data-id="${escapeHtml(data.id)}" data-saved="${data.is_saved ? 'true' : 'false'}" title="${data.is_saved ? 'Guardada' : 'Guardar'}" aria-label="${data.is_saved ? 'Guardada' : 'Guardar'}">
-                    ${getSavedIconHtml(!!data.is_saved)}
-                </button>`;
-        const deleteButton = USER_FLAGS.is_staff ? `
-                <button class="news-link icon-only delete-btn" data-id="${escapeHtml(data.id)}" title="Eliminar" aria-label="Eliminar">
-                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M10 12V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                        <path d="M14 12V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                        <path d="M4 7H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                        <path d="M6 10V18C6 19.6569 7.34315 21 9 21H15C16.6569 21 18 19.6569 18 18V10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                        <path d="M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5V7H9V5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                    </svg>
-                </button>` : '';
-        const commentsButton = data.has_comment_extractor ? `
-                <button type="button" class="news-link icon-only comments-btn" data-comments-url="${escapeHtml(data.comments_url || '')}" title="Ver comentarios" aria-label="Ver comentarios">
-                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M5 4H19C20.1046 4 21 4.89543 21 6V15C21 16.1046 20.1046 17 19 17H10L5 20V17C3.89543 17 3 16.1046 3 15V6C3 4.89543 3.89543 4 5 4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                    </svg>
-                </button>` : '';
-        const voteButtons = `
-                <button type="button" class="news-link icon-only vote-btn vote-up ${data.user_vote === 1 ? 'is-active' : ''}" data-id="${escapeHtml(data.id)}" data-vote="1" title="Me interesa" aria-label="Me interesa" aria-pressed="${data.user_vote === 1 ? 'true' : 'false'}">
-                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                    </svg>
-                </button>
-                <button type="button" class="news-link icon-only vote-btn vote-down ${data.user_vote === -1 ? 'is-active' : ''}" data-id="${escapeHtml(data.id)}" data-vote="-1" title="No me interesa" aria-label="No me interesa" aria-pressed="${data.user_vote === -1 ? 'true' : 'false'}">
-                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                    </svg>
-                </button>`;
-        const interest = data.interest_percentile === null || data.interest_percentile === undefined
-            ? ''
-            : `<span class="interest-score ${escapeHtml(data.interest_bucket || '')}" title="Encaja contigo más que el ${escapeHtml(data.interest_percentile)}% del feed, según tus pulgares">${escapeHtml(data.interest_percentile)}%</span>`;
-        const fallbackImage = USER_FLAGS.default_image_url;
-        return `<div class="news-card-container" id="news-${escapeHtml(data.id)}" data-news-id="${escapeHtml(data.id)}" data-published-at="${escapeHtml(data.published_at || '')}" data-created-at="${escapeHtml(data.created_at || '')}">
-    <div class="news-card">
-        <div class="card-front">
-            <div class="news-media-zone">
-                <img src="${escapeHtml(data.image_url || fallbackImage)}" data-fallback-src="${escapeHtml(fallbackImage)}" alt="${escapeHtml(data.title)}" class="news-image" loading="lazy" decoding="async">
-            </div>
-            <h3 class="news-title">${escapeHtml(data.title)}</h3>
-            ${shortAnswer}
-            <div class="news-meta">
-                <span class="meta-info">${escapeHtml(data.source_name)} - ${escapeHtml(data.published_label || '')}</span>
-                ${interest}
-                ${similarity}
-            </div>
-        </div>
-        <div class="card-back">
-            <div class="news-description">${data.description_html || ''}</div>
-            <div class="news-links">
-                ${commentsButton}
-                <a href="${escapeHtml(data.link)}" target="_blank" rel="noopener noreferrer" class="news-link icon-only source-link" title="Fuente" aria-label="Fuente">
-                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M12.7076 18.3639L11.2933 19.7781C9.34072 21.7308 6.1749 21.7308 4.22228 19.7781C2.26966 17.8255 2.26966 14.6597 4.22228 12.7071L5.63649 11.2929M18.3644 12.7071L19.7786 11.2929C21.7312 9.34024 21.7312 6.17441 19.7786 4.22179C17.826 2.26917 14.6602 2.26917 12.7076 4.22179L11.2933 5.636M8.50045 15.4999L15.5005 8.49994" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                    </svg>
-                </a>
-                ${voteButtons}
-                ${saveButton}
-                ${deleteButton}
-            </div>
-        </div>
-    </div>
-</div>`;
-    };
-
-    /** Crea elemento de tarjeta desde payload (data JSON o HTML legado) */
+    /** Sella en el dataset lo que el JS necesita leer sin volver al servidor */
     const applyCardDataset = (card, data = null) => {
         if (!card) return;
         const resolvedId = normalizeId(data?.id || card.dataset.newsId || card.id.replace('news-', ''));
@@ -752,14 +658,16 @@
         else delete card.dataset.createdAt;
     };
 
+    // El marcado lo pinta el servidor con news_card.html, la misma plantilla
+    // que usa la carga inicial. Antes se reconstruia aqui y las dos copias
+    // habian empezado a divergir.
     const createCardFromPayload = (item) => {
-        const data = item?.id != null ? item : null;
-        const html = data ? renderNewsCardHTML(data) : '';
+        const html = item?.html;
         if (!html) return {card: null};
         const temp = document.createElement('div');
-        temp.innerHTML = html;
+        temp.innerHTML = html.trim();
         const card = temp.firstElementChild;
-        applyCardDataset(card, data);
+        applyCardDataset(card, item);
         return {card};
     };
 
