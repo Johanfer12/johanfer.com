@@ -1,0 +1,10 @@
+{% comment %}
+Pastilla de "cargando más…" del scroll infinito. El texto lo pone quien
+incluye la plantilla, con loader_label.
+{% endcomment %}
+<div id="loading" class="feed-loader" role="status" aria-live="polite">
+    <span class="feed-loader-pill">
+        <span class="feed-loader-orbit" aria-hidden="true"></span>
+        <span class="feed-loader-text">Cargando más {{ loader_label }}…</span>
+    </span>
+</div>
