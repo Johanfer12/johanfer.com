@@ -34,50 +34,32 @@
             <div class="news-links">
                 {% if article.link|has_comment_extractor %}
                 <button type="button" class="news-link icon-only comments-btn" data-comments-url="{% url 'my_news:news_comments' article.id %}" title="Ver comentarios" aria-label="Ver comentarios">
-                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M5 4H19C20.1046 4 21 4.89543 21 6V15C21 16.1046 20.1046 17 19 17H10L5 20V17C3.89543 17 3 16.1046 3 15V6C3 4.89543 3.89543 4 5 4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                    </svg>
+                    <svg class="news-icon" aria-hidden="true"><use href="#ic-comments"></use></svg>
                 </button>
                 {% endif %}
                 <a href="{{ article.link }}" target="_blank" rel="noopener noreferrer" class="news-link icon-only source-link" title="Fuente" aria-label="Fuente">
-                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M12.7076 18.3639L11.2933 19.7781C9.34072 21.7308 6.1749 21.7308 4.22228 19.7781C2.26966 17.8255 2.26966 14.6597 4.22228 12.7071L5.63649 11.2929M18.3644 12.7071L19.7786 11.2929C21.7312 9.34024 21.7312 6.17441 19.7786 4.22179C17.826 2.26917 14.6602 2.26917 12.7076 4.22179L11.2933 5.636M8.50045 15.4999L15.5005 8.49994" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                    </svg>
+                    <svg class="news-icon" aria-hidden="true"><use href="#ic-source"></use></svg>
                 </a>
                 {% if show_vote_buttons %}
                 <button type="button" class="news-link icon-only vote-btn vote-up {% if article.user_vote == 1 %}is-active{% endif %}" data-id="{{ article.id }}" data-vote="1" title="Me interesa" aria-label="Me interesa" aria-pressed="{% if article.user_vote == 1 %}true{% else %}false{% endif %}">
-                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                    </svg>
+                    <svg class="news-icon" aria-hidden="true"><use href="#ic-vote-up"></use></svg>
                 </button>
                 <button type="button" class="news-link icon-only vote-btn vote-down {% if article.user_vote == -1 %}is-active{% endif %}" data-id="{{ article.id }}" data-vote="-1" title="No me interesa" aria-label="No me interesa" aria-pressed="{% if article.user_vote == -1 %}true{% else %}false{% endif %}">
-                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                    </svg>
+                    <svg class="news-icon" aria-hidden="true"><use href="#ic-vote-down"></use></svg>
                 </button>
                 {% endif %}
                 {% if show_save_button %}
                 <button type="button" class="news-link icon-only save-btn {% if article.is_saved %}is-saved{% endif %}" data-id="{{ article.id }}" data-saved="{% if article.is_saved %}true{% else %}false{% endif %}" title="Guardar" aria-label="Guardar">
                     {% if article.is_saved %}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="news-icon bookmark-icon bookmark-saved" viewBox="0 0 16 16" aria-hidden="true">
-                        <path fill-rule="evenodd" d="M2 15.5V2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.74.439L8 13.069l-5.26 2.87A.5.5 0 0 1 2 15.5zm8.854-9.646a.5.5 0 0 0-.708-.708L7.5 7.793 6.354 6.646a.5.5 0 1 0-.708.708l1.5 1.5a.5.5 0 0 0 .708 0l3-3z"/>
-                    </svg>
+                    <svg class="news-icon" aria-hidden="true"><use href="#ic-bookmark-saved"></use></svg>
                     {% else %}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="news-icon bookmark-icon bookmark-default" viewBox="0 0 16 16" aria-hidden="true">
-                        <path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
-                    </svg>
+                    <svg class="news-icon" aria-hidden="true"><use href="#ic-bookmark"></use></svg>
                     {% endif %}
                 </button>
                 {% endif %}
                 {% if show_delete_button %}
                 <button type="button" class="news-link icon-only delete-btn" data-id="{{ article.id }}" title="Eliminar" aria-label="Eliminar">
-                    <svg viewBox="0 0 24 24" class="news-icon" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M10 12V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                        <path d="M14 12V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                        <path d="M4 7H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                        <path d="M6 10V18C6 19.6569 7.34315 21 9 21H15C16.6569 21 18 19.6569 18 18V10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                        <path d="M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5V7H9V5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                    </svg>
+                    <svg class="news-icon" aria-hidden="true"><use href="#ic-delete"></use></svg>
                 </button>
                 {% endif %}
             </div>

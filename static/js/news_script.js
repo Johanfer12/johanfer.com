@@ -99,8 +99,10 @@
     const err = (...args) => console.error('[news]', ...args);
     const SHARE_ICON_HTML = '<svg class="share-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 483 483" aria-hidden="true"><path fill="currentColor" d="M395.72,0c-48.204,0-87.281,39.078-87.281,87.281c0,2.036,0.164,4.03,0.309,6.029l-161.233,75.674 c-15.668-14.971-36.852-24.215-60.231-24.215c-48.204,0.001-87.282,39.079-87.282,87.282c0,48.204,39.078,87.281,87.281,87.281 c15.206,0,29.501-3.907,41.948-10.741l69.789,58.806c-3.056,8.896-4.789,18.396-4.789,28.322c0,48.204,39.078,87.281,87.281,87.281 c48.205,0,87.281-39.078,87.281-87.281s-39.077-87.281-87.281-87.281c-15.205,0-29.5,3.908-41.949,10.74l-69.788-58.805 c3.057-8.891,4.789-18.396,4.789-28.322c0-2.035-0.164-4.024-0.308-6.029l161.232-75.674c15.668,14.971,36.852,24.215,60.23,24.215 c48.203,0,87.281-39.078,87.281-87.281C482.999,39.079,443.923,0,395.72,0z"/></svg>';
     const SHARE_CHECK_HTML = '<svg class="share-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.285 6.709a1 1 0 0 1 .006 1.414l-9.3 9.4a1 1 0 0 1-1.421.005L3.71 11.72a1 1 0 1 1 1.414-1.414l5.146 5.146 8.593-8.68a1 1 0 0 1 1.422-.063z"/></svg>';
-    const BOOKMARK_DEFAULT_HTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="news-icon bookmark-icon bookmark-default" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/></svg>';
-    const BOOKMARK_SAVED_HTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="news-icon bookmark-icon bookmark-saved" viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2 15.5V2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.74.439L8 13.069l-5.26 2.87A.5.5 0 0 1 2 15.5zm8.854-9.646a.5.5 0 0 0-.708-.708L7.5 7.793 6.354 6.646a.5.5 0 1 0-.708.708l1.5 1.5a.5.5 0 0 0 .708 0l3-3z"/></svg>';
+    // El dibujo vive en el sprite de la pagina (templates/news_icons.html),
+    // el mismo que usa la tarjeta. Aqui solo se cambia a cual se apunta.
+    const bookmarkIconHtml = (id) =>
+        `<svg class="news-icon" aria-hidden="true"><use href="#${id}"></use></svg>`;
 
     const getCookie = (name) => {
         const value = document.cookie
@@ -629,7 +631,7 @@
     };
 
     const isSavedView = () => !!VIEW_MODE.saved_only;
-    const getSavedIconHtml = (isSaved) => (isSaved ? BOOKMARK_SAVED_HTML : BOOKMARK_DEFAULT_HTML);
+    const getSavedIconHtml = (isSaved) => bookmarkIconHtml(isSaved ? 'ic-bookmark-saved' : 'ic-bookmark');
     const updateSaveButtonVisual = (button, isSaved) => {
         if (!button) return;
         button.classList.toggle('is-saved', !!isSaved);

@@ -34,6 +34,8 @@
     {% include 'news_public_header.html' %}
 
     <main class="main-content public-news-page">
+        {% include 'news_icons.html' %}
+
         {% include 'news_grid.html' with grid_id='public-news-grid' articles=page_obj card_id_prefix='public-news' show_save_button=False show_delete_button=True show_similarity_score=False %}
 
         <div class="public-news-empty" id="public-news-empty" {% if page_obj %}hidden{% endif %}>
