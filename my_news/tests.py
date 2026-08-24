@@ -1,4 +1,5 @@
 from datetime import timedelta
+import time
 import uuid
 from unittest.mock import patch
 from types import SimpleNamespace
@@ -128,10 +129,17 @@ class CerebrasRateLimiterTests(SimpleTestCase):
         FeedService._CEREBRAS_RATE_LIMITER = CerebrasRateLimiter()
         FeedService._CEREBRAS_RATE_LIMITER.SAFE_RPM_CAP = 500
 
-    def test_model_limits_are_conservative_for_news_processing(self):
+    def test_starting_limits_come_from_the_measured_free_plan(self):
+        """MODEL_LIMITS es solo el valor de arranque, y viene de una medida.
+
+        Agosto de 2026, plan gratuito: 5 peticiones y 30.000 tokens por minuto
+        (la tabla decia 300 rpm, de cuando la cuenta era de pago). Mientras no
+        llegan cabeceras se les aplica SAFETY_FACTOR, de ahi 22.500 y 3.
+        """
         limiter = CerebrasRateLimiter()
 
-        self.assertEqual(limiter.get_limits('gemma-4-31b'), (22_500, 225))
+        self.assertEqual(limiter.MODEL_LIMITS['gemma-4-31b'], {'tpm': 30_000, 'rpm': 5})
+        self.assertEqual(limiter.get_limits('gemma-4-31b'), (22_500, 3))
 
     def test_reset_header_duration_is_parsed(self):
         limiter = CerebrasRateLimiter()
@@ -154,9 +162,52 @@ class CerebrasRateLimiterTests(SimpleTestCase):
         self.assertEqual(limiter.remaining_tokens, 1234)
         self.assertEqual(limiter.remaining_requests, 42)
         self.assertEqual(limiter.limit_tokens, 500000)
-        self.assertEqual(limiter.limit_requests, 1000000000)
         self.assertIsNotNone(limiter.reset_tokens_at)
         self.assertIsNotNone(limiter.reset_requests_at)
+
+    def test_a_daily_cap_is_not_taken_as_the_per_minute_budget(self):
+        """El margen del dia frena; su tope no alimenta el presupuesto local.
+
+        El presupuesto razona en ventanas de 60 s, asi que leer 1.000.000.000
+        al dia como si fuera por minuto autorizaria una rafaga sin freno. Hasta
+        agosto de 2026 limit_requests caia al valor del dia y este test exigia
+        justo eso; el refactor de tightest_window lo corrigio y la expectativa
+        se quedo atras.
+        """
+        limiter = CerebrasRateLimiter()
+
+        limiter.update_from_headers({
+            'x-ratelimit-remaining-requests-day': '42',
+            'x-ratelimit-limit-requests-day': '1000000000',
+        })
+
+        self.assertEqual(limiter.remaining_requests, 42)
+        self.assertIsNone(limiter.limit_requests)
+
+    def test_a_per_minute_cap_does_feed_the_budget(self):
+        limiter = CerebrasRateLimiter()
+
+        limiter.update_from_headers({'x-ratelimit-limit-requests-minute': '5'})
+
+        # Al tope medido no se le aplica SAFETY_FACTOR: es exacto.
+        self.assertEqual(limiter.limit_requests, 5)
+        self.assertEqual(limiter.get_limits('gemma-4-31b')[1], 5)
+
+    def test_the_tightest_window_wins_and_carries_its_own_reset(self):
+        """Con el dia agotado hay que esperar al reset del dia, no al del minuto."""
+        limiter = CerebrasRateLimiter()
+
+        limiter.update_from_headers({
+            'x-ratelimit-remaining-requests-minute': '4',
+            'x-ratelimit-reset-requests-minute': '10s',
+            'x-ratelimit-remaining-requests-day': '0',
+            'x-ratelimit-reset-requests-day': '2m30s',
+        })
+        falta = limiter.reset_requests_at - time.monotonic()
+
+        self.assertEqual(limiter.remaining_requests, 0)
+        self.assertEqual(limiter.tightest_requests_window, 'day')
+        self.assertAlmostEqual(falta, 150, delta=2)
 
     def test_long_header_reset_defers_processing(self):
         limiter = CerebrasRateLimiter()
