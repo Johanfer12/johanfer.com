@@ -10,13 +10,6 @@ const PALETTE = {
 const GRID_COLOR = 'rgba(255, 255, 255, 0.05)';
 
 const isMobileChart = window.innerWidth < 768;
-const compactLabel = (label, maxLength = 16) => {
-    if (!isMobileChart || typeof label !== 'string' || label.length <= maxLength) {
-        return label;
-    }
-
-    return `${label.slice(0, maxLength - 1)}…`;
-};
 const formatNumber = (value) => new Intl.NumberFormat('es-CO').format(value);
 const paddedAxisMax = (values) => {
     const max = Math.max(...values, 0);

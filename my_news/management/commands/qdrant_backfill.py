@@ -2,7 +2,6 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 from datetime import timedelta
 import time
-import numpy as np
 
 from my_news.models import News
 from my_news.services import FeedService, EmbeddingService
@@ -30,19 +29,13 @@ class Command(BaseCommand):
             default=None,
             help="Filtra por una fuente específica (id)",
         )
-        parser.add_argument(
-            "--force",
-            action="store_true",
-            help="Conservado por compatibilidad; los embeddings ya no se guardan en SQLite.",
-        )
 
     def handle(self, *args, **options):
         days = options["days"]
         limit = options["limit"]
         source_id = options["source_id"]
-        force = options["force"]
 
-        self.stdout.write(self.style.HTTP_INFO(f"Inicializando clientes (Gemini/Qdrant)..."))
+        self.stdout.write(self.style.HTTP_INFO("Inicializando clientes (Gemini/Qdrant)..."))
         gemini_client = FeedService.initialize_gemini()
         vector_index = FeedService.initialize_vector_index()
         if vector_index is None:

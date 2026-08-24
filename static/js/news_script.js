@@ -245,9 +245,7 @@
     const isLocallyDeleted = (newsId) => STATE.locallyDeletedIds.has(normalizeId(newsId));
     const extractPayloadId = (item) => {
         if (!item) return '';
-        if (item.id != null) return normalizeId(item.id);
-        if (item.data?.id != null) return normalizeId(item.data.id);
-        return '';
+        return item.id != null ? normalizeId(item.id) : '';
     };
     const shouldSkipServerCard = (newsId) => {
         const normalizedId = normalizeId(newsId);
@@ -394,15 +392,6 @@
         img.onerror = () => reject(new Error('No se pudo cargar imagen'));
         img.src = url;
     });
-
-    const getLineHeight = (el) => {
-        if (!el) return 0;
-        const style = window.getComputedStyle(el);
-        const parsedLineHeight = parseFloat(style.lineHeight);
-        if (!Number.isNaN(parsedLineHeight)) return parsedLineHeight;
-        const fontSize = parseFloat(style.fontSize) || 16;
-        return fontSize * 1.2;
-    };
 
     const applyAdaptiveTitleSize = (scope = document) => {
         CardUi.fitCardText?.(scope);
@@ -764,8 +753,8 @@
     };
 
     const createCardFromPayload = (item) => {
-        const data = item?.data || (item && !item.card && item.id ? item : null);
-        const html = item?.card || (data ? renderNewsCardHTML(data) : '');
+        const data = item?.id != null ? item : null;
+        const html = data ? renderNewsCardHTML(data) : '';
         if (!html) return {card: null};
         const temp = document.createElement('div');
         temp.innerHTML = html;
@@ -799,7 +788,7 @@
         card.innerHTML = freshCard.innerHTML;
         card.removeAttribute('style');
         card.classList.remove('collapsing');
-        applyCardDataset(card, item?.data || item);
+        applyCardDataset(card, item);
 
         if (visualState) {
             const freshInnerCard = card.querySelector('.news-card');
@@ -1417,7 +1406,7 @@
             const announceCount = oldestVisible === null
                 ? freshCards.length
                 : freshCards.filter(item => {
-                    const publishedStamp = parseTimestamp(item?.published_at ?? item?.data?.published_at);
+                    const publishedStamp = parseTimestamp(item?.published_at);
                     return publishedStamp === null || publishedStamp >= oldestVisible;
                 }).length;
             if (announceCount) showNotification(announceCount);

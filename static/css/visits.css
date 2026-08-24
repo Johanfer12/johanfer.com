@@ -112,18 +112,6 @@
     background: rgba(121, 33, 45, 0.9);
 }
 
-.select-all-control {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    min-height: 34px;
-    color: rgba(225, 233, 247, 0.88);
-    cursor: pointer;
-    font-size: 0.8rem;
-    white-space: nowrap;
-}
-
-.select-all-control input,
 .visit-check input[type="checkbox"] {
     width: 16px;
     height: 16px;
@@ -582,10 +570,6 @@ body.modal-open {
 
     .toolbar-group .btn {
         flex: 1 1 auto;
-    }
-
-    .select-all-control {
-        flex-basis: 100%;
     }
 
     .country-summary-count {

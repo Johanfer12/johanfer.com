@@ -157,7 +157,3 @@ def fetch_detail(simkl_id, is_anime=False):
     kind = 'anime' if is_anime else 'tv'
     return _get(f'/{kind}/{simkl_id}', authenticated=False, extended='full') or {}
 
-
-def fetch_user_settings():
-    """Datos de la cuenta dueña del token. Útil para verificar la conexión."""
-    return _get('/users/settings') or {}

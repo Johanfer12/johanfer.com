@@ -4,7 +4,7 @@ from .models import News
 from django.http import JsonResponse
 from django.http import HttpResponse
 from django.views.decorators.http import require_POST, require_GET
-from .services import FeedService, EmbeddingService
+from .services import FeedService
 from .interest import VectorUnavailable, percentile_of, record_vote
 from .ingestion_status import feed_alert
 from django.contrib.auth.decorators import user_passes_test
@@ -15,12 +15,11 @@ from django.utils.dateparse import parse_datetime
 from django.urls import reverse
 from django.templatetags.static import static
 from django.core.cache import cache
-from django.conf import settings
 from datetime import datetime, time as datetime_time, timedelta
 from Bookshelf.html_sanitizer import sanitize_html
 import pytz
 from django.db.models import Q, Count, Max
-from .tasks import purge_old_news, retry_summarize_pending
+from .tasks import retry_summarize_pending
 import subprocess
 import platform
 import hashlib
@@ -509,21 +508,6 @@ def check_new_news(request):
         return JsonResponse({'status': 'error', 'message': str(e)})
 
 @require_GET
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
-def get_news_count(request):
-    try:
-        saved_only = request.GET.get('saved_only', 'false').lower() == 'true'
-        total_news, total_pages = _get_total_news_and_pages(saved_only=saved_only)
-        
-        return JsonResponse({
-            'status': 'success',
-            'total_news': total_news,
-            'total_pages': total_pages
-        })
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)})
-
-@require_GET
 @superuser_required
 def image_proxy(request):
     image_url = request.GET.get('url', '').strip()
@@ -552,31 +536,6 @@ def image_proxy(request):
             return response
     except Exception:
         return JsonResponse({'status': 'error', 'message': 'No se pudo obtener la imagen'}, status=502)
-
-
-@require_POST
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
-def cleanup_old_news(request):
-    try:
-        days = int(request.POST.get('days', 15))
-        removed = purge_old_news(days)
-        _bump_cache_version()
-        total_news, total_pages = _get_total_news_and_pages()
-        return JsonResponse({'status': 'success', 'removed': removed, 'total_news': total_news, 'total_pages': total_pages})
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)})
-
-
-@require_POST
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
-def retry_summaries(request):
-    try:
-        limit = int(request.POST.get('limit', 50))
-        days = int(request.POST.get('days', 2))
-        processed = retry_summarize_pending(limit=limit, days=days)
-        return JsonResponse({'status': 'success', 'processed': processed})
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)})
 
 
 @require_GET
@@ -877,79 +836,6 @@ def test_redundancy(request):
         # Podrías devolver una página de error o un JsonResponse
         # Para mantener la consistencia con la plantilla, podrías renderizarla con un mensaje de error
         return render(request, 'redundancy_test.html', {'error_message': f'Ocurrió un error: {str(e)}'})
-
-@require_GET
-@superuser_required
-def generate_embeddings(request):
-    """Indexa noticias visibles recientes en Qdrant sin guardar vectores en SQLite."""
-    try:
-        gemini_client = FeedService.initialize_gemini()
-        vector_index = FeedService.initialize_vector_index()
-        if vector_index is None:
-            return JsonResponse({'status': 'error', 'message': 'Qdrant no disponible'})
-
-        news_to_index = News.visible.order_by('-published_date')[:50]
-
-        processed_count = 0
-        for news in news_to_index:
-            content = f"{news.title} {news.description}"
-            embedding = EmbeddingService.generate_embedding(content, gemini_client)
-            if not embedding:
-                continue
-
-            vector_index.ensure_collection(len(embedding))
-            payload = {
-                'news_id': news.id,
-                'source_id': news.source_id,
-                'published_ts': int(news.published_date.timestamp()) if news.published_date else int(time.time()),
-                'is_filtered': False,
-                'is_redundant': False,
-                'model_version': getattr(settings, 'GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001'),
-            }
-            vector_index.upsert(news.guid, embedding, payload)
-            processed_count += 1
-        
-        return JsonResponse({
-            'status': 'success',
-            'processed_count': processed_count,
-            'remaining': None
-        })
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)})
-
-@require_GET
-@superuser_required
-def check_all_redundancy(request):
-    """Verifica redundancia en noticias visibles usando Qdrant."""
-    try:
-        gemini_client = FeedService.initialize_gemini()
-        vector_index = FeedService.initialize_vector_index()
-
-        news_to_check = News.visible.select_related('source').order_by('-published_date')[:100]
-        
-        redundant_count = 0
-        for news in news_to_check:
-            is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
-                news, gemini_client, vector_index=vector_index
-            )
-            
-            if is_redundant and similar_news:
-                news.is_redundant = True
-                news.is_filtered = True  # Usamos is_filtered en lugar de is_deleted
-                news.similar_to = similar_news
-                news.similarity_score = similarity_score
-                news.save()
-                redundant_count += 1
-        if redundant_count:
-            _bump_cache_version()
-        
-        return JsonResponse({
-            'status': 'success',
-            'redundant_count': redundant_count,
-            'total_checked': len(news_to_check)
-        })
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)})
 
 
 @require_GET

@@ -271,11 +271,6 @@ html.instagram-webview .news-card-container {
     color: #f2f5fb;
 }
 
-/* Estilo para los bulletpoints */
-.news-description::before {
-    content: none;
-}
-
 /* Ajustar el espacio para los bulletpoints personalizados */
 .news-description {
     padding-left: 5px;

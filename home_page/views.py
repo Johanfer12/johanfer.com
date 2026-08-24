@@ -358,8 +358,6 @@ def visits(request):
     return render(request, 'visits.html', {
         'visit_groups': visit_groups,
         'total_visits': len(visits_list),
-        'current_ip': current_ip,
-        'current_visitor_id': current_visitor_id,
         'filters': filters,
     })
 

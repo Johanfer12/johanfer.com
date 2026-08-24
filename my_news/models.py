@@ -268,7 +268,3 @@ class IngestionStatus(models.Model):
 
     def __str__(self):
         return f"Ingesta {self.get_state_display()} ({self.updated_at:%Y-%m-%d %H:%M})"
-
-    @property
-    def is_healthy(self):
-        return self.state == self.STATE_OK

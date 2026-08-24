@@ -210,26 +210,6 @@ def download_poster(poster_url, file_name, force=False):
             os.remove(temp_path)
 
 
-def refresh_posters(force=False):
-    """Re-descarga la carátula de cada obra distinta. Con force=True sobrescribe
-    las existentes (útil tras cambiar el idioma de las carátulas)."""
-    tmdb_cache = {}
-    seen = set()
-    updated = 0
-    for item in WatchedItem.objects.exclude(tmdb_id__isnull=True).only('media_type', 'tmdb_id', 'title'):
-        key = (item.media_type, item.tmdb_id)
-        if key in seen:
-            continue
-        seen.add(key)
-        metadata = metadata_for_work(tmdb_cache, item.media_type, item.tmdb_id, item.title)
-        poster_url = metadata.get('poster_url')
-        if poster_url:
-            download_poster(poster_url, item.poster_name, force=force)
-            updated += 1
-    logger.info("Carátulas re-descargadas: %s", updated)
-    return updated
-
-
 # --- Sincronización con Simkl --------------------------------------------------
 
 def _parse_stamp(value):

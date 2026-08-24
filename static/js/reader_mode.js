@@ -220,11 +220,6 @@
         loadNews(STATE.currentIndex + 1);
     };
 
-    /** Ir a la noticia anterior */
-    const prevNews = () => {
-        loadNews(STATE.currentIndex - 1);
-    };
-
     /** Leer el reverso de la tarjeta (descripción completa) */
     const readBack = () => {
         if (STATE.readingBack) return;
