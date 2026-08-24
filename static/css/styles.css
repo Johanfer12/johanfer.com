@@ -16,24 +16,7 @@ html, body {
     font-display: swap;
 }
 
-:root {
-    --bg-1: #070715;
-    --bg-2: #131b46;
-    --bg-3: #341b63;
-    --text-primary: #f2f5fb;
-    --text-secondary: rgba(227, 233, 245, 0.78);
-    --glass-bg: rgba(11, 20, 44, 0.48);
-    --glass-bg-soft: rgba(34, 30, 70, 0.3);
-    --glass-border: rgba(207, 220, 241, 0.27);
-    --glass-highlight: rgba(255, 255, 255, 0.15);
-    --card-bg: rgba(255, 255, 255, 0.03);
-    --card-border: rgba(198, 214, 242, 0.16);
-    --card-hover: rgba(216, 228, 248, 0.46);
-    --accent: #c6d6f5;
-    --accent-strong: #8fb4e8;
-    --accent-warm: #d6bc8f;
-}
-
+/* Los tokens de color viven en tokens.css, compartidos con la otra hoja. */
 html {
     position: relative;
 }

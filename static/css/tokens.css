@@ -1,0 +1,30 @@
+/* Paleta del sitio: la unica declaracion de los tokens de color.
+ *
+ * Estaban copiados en :root de styles.css y de home.css, que son las dos unicas
+ * hojas que los consumen y que nunca se cargan juntas (home.css es la portada,
+ * styles.css el resto). Trece de los catorce valores coincidian y uno ya se
+ * habia desviado: --text-secondary estaba al 0.78 en styles.css y al 0.76 en
+ * home.css. Gana el 0.78, que es el que ven las quince paginas restantes.
+ *
+ * Se carga desde pwa_head.html, que es el unico include comun a las dieciseis
+ * plantillas. Va despues de las hojas que usan los tokens y da igual: el valor
+ * de una custom property lo resuelve la cascada antes de sustituir var(), asi
+ * que el orden entre declaracion y uso no importa.
+ */
+:root {
+    --bg-1: #070715;
+    --bg-2: #131b46;
+    --bg-3: #341b63;
+    --text-primary: #f2f5fb;
+    --text-secondary: rgba(227, 233, 245, 0.78);
+    --glass-bg: rgba(11, 20, 44, 0.48);
+    --glass-bg-soft: rgba(34, 30, 70, 0.3);
+    --glass-border: rgba(207, 220, 241, 0.27);
+    --glass-highlight: rgba(255, 255, 255, 0.15);
+    --card-bg: rgba(255, 255, 255, 0.03);
+    --card-border: rgba(198, 214, 242, 0.16);
+    --card-hover: rgba(216, 228, 248, 0.46);
+    --accent: #c6d6f5;
+    --accent-strong: #8fb4e8;
+    --accent-warm: #d6bc8f;
+}
