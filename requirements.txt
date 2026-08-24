@@ -1,10 +1,18 @@
+# Dependencias de produccion. ESTA es la lista que instala deploy.sh en la Pi.
+#
+# Tiene que ir a la par con la seccion [project].dependencies de pyproject.toml,
+# que es la que usa poetry.lock. Hoy son dos listas mantenidas a mano y hay que
+# tocar las dos; `poetry export` las generaria desde el lock, pero requiere
+# instalar poetry-plugin-export.
+#
+# Comprobar que coinciden:
+#   poetry check --lock
 annotated-types==0.7.0
 anyio==4.11.0
 asgiref==3.8.1
 async-timeout==5.0.1
 beautifulsoup4==4.12.3
 bleach==6.2.0
-bs4==0.0.2
 cachetools==5.5.1
 certifi==2024.2.2
 charset-normalizer==3.3.2

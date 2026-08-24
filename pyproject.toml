@@ -10,7 +10,6 @@ dependencies = [
     "async-timeout==5.0.1",
     "beautifulsoup4==4.12.3",
     "bleach==6.2.0",
-    "bs4==0.0.2",
     "cachetools==5.5.1",
     "certifi==2024.2.2",
     "charset-normalizer==3.3.2",
