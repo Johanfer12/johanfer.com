@@ -15,8 +15,8 @@
 #
 # El storage (/var/lib/qdrant/storage, ~37 MB) son DATOS, no configuración:
 # entra en la copia de seguridad. Si se pierde, los vectores se pueden
-# regenerar con `qdrant_backfill` y `retry_missing_embeddings`, pero cuesta una
-# llamada a Gemini por noticia.
+# regenerar con `python manage.py qdrant_backfill`, que va por tandas hasta
+# agotar lo pendiente, pero cuesta una llamada a Gemini por noticia.
 
 [Unit]
 Description=Qdrant Vector DB

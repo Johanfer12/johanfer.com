@@ -1,106 +1,66 @@
-from django.core.management.base import BaseCommand, CommandError
-from django.utils import timezone
-from datetime import timedelta
-import time
+"""Indexa en Qdrant las noticias recientes que no tengan vector.
 
-from my_news.models import News
-from my_news.services import FeedService, EmbeddingService
+    python manage.py qdrant_backfill                  # tandas de 25 hasta agotar
+    python manage.py qdrant_backfill --days 30
+    python manage.py qdrant_backfill --limit 50 --passes 4
+
+Hace falta sobre todo si se pierde el storage de Qdrant: los vectores se pueden
+regenerar desde las noticias, a costa de una llamada a Gemini por cada una.
+
+La lógica es la de ``tasks.retry_missing_embeddings``, que es la misma que corre
+el cron al cerrar cada pasada. Este comando solo la repite por tandas. Antes
+tenía su propia copia, y era peor: reindexaba también lo que ya estaba en
+Qdrant —gastando una llamada a Gemini por noticia— y armaba el payload a mano en
+vez de usar ``FeedService.build_vector_payload``, así que podía quedar
+desalineado con lo que escribe la ingesta.
+
+``--limit`` es el tamaño de tanda, no el total: acota las llamadas a Gemini de
+cada pasada. Se para cuando una tanda no recupera nada.
+"""
+
+from django.core.management.base import BaseCommand
+
+from my_news.tasks import retry_missing_embeddings
 
 
 class Command(BaseCommand):
-    help = "Indexa en Qdrant las noticias de los últimos N días, generando embeddings transitorios con Gemini."
+    help = "Genera e indexa en Qdrant los embeddings que falten de los últimos N días."
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--days",
             type=int,
-            default=14,
-            help="Días hacia atrás a indexar (default: 14)",
+            default=15,
+            help="Ventana de noticias a revisar (por defecto 15, los que conserva la purga).",
         )
         parser.add_argument(
             "--limit",
             type=int,
-            default=None,
-            help="Límite máximo de noticias a procesar",
+            default=25,
+            help="Noticias por tanda (por defecto 25).",
         )
         parser.add_argument(
-            "--source-id",
+            "--passes",
             type=int,
-            default=None,
-            help="Filtra por una fuente específica (id)",
+            default=20,
+            help="Tope de tandas, por si algo falla siempre (por defecto 20).",
         )
 
     def handle(self, *args, **options):
         days = options["days"]
         limit = options["limit"]
-        source_id = options["source_id"]
+        passes = options["passes"]
 
-        self.stdout.write(self.style.HTTP_INFO("Inicializando clientes (Gemini/Qdrant)..."))
-        gemini_client = FeedService.initialize_gemini()
-        vector_index = FeedService.initialize_vector_index()
-        if vector_index is None:
-            raise CommandError(
-                "Qdrant no disponible. Asegúrate de tener qdrant-client instalado y QDRANT_URL configurado."
-            )
+        total = 0
+        for numero in range(1, passes + 1):
+            recuperadas = retry_missing_embeddings(limit=limit, days=days)
+            total += recuperadas
+            self.stdout.write(f"Tanda {numero}: {recuperadas} indexadas (acumulado {total})")
+            if recuperadas == 0:
+                break
+        else:
+            self.stdout.write(self.style.WARNING(
+                f"Se alcanzó el tope de {passes} tandas; puede quedar trabajo pendiente."
+            ))
 
-        cutoff = timezone.now() - timedelta(days=days)
-        qs = News.objects.filter(published_date__gte=cutoff)
-        # Indexar solo candidatos relevantes para dedupe
-        qs = qs.filter(is_filtered=False, is_redundant=False)
-        if source_id:
-            qs = qs.filter(source_id=source_id)
-        qs = qs.order_by("published_date")
-        if limit:
-            qs = qs[:limit]
-
-        total = qs.count()
-        if total == 0:
-            self.stdout.write("No hay noticias que indexar en el rango indicado.")
-            return
-
-        processed = 0
-        indexed = 0
-        skipped = 0
-
-        # Detectar dimensión objetivo desde settings (usado por EmbeddingService)
-        from django.conf import settings
-
-        target_dim = int(getattr(settings, "GEMINI_EMBEDDING_DIM", 768))
-
-        vector_index.ensure_collection(target_dim)
-
-        start = time.time()
-        for news in qs.iterator():
-            processed += 1
-            text = f"{news.title} {news.description or ''}".strip()
-            emb = EmbeddingService.generate_embedding(text, gemini_client)
-            if not emb:
-                skipped += 1
-                continue
-
-            try:
-                vector_index.ensure_collection(len(emb))
-                published_ts = int(news.published_date.timestamp()) if news.published_date else int(time.time())
-                payload = {
-                    "news_id": news.id,
-                    "source_id": news.source_id,
-                    "published_ts": published_ts,
-                    "is_filtered": bool(getattr(news, "is_filtered", False)),
-                    "is_redundant": bool(getattr(news, "is_redundant", False)),
-                    "model_version": getattr(settings, "GEMINI_EMBEDDING_MODEL", "gemini-embedding-001"),
-                }
-                vector_index.upsert(news.guid, emb, payload)
-                indexed += 1
-            except Exception as e:
-                skipped += 1
-                self.stderr.write(f"Error indexando guid={news.guid}: {e}")
-
-            if processed % 50 == 0:
-                self.stdout.write(f"Progreso: {processed}/{total} procesadas, {indexed} indexadas, {skipped} omitidas")
-
-        elapsed = time.time() - start
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Backfill completado en {elapsed:.1f}s. Procesadas={processed}, Indexadas={indexed}, Omitidas={skipped}"
-            )
-        )
+        self.stdout.write(self.style.SUCCESS(f"Indexadas {total} noticias que no tenían vector."))
