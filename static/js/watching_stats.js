@@ -1,11 +1,3 @@
-Chart.register(ChartDataLabels);
-
-// Paleta del sitio (la misma familia azul/morado del home)
-const PALETTE = {
-    blue: { bg: 'rgba(108, 142, 255, 0.62)', border: 'rgba(141, 168, 255, 0.95)' },
-    purple: { bg: 'rgba(164, 124, 255, 0.58)', border: 'rgba(186, 156, 255, 0.95)' },
-    gold: { bg: 'rgba(222, 188, 122, 0.65)', border: 'rgba(240, 212, 150, 0.95)' },
-};
 const POLAR_COLORS = [
     'rgba(108, 142, 255, 0.72)',  // azul
     'rgba(164, 124, 255, 0.68)',  // morado
@@ -15,52 +7,6 @@ const POLAR_COLORS = [
     'rgba(126, 217, 173, 0.66)',  // verde menta
     'rgba(240, 156, 130, 0.68)',  // coral
 ];
-const GRID_COLOR = 'rgba(255, 255, 255, 0.05)';
-
-const isMobileChart = window.innerWidth < 768;
-const formatNumber = (value) => new Intl.NumberFormat('es-CO').format(value);
-const paddedAxisMax = (values) => {
-    const max = Math.max(...values, 0);
-    return max > 0 ? Math.ceil(max * 1.18) : undefined;
-};
-
-const chartDefaults = {
-    devicePixelRatio: 2,
-    animation: {
-        duration: 0
-    },
-    layout: {
-        padding: isMobileChart ? 8 : 0
-    }
-};
-
-const commonOptions = {
-    ...chartDefaults,
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-        legend: {
-            labels: {
-                color: 'white',
-                boxWidth: isMobileChart ? 12 : 40,
-                padding: isMobileChart ? 10 : 12,
-                font: {
-                    size: isMobileChart ? 11 : 12
-                }
-            }
-        }
-    },
-    scales: {
-        y: {
-            ticks: { color: 'white' },
-            grid: { color: GRID_COLOR }
-        },
-        x: {
-            ticks: { color: 'white' },
-            grid: { color: GRID_COLOR }
-        }
-    }
-};
 
 // Series y películas por año (barras agrupadas)
 new Chart(document.getElementById('perYearChart'), {

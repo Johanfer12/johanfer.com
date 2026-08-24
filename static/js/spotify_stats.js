@@ -1,7 +1,3 @@
-Chart.register(ChartDataLabels);
-
-// Paleta del sitio (la misma familia azul/morado del home; nada de colores
-// por defecto de Chart.js)
 const PIE_COLORS = [
     'rgba(108, 142, 255, 0.78)',  // azul
     'rgba(164, 124, 255, 0.74)',  // morado
@@ -9,53 +5,13 @@ const PIE_COLORS = [
     'rgba(96, 196, 232, 0.74)',   // cian
     'rgba(214, 132, 196, 0.72)',  // rosa-violeta
 ];
-const GRID_COLOR = 'rgba(255, 255, 255, 0.05)';
 
-const isMobileChart = window.innerWidth < 768;
 const compactLabel = (label, maxLength = 16) => {
     if (!isMobileChart || typeof label !== 'string' || label.length <= maxLength) {
         return label;
     }
 
     return `${label.slice(0, maxLength - 1)}…`;
-};
-
-const chartDefaults = {
-    devicePixelRatio: 2,
-    animation: {
-        duration: 0
-    },
-    layout: {
-        padding: isMobileChart ? 8 : 0
-    }
-};
-
-const commonOptions = {
-    ...chartDefaults,
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-        legend: {
-            labels: {
-                color: 'white',
-                boxWidth: isMobileChart ? 12 : 40,
-                padding: isMobileChart ? 10 : 12,
-                font: {
-                    size: isMobileChart ? 11 : 12
-                }
-            }
-        }
-    },
-    scales: {
-        y: {
-            ticks: { color: 'white' },
-            grid: { color: GRID_COLOR }
-        },
-        x: {
-            ticks: { color: 'white' },
-            grid: { color: GRID_COLOR }
-        }
-    }
 };
 
 // Gráfico de géneros
