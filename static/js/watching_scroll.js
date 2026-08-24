@@ -1,28 +1,9 @@
-// Scroll infinito de Mi TV, calcado del de libros (infinite_scroll.js)
-let page = 1;
-let loading = false;
-let hasNext = true;
+// Mi TV: solo el marcado de la tarjeta y del modal. La paginación, la búsqueda
+// y el scroll los lleva infinite_scroll_core.js, compartido con Mis Libros.
+const watchContainer = document.getElementById('watch-container');
+const fallbackPoster = watchContainer ? watchContainer.dataset.fallbackPoster : '';
 let currentTipo = 'series';
 let currentOrden = '';
-let currentQuery = '';
-
-const watchContainer = document.getElementById('watch-container');
-const loadingDiv = document.getElementById('loading');
-const fallbackPoster = watchContainer ? watchContainer.dataset.fallbackPoster : '';
-
-const escapeHtml = (value) => {
-    const div = document.createElement('div');
-    div.textContent = value || '';
-    return div.innerHTML;
-};
-
-// El indicador se muestra con una clase, no con style.display: la pastilla
-// necesita display:flex y un estilo en línea lo pisaría.
-const setLoadingVisible = (visible) => {
-    if (loadingDiv) {
-        loadingDiv.classList.toggle('is-visible', visible);
-    }
-};
 
 const posterImg = (card) => `
     <img src="${escapeHtml(card.poster_url)}"
@@ -127,51 +108,16 @@ const createWatchModal = (card) => {
     return modal;
 };
 
-function loadMoreCards() {
-    if (loading || !hasNext) return;
-
-    loading = true;
-    setLoadingVisible(true);
-
-    const params = new URLSearchParams();
-    params.set('page', String(page + 1));
-    params.set('tipo', currentTipo);
-    if (currentOrden) {
-        params.set('orden', currentOrden);
+const renderCards = (data, {replace}) => {
+    if (replace) {
+        watchContainer.innerHTML = '';
+        document.querySelectorAll('div.modal[id^="modal-watch-"]').forEach((modal) => modal.remove());
     }
-    if (currentQuery) {
-        params.set('q', currentQuery);
-    }
-
-    fetch(`/viendo/?${params.toString()}`, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-        .then((response) => response.json())
-        .then((data) => {
-            (data.cards || []).forEach((card) => {
-                watchContainer.appendChild(createWatchItem(card));
-                watchContainer.appendChild(createWatchModal(card));
-            });
-            page += 1;
-            hasNext = Boolean(data.has_next);
-            loading = false;
-            setLoadingVisible(false);
-            if (!hasNext) {
-                window.removeEventListener('scroll', handleScroll);
-            }
-        })
-        .catch((error) => {
-            console.error('Error al cargar más tarjetas:', error);
-            loading = false;
-            setLoadingVisible(false);
-        });
-}
-
-function handleScroll() {
-    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
-        loadMoreCards();
-    }
-}
+    (data.cards || []).forEach((card) => {
+        watchContainer.appendChild(createWatchItem(card));
+        watchContainer.appendChild(createWatchModal(card));
+    });
+};
 
 const setWatchedTotalLabel = (count) => {
     const totalLabel = document.querySelector('.header .total');
@@ -184,7 +130,7 @@ const setWatchedTotalLabel = (count) => {
 
 // Reescribe los enlaces de los toggles series/películas para que arrastren el
 // filtro activo (los href vienen del servidor y no saben de la búsqueda AJAX).
-const syncToggleLinks = () => {
+const syncToggleLinks = (currentQuery) => {
     document.querySelectorAll('.watch-toggle-btn').forEach((link) => {
         const tipo = link.classList.contains('movies') ? 'peliculas' : 'series';
         const params = new URLSearchParams();
@@ -199,68 +145,22 @@ const syncToggleLinks = () => {
     });
 };
 
-// Aplica una búsqueda por título recargando la primera página vía AJAX,
-// reemplazando las tarjetas y reseteando la paginación (igual que en libros).
-window.watchingApplySearch = function (query) {
-    currentQuery = (query || '').trim();
-    page = 1;
-
-    const params = new URLSearchParams();
-    params.set('page', '1');
-    params.set('tipo', currentTipo);
-    if (currentOrden) {
-        params.set('orden', currentOrden);
-    }
-    if (currentQuery) {
-        params.set('q', currentQuery);
-    }
-
-    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
-
-    loading = true;
-    setLoadingVisible(true);
-
-    return fetch(`/viendo/?${params.toString()}`, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-        .then((response) => response.json())
-        .then((data) => {
-            watchContainer.innerHTML = '';
-            document.querySelectorAll('div.modal[id^="modal-watch-"]').forEach((modal) => modal.remove());
-            (data.cards || []).forEach((card) => {
-                watchContainer.appendChild(createWatchItem(card));
-                watchContainer.appendChild(createWatchModal(card));
-            });
-            hasNext = Boolean(data.has_next);
-            setWatchedTotalLabel(data.total_watched);
-            syncToggleLinks();
-            loading = false;
-            setLoadingVisible(false);
-
-            window.removeEventListener('scroll', handleScroll);
-            if (hasNext) {
-                window.addEventListener('scroll', handleScroll);
-            }
-            return data;
-        })
-        .catch((error) => {
-            console.error('Error al aplicar búsqueda:', error);
-            loading = false;
-            setLoadingVisible(false);
-            throw error;
-        });
-};
-
 document.addEventListener('DOMContentLoaded', function () {
     if (!watchContainer) return;
 
     const params = new URLSearchParams(window.location.search);
     currentTipo = params.get('tipo') === 'peliculas' ? 'peliculas' : 'series';
     currentOrden = params.get('orden') || '';
-    currentQuery = params.get('q') || '';
-    hasNext = watchContainer.dataset.hasNext === 'true';
 
-    if (hasNext) {
-        window.addEventListener('scroll', handleScroll);
-    }
+    const scroll = window.createInfiniteScroll({
+        container: watchContainer,
+        endpoint: '/viendo/',
+        params: () => ({tipo: currentTipo, orden: currentOrden}),
+        render: renderCards,
+        onLoaded: (data, query) => {
+            setWatchedTotalLabel(data.total_watched);
+            syncToggleLinks(query);
+        },
+    });
+    window.watchingApplySearch = scroll.applySearch;
 });

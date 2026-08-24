@@ -1,17 +1,6 @@
-let page = 1;
-let loading = false;
-let hasNext = true;
-let currentQuery = '';
-let currentOrden = '';
-
+// Mis Libros: solo el marcado de la tarjeta y del modal. La paginación, la
+// búsqueda y el scroll los lleva infinite_scroll_core.js, compartido con Mi TV.
 const bookContainer = document.getElementById('book-container');
-const loadingDiv = document.getElementById('loading');
-
-const escapeHtml = (value) => {
-    const div = document.createElement('div');
-    div.textContent = value || '';
-    return div.innerHTML;
-};
 
 const formatDate = (isoDate) => {
     if (!isoDate) return '';
@@ -92,24 +81,15 @@ const createBookModal = (book) => {
     return modal;
 };
 
-const renderBooks = (books, replace = false) => {
+const renderBooks = (data, {replace}) => {
     if (replace) {
         bookContainer.innerHTML = '';
         document.querySelectorAll('div.modal[id^="modal-"]').forEach((modal) => modal.remove());
     }
-
-    books.forEach((book) => {
+    (data.books || []).forEach((book) => {
         bookContainer.appendChild(createBookItem(book));
         bookContainer.appendChild(createBookModal(book));
     });
-};
-
-// El indicador se muestra con una clase, no con style.display: la pastilla
-// necesita display:flex y un estilo en línea lo pisaría.
-const setLoadingVisible = (visible) => {
-    if (loadingDiv) {
-        loadingDiv.classList.toggle('is-visible', visible);
-    }
 };
 
 const setTotalBooksLabel = (count) => {
@@ -120,101 +100,14 @@ const setTotalBooksLabel = (count) => {
     totalLabel.textContent = `${count} libro${count === 1 ? '' : 's'}`;
 };
 
-function loadMoreBooks() {
-    if (loading || !hasNext) return;
-
-    loading = true;
-    setLoadingVisible(true);
-
-    const params = new URLSearchParams();
-    params.set('page', String(page + 1));
-    if (currentQuery) {
-        params.set('q', currentQuery);
-    }
-    if (currentOrden) {
-        params.set('orden', currentOrden);
-    }
-
-    fetch(`/bookshelf?${params.toString()}`, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-        .then((response) => response.json())
-        .then((data) => {
-            renderBooks(data.books || []);
-            page += 1;
-            hasNext = Boolean(data.has_next);
-            loading = false;
-            setLoadingVisible(false);
-            if (!hasNext) {
-                window.removeEventListener('scroll', handleScroll);
-            }
-        })
-        .catch((error) => {
-            console.error('Error al cargar más libros:', error);
-            loading = false;
-            setLoadingVisible(false);
-        });
-}
-
-function handleScroll() {
-    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
-        loadMoreBooks();
-    }
-}
-
-window.bookshelfApplySearch = function (query) {
-    currentQuery = (query || '').trim();
-    page = 1;
-
-    const params = new URLSearchParams();
-    params.set('page', '1');
-    if (currentQuery) {
-        params.set('q', currentQuery);
-    }
-    if (currentOrden) {
-        params.set('orden', currentOrden);
-    }
-
-    const url = `${window.location.pathname}?${params.toString()}`;
-    window.history.replaceState({}, '', url);
-
-    loading = true;
-    setLoadingVisible(true);
-
-    return fetch(`/bookshelf?${params.toString()}`, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-        .then((response) => response.json())
-        .then((data) => {
-            renderBooks(data.books || [], true);
-            hasNext = Boolean(data.has_next);
-            setTotalBooksLabel(data.total_books);
-            loading = false;
-            setLoadingVisible(false);
-
-            window.removeEventListener('scroll', handleScroll);
-            if (hasNext) {
-                window.addEventListener('scroll', handleScroll);
-            }
-
-            return data;
-        })
-        .catch((error) => {
-            console.error('Error al aplicar búsqueda:', error);
-            loading = false;
-            setLoadingVisible(false);
-            throw error;
-        });
-};
-
 document.addEventListener('DOMContentLoaded', function () {
-    const initialParams = new URLSearchParams(window.location.search);
-    const initialQuery = initialParams.get('q');
-    currentQuery = initialQuery ? initialQuery.trim() : '';
-    currentOrden = initialParams.get('orden') || '';
-    hasNext = bookContainer.dataset.hasNext === 'true';
-
-    if (hasNext) {
-        window.addEventListener('scroll', handleScroll);
-    }
+    const orden = new URLSearchParams(window.location.search).get('orden') || '';
+    const scroll = window.createInfiniteScroll({
+        container: bookContainer,
+        endpoint: '/bookshelf',
+        params: () => ({orden}),
+        render: renderBooks,
+        onLoaded: (data) => setTotalBooksLabel(data.total_books),
+    });
+    window.bookshelfApplySearch = scroll.applySearch;
 });
