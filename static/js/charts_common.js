@@ -6,7 +6,7 @@
 // declarado dos veces con el mismo nombre es un SyntaxError, no una redefinición.
 //
 // Lo que no está aquí es lo que solo usa una página: PIE_COLORS y compactLabel
-// (música), POLAR_COLORS (Mi TV) y barValueLabels (libros).
+// (música) y POLAR_COLORS (Mi TV).
 
 Chart.register(ChartDataLabels);
 
@@ -65,3 +65,24 @@ const commonOptions = {
         }
     }
 };
+
+// Etiqueta del valor encima de cada barra. Libros y Mi TV la repetian entera;
+// lo unico que cambia entre sus tres usos es el recorte, el desplazamiento, el
+// tamano y el formato, asi que solo eso se pasa.
+const valueLabels = ({
+    clamp = false,
+    offset = 0,
+    size = isMobileChart ? 9 : 11,
+    formatter = formatNumber,
+} = {}) => ({
+    color: 'rgba(238, 243, 251, 0.88)',
+    anchor: 'end',
+    align: 'end',
+    clamp,
+    offset,
+    font: {
+        weight: 'bold',
+        size,
+    },
+    formatter,
+});

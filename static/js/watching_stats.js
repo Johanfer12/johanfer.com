@@ -56,18 +56,9 @@ new Chart(document.getElementById('perYearChart'), {
                     }
                 }
             },
-            datalabels: {
-                color: 'rgba(238, 243, 251, 0.88)',
-                anchor: 'end',
-                align: 'end',
-                clamp: false,
-                offset: 0,
-                font: {
-                    weight: 'bold',
-                    size: isMobileChart ? 9 : 11
-                },
-                formatter: (value) => (value > 0 ? formatNumber(value) : '')
-            }
+            datalabels: valueLabels({
+                formatter: (value) => (value > 0 ? formatNumber(value) : ''),
+            })
         },
         animation: {
             y: {
@@ -174,18 +165,11 @@ new Chart(document.getElementById('decadesChart'), {
         },
         plugins: {
             legend: { display: false },
-            datalabels: {
-                color: 'rgba(238, 243, 251, 0.88)',
-                anchor: 'end',
-                align: 'end',
+            datalabels: valueLabels({
                 clamp: true,
                 offset: 4,
-                font: {
-                    weight: 'bold',
-                    size: isMobileChart ? 10 : 12
-                },
-                formatter: (value) => formatNumber(value)
-            }
+                size: isMobileChart ? 10 : 12,
+            })
         },
         animation: {
             x: {

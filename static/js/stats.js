@@ -1,16 +1,3 @@
-const barValueLabels = {
-    color: 'rgba(238, 243, 251, 0.88)',
-    anchor: 'end',
-    align: 'end',
-    clamp: false,
-    offset: 0,
-    font: {
-        weight: 'bold',
-        size: isMobileChart ? 9 : 11
-    },
-    formatter: (value) => formatNumber(value)
-};
-
 // Al inicio del archivo, antes de commonOptions
 // Configuración común para todos los gráficos
 // Gráfico de libros por año
@@ -39,7 +26,7 @@ new Chart(document.getElementById('booksPerYearChart'), {
             legend: {
                 display: false
             },
-            datalabels: barValueLabels
+            datalabels: valueLabels()
         },
         animation: {
             y: {
@@ -163,7 +150,7 @@ new Chart(document.getElementById('pagesPerYearChart'), {
             legend: {
                 display: false
             },
-            datalabels: barValueLabels
+            datalabels: valueLabels()
         },
         maintainAspectRatio: false,
         animation: {
