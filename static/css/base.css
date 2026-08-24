@@ -124,3 +124,18 @@ html.background-motion-paused body::after {
         transform: rotate(-24deg) translate3d(-520px, 330px, 0) scaleX(0.75);
     }
 }
+
+/* Modo rendimiento: en pantallas pequenas o con reduced-motion se apagan las
+ * cuatro capas del fondo. Estaba repetido igual en las dos hojas de pagina, que
+ * conservan lo suyo dentro de la misma media query (el fondo plano de cada una).
+ * Aqui el orden no importa porque va todo con !important. */
+@media (max-width: 900px), (prefers-reduced-motion: reduce) {
+    html::before,
+    html::after,
+    body::before,
+    body::after {
+        content: none !important;
+        animation: none !important;
+        filter: none !important;
+    }
+}

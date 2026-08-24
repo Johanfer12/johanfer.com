@@ -337,15 +337,6 @@ body::after {
 
 /* Modo rendimiento para móvil / dispositivos modestos */
 @media (max-width: 900px), (prefers-reduced-motion: reduce) {
-    html::before,
-    html::after,
-    body::before,
-    body::after {
-        content: none !important;
-        animation: none !important;
-        filter: none !important;
-    }
-
     body {
         background-color: var(--bg-1) !important;
         background-image:
