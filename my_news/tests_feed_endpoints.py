@@ -1,7 +1,14 @@
-"""Tests de regresión para la migración SSE→polling de noticias.
+"""Endpoints HTTP del feed de noticias, de punta a punta.
 
-Cubren la eliminación del endpoint news-stream, el chequeo por cursor que usa
-el sondeo del frontend, y los endpoints de mutación (guardar/eliminar/deshacer).
+Nacieron como tests de regresión de la migración SSE→polling, y el nombre que
+tenían (``tests_smoke_changes``) los hacía parecer un resto temporal. No lo son:
+medido con coverage, este fichero es lo ÚNICO que cubre 15 líneas de
+``views.py``, entre ellas el cuerpo entero de ``toggle_save_news``. Si se
+borran, guardar y desguardar una noticia se queda sin ninguna prueba.
+
+Cubren la ausencia del endpoint news-stream, el chequeo por cursor del sondeo,
+las mutaciones (guardar, eliminar, deshacer), el redirect del login y el botón
+de acceso de la cabecera pública.
 """
 from django.contrib.auth.models import User
 from django.test import TestCase
