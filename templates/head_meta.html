@@ -1,0 +1,37 @@
+{% load static %}
+{% comment %}
+Metadatos de SEO y de tarjeta social. Las nueve páginas públicas repetían este
+bloque de doce líneas cambiando solo tres valores.
+
+  meta_title             título sin el nombre del sitio, que se añade aquí.
+                         Si se omite (la portada) el título es solo el sitio.
+  meta_description       texto de la tarjeta social (og y twitter)
+  meta_image             ruta del icono dentro de static/
+  meta_page_description  opcional: el <meta name="description"> cuando difiere
+                         del social, cosa que pasa en cuatro páginas
+
+og y twitter siempre llevan el mismo título, descripción e imagen; se comprobó
+en las nueve antes de unificarlas. Ojo al pasar textos que incluyan el nombre
+del sitio: dentro de un literal de {% templatetag openvariable %} no se
+interpola, hay que concatenar con el filtro add.
+{% endcomment %}
+<meta name="description" content="{{ meta_page_description|default:meta_description }}">
+<link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+<meta property="og:site_name" content="{{ site_name }}">
+<meta property="og:type" content="website">
+{% if meta_title %}
+<meta property="og:title" content="{{ meta_title }} | {{ site_name }}">
+{% else %}
+<meta property="og:title" content="{{ site_name }}">
+{% endif %}
+<meta property="og:description" content="{{ meta_description }}">
+<meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+<meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static meta_image %}">
+<meta name="twitter:card" content="summary_large_image">
+{% if meta_title %}
+<meta name="twitter:title" content="{{ meta_title }} | {{ site_name }}">
+{% else %}
+<meta name="twitter:title" content="{{ site_name }}">
+{% endif %}
+<meta name="twitter:description" content="{{ meta_description }}">
+<meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static meta_image %}">

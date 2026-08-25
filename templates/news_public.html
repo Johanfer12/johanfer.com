@@ -11,18 +11,7 @@
         }
     </script>
     <title>Noticias de Hoy | {{ site_name }}</title>
-    <meta name="description" content="Las noticias más recientes disponibles en {{ site_name }}.">
-    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
-    <meta property="og:site_name" content="{{ site_name }}">
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="Noticias de Hoy | {{ site_name }}">
-    <meta property="og:description" content="Las noticias más recientes disponibles en {{ site_name }}.">
-    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
-    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/news-icon.svg' %}">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Noticias de Hoy | {{ site_name }}">
-    <meta name="twitter:description" content="Las noticias más recientes disponibles en {{ site_name }}.">
-    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/news-icon.svg' %}">
+    {% include 'head_meta.html' with meta_title='Noticias de Hoy' meta_image='Img/news-icon.svg' meta_description='Las noticias más recientes disponibles en '|add:site_name|add:'.' %}
     {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/header.css' %}">

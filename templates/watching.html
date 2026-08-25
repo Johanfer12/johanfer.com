@@ -5,8 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mi TV</title>
-    <meta name="description" content="Películas y series vistas por Johan, sincronizadas desde Simkl.">
-    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    {% include 'head_meta.html' with meta_title='Mi TV' meta_description='Películas y series vistas por Johan, sincronizadas desde Simkl.' meta_image='Img/watch-icon.svg' %}
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">

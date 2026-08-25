@@ -6,18 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ site_name }}</title>
-    <meta name="description" content="{{ site_meta_description }}">
-    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
-    <meta property="og:site_name" content="{{ site_name }}">
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="{{ site_name }}">
-    <meta property="og:description" content="{{ site_meta_description }}">
-    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
-    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="{{ site_name }}">
-    <meta name="twitter:description" content="{{ site_meta_description }}">
-    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
+    {% include 'head_meta.html' with meta_description=site_meta_description meta_image='Img/library-icon.svg' %}
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/home.css' %}">

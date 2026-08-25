@@ -5,18 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Estadísticas de mi TV</title>
-    <meta name="description" content="Estadísticas de series y películas: vistas por año, mis calificaciones y décadas de estreno.">
-    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
-    <meta property="og:site_name" content="{{ site_name }}">
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="Estadísticas de mi TV | {{ site_name }}">
-    <meta property="og:description" content="Series y películas por año, mis calificaciones y décadas de estreno.">
-    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
-    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/watch-icon.svg' %}">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Estadísticas de mi TV | {{ site_name }}">
-    <meta name="twitter:description" content="Series y películas por año, mis calificaciones y décadas de estreno.">
-    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/watch-icon.svg' %}">
+    {% include 'head_meta.html' with meta_title='Estadísticas de mi TV' meta_description='Series y películas por año, mis calificaciones y décadas de estreno.' meta_image='Img/watch-icon.svg' meta_page_description='Estadísticas de series y películas: vistas por año, mis calificaciones y décadas de estreno.' %}
     {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/stats.css' %}">

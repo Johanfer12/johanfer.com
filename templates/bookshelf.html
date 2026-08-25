@@ -5,18 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mis Libros</title>
-    <meta name="description" content="Lista de libros leídos por Johan con calificaciones, páginas y descripciones.">
-    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
-    <meta property="og:site_name" content="{{ site_name }}">
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="Mis Libros | {{ site_name }}">
-    <meta property="og:description" content="Lista de libros leídos por Johan con calificaciones, páginas y descripciones.">
-    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
-    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Mis Libros | {{ site_name }}">
-    <meta name="twitter:description" content="Lista de libros leídos por Johan con calificaciones, páginas y descripciones.">
-    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
+    {% include 'head_meta.html' with meta_title='Mis Libros' meta_description='Lista de libros leídos por Johan con calificaciones, páginas y descripciones.' meta_image='Img/library-icon.svg' %}
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">

@@ -5,18 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Acerca de</title>
-    <meta name="description" content="Acerca de {{ site_name }}: libros, series, música, noticias, filtros y resúmenes.">
-    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
-    <meta property="og:site_name" content="{{ site_name }}">
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="Acerca de | {{ site_name }}">
-    <meta property="og:description" content="Conoce el propósito, las secciones y la lógica detrás de libros, Spotify y noticias en {{ site_name }}.">
-    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
-    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Acerca de | {{ site_name }}">
-    <meta name="twitter:description" content="Conoce el propósito, las secciones y la lógica detrás de libros, Spotify y noticias en {{ site_name }}.">
-    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'Img/library-icon.svg' %}">
+    {% include 'head_meta.html' with meta_title='Acerca de' meta_image='Img/library-icon.svg' meta_description='Conoce el propósito, las secciones y la lógica detrás de libros, Spotify y noticias en '|add:site_name|add:'.' meta_page_description='Acerca de '|add:site_name|add:': libros, series, música, noticias, filtros y resúmenes.' %}
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
