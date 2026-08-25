@@ -2,12 +2,25 @@ import hashlib
 import uuid
 from typing import List, Optional
 
-try:
-    from qdrant_client import QdrantClient
-    from qdrant_client import models as qm
-except Exception:  # pragma: no cover
-    QdrantClient = None  # type: ignore
-    qm = None  # type: ignore
+# qdrant-client se importa la primera vez que se instancia el servicio, no al
+# cargar el modulo. Cuesta ~10 s y ~120 MB en la Pi, y el proceso web no toca
+# Qdrant para servir una pagina: solo lo usan la ingesta y los comandos. Con el
+# import arriba, gunicorn lo pagaba entero en cada arranque.
+QdrantClient = None  # type: ignore
+qm = None  # type: ignore
+
+
+def _cargar_qdrant():
+    """Deja QdrantClient y qm disponibles como globales del modulo.
+
+    Los metodos de la clase usan ``qm.`` y solo se llaman sobre una instancia,
+    asi que para entonces ``__init__`` ya paso por aqui.
+    """
+    global QdrantClient, qm
+    if QdrantClient is None:
+        from qdrant_client import QdrantClient as _Cliente
+        from qdrant_client import models as _modelos
+        QdrantClient, qm = _Cliente, _modelos
 
 
 class VectorIndexUnavailable(Exception):
@@ -18,10 +31,12 @@ class VectorIndexService:
     """Wrapper mínimo para operar Qdrant sin silencios."""
 
     def __init__(self, url: str, collection: str, api_key: Optional[str] = None):
-        if QdrantClient is None:
+        try:
+            _cargar_qdrant()
+        except ImportError as exc:
             raise VectorIndexUnavailable(
                 "qdrant-client no está instalado. Instálalo con 'pip install qdrant-client'."
-            )
+            ) from exc
         self.client = QdrantClient(url=url, api_key=api_key)
         self.collection = collection
 

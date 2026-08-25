@@ -5,12 +5,12 @@ import pytz
 from .models import News, FeedSource, FilterWord, AIFilterInstruction, AIModelSetting
 from .interest import InterestModel
 import re
-from google import genai
-from google.genai import types
+# google-genai y cerebras se importan dentro de las funciones que los usan:
+# entre los dos son ~10 s y ~155 MB en la Pi, y el proceso web que sirve el feed
+# no llama a ninguno. Solo los necesitan la ingesta y los comandos.
 import time
 import requests
 import os
-from cerebras.cloud.sdk import Cerebras
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import numpy as np
@@ -297,6 +297,10 @@ class EmbeddingService:
             clean_text = clean_text[:8000]
 
         # Config por defecto para embeddings (modelo y dimensión)
+        # El import va aqui por lo mismo que en initialize_gemini: fuera de la
+        # ingesta nadie pide embeddings, y arriba lo pagaba cada arranque web.
+        from google.genai import types
+
         embedding_model = getattr(settings, 'GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001')
         output_dim = int(getattr(settings, 'GEMINI_EMBEDDING_DIM', 768))
         
@@ -510,6 +514,7 @@ class FeedService:
             api_key = getattr(settings, 'GOOGLE_API_KEY', None) or os.environ.get('GOOGLE_API_KEY')
             if not api_key:
                 raise ValueError("GOOGLE_API_KEY no configurada. Agrégala en settings.py o como variable de entorno.")
+            from google import genai
             FeedService._GEMINI_CLIENT = genai.Client(api_key=api_key)
         return FeedService._GEMINI_CLIENT
 
@@ -520,6 +525,7 @@ class FeedService:
             api_key = getattr(settings, 'CEREBRAS_API_KEY', None) or os.environ.get('CEREBRAS_API_KEY')
             if not api_key:
                 raise ValueError("CEREBRAS_API_KEY no configurada. Agrégala en settings.py o como variable de entorno.")
+            from cerebras.cloud.sdk import Cerebras
             FeedService._CEREBRAS_CLIENT = Cerebras(api_key=api_key)
         return FeedService._CEREBRAS_CLIENT
 
