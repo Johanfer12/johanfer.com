@@ -1,0 +1,20 @@
+{% comment %}
+Chart.js y su plugin de etiquetas, que usan las tres páginas de estadísticas.
+
+La versión va FIJA a propósito. Antes se pedía `npm/chart.js` a secas, o sea la
+última que hubiera: un major con cambios de API habría roto las tres páginas en
+silencio, sin que nada del repo cambiara. Al fijarla se comprobó que estas dos
+sirven exactamente los mismos bytes que servía la URL sin versión.
+
+El `integrity` es el hash de esos bytes: si el CDN devolviera otra cosa, el
+navegador se niega a ejecutarlo en vez de confiar. Al subir de versión hay que
+recalcularlo, o el script deja de cargar:
+
+  curl -s https://cdn.jsdelivr.net/npm/chart.js@X.Y.Z | openssl dgst -sha384 -binary | openssl base64 -A
+{% endcomment %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"
+        integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"
+        integrity="sha384-y49Zu59jZHJL/PLKgZPv3k2WI9c0Yp3pWB76V8OBVCb0QBKS8l4Ff3YslzHVX76Y"
+        crossorigin="anonymous"></script>

@@ -212,6 +212,21 @@ if not DEBUG:
         },
     }
 
+    # La cookie de sesion y la de CSRF solo viajan por HTTPS. Es seguro darlo por
+    # hecho porque nginx redirige TODO el trafico del puerto 80 a HTTPS, tambien
+    # el acceso por IP desde la LAN (comprobado: http://192.168.1.99/ responde
+    # 301). Van dentro del `if not DEBUG` porque en local se sirve por
+    # http://localhost y con Secure el navegador no devolveria la cookie: no se
+    # podria iniciar sesion.
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # Sin esto la cookie de sesion viaja en peticiones que nacen en otro sitio.
+    # 'Lax' es el valor por defecto de Django, pero explicito se lee mejor y deja
+    # claro que el login por enlace externo (GET) sigue funcionando.
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    CSRF_COOKIE_SAMESITE = 'Lax'
+
 # Media files (User uploads, dynamically generated content)
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
