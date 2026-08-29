@@ -8,8 +8,17 @@
         cards(root).map((card) => [card, card.getBoundingClientRect()])
     );
 
-    const animateReposition = (oldPositions, {excludedIds = [], onSettled = null} = {}) => {
-        if (isMobile() || !oldPositions?.size) return;
+    const animateReposition = (oldPositions, {
+        excludedIds = [],
+        onSettled = null,
+        allowMobile = false,
+        viewportOnly = false,
+    } = {}) => {
+        if ((isMobile() && !allowMobile) || !oldPositions?.size) return;
+        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+            if (typeof onSettled === 'function') onSettled();
+            return;
+        }
 
         requestAnimationFrame(() => {
             let hasMovingCards = false;
@@ -17,21 +26,39 @@
                 if (!document.body.contains(card) || excludedIds.includes(card.id)) return;
 
                 const newRect = card.getBoundingClientRect();
+                if (viewportOnly) {
+                    const buffer = Math.min(window.innerHeight * 0.5, 360);
+                    const outsideBefore = rect.bottom < -buffer || rect.top > window.innerHeight + buffer;
+                    const outsideAfter = newRect.bottom < -buffer || newRect.top > window.innerHeight + buffer;
+                    if (outsideBefore && outsideAfter) return;
+                }
                 const dx = rect.left - newRect.left;
                 const dy = rect.top - newRect.top;
                 if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
 
                 hasMovingCards = true;
-                card.style.transform = `translate(${dx}px,${dy}px)`;
+                card.style.transform = `translate3d(${dx}px,${dy}px,0)`;
                 card.style.transition = 'none';
+                card.style.willChange = 'transform';
 
                 requestAnimationFrame(() => {
-                    card.style.transition = 'transform 0.4s ease-out';
-                    card.style.transform = '';
-                    card.addEventListener('transitionend', () => {
+                    const duration = isMobile() ? 300 : 400;
+                    let settled = false;
+                    const finish = () => {
+                        if (settled) return;
+                        settled = true;
                         card.style.transition = '';
+                        card.style.willChange = '';
+                        card.removeEventListener('transitionend', onTransitionEnd);
                         if (typeof onSettled === 'function') onSettled();
-                    }, {once: true});
+                    };
+                    const onTransitionEnd = (event) => {
+                        if (event.target === card && event.propertyName === 'transform') finish();
+                    };
+                    card.style.transition = `transform ${duration}ms cubic-bezier(0.22, 0.61, 0.36, 1)`;
+                    card.style.transform = '';
+                    card.addEventListener('transitionend', onTransitionEnd);
+                    setTimeout(finish, duration + 80);
                 });
             });
 
@@ -146,6 +173,8 @@
         root.querySelectorAll?.('.news-image').forEach((image) => {
             if (!image.isConnected) return;
             if (image.complete && image.naturalWidth === 0) useFallbackImage(image);
+            if (image.dataset.newsCardBound === 'true') return;
+            image.dataset.newsCardBound = 'true';
             image.addEventListener('load', () => fitCardText(image.closest('.news-card-container') || document), {once: true});
         });
     };
@@ -161,6 +190,14 @@
 
     const fitTitleToSummary = (scope = document) => {
         scope.querySelectorAll?.('.card-front').forEach((front) => {
+            const container = front.closest('.news-card-container');
+            // Una tarjeta que entra o sale todavia no tiene su altura real. Si
+            // se mide durante el colapso, el titulo queda limitado a una o dos
+            // lineas incluso despues de recuperar su tamano normal.
+            if (container?.classList.contains('is-inserting') ||
+                container?.classList.contains('inserting') ||
+                container?.classList.contains('collapsing')) return;
+
             const title = front.querySelector('.news-title');
             if (!title) return;
 
@@ -183,6 +220,11 @@
 
     const fitDescriptionToCard = (scope = document) => {
         scope.querySelectorAll?.('.news-description').forEach((description) => {
+            const container = description.closest('.news-card-container');
+            if (container?.classList.contains('is-inserting') ||
+                container?.classList.contains('inserting') ||
+                container?.classList.contains('collapsing')) return;
+
             description.classList.remove('is-description-compact', 'is-description-tight');
             if (isMobile() || description.scrollHeight <= description.clientHeight + 1) return;
 

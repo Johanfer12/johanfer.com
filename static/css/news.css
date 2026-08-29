@@ -1022,11 +1022,9 @@ body.comments-modal-open {
     z-index: 10 !important;
 }
 
-/* Colapso con reflow: altura reduce y vecinos ocupan el espacio */
+/* El clon de salida usa solo transform/opacidad; no participa en el layout. */
 .news-card-container.collapsing {
     overflow: hidden;
-    will-change: height, width, margin, opacity, transform;
-    transition: height 0.45s ease, width 0.45s ease, margin 0.45s ease, opacity 0.35s ease, transform 0.45s ease;
 }
 
 .news-card-container.collapsing .news-card::before {
@@ -1051,14 +1049,8 @@ body.comments-modal-open {
 }
 
 @media (max-width: 767px) {
-    .news-card-container.collapsing {
-        will-change: height, margin-bottom, opacity;
-        transition: height 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), margin-bottom 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.22s ease;
-        transform: none !important;
-    }
-
     .news-card-container.inserting {
-        animation-duration: 0.38s;
+        animation-duration: 0.34s;
     }
 }
 

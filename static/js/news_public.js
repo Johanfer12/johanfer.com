@@ -45,6 +45,8 @@
     const totalPages = Number.parseInt(pageData.total_pages || '1', 10) || 1;
     const refillQueue = [];
     let refillInFlight = false;
+    const MOBILE_REMOVE_MS = 320;
+    const INSERT_MS = {mobile: 380, desktop: 600};
     const mobileTapState = {
         startX: 0,
         startY: 0,
@@ -83,7 +85,6 @@
     };
 
     const prepareIncomingCard = (card) => {
-        card.classList.remove('is-hiding');
         CardUi.addMobileDeleteButton(card);
         card.querySelectorAll('.news-image').forEach((image) => {
             image.loading = 'eager';
@@ -100,10 +101,12 @@
             card.classList.add('inserting');
             grid.appendChild(prepareIncomingCard(card));
             CardUi.bindImageFallbacks(card);
-            CardUi.fitCardText?.(card);
-            // 600ms = duración de la animación insertCard en desktop (0.38s en
-            // móvil); quitar la clase antes cortaba la animación con un salto.
-            setTimeout(() => card.classList.remove('inserting'), 600);
+            // El texto se mide despues de retirar la capa de animacion, ya con
+            // la altura definitiva. En movil se libera antes para ahorrar GPU.
+            setTimeout(() => {
+                card.classList.remove('inserting');
+                CardUi.fitCardText?.(card);
+            }, CardUi.isMobile() ? INSERT_MS.mobile : INSERT_MS.desktop);
         }
     };
 
@@ -141,16 +144,43 @@
 
     const removeCard = (card, id) => {
         if (!card || !id) return;
-        const oldPositions = CardUi.isMobile() ? null : CardUi.capturePositions(grid || document);
+        const mobile = CardUi.isMobile();
+        const oldPositions = CardUi.capturePositions(grid || document);
+        const rect = card.getBoundingClientRect();
+        const exitClone = card.cloneNode(true);
+        exitClone.id = '';
+        exitClone.removeAttribute('data-news-id');
+        Object.assign(exitClone.style, {
+            position: 'fixed',
+            left: `${rect.left}px`,
+            top: `${rect.top}px`,
+            width: `${rect.width}px`,
+            height: `${rect.height}px`,
+            margin: '0',
+            pointerEvents: 'none',
+            zIndex: '1000',
+            transformOrigin: 'center center',
+            willChange: 'transform, opacity',
+            transition: `opacity 0.2s ease, transform ${mobile ? 300 : 200}ms cubic-bezier(0.22, 0.61, 0.36, 1)`,
+        });
         hiddenIds.add(String(id));
         persistHiddenIds();
-        card.classList.add('is-hiding');
+        card.remove();
+        document.body.appendChild(exitClone);
+        CardUi.animateReposition(oldPositions, {
+            excludedIds: [card.id],
+            allowMobile: true,
+            viewportOnly: mobile,
+        });
+        requestAnimationFrame(() => {
+            exitClone.style.opacity = '0';
+            exitClone.style.transform = 'scale(0.94)';
+        });
         setTimeout(() => {
-            card.remove();
-            if (oldPositions) CardUi.animateReposition(oldPositions, {excludedIds: [card.id]});
+            exitClone.remove();
             updateCounter();
             refillCards();
-        }, 220);
+        }, mobile ? MOBILE_REMOVE_MS : 220);
     };
 
     cards().forEach((card) => {

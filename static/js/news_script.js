@@ -21,7 +21,7 @@
     const MAX_NEWS = 25;
     const NOTIF_DURATION = 10_000;         // 10 s
     const DELETE_ANIMATION_MS = {
-        mobile: 500,
+        mobile: 320,
         desktop: 460,
     };
 
@@ -139,10 +139,15 @@
 
     /** Animación FLIP (First‑Last Invert Play) para re‑posicionamiento */
     const animateReposition = (oldPos, excludedIds = []) => {
-        CardUi.animateReposition(oldPos, {excludedIds, onSettled: refreshHoverUnderPointer});
+        CardUi.animateReposition(oldPos, {
+            excludedIds,
+            onSettled: refreshHoverUnderPointer,
+            allowMobile: true,
+            viewportOnly: isMobile(),
+        });
     };
 
-    const createDesktopDeleteClone = (container) => {
+    const createDeleteClone = (container) => {
         const rect = container.getBoundingClientRect();
         const clone = container.cloneNode(true);
         clone.id = '';
@@ -157,7 +162,9 @@
         clone.style.pointerEvents = 'none';
         clone.style.zIndex = '1000';
         clone.style.transformOrigin = 'center center';
-        clone.style.transition = 'opacity 0.34s ease, transform 0.44s cubic-bezier(0.22, 0.61, 0.36, 1)';
+        clone.style.willChange = 'transform, opacity';
+        const duration = isMobile() ? 300 : 440;
+        clone.style.transition = `opacity ${isMobile() ? 200 : 340}ms ease, transform ${duration}ms cubic-bezier(0.22, 0.61, 0.36, 1)`;
         document.body.appendChild(clone);
 
         requestAnimationFrame(() => {
@@ -168,20 +175,8 @@
         return clone;
     };
 
-    const startMobileDeleteCollapse = (container) => {
-        container.classList.add('collapsing');
-        container.style.height = `${container.offsetHeight}px`;
-        container.style.marginBottom = getComputedStyle(container).marginBottom;
-        void container.offsetHeight;
-        requestAnimationFrame(() => {
-            container.style.height = '0px';
-            container.style.marginBottom = '0px';
-            container.style.opacity = '0';
-        });
-    };
-
-    const startDesktopDeleteCollapse = (container, oldPositions, excludedId) => {
-        const clone = createDesktopDeleteClone(container);
+    const startGpuDelete = (container, oldPositions, excludedId) => {
+        const clone = createDeleteClone(container);
         container.remove();
         if (oldPositions) animateReposition(oldPositions, [excludedId]);
         enforceCardLimit();
@@ -190,7 +185,13 @@
     };
 
     /** Pequeña animación de fade/scale */
-    const animateScaleOpacity = (el, {fromScale = 0.9, toScale = 1, duration = 400, prepared = false} = {}) => {
+    const animateScaleOpacity = (el, {
+        fromScale = 0.9,
+        toScale = 1,
+        duration = 400,
+        prepared = false,
+        onSettled = null,
+    } = {}) => {
         if (!prepared) {
             el.style.opacity = '0';
             el.style.transform = `scale(${fromScale})`;
@@ -198,13 +199,26 @@
             void el.offsetWidth; // re‑flow
         }
         requestAnimationFrame(() => {
+            let settled = false;
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                el.style.transition = el.style.opacity = el.style.transform = '';
+                el.style.willChange = '';
+                el.classList.remove('is-inserting');
+                el.removeEventListener('transitionend', onTransitionEnd);
+                if (typeof onSettled === 'function') onSettled();
+            };
+            const onTransitionEnd = (event) => {
+                if (event.target === el &&
+                    (event.propertyName === 'transform' || event.propertyName === 'opacity')) finish();
+            };
+            el.style.willChange = 'transform, opacity';
             el.style.transition = `opacity ${duration}ms ease, transform ${duration}ms cubic-bezier(0.25,0.1,0.25,1)`;
             el.style.opacity = '1';
             el.style.transform = `scale(${toScale})`;
-            el.addEventListener('transitionend', () => {
-                el.style.transition = el.style.opacity = el.style.transform = '';
-                el.classList.remove('is-inserting');
-            }, {once: true});
+            el.addEventListener('transitionend', onTransitionEnd);
+            setTimeout(finish, duration + 80);
         });
     };
 
@@ -267,18 +281,6 @@
             if (isStaleUiRead(scheduledVersion)) return;
             refreshCurrentPageFromDb(reason, {animation: 'silent'});
         }, delay);
-    };
-
-    const clearCollapsedCardStyles = (container) => {
-        container.style.transition = 'none';
-        container.style.height = '';
-        container.style.width = '';
-        container.style.marginBottom = '';
-        container.style.marginRight = '';
-        container.style.opacity = '';
-        container.style.transform = '';
-        container.classList.remove('collapsing', 'deleting', 'is-inserting');
-        void container.offsetHeight;
     };
 
     const resetCardFlipState = (container) => CardUi.resetFlipState(container);
@@ -946,43 +948,20 @@
         el.classList.add('is-inserting');
         el.style.opacity = '0';
         el.style.transition = 'none';
-        if (isMobile()) {
-            el.dataset.insertHeight = String(el.offsetHeight || 350);
-            el.style.height = '0px';
-            el.style.marginBottom = '0px';
-            el.style.overflow = 'hidden';
-        } else {
-            el.style.transform = 'scale(0.9)';
-        }
+        el.style.transform = 'scale(0.94)';
     };
 
     const animateCardInsertion = (el, {delay = 0} = {}) => {
         if (!el) return;
         const start = () => {
-            if (!isMobile()) {
-                animateScaleOpacity(el, {prepared: true});
-                return;
-            }
-
-            const finalHeight = el.dataset.insertHeight || '350';
-            void el.offsetHeight; // re-flow para que el estado colapsado sea visible
-            requestAnimationFrame(() => {
-                el.style.transition = 'height 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), margin-bottom 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.24s ease';
-                el.style.height = `${finalHeight}px`;
-                el.style.marginBottom = 'var(--news-card-mobile-gap)';
-                el.style.opacity = '1';
-                const onInsertionEnd = (event) => {
-                    if (event.propertyName !== 'height') return;
-                    el.style.transition = '';
-                    el.style.height = '';
-                    el.style.marginBottom = '';
-                    el.style.overflow = '';
-                    el.style.opacity = '';
-                    el.classList.remove('is-inserting');
-                    delete el.dataset.insertHeight;
-                    el.removeEventListener('transitionend', onInsertionEnd);
-                };
-                el.addEventListener('transitionend', onInsertionEnd);
+            animateScaleOpacity(el, {
+                fromScale: 0.94,
+                duration: isMobile() ? 300 : 400,
+                prepared: true,
+                onSettled: () => {
+                    CardUi.bindImageFallbacks?.(el);
+                    applyAdaptiveTitleSize(el);
+                },
             });
         };
 
@@ -1058,7 +1037,7 @@
 
                 const shouldRemoveFromCurrentView = (isSavedView() && !data.is_saved) || (!isSavedView() && data.is_saved);
                 if (shouldRemoveFromCurrentView) {
-                    const oldPositions = isMobile() ? null : capturePositions();
+                    const oldPositions = capturePositions();
                     container.remove();
                     if (oldPositions) animateReposition(oldPositions, [`news-${newsId}`]);
                     updateCounters(data.total_news, data.total_pages);
@@ -1134,28 +1113,14 @@
         const currentPage = new URLSearchParams(location.search).get('page') || 1;
 
         const mobileView = isMobile();
-        const oldPositions = mobileView ? null : capturePositions();
-        let desktopExitClone = null;
-        
-        if (mobileView) {
-            startMobileDeleteCollapse(container);
-        } else {
-            desktopExitClone = startDesktopDeleteCollapse(container, oldPositions, `news-${normalizedNewsId}`);
-        }
+        const oldPositions = capturePositions();
+        let exitClone = startGpuDelete(container, oldPositions, `news-${normalizedNewsId}`);
         
         // No usar respaldo precargado para evitar problemas de orden cronológico
         // Siempre esperar la respuesta del servidor que calcula el reemplazo correcto
-        // Programar eliminación del DOM después de la animación
-        const removeFromDOM = () => {
-            container.remove();
-        };
-        const restoreCollapsedCard = () => {
-            clearCollapsedCardStyles(container);
-        };
-
-        // Eliminar por transitionend con fallback por tiempo
+        // La tarjeta real sale del layout una sola vez; un clon compuesto por
+        // GPU representa la salida mientras FLIP mueve las tarjetas visibles.
         const animationDuration = mobileView ? DELETE_ANIMATION_MS.mobile : DELETE_ANIMATION_MS.desktop;
-        let removed = !mobileView;
         let pendingDeleteResponse = null;
         const finalizeSuccessfulDelete = (data) => {
             if (!data) return;
@@ -1182,35 +1147,9 @@
             pendingDeleteResponse = null;
             finalizeSuccessfulDelete(payload);
         };
-        const onAnimEnd = (ev) => {
-            // Solo nos interesa el fin de la transición de height (la más larga
-            // del colapso móvil). Sin {once: true}: la transición de opacity
-            // termina antes y consumiría el listener sin llegar nunca aquí.
-            if (ev.target !== container || ev.propertyName !== 'height') return;
-            container.removeEventListener('transitionend', onAnimEnd);
-            if (removed) return;
-            removed = true;
-            removeFromDOM();
-            if (oldPositions) animateReposition(oldPositions, [`news-${normalizedNewsId}`]);
-            enforceCardLimit();
-            refreshHoverUnderPointer();
-            maybeFinalizeDelete();
-        };
-        if (mobileView) container.addEventListener('transitionend', onAnimEnd);
         const removeTimeout = setTimeout(() => {
-            if (desktopExitClone) {
-                desktopExitClone.remove();
-                desktopExitClone = null;
-                maybeFinalizeDelete();
-                return;
-            }
-            if (!removed) {
-                removed = true;
-                container.removeEventListener('transitionend', onAnimEnd);
-                removeFromDOM();
-                if (oldPositions) animateReposition(oldPositions, [`news-${normalizedNewsId}`]);
-                enforceCardLimit();
-            }
+            exitClone?.remove();
+            exitClone = null;
             refreshHoverUnderPointer();
             maybeFinalizeDelete();
         }, animationDuration + 50);
@@ -1220,39 +1159,24 @@
             .then(data => {
                 if (STATE.cancelledDeletes.has(normalizedNewsId)) {
                     STATE.cancelledDeletes.delete(normalizedNewsId);
-                STATE.deletingNews.delete(normalizedNewsId);
-                setButtonBusy(triggerButton, false);
-                return;
-            }
-                if (data.status !== 'success') {
-                    clearTimeout(removeTimeout);
-                    container.removeEventListener('transitionend', onAnimEnd);
-                    if (document.body.contains(container)) {
-                        restoreCollapsedCard();
-                    } else {
-                        window.location.reload();
-                        return;
-                    }
                     STATE.deletingNews.delete(normalizedNewsId);
                     setButtonBusy(triggerButton, false);
+                    return;
+                }
+                if (data.status !== 'success') {
+                    clearTimeout(removeTimeout);
+                    exitClone?.remove();
                     err('Error del servidor al eliminar:', data.message);
+                    // La UI fue optimista; recargar restaura el estado real.
+                    window.location.reload();
                     return;
                 }
 
-                // Si ya se eliminó del DOM por timeout, actualizar contadores
-                if (!document.body.contains(container)) {
-                    if (!mobileView && desktopExitClone?.isConnected) {
-                        pendingDeleteResponse = data;
-                        return;
-                    }
-                    finalizeSuccessfulDelete(data);
+                if (exitClone?.isConnected) {
+                    pendingDeleteResponse = data;
                     return;
                 }
-
-                // Si el servidor responde antes de que termine la animación,
-                // dejamos que el colapso visual acabe para evitar el "rebote"
-                // del resto de tarjetas.
-                pendingDeleteResponse = data;
+                finalizeSuccessfulDelete(data);
             })
             .catch(e => {
                 if (STATE.cancelledDeletes.has(normalizedNewsId)) {
@@ -1261,20 +1185,10 @@
                     setButtonBusy(triggerButton, false);
                     return;
                 }
-                // En caso de error de red o servidor, revertir la animación
                 clearTimeout(removeTimeout);
-                container.removeEventListener('transitionend', onAnimEnd);
-                if (document.body.contains(container)) {
-                    restoreCollapsedCard();
-                } else {
-                    window.location.reload();
-                    return;
-                }
-
                 err('Error al eliminar noticia:', e);
-                alert('Error al eliminar la noticia. Por favor, inténtalo de nuevo.');
-                STATE.deletingNews.delete(normalizedNewsId); // Limpiar flag en error
-                setButtonBusy(triggerButton, false);
+                exitClone?.remove();
+                window.location.reload();
             });
 
     };
@@ -1449,7 +1363,8 @@
             updateSaveButtonVisual(saveBtn, isSaved);
         }
 
-        // Limitar líneas solo cuando el contenido supera la altura de la cara.
+        CardUi.bindImageFallbacks?.(container);
+        // Limitar lineas solo cuando el contenido supera la altura real.
         requestAnimationFrame(() => applyAdaptiveTitleSize(container));
     };
 
