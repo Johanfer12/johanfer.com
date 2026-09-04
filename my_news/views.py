@@ -6,7 +6,6 @@ from django.http import JsonResponse
 from django.http import HttpResponse
 from django.views.decorators.http import require_POST, require_GET
 from .services import FeedService
-from .interest import VectorUnavailable, record_vote
 from .ingestion_status import feed_alert
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.views import LoginView
@@ -158,8 +157,6 @@ def _card_render_flags(request):
         'show_save_button': True,
         'show_delete_button': bool(request.user.is_staff),
         'show_similarity_score': True,
-        'show_vote_buttons': True,
-        'show_interest_score': True,
     }
 
 
@@ -670,38 +667,6 @@ def toggle_save_news(request, pk):
         return JsonResponse({'status': 'error', 'message': 'Noticia no encontrada'})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
-
-
-@require_POST
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
-def vote_news(request, pk):
-    """Registra el pulgar arriba/abajo. Volver a pulsar el mismo voto lo retira."""
-    try:
-        try:
-            requested_vote = int(request.POST.get('vote', '0'))
-        except (TypeError, ValueError):
-            return JsonResponse({'status': 'error', 'message': 'Voto no válido'}, status=400)
-
-        if requested_vote not in (1, -1):
-            return JsonResponse({'status': 'error', 'message': 'Voto no válido'}, status=400)
-
-        news = News.objects.get(pk=pk)
-        # Pulsar el pulgar que ya estaba activo actúa como "deshacer".
-        effective_vote = 0 if news.user_vote == requested_vote else requested_vote
-        applied = record_vote(news, effective_vote)
-
-        return JsonResponse({
-            'status': 'success',
-            'news_id': news.id,
-            'user_vote': applied,
-        })
-    except VectorUnavailable as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=503)
-    except News.DoesNotExist:
-        return JsonResponse({'status': 'error', 'message': 'Noticia no encontrada'}, status=404)
-    except Exception as e:
-        logger.exception("Error registrando voto de la noticia %s", pk)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
 @require_GET

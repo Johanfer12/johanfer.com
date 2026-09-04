@@ -76,7 +76,6 @@
         currentPage: parseInt(new URLSearchParams(location.search).get('page') || '1', 10),
         deletingNews: new Set(), // IDs de noticias siendo eliminadas
         savingNews: new Set(), // IDs de noticias siendo guardadas/desguardadas
-        votingNews: new Set(), // IDs de noticias con un voto (pulgar) en vuelo
         restoringNews: false,
         syncingFromDb: false, // evita refrescos simultaneos al recuperar foco/conexion
         lastDbSyncAt: 0, // timestamp del ultimo sync fuerte con DB
@@ -1054,45 +1053,6 @@
             });
     };
 
-    const serverVoteNews = (newsId, vote) => fetchJson(`/noticias/vote/${newsId}/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken'),
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `vote=${vote}`,
-    });
-
-    const applyVoteVisual = (container, userVote) => {
-        $$('.vote-btn', container).forEach((button) => {
-            const isActive = Number(button.dataset.vote) === Number(userVote);
-            button.classList.toggle('is-active', isActive);
-            button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-        });
-    };
-
-    const voteNews = (newsId, vote, triggerButton = null) => {
-        if (STATE.votingNews.has(newsId)) return;
-        const container = $(`#news-${newsId}`);
-        if (!container) return;
-
-        STATE.votingNews.add(newsId);
-        setButtonBusy(triggerButton, true);
-        serverVoteNews(newsId, vote)
-            .then(data => {
-                if (data.status !== 'success') throw new Error(data.message || 'Error al votar');
-                applyVoteVisual(container, data.user_vote);
-            })
-            .catch(e => {
-                err('Error al votar noticia:', e);
-                alert('No se pudo registrar el voto.');
-            })
-            .finally(() => {
-                setButtonBusy(triggerButton, false);
-                STATE.votingNews.delete(newsId);
-            });
-    };
-
     const deleteNews = (newsId, triggerButton = null) => {
         const normalizedNewsId = normalizeId(newsId);
         STATE.cancelledDeletes.delete(normalizedNewsId);
@@ -1454,15 +1414,6 @@
             const container = saveBtn.closest('.news-card-container');
             const id = saveBtn.dataset.id || container?.id?.replace('news-', '');
             if (id) toggleSaveNews(id);
-            return;
-        }
-
-        const voteBtn = e.target.closest('.vote-btn');
-        if (voteBtn) {
-            e.stopPropagation();
-            const container = voteBtn.closest('.news-card-container');
-            const id = voteBtn.dataset.id || container?.id?.replace('news-', '');
-            if (id) voteNews(id, voteBtn.dataset.vote, voteBtn);
             return;
         }
 

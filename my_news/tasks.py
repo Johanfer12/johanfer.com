@@ -1,6 +1,4 @@
 from .services import EmbeddingService, FeedService, DEFAULT_AI_MODEL
-from .interest import INTEREST_DISTRIBUTION_CACHE_KEY, InterestModel, scored_population
-from django.core.cache import cache
 from django.utils import timezone
 from datetime import timedelta
 from .models import News
@@ -150,82 +148,6 @@ def retry_missing_embeddings(limit: int = 25, days: int = 15):
         return 0
 
 
-def rescore_recent_news(limit: int = 0):
-    """Repuntúa la ventana de referencia con los votos que haya ahora mismo.
-
-    Cada noticia se puntúa al entrar, pero conserva ese valor para siempre: sin
-    esto, votar no cambiaría nada de lo ya publicado y el feed quedaría
-    describiendo unos gustos viejos.
-
-    Cubre la ventana entera (``INTEREST_WINDOW_DAYS``), no solo lo que queda sin
-    leer. Son dos motivos: la referencia del percentil no puede encoger según se
-    lee, y así todas las noticias con las que se compara están puntuadas por el
-    mismo modelo en la misma pasada.
-
-    Coste medido en la Pi con la ventana de 15 días (886 noticias): 4,9 s, de los
-    que 2,2 s son traer los vectores y 2,0 s escribir en SQLite. Si el modelo aún
-    no tiene votos suficientes se sale sin llegar a hablar con Qdrant.
-
-    Va al final del cron y después de la purga, para no robarle tiempo a la
-    ingesta ni gastarlo en noticias que están a punto de borrarse.
-    """
-    try:
-        model = InterestModel.load()
-        if not model.is_trained:
-            positives, negatives = model.label_counts
-            logger.info(
-                "Sin votos suficientes para puntuar (%s a favor / %s en contra); "
-                "no se repuntúa.",
-                positives,
-                negatives,
-            )
-            return 0
-
-        vector_index = FeedService.initialize_vector_index()
-        if vector_index is None:
-            logger.warning("Qdrant no disponible; no se repuntúa el feed.")
-            return 0
-
-        queryset = scored_population().order_by('-published_date')
-        if limit and limit > 0:
-            queryset = queryset[:limit]
-        objetivo = list(queryset)
-        if not objetivo:
-            return 0
-
-        vectores = vector_index.vectors_for_guids([n.guid for n in objetivo])
-
-        pendientes = []
-        puntuadas = 0
-        for news in objetivo:
-            vector = vectores.get(news.guid)
-            if vector is None:
-                continue
-            news.interest_score = model.score(vector)
-            pendientes.append(news)
-            puntuadas += 1
-            if len(pendientes) >= 200:
-                News.objects.bulk_update(pendientes, ['interest_score'])
-                pendientes = []
-
-        if pendientes:
-            News.objects.bulk_update(pendientes, ['interest_score'])
-
-        # El percentil de la tarjeta se calcula sobre una distribución cacheada.
-        cache.delete(INTEREST_DISTRIBUTION_CACHE_KEY)
-
-        sin_vector = len(objetivo) - puntuadas
-        logger.info(
-            "Ventana de referencia repuntuada: %s noticias%s",
-            puntuadas,
-            f" ({sin_vector} sin vector, omitidas)" if sin_vector else "",
-        )
-        return puntuadas
-    except Exception:
-        logger.exception("Error repuntuando el feed")
-        return 0
-
-
 def update_news_cron():
     # En BASE_DIR y no en /tmp: ahí el sistema puede borrarlo en limpiezas/reinicios.
     lock_path = os.path.join(settings.BASE_DIR, 'my_news_update.lock')
@@ -246,13 +168,6 @@ def update_news_cron():
                 logger.exception("Error reintentando embeddings pendientes tras el cron")
             # Ejecutar limpieza tras actualización
             purge_old_news(15)
-            # Lo último, y después de la purga: así no gasta trabajo en noticias
-            # que se van a borrar y no puede retrasar la ingesta, que es lo que
-            # tiene que llegar a tiempo.
-            try:
-                rescore_recent_news()
-            except Exception:
-                logger.exception("Error repuntuando el feed tras el cron")
     except portalocker.exceptions.LockException:
         # No es una avería: la pasada anterior sigue en marcha y terminará ella.
         logger.warning("Actualización de noticias omitida: ya hay otra ejecución en curso.")

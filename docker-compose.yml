@@ -6,7 +6,7 @@
 # El puerto y la ruta del almacenamiento salen del .env (QDRANT_URL y
 # QDRANT_STORAGE_PATH); si no hay QDRANT_STORAGE_PATH cae en ./qdrant_storage.
 # Sin esto levantado, la ingesta de noticias en local se queda sin detección de
-# duplicados y sin modelo de interés, pero no revienta.
+# duplicados, pero no revienta.
 services:
   qdrant:
     image: qdrant/qdrant

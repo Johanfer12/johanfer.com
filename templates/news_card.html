@@ -15,13 +15,6 @@
             {% endif %}
             <div class="news-meta">
                 <span class="meta-info">{{ article.source.name }} - {{ article.published_date|date:"d/m/Y H:i" }}</span>
-                {% if show_interest_score %}
-                    {% with pct=article.interest_score|interest_percentile %}
-                    {% if pct is not None %}
-                    <span class="interest-score {% if pct >= 66 %}is-high{% elif pct >= 33 %}is-mid{% else %}is-low{% endif %}" title="Encaja contigo más que el {{ pct }}% del feed, según tus pulgares">{{ pct }}%</span>
-                    {% endif %}
-                    {% endwith %}
-                {% endif %}
                 {% if show_similarity_score and article.similarity_score %}
                     <span class="similarity-score">{{ article.similarity_score|floatformat:2 }}</span>
                 {% endif %}
@@ -40,14 +33,6 @@
                 <a href="{{ article.link }}" target="_blank" rel="noopener noreferrer" class="news-link icon-only source-link" title="Fuente" aria-label="Fuente">
                     <svg class="news-icon" aria-hidden="true"><use href="#ic-source"></use></svg>
                 </a>
-                {% if show_vote_buttons %}
-                <button type="button" class="news-link icon-only vote-btn vote-up {% if article.user_vote == 1 %}is-active{% endif %}" data-id="{{ article.id }}" data-vote="1" title="Me interesa" aria-label="Me interesa" aria-pressed="{% if article.user_vote == 1 %}true{% else %}false{% endif %}">
-                    <svg class="news-icon" aria-hidden="true"><use href="#ic-vote-up"></use></svg>
-                </button>
-                <button type="button" class="news-link icon-only vote-btn vote-down {% if article.user_vote == -1 %}is-active{% endif %}" data-id="{{ article.id }}" data-vote="-1" title="No me interesa" aria-label="No me interesa" aria-pressed="{% if article.user_vote == -1 %}true{% else %}false{% endif %}">
-                    <svg class="news-icon" aria-hidden="true"><use href="#ic-vote-down"></use></svg>
-                </button>
-                {% endif %}
                 {% if show_save_button %}
                 <button type="button" class="news-link icon-only save-btn {% if article.is_saved %}is-saved{% endif %}" data-id="{{ article.id }}" data-saved="{% if article.is_saved %}true{% else %}false{% endif %}" title="Guardar" aria-label="Guardar">
                     {% if article.is_saved %}

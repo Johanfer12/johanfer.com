@@ -8,7 +8,6 @@ urlpatterns = [
     path('guardadas/', views.SavedNewsListView.as_view(), name='saved_news_list'),
     path('login/', views.NewsLoginView.as_view(), name='news_login'),
     path('save/<int:pk>/', views.toggle_save_news, name='toggle_save_news'),
-    path('vote/<int:pk>/', views.vote_news, name='vote_news'),
     path('delete/<int:pk>/', views.delete_news, name='delete_news'),
     path('undo/<int:pk>/', views.undo_delete, name='undo_delete'),
     path('latest-deleted/', views.latest_deleted_news, name='latest_deleted_news'),

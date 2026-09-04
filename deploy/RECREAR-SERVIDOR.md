@@ -36,9 +36,7 @@ maestra, y en la Pi hay que instalarlos a mano porque `deploy.sh` no los toca.
 > verdad cuesta reconstruir de memoria.
 
 La base de datos es lo único verdaderamente irrecuperable: dentro están las
-noticias, los libros, el histórico de Spotify y **los votos del modelo de
-interés** (tabla `my_news_newsfeedback`, con una copia del embedding de cada
-voto).
+noticias, los libros y el histórico de Spotify.
 
 Los vectores de Qdrant sí se pueden reconstruir sin respaldo: `python manage.py
 qdrant_backfill` los regenera y `retry_missing_embeddings` recupera los que
@@ -58,7 +56,7 @@ sudo apt update && sudo apt install -y python3-venv python3-pip nginx fail2ban u
 
 **No viene por apt.** Es un binario suelto que corre como servicio propio, y es
 la pieza que más fácil se olvida al recrear la máquina: sin ella no hay
-detección de duplicados ni modelo de interés.
+detección de duplicados.
 
 ```bash
 sudo mkdir -p /opt/qdrant /var/lib/qdrant/storage
@@ -219,7 +217,7 @@ systemctl is-active qdrant my_bookshelf nginx fail2ban
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/noticias/   # 200
 curl -s -o /dev/null -w '%{http_code}\n' https://johanfer.com/noticias/    # 200
 crontab -l | grep -c 'django-cronjobs'                                      # 4
-python manage.py shell -c "from my_news.models import News, NewsFeedback; print(News.objects.count(), NewsFeedback.objects.count())"
+python manage.py shell -c "from my_news.models import News; print(News.objects.count())"
 ```
 
 La primera petición tras reiniciar puede tardar ~20 s: es el arranque en frío de

@@ -44,7 +44,7 @@
 
         {% include 'news_icons.html' %}
 
-        {% include 'news_grid.html' with grid_id='news-grid' articles=page_obj card_id_prefix='news' show_save_button=True show_delete_button=user.is_staff show_similarity_score=True show_vote_buttons=True show_interest_score=True %}
+        {% include 'news_grid.html' with grid_id='news-grid' articles=page_obj card_id_prefix='news' show_save_button=True show_delete_button=user.is_staff show_similarity_score=True %}
 
         {% if is_paginated %}
         <div class="pagination">

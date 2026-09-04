@@ -1,5 +1,5 @@
 # Base de datos vectorial. Guarda los embeddings de las noticias, que son la
-# base de la detección de duplicados y del modelo de interés.
+# base de la detección de duplicados.
 #
 # Instalar en /etc/systemd/system/qdrant.service
 #
