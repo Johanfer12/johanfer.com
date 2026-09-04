@@ -1,0 +1,505 @@
+.management-page {
+    color: var(--text-primary);
+}
+
+.management-shell,
+.management-form-shell {
+    width: min(1180px, calc(100% - 32px));
+    margin: 0 auto 64px;
+}
+
+.management-hero,
+.management-section,
+.management-form-card {
+    background: linear-gradient(155deg, rgba(255, 255, 255, 0.13), rgba(18, 28, 52, 0.54) 28%, rgba(8, 14, 28, 0.78));
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 18px 42px rgba(2, 8, 18, 0.46), inset 0 1px 0 var(--glass-highlight);
+    backdrop-filter: blur(18px) saturate(120%);
+    -webkit-backdrop-filter: blur(18px) saturate(120%);
+}
+
+.management-hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 28px;
+    padding: 30px;
+    border-radius: 22px;
+    margin-bottom: 22px;
+}
+
+.management-eyebrow {
+    margin: 0 0 8px;
+    color: var(--accent-strong);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+}
+
+.management-hero h2,
+.management-section h2,
+.management-form-card h2 {
+    margin: 0;
+    color: #fff;
+}
+
+.management-hero h2 {
+    font-size: clamp(1.8rem, 4vw, 2.7rem);
+}
+
+.management-hero p:not(.management-eyebrow),
+.management-section-heading p {
+    margin: 9px 0 0;
+    color: var(--text-secondary);
+    line-height: 1.55;
+}
+
+.management-jump {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.management-jump a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 13px;
+    border-radius: 999px;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--card-border);
+}
+
+.management-jump a:hover {
+    background: rgba(255, 255, 255, 0.11);
+}
+
+.management-jump span {
+    color: var(--accent-strong);
+    font-size: 0.78rem;
+}
+
+.management-messages {
+    margin: 0 0 22px;
+}
+
+.management-message {
+    padding: 13px 16px;
+    border: 1px solid rgba(86, 214, 142, 0.38);
+    border-radius: 12px;
+    background: rgba(25, 105, 66, 0.26);
+    color: #c9f7dc;
+}
+
+.management-section {
+    padding: 26px;
+    border-radius: 20px;
+    margin-bottom: 22px;
+    scroll-margin-top: 20px;
+}
+
+.management-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.management-section-heading h2 {
+    font-size: clamp(1.35rem, 3vw, 1.75rem);
+}
+
+.management-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+    gap: 14px;
+}
+
+.management-grid-sources {
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+}
+
+.management-card {
+    min-width: 0;
+    padding: 18px;
+    border-radius: 15px;
+    border: 1px solid var(--card-border);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.025));
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+}
+
+.management-card.is-inactive {
+    opacity: 0.68;
+}
+
+.management-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.status-pill,
+.feature-pill,
+.management-count {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 9px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+
+.status-pill {
+    color: #d6ddea;
+    border: 1px solid rgba(198, 214, 245, 0.22);
+    background: rgba(198, 214, 245, 0.07);
+}
+
+.status-pill.is-active {
+    color: #bff4d3;
+    border-color: rgba(70, 210, 130, 0.32);
+    background: rgba(35, 145, 83, 0.2);
+}
+
+.feature-pill {
+    margin-left: 5px;
+    color: #d8c8ff;
+    background: rgba(132, 86, 220, 0.2);
+}
+
+.management-count {
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.045);
+}
+
+.management-card h3 {
+    margin: 0;
+    color: #fff;
+    font-size: 1.08rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.management-card > p {
+    margin: -4px 0 0;
+    color: var(--text-secondary);
+    line-height: 1.45;
+}
+
+.management-url {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--accent-strong);
+    font-size: 0.84rem;
+}
+
+.management-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 0;
+}
+
+.management-details div {
+    padding: 10px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.management-details dt {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.management-details dd {
+    margin: 4px 0 0;
+    color: #fff;
+    font-size: 0.86rem;
+}
+
+.management-actions,
+.management-form-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.management-actions {
+    margin-top: auto;
+    padding-top: 4px;
+}
+
+.management-actions form {
+    margin: 0;
+}
+
+.management-primary,
+.management-secondary,
+.management-danger,
+.management-danger-solid {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    padding: 8px 13px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    font: inherit;
+    font-size: 0.84rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.management-primary {
+    color: #081120;
+    background: var(--accent-strong);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.management-primary:hover {
+    color: #081120;
+    background: #bdd5f6;
+    transform: translateY(-1px);
+}
+
+.management-secondary {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.055);
+    border-color: var(--card-border);
+}
+
+.management-secondary:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.management-danger {
+    color: #ffb7b7;
+    background: transparent;
+    border-color: rgba(255, 113, 113, 0.2);
+}
+
+.management-danger:hover,
+.management-danger-solid {
+    color: #fff;
+    background: rgba(196, 48, 61, 0.7);
+    border-color: rgba(255, 130, 140, 0.45);
+}
+
+.management-danger-solid:hover {
+    background: rgba(224, 55, 70, 0.9);
+}
+
+.management-empty {
+    padding: 30px;
+    border: 1px dashed rgba(198, 214, 242, 0.25);
+    border-radius: 14px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.management-form-shell {
+    max-width: 720px;
+}
+
+.management-back {
+    display: inline-flex;
+    margin: 0 0 14px 4px;
+    color: var(--text-secondary);
+}
+
+.management-form-card {
+    padding: clamp(24px, 5vw, 38px);
+    border-radius: 20px;
+}
+
+.management-form-card h2 {
+    margin-bottom: 24px;
+    font-size: clamp(1.55rem, 4vw, 2rem);
+}
+
+.management-field,
+.management-checkbox-field {
+    margin-bottom: 18px;
+}
+
+.management-field label,
+.management-checkbox-field label {
+    color: #fff;
+    font-weight: 700;
+}
+
+.management-field label {
+    display: block;
+    margin-bottom: 7px;
+}
+
+.management-field input,
+.management-field textarea {
+    width: 100%;
+    border: 1px solid rgba(198, 214, 242, 0.24);
+    border-radius: 11px;
+    padding: 12px 13px;
+    color: #fff;
+    background: rgba(4, 10, 22, 0.62);
+    font: inherit;
+    outline: none;
+}
+
+.management-field textarea {
+    resize: vertical;
+    min-height: 120px;
+}
+
+.management-field input:focus,
+.management-field textarea:focus {
+    border-color: var(--accent-strong);
+    box-shadow: 0 0 0 3px rgba(143, 180, 232, 0.13);
+}
+
+.management-checkbox-field {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 10px;
+    align-items: center;
+    padding: 13px;
+    border: 1px solid var(--card-border);
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.management-checkbox-field input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-strong);
+}
+
+.management-field p,
+.management-checkbox-field p {
+    margin: 6px 0 0;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+
+.management-checkbox-field p,
+.management-checkbox-field .field-error {
+    grid-column: 2;
+}
+
+.field-error,
+.form-error-summary {
+    display: block;
+    margin-top: 7px;
+    color: #ffb7b7;
+    font-size: 0.82rem;
+}
+
+.has-error input,
+.has-error textarea {
+    border-color: rgba(255, 113, 113, 0.7);
+}
+
+.management-form-actions {
+    justify-content: flex-end;
+    padding-top: 10px;
+}
+
+.management-delete-card {
+    text-align: center;
+}
+
+.management-delete-icon {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    margin: 0 auto 18px;
+    border-radius: 50%;
+    color: #ffd0d0;
+    background: rgba(196, 48, 61, 0.28);
+    border: 1px solid rgba(255, 130, 140, 0.42);
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.management-delete-name {
+    padding: 14px;
+    border-radius: 11px;
+    background: rgba(0, 0, 0, 0.18);
+    color: #fff;
+    overflow-wrap: anywhere;
+}
+
+.management-impact {
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.management-delete-card .management-form-actions {
+    justify-content: center;
+    margin-top: 22px;
+}
+
+@media (max-width: 760px) {
+    .management-shell,
+    .management-form-shell {
+        width: min(100% - 20px, 720px);
+    }
+
+    .management-hero,
+    .management-section-heading {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .management-hero,
+    .management-section {
+        padding: 20px;
+    }
+
+    .management-jump {
+        justify-content: flex-start;
+    }
+
+    .management-grid,
+    .management-grid-sources {
+        grid-template-columns: 1fr;
+    }
+
+    .management-section-heading .management-primary {
+        align-self: flex-start;
+    }
+}
+
+@media (max-width: 900px), (prefers-reduced-motion: reduce) {
+    .management-hero,
+    .management-section,
+    .management-form-card {
+        background: rgba(11, 20, 44, 0.94);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    .management-primary,
+    .management-secondary,
+    .management-danger,
+    .management-danger-solid {
+        transition: none;
+    }
+}

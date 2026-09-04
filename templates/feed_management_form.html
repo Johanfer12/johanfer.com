@@ -1,0 +1,50 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>{{ form_title }}</title>
+    {% include 'head_base.html' %}
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'css/feed_management.css' %}">
+    {% include 'pwa_head.html' %}
+</head>
+<body class="has-header management-page">
+    {% include 'header.html' %}
+    <main class="management-form-shell">
+        <a class="management-back" href="{% url 'my_news:feed_management' %}#{{ back_section }}">← Volver a configuración</a>
+        <section class="management-form-card">
+            <p class="management-eyebrow">{{ form_eyebrow }}</p>
+            <h2>{{ form_title }}</h2>
+            {% if form.non_field_errors %}<div class="form-error-summary">{{ form.non_field_errors }}</div>{% endif %}
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% for field in form %}
+                    {% if field.widget_type == 'checkbox' %}
+                    <div class="management-checkbox-field {% if field.errors %}has-error{% endif %}">
+                        {{ field }}
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {% if field.help_text %}<p>{{ field.help_text }}</p>{% endif %}
+                        {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="management-field {% if field.errors %}has-error{% endif %}">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<p>{{ field.help_text }}</p>{% endif %}
+                        {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+                {% endfor %}
+                <div class="management-form-actions">
+                    <a class="management-secondary" href="{% url 'my_news:feed_management' %}#{{ back_section }}">Cancelar</a>
+                    <button class="management-primary" type="submit">{{ submit_label }}</button>
+                </div>
+            </form>
+        </section>
+    </main>
+    <script src="{% static 'js/background_motion.js' %}"></script>
+</body>
+</html>

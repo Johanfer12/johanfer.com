@@ -17,6 +17,8 @@
         {% elif request.path|slice:":9" == '/noticias' %}
           {% if request.path == '/noticias/system-stats/' %}
             Estadísticas del Sistema
+          {% elif request.path|slice:":24" == '/noticias/configuracion/' %}
+            Configuración del feed
           {% else %}
             Mis Noticias
           {% endif %}
@@ -88,11 +90,14 @@
             {% endif %}
         {% elif request.path == '/noticias/system-stats/' %}
             <a href="/noticias/" title="Volver a Noticias"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5z"/></svg></a>
+        {% elif request.path|slice:":24" == '/noticias/configuracion/' %}
+            <a href="/noticias/redundancy-test/" title="Redundancia"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 256 256"><polyline points="79.8 99.7 31.8 99.7 31.8 51.7" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><path d="M190.2,65.8a87.9,87.9,0,0,0-124.4,0l-34,33.9" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><polyline points="176.2 156.3 224.2 156.3 224.2 204.3" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><path d="M65.8,190.2a87.9,87.9,0,0,0,124.4,0l34-33.9" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/></svg></a>
+            <a href="/noticias/" title="Volver a Noticias"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5z"/></svg></a>
         {% elif request.path == '/noticias/redundancy-test/' %}
-            <a href="/j_admin/my_news/filterword/" title="Filtros"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2z"/></svg></a>
+            <a href="{% url 'my_news:feed_management' %}" title="Configurar fuentes y filtros"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2z"/></svg></a>
             <a href="/noticias/" title="Volver a Noticias"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5z"/></svg></a>
         {% elif request.path|slice:":9" == '/noticias' %}
-            <a href="/j_admin/my_news/filterword/" title="Filtros"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2z"/></svg></a>
+            <a href="{% url 'my_news:feed_management' %}" title="Configurar fuentes y filtros"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2z"/></svg></a>
             <a href="/noticias/redundancy-test/" title="Redundancia"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 256 256"><polyline points="79.8 99.7 31.8 99.7 31.8 51.7" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><path d="M190.2,65.8a87.9,87.9,0,0,0-124.4,0l-34,33.9" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><polyline points="176.2 156.3 224.2 156.3 224.2 204.3" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><path d="M65.8,190.2a87.9,87.9,0,0,0,124.4,0l34-33.9" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/></svg></a>
             {% if request.path == '/noticias/guardadas/' %}
             <a href="/noticias/" title="Volver a Noticias">

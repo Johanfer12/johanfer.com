@@ -1,0 +1,41 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>Eliminar {{ object_name|lower }}</title>
+    {% include 'head_base.html' %}
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'css/feed_management.css' %}">
+    {% include 'pwa_head.html' %}
+</head>
+<body class="has-header management-page">
+    {% include 'header.html' %}
+    <main class="management-form-shell">
+        <a class="management-back" href="{% url 'my_news:feed_management' %}#{{ back_section }}">← Volver a configuración</a>
+        <section class="management-form-card management-delete-card">
+            <div class="management-delete-icon" aria-hidden="true">!</div>
+            <p class="management-eyebrow">Confirmación necesaria</p>
+            <h2>Eliminar {{ object_name|lower }}</h2>
+            <p class="management-delete-name">{{ object_detail }}</p>
+            {% if impact_count %}
+            <p class="management-impact"><strong>{{ impact_count }}</strong> {{ impact_label }}.</p>
+            {% else %}
+            <p class="management-impact">Esta acción no se puede deshacer.</p>
+            {% endif %}
+            {% if confirmation_error %}<p class="field-error">La confirmación no fue válida. Inténtalo de nuevo.</p>{% endif %}
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="confirmation" value="delete">
+                <div class="management-form-actions">
+                    <a class="management-secondary" href="{% url 'my_news:feed_management' %}#{{ back_section }}">Cancelar</a>
+                    <button class="management-danger-solid" type="submit">Sí, eliminar</button>
+                </div>
+            </form>
+        </section>
+    </main>
+    <script src="{% static 'js/background_motion.js' %}"></script>
+</body>
+</html>

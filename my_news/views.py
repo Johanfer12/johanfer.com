@@ -1,14 +1,17 @@
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.views.generic import ListView
-from .models import News
+from .models import AIFilterInstruction, FeedSource, FilterWord, News
+from .forms import AIFilterInstructionForm, FeedSourceForm, FilterWordForm
 from django.http import JsonResponse
 from django.http import HttpResponse
-from django.views.decorators.http import require_POST, require_GET
+from django.views.decorators.http import require_POST, require_GET, require_http_methods
+from django.contrib import messages
 from .services import FeedService
 from .ingestion_status import feed_alert
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.views import LoginView
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -359,6 +362,211 @@ def delete_news(request, pk):
 def superuser_required(view_func):
     decorated_view = user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')(view_func)
     return decorated_view
+
+
+def _management_redirect(section):
+    return redirect(f"{reverse('my_news:feed_management')}#{section}")
+
+
+@require_GET
+@superuser_required
+def feed_management(request):
+    sources = FeedSource.objects.annotate(news_count=Count('news')).order_by('name')
+    word_filters = FilterWord.objects.annotate(news_count=Count('filtered_news')).order_by('word')
+    ai_filters = AIFilterInstruction.objects.order_by('-created_at')
+    context = {
+        'sources': sources,
+        'word_filters': word_filters,
+        'ai_filters': ai_filters,
+        'active_sources': sources.filter(active=True).count(),
+        'active_word_filters': word_filters.filter(active=True).count(),
+        'active_ai_filters': ai_filters.filter(active=True).count(),
+    }
+    return render(request, 'feed_management.html', context)
+
+
+def _render_management_form(request, form, *, title, eyebrow, back_section, submit_label):
+    return render(request, 'feed_management_form.html', {
+        'form': form,
+        'form_title': title,
+        'form_eyebrow': eyebrow,
+        'back_section': back_section,
+        'submit_label': submit_label,
+    })
+
+
+@require_http_methods(['GET', 'POST'])
+@superuser_required
+def source_create(request):
+    form = FeedSourceForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        source = form.save()
+        messages.success(request, f"Fuente «{source.name}» creada.")
+        return _management_redirect('sources')
+    return _render_management_form(
+        request, form, title='Nueva fuente RSS', eyebrow='Fuentes',
+        back_section='sources', submit_label='Crear fuente',
+    )
+
+
+@require_http_methods(['GET', 'POST'])
+@superuser_required
+def source_edit(request, pk):
+    source = get_object_or_404(FeedSource, pk=pk)
+    form = FeedSourceForm(request.POST or None, instance=source)
+    if request.method == 'POST' and form.is_valid():
+        source = form.save()
+        messages.success(request, f"Fuente «{source.name}» actualizada.")
+        return _management_redirect('sources')
+    return _render_management_form(
+        request, form, title=f'Editar {source.name}', eyebrow='Fuentes',
+        back_section='sources', submit_label='Guardar cambios',
+    )
+
+
+@require_http_methods(['GET', 'POST'])
+@superuser_required
+def word_filter_create(request):
+    form = FilterWordForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        word_filter = form.save()
+        messages.success(request, f"Filtro «{word_filter.word}» creado.")
+        return _management_redirect('word-filters')
+    return _render_management_form(
+        request, form, title='Nuevo filtro por palabra', eyebrow='Filtros por palabra',
+        back_section='word-filters', submit_label='Crear filtro',
+    )
+
+
+@require_http_methods(['GET', 'POST'])
+@superuser_required
+def word_filter_edit(request, pk):
+    word_filter = get_object_or_404(FilterWord, pk=pk)
+    form = FilterWordForm(request.POST or None, instance=word_filter)
+    if request.method == 'POST' and form.is_valid():
+        word_filter = form.save()
+        messages.success(request, f"Filtro «{word_filter.word}» actualizado.")
+        return _management_redirect('word-filters')
+    return _render_management_form(
+        request, form, title=f'Editar {word_filter.word}', eyebrow='Filtros por palabra',
+        back_section='word-filters', submit_label='Guardar cambios',
+    )
+
+
+@require_http_methods(['GET', 'POST'])
+@superuser_required
+def ai_filter_create(request):
+    form = AIFilterInstructionForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, 'Instrucción para la IA creada.')
+        return _management_redirect('ai-filters')
+    return _render_management_form(
+        request, form, title='Nueva instrucción para la IA', eyebrow='Filtros con IA',
+        back_section='ai-filters', submit_label='Crear instrucción',
+    )
+
+
+@require_http_methods(['GET', 'POST'])
+@superuser_required
+def ai_filter_edit(request, pk):
+    ai_filter = get_object_or_404(AIFilterInstruction, pk=pk)
+    form = AIFilterInstructionForm(request.POST or None, instance=ai_filter)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, 'Instrucción para la IA actualizada.')
+        return _management_redirect('ai-filters')
+    return _render_management_form(
+        request, form, title='Editar instrucción para la IA', eyebrow='Filtros con IA',
+        back_section='ai-filters', submit_label='Guardar cambios',
+    )
+
+
+def _toggle_management_object(request, obj, section, label):
+    obj.active = not obj.active
+    obj.save(update_fields=['active'])
+    state = 'activado' if obj.active else 'desactivado'
+    messages.success(request, f'{label} {state}.')
+    return _management_redirect(section)
+
+
+@require_POST
+@superuser_required
+def source_toggle(request, pk):
+    source = get_object_or_404(FeedSource, pk=pk)
+    return _toggle_management_object(request, source, 'sources', f'«{source.name}»')
+
+
+@require_POST
+@superuser_required
+def word_filter_toggle(request, pk):
+    word_filter = get_object_or_404(FilterWord, pk=pk)
+    return _toggle_management_object(request, word_filter, 'word-filters', f'«{word_filter.word}»')
+
+
+@require_POST
+@superuser_required
+def ai_filter_toggle(request, pk):
+    ai_filter = get_object_or_404(AIFilterInstruction, pk=pk)
+    return _toggle_management_object(request, ai_filter, 'ai-filters', 'La instrucción')
+
+
+def _confirm_management_delete(
+    request, obj, *, object_name, object_detail, impact_count, impact_label, section
+):
+    if request.method == 'POST':
+        if request.POST.get('confirmation') != 'delete':
+            return render(request, 'feed_management_confirm_delete.html', {
+                'object_name': object_name,
+                'object_detail': object_detail,
+                'impact_count': impact_count,
+                'impact_label': impact_label,
+                'back_section': section,
+                'confirmation_error': True,
+            }, status=400)
+        obj.delete()
+        messages.success(request, 'El elemento se eliminó correctamente.')
+        return _management_redirect(section)
+    return render(request, 'feed_management_confirm_delete.html', {
+        'object_name': object_name,
+        'object_detail': object_detail,
+        'impact_count': impact_count,
+        'impact_label': impact_label,
+        'back_section': section,
+    })
+
+
+@require_http_methods(['GET', 'POST'])
+@superuser_required
+def source_delete(request, pk):
+    source = get_object_or_404(FeedSource, pk=pk)
+    return _confirm_management_delete(
+        request, source, object_name='Fuente', object_detail=source.name,
+        impact_count=source.news_set.count(), impact_label='noticias asociadas',
+        section='sources',
+    )
+
+
+@require_http_methods(['GET', 'POST'])
+@superuser_required
+def word_filter_delete(request, pk):
+    word_filter = get_object_or_404(FilterWord, pk=pk)
+    return _confirm_management_delete(
+        request, word_filter, object_name='Filtro', object_detail=word_filter.word,
+        impact_count=word_filter.filtered_news.count(),
+        impact_label='noticias conservarán su estado filtrado, pero perderán esta referencia',
+        section='word-filters',
+    )
+
+
+@require_http_methods(['GET', 'POST'])
+@superuser_required
+def ai_filter_delete(request, pk):
+    ai_filter = get_object_or_404(AIFilterInstruction, pk=pk)
+    return _confirm_management_delete(
+        request, ai_filter, object_name='Instrucción', object_detail=ai_filter.instruction,
+        impact_count=0, impact_label='', section='ai-filters',
+    )
 
 class NewsListView(ListView):
     model = News

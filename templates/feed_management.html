@@ -1,0 +1,142 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>Configuración del feed</title>
+    {% include 'head_base.html' %}
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'css/feed_management.css' %}">
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    {% include 'pwa_head.html' %}
+</head>
+<body class="has-header management-page">
+    {% include 'header.html' %}
+
+    <main class="management-shell">
+        <section class="management-hero">
+            <div>
+                <p class="management-eyebrow">Control editorial</p>
+                <h2>Configuración del feed</h2>
+                <p>Administra de forma directa qué fuentes se consultan y qué contenido se descarta.</p>
+            </div>
+            <nav class="management-jump" aria-label="Secciones de configuración">
+                <a href="#sources">Fuentes <span>{{ active_sources }}/{{ sources|length }}</span></a>
+                <a href="#word-filters">Palabras <span>{{ active_word_filters }}/{{ word_filters|length }}</span></a>
+                <a href="#ai-filters">IA <span>{{ active_ai_filters }}/{{ ai_filters|length }}</span></a>
+            </nav>
+        </section>
+
+        {% if messages %}
+        <div class="management-messages" aria-live="polite">
+            {% for message in messages %}<div class="management-message {{ message.tags }}">{{ message }}</div>{% endfor %}
+        </div>
+        {% endif %}
+
+        <section class="management-section" id="sources">
+            <div class="management-section-heading">
+                <div>
+                    <p class="management-eyebrow">Entrada</p>
+                    <h2>Fuentes RSS</h2>
+                    <p>{{ sources|length }} configuradas; {{ active_sources }} activas.</p>
+                </div>
+                <a class="management-primary" href="{% url 'my_news:source_create' %}">+ Nueva fuente</a>
+            </div>
+            <div class="management-grid management-grid-sources">
+                {% for source in sources %}
+                <article class="management-card {% if not source.active %}is-inactive{% endif %}">
+                    <div class="management-card-top">
+                        <div>
+                            <span class="status-pill {% if source.active %}is-active{% endif %}">{% if source.active %}Activa{% else %}Pausada{% endif %}</span>
+                            {% if source.deep_search %}<span class="feature-pill">Lectura profunda</span>{% endif %}
+                        </div>
+                        <span class="management-count">{{ source.news_count }} noticias</span>
+                    </div>
+                    <h3>{{ source.name }}</h3>
+                    <a class="management-url" href="{{ source.url }}" target="_blank" rel="noopener noreferrer">{{ source.url }}</a>
+                    <dl class="management-details">
+                        <div><dt>Similitud</dt><dd>{{ source.similarity_threshold|floatformat:2 }}</dd></div>
+                        <div><dt>Última consulta</dt><dd>{% if source.last_fetch %}{{ source.last_fetch|date:"d/m/Y H:i" }}{% else %}Nunca{% endif %}</dd></div>
+                    </dl>
+                    <div class="management-actions">
+                        <form method="post" action="{% url 'my_news:source_toggle' source.pk %}">
+                            {% csrf_token %}<button class="management-secondary" type="submit">{% if source.active %}Pausar{% else %}Activar{% endif %}</button>
+                        </form>
+                        <a class="management-secondary" href="{% url 'my_news:source_edit' source.pk %}">Editar</a>
+                        <a class="management-danger" href="{% url 'my_news:source_delete' source.pk %}">Eliminar</a>
+                    </div>
+                </article>
+                {% empty %}
+                <div class="management-empty">No hay fuentes configuradas.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="management-section" id="word-filters">
+            <div class="management-section-heading">
+                <div>
+                    <p class="management-eyebrow">Reglas exactas</p>
+                    <h2>Filtros por palabra</h2>
+                    <p>Descartan coincidencias antes del procesamiento con IA.</p>
+                </div>
+                <a class="management-primary" href="{% url 'my_news:word_filter_create' %}">+ Nuevo filtro</a>
+            </div>
+            <div class="management-grid">
+                {% for filter in word_filters %}
+                <article class="management-card management-card-compact {% if not filter.active %}is-inactive{% endif %}">
+                    <div class="management-card-top">
+                        <span class="status-pill {% if filter.active %}is-active{% endif %}">{% if filter.active %}Activo{% else %}Pausado{% endif %}</span>
+                        <span class="management-count">{{ filter.news_count }} filtradas</span>
+                    </div>
+                    <h3>{{ filter.word }}</h3>
+                    <p>{% if filter.title_only %}Solo busca en el título.{% else %}Busca en título y descripción.{% endif %}</p>
+                    <div class="management-actions">
+                        <form method="post" action="{% url 'my_news:word_filter_toggle' filter.pk %}">
+                            {% csrf_token %}<button class="management-secondary" type="submit">{% if filter.active %}Pausar{% else %}Activar{% endif %}</button>
+                        </form>
+                        <a class="management-secondary" href="{% url 'my_news:word_filter_edit' filter.pk %}">Editar</a>
+                        <a class="management-danger" href="{% url 'my_news:word_filter_delete' filter.pk %}">Eliminar</a>
+                    </div>
+                </article>
+                {% empty %}
+                <div class="management-empty">No hay filtros por palabra.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="management-section" id="ai-filters">
+            <div class="management-section-heading">
+                <div>
+                    <p class="management-eyebrow">Criterios semánticos</p>
+                    <h2>Filtros con IA</h2>
+                    <p>Instrucciones que se comparan con cada noticia procesada.</p>
+                </div>
+                <a class="management-primary" href="{% url 'my_news:ai_filter_create' %}">+ Nueva instrucción</a>
+            </div>
+            <div class="management-grid">
+                {% for filter in ai_filters %}
+                <article class="management-card management-card-compact {% if not filter.active %}is-inactive{% endif %}">
+                    <div class="management-card-top">
+                        <span class="status-pill {% if filter.active %}is-active{% endif %}">{% if filter.active %}Activa{% else %}Pausada{% endif %}</span>
+                        <span class="management-count">{{ filter.created_at|date:"d/m/Y" }}</span>
+                    </div>
+                    <h3>{{ filter.instruction }}</h3>
+                    <div class="management-actions">
+                        <form method="post" action="{% url 'my_news:ai_filter_toggle' filter.pk %}">
+                            {% csrf_token %}<button class="management-secondary" type="submit">{% if filter.active %}Pausar{% else %}Activar{% endif %}</button>
+                        </form>
+                        <a class="management-secondary" href="{% url 'my_news:ai_filter_edit' filter.pk %}">Editar</a>
+                        <a class="management-danger" href="{% url 'my_news:ai_filter_delete' filter.pk %}">Eliminar</a>
+                    </div>
+                </article>
+                {% empty %}
+                <div class="management-empty">No hay instrucciones para el filtro con IA.</div>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+    <script src="{% static 'js/background_motion.js' %}"></script>
+</body>
+</html>
