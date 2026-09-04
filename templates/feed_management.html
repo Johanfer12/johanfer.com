@@ -86,19 +86,32 @@
             </div>
             <div class="management-grid management-grid-words">
                 {% for filter in word_filters %}
-                <article class="management-card management-card-compact {% if not filter.active %}is-inactive{% endif %}">
-                    <div class="management-card-top">
+                <article class="management-card management-card-compact management-word-card {% if not filter.active %}is-inactive{% endif %}">
+                    <div class="management-word-row management-word-main">
                         <span class="status-pill {% if filter.active %}is-active{% endif %}">{% if filter.active %}Activo{% else %}Pausado{% endif %}</span>
+                        <h3 title="{{ filter.word }}">{{ filter.word }}</h3>
                         <span class="management-count">{{ filter.news_count }} filtradas</span>
                     </div>
-                    <h3>{{ filter.word }}</h3>
-                    <p>{% if filter.title_only %}Solo busca en el título.{% else %}Busca en título y descripción.{% endif %}</p>
-                    <div class="management-actions">
+                    <div class="management-word-row management-word-secondary">
+                        <p>{% if filter.title_only %}Solo en el título{% else %}Título y descripción{% endif %}</p>
+                        <div class="management-actions management-icon-actions">
                         <form method="post" action="{% url 'my_news:word_filter_toggle' filter.pk %}">
-                            {% csrf_token %}<button class="management-secondary" type="submit">{% if filter.active %}Pausar{% else %}Activar{% endif %}</button>
+                            {% csrf_token %}
+                            <button class="management-secondary management-icon-button" type="submit" aria-label="{% if filter.active %}Pausar{% else %}Activar{% endif %} {{ filter.word }}" title="{% if filter.active %}Pausar{% else %}Activar{% endif %}">
+                                {% if filter.active %}
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+                                {% else %}
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7Z"/></svg>
+                                {% endif %}
+                            </button>
                         </form>
-                        <a class="management-secondary" href="{% url 'my_news:word_filter_edit' filter.pk %}">Editar</a>
-                        <a class="management-danger" href="{% url 'my_news:word_filter_delete' filter.pk %}">Eliminar</a>
+                        <a class="management-secondary management-icon-button" href="{% url 'my_news:word_filter_edit' filter.pk %}" aria-label="Editar {{ filter.word }}" title="Editar">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/></svg>
+                        </a>
+                        <a class="management-danger management-icon-button" href="{% url 'my_news:word_filter_delete' filter.pk %}" aria-label="Eliminar {{ filter.word }}" title="Eliminar">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>
+                        </a>
+                        </div>
                     </div>
                 </article>
                 {% empty %}

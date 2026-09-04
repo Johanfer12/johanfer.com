@@ -159,19 +159,37 @@
 }
 
 .management-grid-words .management-card {
-    gap: 8px;
-    padding: 12px 13px;
+    gap: 7px;
+    padding: 10px 12px;
 }
 
-.management-grid-words .management-card h3 {
+.management-word-row {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.management-word-main h3 {
+    min-width: 0;
+    flex: 1;
     font-size: 0.98rem;
     line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.management-grid-words .management-card > p {
-    margin-top: -2px;
+.management-word-secondary > p {
+    min-width: 0;
+    flex: 1;
+    margin: 0;
+    color: var(--text-secondary);
     font-size: 0.78rem;
     line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .management-grid-words .status-pill,
@@ -180,17 +198,33 @@
     font-size: 0.67rem;
 }
 
-.management-grid-words .management-actions {
-    gap: 5px;
-    padding-top: 1px;
+.management-grid-words .management-count {
+    margin-left: auto;
 }
 
-.management-grid-words .management-secondary,
-.management-grid-words .management-danger {
-    min-height: 31px;
-    padding: 5px 9px;
+.management-icon-actions {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+}
+
+.management-icon-button {
+    width: 30px;
+    min-height: 30px;
+    padding: 0;
     border-radius: 8px;
-    font-size: 0.75rem;
+}
+
+.management-icon-button svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .management-card-top {

@@ -47,6 +47,10 @@ class FeedManagementTests(TestCase):
         self.assertContains(response, 'data-management-tab', count=3)
         self.assertContains(response, 'data-management-panel', count=3)
         self.assertContains(response, 'management-grid-words')
+        self.assertContains(response, 'management-word-card')
+        self.assertContains(response, 'aria-label="Pausar horóscopo"')
+        self.assertContains(response, 'aria-label="Editar horóscopo"')
+        self.assertContains(response, 'aria-label="Eliminar horóscopo"')
         self.assertContains(response, 'js/feed_management.js')
         self.assertNotContains(response, '/j_admin/')
 
