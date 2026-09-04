@@ -139,8 +139,8 @@
 }
 
 .management-grid-words {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
 }
 
 .management-card {
@@ -159,8 +159,8 @@
 }
 
 .management-grid-words .management-card {
-    gap: 7px;
-    padding: 10px 12px;
+    gap: 5px;
+    padding: 8px 10px;
 }
 
 .management-word-row {
@@ -211,8 +211,8 @@
 }
 
 .management-grid-words .management-icon-button {
-    width: 30px;
-    min-height: 30px;
+    width: 28px;
+    min-height: 28px;
     padding: 0;
     border-radius: 8px;
 }
@@ -428,7 +428,8 @@
 }
 
 .management-field label,
-.management-checkbox-field label {
+.management-checkbox-field label,
+.management-checkbox-field > span {
     color: #fff;
     font-weight: 700;
 }
@@ -509,6 +510,64 @@
     padding-top: 10px;
 }
 
+.management-modal {
+    width: min(500px, calc(100% - 24px));
+    max-width: none;
+    padding: 0;
+    color: var(--text-primary);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    background: transparent;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.64);
+}
+
+.management-modal::backdrop {
+    background: rgba(2, 7, 18, 0.76);
+    backdrop-filter: blur(5px);
+}
+
+.management-modal-card {
+    padding: 24px;
+    background: linear-gradient(155deg, rgba(37, 54, 87, 0.98), rgba(8, 14, 28, 0.99));
+}
+
+.management-modal-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 22px;
+}
+
+.management-modal-heading h2 {
+    margin: 0;
+    color: #fff;
+    font-size: 1.5rem;
+}
+
+.management-modal-close {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    color: var(--text-secondary);
+    border: 1px solid var(--card-border);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.05);
+    font: inherit;
+    font-size: 1.45rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.management-modal-close:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.management-modal .management-checkbox-field {
+    cursor: pointer;
+}
+
 .management-delete-card {
     text-align: center;
 }
@@ -572,7 +631,7 @@
     }
 
     .management-grid-words {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
     }
 
     .management-section-heading .management-primary {

@@ -7,7 +7,8 @@
     const validPanelIds = new Set(panels.map((panel) => panel.id));
 
     function activate(panelId, { updateHash = false, focus = false } = {}) {
-        const selectedId = validPanelIds.has(panelId) ? panelId : panels[0].id;
+        const defaultPanelId = validPanelIds.has('word-filters') ? 'word-filters' : panels[0].id;
+        const selectedId = validPanelIds.has(panelId) ? panelId : defaultPanelId;
 
         panels.forEach((panel) => {
             const isSelected = panel.id === selectedId;
@@ -52,4 +53,34 @@
 
     window.addEventListener('hashchange', () => activate(window.location.hash.slice(1)));
     activate(window.location.hash.slice(1));
+
+    const editModal = document.querySelector('#word-filter-edit-modal');
+    const editForm = document.querySelector('#word-filter-edit-form');
+    const wordInput = document.querySelector('#word-filter-edit-word');
+    const activeInput = document.querySelector('#word-filter-edit-active');
+    const titleOnlyInput = document.querySelector('#word-filter-edit-title-only');
+
+    if (!editModal || !editForm || !wordInput || !activeInput || !titleOnlyInput) return;
+
+    document.querySelectorAll('[data-word-filter-edit]').forEach((button) => {
+        button.addEventListener('click', (event) => {
+            if (typeof editModal.showModal !== 'function') return;
+            event.preventDefault();
+            editForm.action = button.href;
+            wordInput.value = button.dataset.word || '';
+            activeInput.checked = button.dataset.active === 'true';
+            titleOnlyInput.checked = button.dataset.titleOnly === 'true';
+            editModal.showModal();
+            wordInput.focus();
+            wordInput.select();
+        });
+    });
+
+    editModal.querySelectorAll('[data-modal-close]').forEach((button) => {
+        button.addEventListener('click', () => editModal.close());
+    });
+
+    editModal.addEventListener('click', (event) => {
+        if (event.target === editModal) editModal.close();
+    });
 })();

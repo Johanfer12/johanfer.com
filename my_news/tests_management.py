@@ -50,6 +50,10 @@ class FeedManagementTests(TestCase):
         self.assertContains(response, 'management-word-card')
         self.assertContains(response, 'aria-label="Pausar horóscopo"')
         self.assertContains(response, 'aria-label="Editar horóscopo"')
+        self.assertContains(response, 'data-word-filter-edit')
+        self.assertContains(response, 'id="word-filter-edit-modal"')
+        self.assertContains(response, 'aria-controls="word-filters" aria-selected="true"')
+        self.assertContains(response, 'aria-controls="sources" aria-selected="false"')
         self.assertContains(response, 'aria-label="Eliminar horóscopo"')
         self.assertContains(response, 'js/feed_management.js')
         self.assertNotContains(response, '/j_admin/')
@@ -154,6 +158,16 @@ class FeedManagementTests(TestCase):
         self.assertEqual(self.client.get(delete_url).status_code, 200)
         self.client.post(delete_url, {'confirmation': 'delete'})
         self.assertFalse(FilterWord.objects.filter(pk=self.word_filter.pk).exists())
+
+    def test_management_dashboard_uses_only_three_content_queries(self):
+        self.login()
+
+        # Dos consultas pertenecen a la sesión/autenticación; el panel usa una
+        # por cada tipo de contenido sin consultas adicionales para los totales.
+        with self.assertNumQueries(5):
+            response = self.client.get(reverse('my_news:feed_management'))
+
+        self.assertEqual(response.status_code, 200)
 
     def test_ai_filter_can_be_edited_toggled_and_deleted(self):
         self.login()

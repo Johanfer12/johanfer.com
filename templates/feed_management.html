@@ -24,8 +24,8 @@
                 <p>Administra de forma directa qué fuentes se consultan y qué contenido se descarta.</p>
             </div>
             <nav class="management-jump" aria-label="Secciones de configuración" role="tablist">
-                <a id="management-tab-sources" href="#sources" role="tab" aria-controls="sources" aria-selected="true" data-management-tab>Fuentes <span>{{ active_sources }}/{{ sources|length }}</span></a>
-                <a id="management-tab-word-filters" href="#word-filters" role="tab" aria-controls="word-filters" aria-selected="false" tabindex="-1" data-management-tab>Palabras <span>{{ active_word_filters }}/{{ word_filters|length }}</span></a>
+                <a id="management-tab-sources" href="#sources" role="tab" aria-controls="sources" aria-selected="false" tabindex="-1" data-management-tab>Fuentes <span>{{ active_sources }}/{{ sources|length }}</span></a>
+                <a id="management-tab-word-filters" href="#word-filters" role="tab" aria-controls="word-filters" aria-selected="true" data-management-tab>Palabras <span>{{ active_word_filters }}/{{ word_filters|length }}</span></a>
                 <a id="management-tab-ai-filters" href="#ai-filters" role="tab" aria-controls="ai-filters" aria-selected="false" tabindex="-1" data-management-tab>IA <span>{{ active_ai_filters }}/{{ ai_filters|length }}</span></a>
             </nav>
         </section>
@@ -36,7 +36,7 @@
         </div>
         {% endif %}
 
-        <section class="management-section is-active" id="sources" role="tabpanel" aria-labelledby="management-tab-sources" data-management-panel>
+        <section class="management-section" id="sources" role="tabpanel" aria-labelledby="management-tab-sources" data-management-panel>
             <div class="management-section-heading">
                 <div>
                     <p class="management-eyebrow">Entrada</p>
@@ -75,7 +75,7 @@
             </div>
         </section>
 
-        <section class="management-section" id="word-filters" role="tabpanel" aria-labelledby="management-tab-word-filters" data-management-panel>
+        <section class="management-section is-active" id="word-filters" role="tabpanel" aria-labelledby="management-tab-word-filters" data-management-panel>
             <div class="management-section-heading">
                 <div>
                     <p class="management-eyebrow">Reglas exactas</p>
@@ -105,7 +105,7 @@
                                 {% endif %}
                             </button>
                         </form>
-                        <a class="management-secondary management-icon-button" href="{% url 'my_news:word_filter_edit' filter.pk %}" aria-label="Editar {{ filter.word }}" title="Editar">
+                        <a class="management-secondary management-icon-button" href="{% url 'my_news:word_filter_edit' filter.pk %}" aria-label="Editar {{ filter.word }}" title="Editar" data-word-filter-edit data-word="{{ filter.word }}" data-active="{{ filter.active|yesno:'true,false' }}" data-title-only="{{ filter.title_only|yesno:'true,false' }}">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/></svg>
                         </a>
                         <a class="management-danger management-icon-button" href="{% url 'my_news:word_filter_delete' filter.pk %}" aria-label="Eliminar {{ filter.word }}" title="Eliminar">
@@ -151,6 +151,34 @@
             </div>
         </section>
     </main>
+    <dialog class="management-modal" id="word-filter-edit-modal" aria-labelledby="word-filter-edit-title">
+        <form method="post" class="management-modal-card" id="word-filter-edit-form" novalidate>
+            {% csrf_token %}
+            <div class="management-modal-heading">
+                <div>
+                    <p class="management-eyebrow">Filtros por palabra</p>
+                    <h2 id="word-filter-edit-title">Editar filtro</h2>
+                </div>
+                <button class="management-modal-close" type="button" data-modal-close aria-label="Cerrar modal">×</button>
+            </div>
+            <div class="management-field">
+                <label for="word-filter-edit-word">Palabra o frase</label>
+                <input id="word-filter-edit-word" name="word" type="text" autocomplete="off" required>
+            </div>
+            <label class="management-checkbox-field" for="word-filter-edit-active">
+                <input id="word-filter-edit-active" name="active" type="checkbox">
+                <span>Filtro activo</span>
+            </label>
+            <label class="management-checkbox-field" for="word-filter-edit-title-only">
+                <input id="word-filter-edit-title-only" name="title_only" type="checkbox">
+                <span>Buscar solo en el título</span>
+            </label>
+            <div class="management-form-actions">
+                <button class="management-secondary" type="button" data-modal-close>Cancelar</button>
+                <button class="management-primary" type="submit">Guardar cambios</button>
+            </div>
+        </form>
+    </dialog>
     <script src="{% static 'js/feed_management.js' %}"></script>
     <script src="{% static 'js/background_motion.js' %}"></script>
 </body>

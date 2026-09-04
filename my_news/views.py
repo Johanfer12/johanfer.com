@@ -371,16 +371,18 @@ def _management_redirect(section):
 @require_GET
 @superuser_required
 def feed_management(request):
-    sources = FeedSource.objects.annotate(news_count=Count('news')).order_by('name')
-    word_filters = FilterWord.objects.annotate(news_count=Count('filtered_news')).order_by('word')
-    ai_filters = AIFilterInstruction.objects.order_by('-created_at')
+    sources = list(FeedSource.objects.annotate(news_count=Count('news')).order_by('name'))
+    word_filters = list(
+        FilterWord.objects.annotate(news_count=Count('filtered_news')).order_by('word')
+    )
+    ai_filters = list(AIFilterInstruction.objects.order_by('-created_at'))
     context = {
         'sources': sources,
         'word_filters': word_filters,
         'ai_filters': ai_filters,
-        'active_sources': sources.filter(active=True).count(),
-        'active_word_filters': word_filters.filter(active=True).count(),
-        'active_ai_filters': ai_filters.filter(active=True).count(),
+        'active_sources': sum(source.active for source in sources),
+        'active_word_filters': sum(word_filter.active for word_filter in word_filters),
+        'active_ai_filters': sum(ai_filter.active for ai_filter in ai_filters),
     }
     return render(request, 'feed_management.html', context)
 
