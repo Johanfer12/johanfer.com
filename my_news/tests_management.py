@@ -44,6 +44,10 @@ class FeedManagementTests(TestCase):
         self.assertContains(response, 'Tecnología')
         self.assertContains(response, 'horóscopo')
         self.assertContains(response, 'Artículos de opinión muy sesgados')
+        self.assertContains(response, 'data-management-tab', count=3)
+        self.assertContains(response, 'data-management-panel', count=3)
+        self.assertContains(response, 'management-grid-words')
+        self.assertContains(response, 'js/feed_management.js')
         self.assertNotContains(response, '/j_admin/')
 
         news_response = self.client.get(reverse('my_news:news_list'))

@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="dark">
+    <script>document.documentElement.classList.add('management-js');</script>
     <title>Configuración del feed</title>
     {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
@@ -22,10 +23,10 @@
                 <h2>Configuración del feed</h2>
                 <p>Administra de forma directa qué fuentes se consultan y qué contenido se descarta.</p>
             </div>
-            <nav class="management-jump" aria-label="Secciones de configuración">
-                <a href="#sources">Fuentes <span>{{ active_sources }}/{{ sources|length }}</span></a>
-                <a href="#word-filters">Palabras <span>{{ active_word_filters }}/{{ word_filters|length }}</span></a>
-                <a href="#ai-filters">IA <span>{{ active_ai_filters }}/{{ ai_filters|length }}</span></a>
+            <nav class="management-jump" aria-label="Secciones de configuración" role="tablist">
+                <a id="management-tab-sources" href="#sources" role="tab" aria-controls="sources" aria-selected="true" data-management-tab>Fuentes <span>{{ active_sources }}/{{ sources|length }}</span></a>
+                <a id="management-tab-word-filters" href="#word-filters" role="tab" aria-controls="word-filters" aria-selected="false" tabindex="-1" data-management-tab>Palabras <span>{{ active_word_filters }}/{{ word_filters|length }}</span></a>
+                <a id="management-tab-ai-filters" href="#ai-filters" role="tab" aria-controls="ai-filters" aria-selected="false" tabindex="-1" data-management-tab>IA <span>{{ active_ai_filters }}/{{ ai_filters|length }}</span></a>
             </nav>
         </section>
 
@@ -35,7 +36,7 @@
         </div>
         {% endif %}
 
-        <section class="management-section" id="sources">
+        <section class="management-section is-active" id="sources" role="tabpanel" aria-labelledby="management-tab-sources" data-management-panel>
             <div class="management-section-heading">
                 <div>
                     <p class="management-eyebrow">Entrada</p>
@@ -74,7 +75,7 @@
             </div>
         </section>
 
-        <section class="management-section" id="word-filters">
+        <section class="management-section" id="word-filters" role="tabpanel" aria-labelledby="management-tab-word-filters" data-management-panel>
             <div class="management-section-heading">
                 <div>
                     <p class="management-eyebrow">Reglas exactas</p>
@@ -83,7 +84,7 @@
                 </div>
                 <a class="management-primary" href="{% url 'my_news:word_filter_create' %}">+ Nuevo filtro</a>
             </div>
-            <div class="management-grid">
+            <div class="management-grid management-grid-words">
                 {% for filter in word_filters %}
                 <article class="management-card management-card-compact {% if not filter.active %}is-inactive{% endif %}">
                     <div class="management-card-top">
@@ -106,7 +107,7 @@
             </div>
         </section>
 
-        <section class="management-section" id="ai-filters">
+        <section class="management-section" id="ai-filters" role="tabpanel" aria-labelledby="management-tab-ai-filters" data-management-panel>
             <div class="management-section-heading">
                 <div>
                     <p class="management-eyebrow">Criterios semánticos</p>
@@ -137,6 +138,7 @@
             </div>
         </section>
     </main>
+    <script src="{% static 'js/feed_management.js' %}"></script>
     <script src="{% static 'js/background_motion.js' %}"></script>
 </body>
 </html>
