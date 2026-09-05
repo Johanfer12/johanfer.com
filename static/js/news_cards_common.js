@@ -4,68 +4,98 @@
     const isMobile = () => window.innerWidth <= 767;
     const cards = (root = document) => Array.from(root.querySelectorAll('.news-card-container'));
 
+    const activeCards = (root = document) => Array.from(root.querySelectorAll(
+        '.news-card.is-flipped, .news-card.image-hover, .news-card.delete-hover, .news-card[data-hover-mode]'
+    ), (card) => card.closest('.news-card-container'));
+
     const capturePositions = (root = document) => new Map(
         cards(root).map((card) => [card, card.getBoundingClientRect()])
     );
 
+    let cancelReposition = null;
     const animateReposition = (oldPositions, {
         excludedIds = [],
         onSettled = null,
         allowMobile = false,
         viewportOnly = false,
     } = {}) => {
-        if ((isMobile() && !allowMobile) || !oldPositions?.size) return;
-        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-            if (typeof onSettled === 'function') onSettled();
+        // Una nueva eliminación sustituye la animación anterior; sus timers no
+        // deben borrar los estilos de la nueva ni repetir el reajuste del hover.
+        if (cancelReposition) cancelReposition();
+        const settled = () => { if (typeof onSettled === 'function') onSettled(); };
+        if ((isMobile() && !allowMobile) || !oldPositions?.size ||
+            window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+            settled();
             return;
         }
 
-        requestAnimationFrame(() => {
-            let hasMovingCards = false;
-            oldPositions.forEach((rect, card) => {
-                if (!document.body.contains(card) || excludedIds.includes(card.id)) return;
+        let frame = null;
+        let timer = null;
+        let finished = false;
+        const moving = [];
+        const cleanup = () => {
+            if (finished) return;
+            finished = true;
+            cancelAnimationFrame(frame);
+            clearTimeout(timer);
+            moving.forEach(({card, original, onEnd}) => {
+                card.removeEventListener('transitionend', onEnd);
+                Object.assign(card.style, original);
+            });
+            cancelReposition = null;
+        };
+        const finish = () => {
+            if (finished) return;
+            cleanup();
+            settled();
+        };
+        cancelReposition = cleanup;
 
+        frame = requestAnimationFrame(() => {
+            const excluded = new Set(excludedIds);
+            const height = window.innerHeight;
+            const buffer = Math.min(height * 0.5, 360);
+            // Primero todas las lecturas, después todas las escrituras: evita
+            // alternar cálculo de geometría y cambios de estilo por tarjeta.
+            oldPositions.forEach((rect, card) => {
+                if (!card.isConnected || excluded.has(card.id)) return;
                 const newRect = card.getBoundingClientRect();
-                if (viewportOnly) {
-                    const buffer = Math.min(window.innerHeight * 0.5, 360);
-                    const outsideBefore = rect.bottom < -buffer || rect.top > window.innerHeight + buffer;
-                    const outsideAfter = newRect.bottom < -buffer || newRect.top > window.innerHeight + buffer;
-                    if (outsideBefore && outsideAfter) return;
-                }
+                if (viewportOnly &&
+                    (rect.bottom < -buffer || rect.top > height + buffer) &&
+                    (newRect.bottom < -buffer || newRect.top > height + buffer)) return;
                 const dx = rect.left - newRect.left;
                 const dy = rect.top - newRect.top;
                 if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
-
-                hasMovingCards = true;
-                card.style.transform = `translate3d(${dx}px,${dy}px,0)`;
-                card.style.transition = 'none';
-                card.style.willChange = 'transform';
-
-                requestAnimationFrame(() => {
-                    const duration = isMobile() ? 300 : 400;
-                    let settled = false;
-                    const finish = () => {
-                        if (settled) return;
-                        settled = true;
-                        card.style.transition = '';
-                        card.style.willChange = '';
-                        card.removeEventListener('transitionend', onTransitionEnd);
-                        if (typeof onSettled === 'function') onSettled();
-                    };
-                    const onTransitionEnd = (event) => {
-                        if (event.target === card && event.propertyName === 'transform') finish();
-                    };
-                    card.style.transition = `transform ${duration}ms cubic-bezier(0.22, 0.61, 0.36, 1)`;
-                    card.style.transform = '';
-                    card.addEventListener('transitionend', onTransitionEnd);
-                    setTimeout(finish, duration + 80);
-                });
+                moving.push({card, dx, dy, original: {
+                    transform: card.style.transform,
+                    transition: card.style.transition,
+                    willChange: card.style.willChange,
+                }});
             });
-
-            if (hasMovingCards && typeof onSettled === 'function') {
-                requestAnimationFrame(onSettled);
-                setTimeout(onSettled, 430);
-            }
+            if (!moving.length) { finish(); return; }
+            moving.forEach(({card, dx, dy}) => {
+                card.style.transition = 'none';
+                card.style.transform = `translate3d(${dx}px,${dy}px,0)`;
+                card.style.willChange = 'transform';
+            });
+            frame = requestAnimationFrame(() => {
+                const duration = isMobile() ? 300 : 400;
+                let remaining = moving.length;
+                moving.forEach((entry) => {
+                    const {card, original} = entry;
+                    let ended = false;
+                    entry.onEnd = (event) => {
+                        if (ended || event.target !== card || event.propertyName !== 'transform') return;
+                        ended = true;
+                        if (--remaining === 0) finish();
+                    };
+                    card.addEventListener('transitionend', entry.onEnd);
+                    card.style.transition = `transform ${duration}ms cubic-bezier(0.22, 0.61, 0.36, 1)`;
+                    card.style.transform = original.transform;
+                });
+                // WebViews y pestañas ocultas pueden omitir transitionend.
+                timer = setTimeout(finish, duration + 80);
+            });
         });
     };
 
@@ -76,6 +106,8 @@
         const button = document.createElement('button');
         button.className = 'mobile-delete-btn';
         button.type = 'button';
+        button.setAttribute('aria-label', 'Eliminar noticia');
+        button.title = 'Eliminar noticia';
         button.dataset.id = id || String(container.dataset.newsId || '').trim();
         mediaZone.appendChild(button);
         return button;
@@ -273,6 +305,7 @@
     window.NewsCards = {
         isMobile,
         cards,
+        activeCards,
         capturePositions,
         animateReposition,
         addMobileDeleteButton,

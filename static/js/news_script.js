@@ -1472,6 +1472,11 @@
 
     const clearFlipLock = (cardElement) => {
         if (!cardElement) return;
+        if (cardElement._flipEndHandler) {
+            cardElement.removeEventListener('transitionend', cardElement._flipEndHandler);
+            cardElement.removeEventListener('transitioncancel', cardElement._flipEndHandler);
+            cardElement._flipEndHandler = null;
+        }
         if (cardElement._flipUnlockTimer) {
             clearTimeout(cardElement._flipUnlockTimer);
             cardElement._flipUnlockTimer = null;
@@ -1484,11 +1489,12 @@
         clearFlipLock(cardElement);
         cardElement.dataset.flipLocked = 'true';
 
-        const unlock = () => clearFlipLock(cardElement);
-        cardElement.addEventListener('transitionend', (ev) => {
-            if (ev.target === cardElement && ev.propertyName === 'transform') unlock();
-        }, {once: true});
-        cardElement._flipUnlockTimer = setTimeout(unlock, 640);
+        cardElement._flipEndHandler = (ev) => {
+            if (ev.target === cardElement && ev.propertyName === 'transform') clearFlipLock(cardElement);
+        };
+        cardElement.addEventListener('transitionend', cardElement._flipEndHandler);
+        cardElement.addEventListener('transitioncancel', cardElement._flipEndHandler);
+        cardElement._flipUnlockTimer = setTimeout(() => clearFlipLock(cardElement), 640);
     };
 
     const setCardHoverMode = (container, pointerEvent, {force = false} = {}) => {
@@ -1586,13 +1592,6 @@
         setCardHoverMode(container, e);
     });
 
-    DOM.grid?.addEventListener('pointermove', (e) => {
-        STATE.lastPointer = makePointerSnapshot(e);
-        const container = e.target.closest('.news-card-container');
-        if (!container) return;
-        setCardHoverMode(container, e);
-    });
-
     DOM.grid?.addEventListener('pointerout', (e) => {
         if (e.pointerType === 'touch' || isMobile()) return;
         const container = e.target.closest('.news-card-container');
@@ -1607,13 +1606,27 @@
         if (container) resetCardHoverMode(container);
     });
 
+    let hoverFrame = null;
     document.addEventListener('pointermove', (e) => {
         if (e.pointerType === 'touch' || isMobile()) return;
-        const container = e.target.closest?.('.news-card-container');
-        $$('.news-card-container', DOM.grid).forEach((card) => {
-            if (card !== container) resetCardHoverMode(card);
+        STATE.lastPointer = makePointerSnapshot(e);
+        if (hoverFrame !== null) return;
+        hoverFrame = requestAnimationFrame(() => {
+            hoverFrame = null;
+            const pointer = STATE.lastPointer;
+            const container = pointer.target.closest?.('.news-card-container');
+            CardUi.activeCards(DOM.grid || document).forEach((card) => {
+                if (card !== container) resetCardHoverMode(card);
+            });
+            if (container?.isConnected) setCardHoverMode(container, pointer);
         });
-    }, true);
+    }, {capture: true, passive: true});
+    const cancelHoverFrame = () => {
+        cancelAnimationFrame(hoverFrame);
+        hoverFrame = null;
+    };
+    document.addEventListener('mouseleave', cancelHoverFrame);
+    window.addEventListener('blur', cancelHoverFrame);
 
     document.addEventListener('mouseleave', resetAllDesktopHoverCards);
     window.addEventListener('blur', resetAllDesktopHoverCards);
@@ -1823,7 +1836,6 @@
      * ------------------------------------------------------------------ */
     // Sincronizar con DB al abrir
     document.addEventListener('DOMContentLoaded', () => {
-        applyAdaptiveTitleSize(document);
         syncCurrentPageFromDb({force: true})
             .catch(e => err('Error al cargar página inicial:', e));
         connectNewsStream();
@@ -1831,15 +1843,6 @@
         setOrderIcon();
     });
 
-    let resizeTitleTimer = null;
-    window.addEventListener('resize', () => {
-        if (resizeTitleTimer) clearTimeout(resizeTitleTimer);
-        resizeTitleTimer = setTimeout(() => {
-            resizeTitleTimer = null;
-            applyAdaptiveTitleSize(document);
-        }, 200);
-    });
-    
     enforceCardLimit(); // Aplicar límite al cargar la página inicialmente
     // updatePagination será llamada por updateCounters en la carga inicial
 

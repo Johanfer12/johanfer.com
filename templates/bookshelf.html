@@ -1,6 +1,6 @@
 {% load static sanitizers %}
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -19,7 +19,7 @@
         <div class="book-item">
             <div class="book-info-container">
                 <!-- Carátula con cursor "manito" y evento de apertura -->
-                <div class="book-cover" onclick="openModal('{{ book.id }}')">
+                <div class="book-cover" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-{{ book.id }}" aria-label="Ver detalles de {{ book.title }}" onclick="openModal('{{ book.id }}')">
                     <img src="{{ MEDIA_URL }}Covers/{{ book.id }}.webp" alt="{{ book.title }}">
                     {% if book.is_reading %}
                     <div class="watching-ribbon"><span>Leyendo</span></div>
@@ -46,9 +46,9 @@
         </div>
         
         <!-- Modal de la descripción (uno por cada libro) -->
-        <div id="modal-{{ book.id }}" class="modal">
+        <div id="modal-{{ book.id }}" class="modal" role="dialog" aria-modal="true" aria-labelledby="title-{{ book.id }}" tabindex="-1">
             <div class="modal-content book-modal-content">
-                <span class="close" onclick="closeModal('{{ book.id }}')">&times;</span>
+                <button type="button" class="close" aria-label="Cerrar detalles" onclick="closeModal('{{ book.id }}')">&times;</button>
                 <div class="book-modal-body">
                     <div class="book-modal-cover">
                         <img src="{{ MEDIA_URL }}Covers/{{ book.id }}.webp" alt="{{ book.title }}" loading="lazy">
@@ -57,7 +57,7 @@
                         {% endif %}
                     </div>
                     <div class="book-modal-info">
-                        <h2>{{ book.title }}</h2>
+                        <h2 id="title-{{ book.id }}">{{ book.title }}</h2>
                         <div class="book-modal-metadata">
                             <div>
                                 <p><strong>Autor:</strong> {{ book.author }}</p>
@@ -80,7 +80,7 @@
                         </div>
 
                         <div class="book-description">
-                            <div class="book-description-scroll">
+                            <div class="book-description-scroll" tabindex="0" role="region" aria-label="Descripción">
                                 <strong>Descripción</strong><br><br>
                                 {{ book.description|sanitize }}
                             </div>
@@ -115,7 +115,7 @@
             <h2 id="booksSearchTitle">Buscar libros</h2>
             <p class="books-search-subtitle">Filtra por título, autor o año.</p>
             <form id="booksSearchForm" class="books-search-form">
-                <input id="booksSearchInput" type="text" class="books-search-input" placeholder="Escribe aquí..." autocomplete="off" value="{{ current_query|default:'' }}">
+                <input id="booksSearchInput" type="text" class="books-search-input" aria-label="Título, autor o año" placeholder="Escribe aquí..." autocomplete="off" value="{{ current_query|default:'' }}">
                 <div class="books-search-actions">
                     <button type="submit" class="books-search-apply">Buscar</button>
                     <button type="button" class="books-search-cancel" id="booksSearchCancelBtn">Cancelar</button>

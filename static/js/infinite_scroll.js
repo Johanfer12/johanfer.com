@@ -24,7 +24,7 @@ const createBookItem = (book) => {
 
     item.innerHTML = `
         <div class="book-info-container">
-            <div class="book-cover" onclick="openModal('${book.id}')">
+            <div class="book-cover" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-${book.id}" aria-label="Ver detalles de ${escapeHtml(book.title)}" onclick="openModal('${book.id}')">
                 <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(book.title)}">
                 ${readingRibbon}
             </div>
@@ -45,17 +45,21 @@ const createBookModal = (book) => {
     const modal = document.createElement('div');
     modal.id = `modal-${book.id}`;
     modal.className = 'modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', `title-${book.id}`);
+    modal.tabIndex = -1;
     const coverImage = (book.cover_image || '').replace('.jpg', '.webp');
     modal.innerHTML = `
         <div class="modal-content book-modal-content">
-            <span class="close" onclick="closeModal('${book.id}')">&times;</span>
+            <button type="button" class="close" aria-label="Cerrar detalles" onclick="closeModal('${book.id}')">&times;</button>
             <div class="book-modal-body">
                 <div class="book-modal-cover">
                     <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(book.title)}" loading="lazy">
                     ${book.is_reading ? '<div class="watching-ribbon"><span>Leyendo</span></div>' : ''}
                 </div>
                 <div class="book-modal-info">
-                    <h2>${escapeHtml(book.title)}</h2>
+                    <h2 id="title-${book.id}">${escapeHtml(book.title)}</h2>
                     <div class="book-modal-metadata">
                         <div>
                             <p><strong>Autor:</strong> ${escapeHtml(book.author)}</p>
@@ -69,7 +73,7 @@ const createBookModal = (book) => {
                         </div>
                     </div>
                     <div class="book-description">
-                        <div class="book-description-scroll">
+                        <div class="book-description-scroll" tabindex="0" role="region" aria-label="Descripción">
                             <strong>Descripción</strong><br><br>
                             ${book.description || 'No hay descripción disponible'}
                         </div>

@@ -36,7 +36,7 @@ const createWatchItem = (card) => {
 
     item.innerHTML = `
         <div class="book-info-container">
-            <div class="book-cover" onclick="openModal('watch-${card.id}')">
+            <div class="book-cover" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-watch-${card.id}" aria-label="Ver detalles de ${escapeHtml(card.title)}" onclick="openModal('watch-${card.id}')">
                 ${posterImg(card)}
                 ${card.is_watching ? '<div class="watching-ribbon"><span>Viendo</span></div>' : ''}
             </div>
@@ -59,6 +59,10 @@ const createWatchModal = (card) => {
     const modal = document.createElement('div');
     modal.id = `modal-watch-${card.id}`;
     modal.className = 'modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', `title-watch-${card.id}`);
+    modal.tabIndex = -1;
 
     let metaLeft = '';
     if (card.media_type === 'episode') {
@@ -84,19 +88,19 @@ const createWatchModal = (card) => {
 
     modal.innerHTML = `
         <div class="modal-content book-modal-content">
-            <span class="close" onclick="closeModal('watch-${card.id}')">&times;</span>
+            <button type="button" class="close" aria-label="Cerrar detalles" onclick="closeModal('watch-${card.id}')">&times;</button>
             <div class="book-modal-body">
                 <div class="book-modal-cover">
                     ${posterImg(card)}
                 </div>
                 <div class="book-modal-info">
-                    <h2>${escapeHtml(card.title)}</h2>
+                    <h2 id="title-watch-${card.id}">${escapeHtml(card.title)}</h2>
                     <div class="book-modal-metadata">
                         <div>${metaLeft}</div>
                         <div>${metaRight}</div>
                     </div>
                     <div class="book-description">
-                        <div class="book-description-scroll">
+                        <div class="book-description-scroll" tabindex="0" role="region" aria-label="Descripción">
                             <strong>Descripción</strong><br><br>
                             ${card.overview || 'No hay descripción disponible.'}
                         </div>

@@ -104,6 +104,15 @@ html.instagram-webview .news-card-container {
     -webkit-font-smoothing: subpixel-antialiased;
 }
 
+/* Preparar la capa al entrar en la tarjeta, antes de pasar de la imagen al
+   texto que dispara el giro. Las demás tarjetas no reservan esta capa. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+    .news-card-container:hover > .news-card,
+    .news-card-container:focus-within > .news-card {
+        will-change: transform;
+    }
+}
+
 /* Una sola sombra dentro del plano 3D: gira junto con ambas caras. */
 .news-card::before {
     content: '';

@@ -6,6 +6,8 @@
     const counter = document.querySelector('#public-news-counter');
     const emptyState = document.querySelector('#public-news-empty');
     const resetButton = document.querySelector('#public-news-reset-btn');
+    const retryButton = document.querySelector('#public-news-retry-btn');
+    const loadError = document.querySelector('#public-news-load-error');
 
     let storageKey = 'public-news-hidden';
     try {
@@ -66,7 +68,12 @@
     };
 
     const persistHiddenIds = () => {
-        localStorage.setItem(storageKey, JSON.stringify([...hiddenIds]));
+        try {
+            localStorage.setItem(storageKey, JSON.stringify([...hiddenIds]));
+        } catch (_) {
+            // Si el navegador bloquea el almacenamiento, ocultar sigue
+            // funcionando durante esta sesión de la página.
+        }
     };
 
     const updateCounter = () => {
@@ -86,9 +93,6 @@
 
     const prepareIncomingCard = (card) => {
         CardUi.addMobileDeleteButton(card);
-        card.querySelectorAll('.news-image').forEach((image) => {
-            image.loading = 'eager';
-        });
         return card;
     };
 
@@ -115,18 +119,24 @@
             credentials: 'same-origin',
             headers: {'X-Requested-With': 'XMLHttpRequest'},
         });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const html = await response.text();
         const doc = new DOMParser().parseFromString(html, 'text/html');
+        const loadedIds = currentCardIds();
         doc.querySelectorAll('#public-news-grid .news-card-container').forEach((card) => {
             const id = getCardId(card);
-            if (id && !hiddenIds.has(id) && !currentCardIds().has(id)) refillQueue.push(card);
+            if (id && !hiddenIds.has(id) && !loadedIds.has(id)) {
+                refillQueue.push(card);
+                loadedIds.add(id);
+            }
         });
     };
 
     const refillCards = async () => {
         if (!grid || refillInFlight || cards().length >= pageSize) return;
         refillInFlight = true;
+        if (loadError) loadError.hidden = true;
+        if (retryButton) retryButton.disabled = true;
         try {
             drainRefillQueue();
             while (cards().length < pageSize && nextRefillPage <= totalPages) {
@@ -136,8 +146,10 @@
             }
         } catch (error) {
             console.warn('No se pudieron cargar tarjetas adicionales.', error);
+            if (loadError) loadError.hidden = false;
         } finally {
             refillInFlight = false;
+            if (retryButton) retryButton.disabled = false;
             updateCounter();
         }
     };
@@ -187,6 +199,7 @@
         CardUi.addMobileDeleteButton(card);
         if (hiddenIds.has(String(card.dataset.newsId || ''))) card.remove();
     });
+    retryButton?.addEventListener('click', refillCards);
     updateCounter();
     refillCards();
 
@@ -284,7 +297,7 @@
         }, 160);
     }, {passive: true});
 
-    grid?.addEventListener('mousemove', (event) => {
+    const updateDesktopHover = (event) => {
         // Instagram y la emulación táctil pueden emitir mousemove antes del
         // click compatible. En móvil el giro pertenece únicamente al toque.
         if (CardUi.isMobile()) return;
@@ -301,7 +314,7 @@
         card.classList.toggle('is-flipped', shouldFlip);
         card.classList.toggle('image-hover', overMediaZone);
         card.classList.toggle('delete-hover', overDeleteButton);
-    });
+    };
 
     grid?.addEventListener('pointerout', (event) => {
         if (CardUi.isMobile()) return;
@@ -311,20 +324,39 @@
         CardUi.resetFlipState(container);
     });
 
+    let hoverFrame = null;
+    let lastHoverEvent = null;
     document.addEventListener('mousemove', (event) => {
         if (CardUi.isMobile()) return;
-        const container = event.target.closest?.('.news-card-container');
-        cards().forEach((card) => {
-            if (card !== container) CardUi.resetFlipState(card);
+        lastHoverEvent = event;
+        if (hoverFrame !== null) return;
+        hoverFrame = requestAnimationFrame(() => {
+            hoverFrame = null;
+            const container = lastHoverEvent.target.closest?.('.news-card-container');
+            CardUi.activeCards(grid || document).forEach((card) => {
+                if (card !== container) CardUi.resetFlipState(card);
+            });
+            if (container?.isConnected) updateDesktopHover(lastHoverEvent);
         });
-    }, true);
+    }, {capture: true, passive: true});
+    const cancelHoverFrame = () => {
+        cancelAnimationFrame(hoverFrame);
+        hoverFrame = null;
+    };
+    document.addEventListener('mouseleave', cancelHoverFrame);
+    window.addEventListener('blur', cancelHoverFrame);
 
     document.addEventListener('mouseleave', resetAllDesktopHoverCards);
     window.addEventListener('blur', resetAllDesktopHoverCards);
 
     resetButton?.addEventListener('click', () => {
         resetButton.disabled = true;
-        localStorage.removeItem(storageKey);
+        try {
+            localStorage.removeItem(storageKey);
+        } catch (_) {
+            resetButton.disabled = false;
+            return;
+        }
         window.location.reload();
     });
 })();

@@ -1,6 +1,6 @@
 {% load static sanitizers %}
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,7 +21,7 @@
         {% for card in cards %}
         <div class="book-item">
             <div class="book-info-container">
-                <div class="book-cover" onclick="openModal('watch-{{ card.latest.id }}')">
+                <div class="book-cover" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-watch-{{ card.latest.id }}" aria-label="Ver detalles de {{ card.latest.title }}" onclick="openModal('watch-{{ card.latest.id }}')">
                     <img src="{{ MEDIA_URL }}Posters/{{ card.latest.poster_name }}"
                          alt="{{ card.latest.title }}"
                          loading="lazy"
@@ -58,9 +58,9 @@
             </div>
         </div>
 
-        <div id="modal-watch-{{ card.latest.id }}" class="modal">
+        <div id="modal-watch-{{ card.latest.id }}" class="modal" role="dialog" aria-modal="true" aria-labelledby="title-watch-{{ card.latest.id }}" tabindex="-1">
             <div class="modal-content book-modal-content">
-                <span class="close" onclick="closeModal('watch-{{ card.latest.id }}')">&times;</span>
+                <button type="button" class="close" aria-label="Cerrar detalles" onclick="closeModal('watch-{{ card.latest.id }}')">&times;</button>
                 <div class="book-modal-body">
                     <div class="book-modal-cover">
                         <img src="{{ MEDIA_URL }}Posters/{{ card.latest.poster_name }}"
@@ -69,7 +69,7 @@
                              onerror="this.onerror=null;this.src='{% static 'Img/News_Default.png' %}';">
                     </div>
                     <div class="book-modal-info">
-                        <h2>{{ card.latest.title }}</h2>
+                        <h2 id="title-watch-{{ card.latest.id }}">{{ card.latest.title }}</h2>
                         <div class="book-modal-metadata">
                             <div>
                                 {% if card.latest.media_type == 'episode' %}
@@ -96,7 +96,7 @@
                         </div>
 
                         <div class="book-description">
-                            <div class="book-description-scroll">
+                            <div class="book-description-scroll" tabindex="0" role="region" aria-label="Descripción">
                                 <strong>Descripción</strong><br><br>
                                 {% if card.latest.overview %}
                                     {{ card.latest.overview|sanitize }}
@@ -132,7 +132,7 @@
             <h2 id="watchSearchTitle">Buscar</h2>
             <p class="books-search-subtitle">Filtra por título o año.</p>
             <form id="watchSearchForm" class="books-search-form">
-                <input id="watchSearchInput" type="text" class="books-search-input" placeholder="Escribe aquí..." autocomplete="off" value="{{ current_query|default:'' }}">
+                <input id="watchSearchInput" type="text" class="books-search-input" aria-label="Título de serie o película" placeholder="Escribe aquí..." autocomplete="off" value="{{ current_query|default:'' }}">
                 <div class="books-search-actions">
                     <button type="submit" class="books-search-apply">Buscar</button>
                     <button type="button" class="books-search-cancel" id="watchSearchCancelBtn">Cancelar</button>
