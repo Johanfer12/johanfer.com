@@ -46,7 +46,7 @@
     min-width: 0;
 }
 
-.header-nav a {
+.header-nav :is(a, summary) {
     color: #f2f5fb;
     text-decoration: none;
     font-size: 16px;
@@ -63,14 +63,14 @@
     flex: 0 0 auto;
 }
 
-.header-nav a:hover {
+.header-nav :is(a, summary):hover {
     transform: translateY(-2px);
     border-color: rgba(216, 228, 248, 0.46);
     background: rgba(255, 255, 255, 0.1);
 }
 
 /* Contador de visitas ajenas desde Colombia sobre el icono de visitas */
-.header-nav a.visits-link {
+.header-nav :is(a, summary).visits-link {
     position: relative;
     overflow: visible;
 }
@@ -102,7 +102,7 @@
         gap: 8px;
     }
 
-    .header-nav a {
+    .header-nav :is(a, summary) {
         width: 34px;
         height: 34px;
     }
@@ -143,13 +143,13 @@
         max-width: 56%;
     }
 
-    .header-nav a {
+    .header-nav :is(a, summary) {
         width: 32px;
         height: 32px;
         border-radius: 9px;
     }
 
-    .header-nav a svg {
+    .header-nav :is(a, summary) svg {
         width: 16px;
         height: 16px;
     }
@@ -173,13 +173,13 @@
         max-width: 60%;
     }
 
-    .header-nav a {
+    .header-nav :is(a, summary) {
         width: 28px;
         height: 28px;
         border-radius: 8px;
     }
 
-    .header-nav a svg {
+    .header-nav :is(a, summary) svg {
         width: 14px;
         height: 14px;
     }
@@ -202,11 +202,31 @@
         box-shadow: 0 4px 12px rgba(2, 8, 18, 0.26) !important;
     }
 
-    .header-nav a {
+    .header-nav :is(a, summary) {
         transition: none !important;
     }
 
-    .header-nav a:hover {
+    .header-nav :is(a, summary):hover {
         transform: none !important;
     }
 }
+
+/* El menú conserva las dimensiones de los iconos del encabezado. */
+.header:has(.header-tools) { position: relative; z-index: 20; }
+.header-tools { position: relative; flex: 0 0 auto; }
+.header-tools summary { cursor: pointer; list-style: none; }
+.header-tools summary::-webkit-details-marker { display: none; }
+.header-tools summary:focus-visible { outline: 2px solid #b7d4ff; outline-offset: 3px; }
+.header-tools-panel {
+    position: absolute; right: 0; top: calc(100% + 8px);
+    width: 220px; max-width: calc(100vw - 40px); padding: 6px;
+    border: 1px solid #465775; border-radius: 12px;
+    background: #101c30; box-shadow: 0 12px 30px #0006;
+}
+.header-nav .header-tools-panel a {
+    width: auto; height: auto; min-height: 36px; padding: 8px 10px;
+    justify-content: flex-start; font-size: 14px; border: 0; background: transparent;
+    transform: none;
+}
+.header-nav .header-tools-panel a:hover,
+.header-nav .header-tools-panel a:focus-visible { background: #ffffff14; }

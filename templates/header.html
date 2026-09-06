@@ -91,14 +91,30 @@
         {% elif request.path == '/noticias/system-stats/' %}
             <a href="/noticias/" title="Volver a Noticias"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5z"/></svg></a>
         {% elif request.path|slice:":24" == '/noticias/configuracion/' %}
-            <a href="/noticias/redundancy-test/" title="Redundancia"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 256 256"><polyline points="79.8 99.7 31.8 99.7 31.8 51.7" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><path d="M190.2,65.8a87.9,87.9,0,0,0-124.4,0l-34,33.9" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><polyline points="176.2 156.3 224.2 156.3 224.2 204.3" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><path d="M65.8,190.2a87.9,87.9,0,0,0,124.4,0l34-33.9" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/></svg></a>
+            <details class="header-tools">
+                <summary title="Herramientas" aria-label="Herramientas de noticias">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/></svg>
+                </summary>
+                <div class="header-tools-panel">
+                    <a href="/noticias/redundancy-test/">Redundancia</a>
+                    <a href="/noticias/system-stats/">Estadísticas del sistema</a>
+                </div>
+            </details>
             <a href="/noticias/" title="Volver a Noticias"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5z"/></svg></a>
         {% elif request.path == '/noticias/redundancy-test/' %}
             <a href="{% url 'my_news:feed_management' %}" title="Configurar fuentes y filtros"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2z"/></svg></a>
             <a href="/noticias/" title="Volver a Noticias"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5z"/></svg></a>
         {% elif request.path|slice:":9" == '/noticias' %}
             <a href="{% url 'my_news:feed_management' %}" title="Configurar fuentes y filtros"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2z"/></svg></a>
-            <a href="/noticias/redundancy-test/" title="Redundancia"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 256 256"><polyline points="79.8 99.7 31.8 99.7 31.8 51.7" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><path d="M190.2,65.8a87.9,87.9,0,0,0-124.4,0l-34,33.9" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><polyline points="176.2 156.3 224.2 156.3 224.2 204.3" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><path d="M65.8,190.2a87.9,87.9,0,0,0,124.4,0l34-33.9" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/></svg></a>
+            <details class="header-tools">
+                <summary title="Herramientas" aria-label="Herramientas de noticias">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/></svg>
+                </summary>
+                <div class="header-tools-panel">
+                    <a href="/noticias/redundancy-test/">Redundancia</a>
+                    <a href="/noticias/system-stats/">Estadísticas del sistema</a>
+                </div>
+            </details>
             {% if request.path == '/noticias/guardadas/' %}
             <a href="/noticias/" title="Volver a Noticias">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" class="bi bi-bookmark-check-fill" viewBox="0 0 16 16">
@@ -112,8 +128,10 @@
               </svg>
             </a>
             {% endif %}
-            <a href="/noticias/system-stats/" title="Estadísticas del Sistema"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M0 1.5A1.5 1.5 0 0 1 1.5 0h13A1.5 1.5 0 0 1 16 1.5v9a1.5 1.5 0 0 1-1.5 1.5H9v2h2.5a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1H7v-2H1.5A1.5 1.5 0 0 1 0 10.5v-9z"/></svg></a>
+
+            {% if not request.user.is_authenticated %}
             <a href="/about/" title="Información"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-11v6h2v-6h-2zm0-4v2h2V7h-2z" fill="white"/></svg></a>
+            {% endif %}
             {% if request.path == '/noticias/guardadas/' %}
             <a href="/noticias/" title="Volver a Noticias"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16"><path d="M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5z"/></svg></a>
             {% else %}
@@ -125,3 +143,4 @@
     </nav>
   </div>
 </header>
+<script src="{% static 'js/header_tools.js' %}" defer></script>

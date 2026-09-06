@@ -46,6 +46,21 @@
 
         {% include 'news_grid.html' with grid_id='news-grid' articles=page_obj card_id_prefix='news' show_save_button=True show_delete_button=user.is_staff show_similarity_score=True %}
 
+        <section id="news-empty" class="news-empty" {% if page_obj %}hidden{% endif %} aria-live="polite">
+            {% if request.GET.q %}
+            <h2>No hay resultados</h2>
+            <p>No encontramos noticias para «{{ request.GET.q }}».</p>
+            <a href="{{ request.path }}">Ver todas las noticias</a>
+            {% elif news_view_mode.saved_only %}
+            <h2>No tienes noticias guardadas</h2>
+            <p>Guarda las noticias que quieras volver a leer con el icono del marcador.</p>
+            <a href="/noticias/">Explorar noticias</a>
+            {% else %}
+            <h2>Estás al día</h2>
+            <p>No hay noticias para mostrar. Las nuevas aparecerán aquí cuando lleguen.</p>
+            {% endif %}
+        </section>
+
         {% if is_paginated %}
         <div class="pagination">
             {% if page_obj.has_previous %}
@@ -114,6 +129,11 @@
                 <path d="M18 15l-6-6l-6 6"></path>
             </svg>
         </button>
+    </div>
+
+    <div class="news-feedback" id="news-feedback" hidden>
+        <p id="news-feedback-message" role="status" aria-live="polite" aria-atomic="true"></p>
+        <button type="button" id="news-feedback-close" aria-label="Cerrar aviso">&times;</button>
     </div>
 
     <!-- Notificación de nuevas noticias -->

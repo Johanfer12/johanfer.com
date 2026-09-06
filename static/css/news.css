@@ -1533,3 +1533,18 @@ body.reader-active {
         padding: 12px 14px;
     }
 }
+
+.news-empty { text-align: center; padding: 48px 20px; color: #e3e9f5; }
+.news-empty h2 { font-size: 20px; margin: 0 0 12px; }
+.news-empty p { color: #b7c4d9; line-height: 1.6; }
+.news-empty a { color: #b7d4ff; text-underline-offset: 3px; }
+.news-feedback {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 10001; width: min(460px, calc(100% - 32px));
+    box-sizing: border-box; display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; background: #18263b; color: #f2f5fb;
+    border: 1px solid #61748f; border-radius: 12px; box-shadow: 0 8px 24px #0005;
+}
+.news-feedback p { margin: 0; flex: 1; line-height: 1.5; }
+.news-feedback button { color: inherit; background: transparent; border: 0; font-size: 24px; cursor: pointer; }
+.news-feedback[hidden], .news-empty[hidden] { display: none; }

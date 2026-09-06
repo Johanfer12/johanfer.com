@@ -18,6 +18,26 @@
         actionsToggle: '#newsActionsToggle',
     };
 
+    // Los errores permanecen visibles hasta que el usuario los cierre.
+    const showFeedback = (message) => {
+        const feedback = document.getElementById('news-feedback');
+        if (!feedback) return;
+        feedback.hidden = false;
+        document.getElementById('news-feedback-message').textContent = message;
+    };
+    document.getElementById('news-feedback-close')?.addEventListener('click', () => {
+        document.getElementById('news-feedback').hidden = true;
+    });
+    const grid = document.querySelector('.news-grid');
+    const emptyState = document.getElementById('news-empty');
+    if (grid && emptyState) {
+        const syncEmptyState = () => {
+            emptyState.hidden = !!grid.querySelector('.news-card-container');
+        };
+        new MutationObserver(syncEmptyState).observe(grid, {childList: true});
+        syncEmptyState();
+    }
+
     const MAX_NEWS = 25;
     const NOTIF_DURATION = 10_000;         // 10 s
     const DELETE_ANIMATION_MS = {
@@ -625,7 +645,7 @@
             showShareSuccess(actionButton);
         } catch (e) {
             err(`No se pudo compartir la noticia ${id}:`, e);
-            alert('No se pudo compartir la noticia en este navegador.');
+            showFeedback('No se pudo compartir la noticia en este navegador.');
         } finally {
             setButtonBusy(actionButton, false);
         }
@@ -1045,7 +1065,7 @@
             })
             .catch(e => {
                 err('Error al guardar noticia:', e);
-                alert('No se pudo guardar la noticia.');
+                showFeedback('No se pudo guardar la noticia.');
             })
             .finally(() => {
                 setButtonBusy(saveBtn, false);
@@ -1739,7 +1759,7 @@
                 updateCounters(data.total_news, data.total_pages);
                 checkForNewNews();
             })
-            .catch(e => { err('Actualizar feed:', e); alert('Error al actualizar el feed: ' + e.message); })
+            .catch(e => { err('Actualizar feed:', e); showFeedback('No se pudo actualizar el feed. Vuelve a intentarlo desde el menú de acciones.'); })
             .finally(() => { setButtonBusy(btn, false); });
     });
 
@@ -1753,7 +1773,7 @@
             try {
                 const latest = await serverGetLatestDeletedNews();
                 if (latest.status === 'empty') {
-                    flashButtonTitle(DOM.undoBtn, 'Nada para deshacer');
+                    showFeedback('No hay noticias eliminadas para recuperar.');
                     STATE.restoringNews = false;
                     setButtonBusy(DOM.undoBtn, false);
                     return;
@@ -1762,7 +1782,7 @@
                 last = latest.news_id || latest.card?.id;
             } catch (e) {
                 err('Consultar última eliminada:', e);
-                alert('No se pudo consultar la última noticia eliminada');
+                showFeedback('No se pudo consultar la última noticia eliminada');
                 STATE.restoringNews = false;
                 setButtonBusy(DOM.undoBtn, false);
                 return;
@@ -1794,7 +1814,7 @@
             .catch(e => {
                 STATE.cancelledDeletes.delete(normalizedLast);
                 err('Deshacer:', e);
-                alert('No se pudo deshacer');
+                showFeedback('No se pudo deshacer');
             })
             .finally(() => {
                 STATE.restoringNews = false;
@@ -1814,7 +1834,7 @@
                 params.set('order', STATE.order);
                 history.replaceState(null, '', `?${params.toString()}`);
             })
-            .catch(e => { err('Cambiar orden:', e); alert('No se pudo cambiar el orden'); });
+            .catch(e => { err('Cambiar orden:', e); showFeedback('No se pudo cambiar el orden'); });
     };
 
     const setOrderIcon = () => {
