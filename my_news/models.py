@@ -133,9 +133,9 @@ class AIModelSetting(models.Model):
     """Modelo de IA usado para procesar noticias, independiente del proveedor."""
     model_name = models.CharField(
         max_length=100,
-        default='gemma-4-31b',
+        default='qwen-3.8-27b',
         verbose_name="Modelo IA Global",
-        help_text="Nombre del modelo de IA a utilizar para resúmenes (ej: 'gemma-4-31b')."
+        help_text="Nombre del modelo de IA a utilizar para resúmenes (ej: 'qwen-3.8-27b')."
     )
     updated_at = models.DateTimeField(auto_now=True)
 

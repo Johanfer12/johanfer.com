@@ -132,14 +132,14 @@ class CerebrasRateLimiterTests(SimpleTestCase):
     def test_starting_limits_come_from_the_measured_free_plan(self):
         """MODEL_LIMITS es solo el valor de arranque, y viene de una medida.
 
-        Agosto de 2026, plan gratuito: 5 peticiones y 30.000 tokens por minuto
-        (la tabla decia 300 rpm, de cuando la cuenta era de pago). Mientras no
-        llegan cabeceras se les aplica SAFETY_FACTOR, de ahi 22.500 y 3.
+        Septiembre de 2026, plan gratuito: gpt-oss-120b da 5 peticiones y
+        30.000 tokens por minuto. Mientras no llegan cabeceras se les aplica
+        SAFETY_FACTOR, de ahi 22.500 y 3.
         """
         limiter = CerebrasRateLimiter()
 
-        self.assertEqual(limiter.MODEL_LIMITS['gemma-4-31b'], {'tpm': 30_000, 'rpm': 5})
-        self.assertEqual(limiter.get_limits('gemma-4-31b'), (22_500, 3))
+        self.assertEqual(limiter.MODEL_LIMITS['gpt-oss-120b'], {'tpm': 30_000, 'rpm': 5})
+        self.assertEqual(limiter.get_limits('gpt-oss-120b'), (22_500, 3))
 
     def test_reset_header_duration_is_parsed(self):
         limiter = CerebrasRateLimiter()
@@ -191,7 +191,7 @@ class CerebrasRateLimiterTests(SimpleTestCase):
 
         # Al tope medido no se le aplica SAFETY_FACTOR: es exacto.
         self.assertEqual(limiter.limit_requests, 5)
-        self.assertEqual(limiter.get_limits('gemma-4-31b')[1], 5)
+        self.assertEqual(limiter.get_limits('gpt-oss-120b')[1], 5)
 
     def test_the_tightest_window_wins_and_carries_its_own_reset(self):
         """Con el dia agotado hay que esperar al reset del dia, no al del minuto."""
@@ -215,7 +215,7 @@ class CerebrasRateLimiterTests(SimpleTestCase):
         limiter.reset_tokens_at = limiter.window_start + 120
 
         with self.assertRaises(CerebrasRateLimiter.Deferred):
-            limiter.acquire('gemma-4-31b', 'x' * 1000, 1024)
+            limiter.acquire('qwen-3.8-27b', 'x' * 1000, 1024)
 
     def test_missing_reset_header_uses_local_window(self):
         limiter = CerebrasRateLimiter()
@@ -227,7 +227,7 @@ class CerebrasRateLimiterTests(SimpleTestCase):
             limiter.remaining_requests = None
 
         limiter._sleep_or_defer = fake_sleep_or_defer
-        limiter.acquire('gemma-4-31b', 'prompt', 8)
+        limiter.acquire('qwen-3.8-27b', 'prompt', 8)
 
         self.assertEqual(waits[0][1], 'sin requests disponibles')
         self.assertGreater(waits[0][0], 0)
@@ -292,7 +292,7 @@ class CerebrasRateLimiterTests(SimpleTestCase):
             'Titulo',
             'Descripcion original',
             Client(),
-            'gemma-4-31b',
+            'qwen-3.8-27b',
             FeedService._DEFAULT_FILTER_INSTRUCTIONS,
             max_retries=2,
         )
@@ -324,7 +324,7 @@ class CerebrasRateLimiterTests(SimpleTestCase):
             'Titulo',
             'Descripcion original sin procesar',
             Client(),
-            'gemma-4-31b',
+            'qwen-3.8-27b',
             FeedService._DEFAULT_FILTER_INSTRUCTIONS,
             max_retries=1,
         )
@@ -384,6 +384,64 @@ class CerebrasRateLimiterTests(SimpleTestCase):
         )
         self.assertEqual(client.chat.completions.calls[1]['reasoning_effort'], 'low')
 
+    def test_reasoning_models_get_a_budget_that_fits_their_reasoning(self):
+        """El bloque de razonamiento se cobra dentro de max_completion_tokens.
+
+        Si el presupuesto no le da, la respuesta no llega recortada: llega
+        truncada y SIN JSON, y la noticia se pierde. Medido con el prompt real
+        en septiembre de 2026: qwen razona ~3.600 caracteres y con 512 falla el
+        100% de las llamadas; gpt-oss razona ~650 y le sobra con 512.
+        """
+        self.assertEqual(
+            FeedService._reasoning_config('qwen-3.8-27b'), ('low', 4096)
+        )
+        self.assertEqual(
+            FeedService._reasoning_config('gpt-oss-120b'), ('low', 512)
+        )
+
+        # Un modelo que no razona no recibe reasoning_effort y le basta 512.
+        self.assertEqual(
+            FeedService._reasoning_config('zai-glm-4.7'), (None, 512)
+        )
+
+    def test_reasoning_budget_reaches_the_request(self):
+        """El presupuesto del modelo tiene que llegar a la peticion."""
+        class Message:
+            content = '{"summary": "Resumen.", "short_answer": null, "ai_filter": null}'
+
+        class Choice:
+            message = Message()
+
+        class Completions:
+            def __init__(self):
+                self.calls = []
+
+            def create(self, **kwargs):
+                self.calls.append(kwargs)
+                return type('R', (), {'choices': [Choice()]})()
+
+        class Chat:
+            def __init__(self):
+                self.completions = Completions()
+
+        class Client:
+            def __init__(self):
+                self.chat = Chat()
+
+        client = Client()
+        FeedService.process_content_with_cerebras(
+            'Titulo',
+            'Descripcion original',
+            client,
+            'qwen-3.8-27b',
+            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
+            max_retries=1,
+        )
+
+        call = client.chat.completions.calls[0]
+        self.assertEqual(call['max_completion_tokens'], 4096)
+        self.assertEqual(call['reasoning_effort'], 'low')
+
     def test_cerebras_response_headers_are_recorded_from_raw_response(self):
         class Message:
             content = '{"summary": "Resumen con headers.", "short_answer": null, "ai_filter": null}'
@@ -421,7 +479,7 @@ class CerebrasRateLimiterTests(SimpleTestCase):
             'Titulo',
             'Descripcion original',
             Client(),
-            'gemma-4-31b',
+            'qwen-3.8-27b',
             FeedService._DEFAULT_FILTER_INSTRUCTIONS,
             max_retries=1,
         )
@@ -464,7 +522,7 @@ Okay, primero razono sobre la noticia.
             'Motorola Razr 70',
             'Descripcion original',
             Client(),
-            'gemma-4-31b',
+            'qwen-3.8-27b',
             FeedService._DEFAULT_FILTER_INSTRUCTIONS,
             max_retries=1,
         )
@@ -512,7 +570,7 @@ Okay, primero razono sobre la noticia.
             'Titulo',
             'Descripcion original',
             Client(),
-            'gemma-4-31b',
+            'qwen-3.8-27b',
             FeedService._DEFAULT_FILTER_INSTRUCTIONS,
             max_retries=1,
         )
@@ -545,7 +603,7 @@ Okay, primero razono sobre la noticia.
             'Titulo',
             'Descripcion original',
             Client(),
-            'gemma-4-31b',
+            'qwen-3.8-27b',
             FeedService._DEFAULT_FILTER_INSTRUCTIONS,
             max_retries=1,
         )

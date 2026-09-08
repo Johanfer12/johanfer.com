@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 # Modelo de IA por defecto para resúmenes; el valor activo vive en la BD
 # (AIModelSetting, editable desde el admin) y este es solo el fallback.
-DEFAULT_AI_MODEL = 'gemma-4-31b'
+DEFAULT_AI_MODEL = 'qwen-3.8-27b'
 DEFAULT_AI_CONTENT_LIMIT = 10_000
 
 
@@ -49,11 +49,12 @@ class CerebrasRateLimiter:
     MODEL_LIMITS = {
         # Valores de arranque, solo para la primera petición de cada proceso:
         # a partir de la primera respuesta mandan las cabeceras.
-        # Medido en agosto de 2026, tras migrar la cuenta al plan gratuito:
-        # 5 peticiones por minuto (antes 300), 150 por hora y 2.400 por día;
-        # 30.000 tokens por minuto y 1.000.000 por hora y por día.
-        'gemma-4-31b': {'tpm': 30_000, 'rpm': 5},
-        'gpt-oss-120b': {'tpm': 1_000_000, 'rpm': 1_000},
+        # Medidos en septiembre de 2026 leyendo las cabeceras x-ratelimit-* de
+        # una llamada real a cada modelo, con la cuenta en el plan gratuito.
+        # Los topes por minuto van aquí; los de hora y día quedan para las
+        # cabeceras, que es donde tightest_window los mira.
+        'qwen-3.8-27b': {'tpm': 150_000, 'rpm': 450},
+        'gpt-oss-120b': {'tpm': 30_000, 'rpm': 5},
         'zai-glm-4.7': {'tpm': 500_000, 'rpm': 500},
     }
 
@@ -677,9 +678,35 @@ class FeedService:
         error_text = str(error).lower()
         return 'json_validate_failed' in error_text or 'failed to validate json' in error_text
 
+    # Modelos de razonamiento, con el presupuesto de salida que necesita cada
+    # uno. El bloque de razonamiento se cobra dentro de max_completion_tokens,
+    # así que un presupuesto corto no recorta el razonamiento: deja la
+    # respuesta truncada y SIN JSON. Medido en septiembre de 2026 sobre el
+    # prompt real, 8 noticias por 3 repeticiones: qwen razona largo (~3.600
+    # caracteres) y con 512 falla el 100% de las llamadas, con 2.048 el 12%
+    # y con 4.096 ninguna; gpt-oss razona breve (~650) y le sobra con 512.
+    # Al subir el presupuesto, subir también el techo medido aquí.
+    _REASONING_MODELS = {
+        'qwen-3.8-27b': {'effort': 'low', 'max_completion_tokens': 4096},
+        'gpt-oss-120b': {'effort': 'low', 'max_completion_tokens': 512},
+    }
+    # Sin razonamiento la respuesta son solo los tres campos del JSON: ~130
+    # tokens medidos, y 512 deja margen de sobra.
+    _DEFAULT_MAX_COMPLETION_TOKENS = 512
+
     @staticmethod
-    def _uses_low_reasoning(model_name):
-        return model_name in {'gpt-oss-120b'}
+    def _reasoning_config(model_name):
+        """Devuelve (reasoning_effort, max_completion_tokens) para el modelo.
+
+        El esfuerzo es None en los modelos que no razonan. Se mantiene en
+        'low': medido sobre el prompt real, 'medium' y 'high' no mejoran el
+        resumen —que es transcripción y sale igual— y en cambio vuelven nulo
+        el short_answer de titulares que sí esconden el dato.
+        """
+        config = FeedService._REASONING_MODELS.get(model_name)
+        if not config:
+            return None, FeedService._DEFAULT_MAX_COMPLETION_TOKENS
+        return config['effort'], config['max_completion_tokens']
 
     @staticmethod
     def _parse_model_json(response_text):
@@ -797,7 +824,7 @@ class FeedService:
             content=safe_content,
             instructions=safe_instructions
         )
-        max_completion_tokens = 512
+        reasoning_effort, max_completion_tokens = FeedService._reasoning_config(model_name)
         response_format_mode = "json_schema"
 
         for attempt in range(max_retries):
@@ -818,8 +845,8 @@ class FeedService:
                     "temperature": 0.3,
                     "max_completion_tokens": max_completion_tokens,
                 }
-                if FeedService._uses_low_reasoning(model_name):
-                    request_kwargs["reasoning_effort"] = "low"
+                if reasoning_effort:
+                    request_kwargs["reasoning_effort"] = reasoning_effort
                 if response_format_mode == "json_schema":
                     request_kwargs["response_format"] = FeedService._NEWS_ANALYSIS_RESPONSE_FORMAT
                 elif response_format_mode == "json_object":
