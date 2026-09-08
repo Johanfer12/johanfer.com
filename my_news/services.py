@@ -695,18 +695,37 @@ class FeedService:
     _DEFAULT_MAX_COMPLETION_TOKENS = 512
 
     @staticmethod
-    def _reasoning_config(model_name):
+    def _reasoning_config(model_name, setting=None):
         """Devuelve (reasoning_effort, max_completion_tokens) para el modelo.
 
-        El esfuerzo es None en los modelos que no razonan. Se mantiene en
-        'low': medido sobre el prompt real, 'medium' y 'high' no mejoran el
-        resumen —que es transcripción y sale igual— y en cambio vuelven nulo
-        el short_answer de titulares que sí esconden el dato.
+        Manda lo que haya elegido a mano en el admin (AIModelSetting); si está
+        en automático se usa la tabla de arriba. El esfuerzo es None en los
+        modelos que no razonan.
+
+        El recomendado es 'low': medido sobre el prompt real, 'medium' y 'high'
+        no mejoran el resumen —que es transcripción y sale igual— y en cambio
+        vuelven nulo el short_answer de titulares que sí esconden el dato.
         """
-        config = FeedService._REASONING_MODELS.get(model_name)
-        if not config:
-            return None, FeedService._DEFAULT_MAX_COMPLETION_TOKENS
-        return config['effort'], config['max_completion_tokens']
+        config = FeedService._REASONING_MODELS.get(model_name) or {}
+        effort = config.get('effort')
+        max_tokens = config.get(
+            'max_completion_tokens', FeedService._DEFAULT_MAX_COMPLETION_TOKENS
+        )
+
+        elegido = (getattr(setting, 'reasoning_effort', '') or '').strip()
+        if elegido:
+            # 'none' es una elección explícita de no razonar, no un "sin dato".
+            effort = None if elegido == 'none' else elegido
+            # Sin presupuesto propio, el de la tabla puede no darle al esfuerzo
+            # elegido a mano: se sube al mínimo medido para que quepa.
+            if effort and not getattr(setting, 'max_completion_tokens', None):
+                max_tokens = max(max_tokens, AIModelSetting.MIN_REASONING_TOKENS)
+
+        propio = getattr(setting, 'max_completion_tokens', None)
+        if propio:
+            max_tokens = propio
+
+        return effort, max_tokens
 
     @staticmethod
     def _parse_model_json(response_text):
@@ -808,6 +827,7 @@ class FeedService:
         filter_instructions_text,
         max_retries=2,
         content_limit=DEFAULT_AI_CONTENT_LIMIT,
+        ai_model_setting=None,
     ):
         """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
 
@@ -824,7 +844,9 @@ class FeedService:
             content=safe_content,
             instructions=safe_instructions
         )
-        reasoning_effort, max_completion_tokens = FeedService._reasoning_config(model_name)
+        reasoning_effort, max_completion_tokens = FeedService._reasoning_config(
+            model_name, ai_model_setting
+        )
         response_format_mode = "json_schema"
 
         for attempt in range(max_retries):
@@ -1067,6 +1089,7 @@ class FeedService:
             ai_model_name = ai_model_setting.model_name
         except Exception:
             logger.exception("Error al obtener configuración de modelo IA. Usando default.")
+            ai_model_setting = None
             ai_model_name = DEFAULT_AI_MODEL
         
         filter_word_patterns = FeedService.build_filter_word_patterns(
@@ -1396,6 +1419,7 @@ class FeedService:
                 ai_model_name,
                 filter_instructions_text,
                 content_limit=ai_content_limit,
+                ai_model_setting=ai_model_setting,
             )
             if processed_description:
                 ai_was_processed = True

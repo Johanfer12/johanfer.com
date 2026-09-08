@@ -231,11 +231,13 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
     try:
         cerebras_client = FeedService.initialize_cerebras()
         try:
-            ai_model_name = (
+            ai_model_setting = (
                 AIModelSetting.objects.first()
                 or AIModelSetting(model_name=DEFAULT_AI_MODEL)
-            ).model_name
+            )
+            ai_model_name = ai_model_setting.model_name
         except Exception:
+            ai_model_setting = None
             ai_model_name = DEFAULT_AI_MODEL
 
         try:
@@ -259,7 +261,8 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
                 news.description or '',
                 cerebras_client,
                 ai_model_name,
-                filter_instructions_text
+                filter_instructions_text,
+                ai_model_setting=ai_model_setting,
             )
 
             if ai_filter_reason and isinstance(ai_filter_reason, str) and ai_filter_reason.strip():

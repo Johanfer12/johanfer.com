@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 
@@ -131,13 +132,70 @@ class AIFilterInstruction(models.Model):
 
 class AIModelSetting(models.Model):
     """Modelo de IA usado para procesar noticias, independiente del proveedor."""
+
+    REASONING_AUTO = ''
+    REASONING_CHOICES = [
+        (REASONING_AUTO, 'Automático (según el modelo)'),
+        ('none', 'Sin razonamiento'),
+        ('low', 'Bajo (recomendado)'),
+        ('medium', 'Medio'),
+        ('high', 'Alto'),
+    ]
+    # Presupuesto mínimo que necesita una respuesta con razonamiento. Medido en
+    # septiembre de 2026 sobre el prompt real con qwen-3.8-27b: con 512 falla el
+    # 100% de las llamadas y con 2.048 el 12%.
+    MIN_REASONING_TOKENS = 4096
+
     model_name = models.CharField(
         max_length=100,
         default='qwen-3.8-27b',
         verbose_name="Modelo IA Global",
         help_text="Nombre del modelo de IA a utilizar para resúmenes (ej: 'qwen-3.8-27b')."
     )
+    reasoning_effort = models.CharField(
+        max_length=10,
+        blank=True,
+        default=REASONING_AUTO,
+        choices=REASONING_CHOICES,
+        verbose_name="Razonamiento",
+        help_text=(
+            "Cuánto razona el modelo antes de responder. 'Automático' usa el "
+            "valor probado para cada modelo. Medido: 'bajo' no mejora el "
+            "resumen (que es transcripción) pero estabiliza el short_answer; "
+            "'medio' y 'alto' lo empeoran, volviéndolo nulo en titulares que "
+            "sí esconden el dato."
+        )
+    )
+    max_completion_tokens = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Tokens de respuesta",
+        help_text=(
+            "Presupuesto de salida por noticia. Vacío usa el valor probado "
+            "para cada modelo. OJO: el razonamiento se cobra aquí dentro, así "
+            f"que con razonamiento hacen falta {MIN_REASONING_TOKENS} o la "
+            "respuesta llega truncada y sin JSON, perdiendo la noticia."
+        )
+    )
     updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        """Impide guardar razonamiento con un presupuesto que no le da.
+
+        Es la combinación que rompe la ingesta en silencio: la respuesta no
+        llega recortada, llega truncada y sin JSON.
+        """
+        super().clean()
+        razona = self.reasoning_effort not in (self.REASONING_AUTO, 'none')
+        if razona and self.max_completion_tokens is not None                 and self.max_completion_tokens < self.MIN_REASONING_TOKENS:
+            raise ValidationError({
+                'max_completion_tokens': (
+                    f"Con razonamiento '{self.reasoning_effort}' hacen falta al "
+                    f"menos {self.MIN_REASONING_TOKENS} tokens: el razonamiento "
+                    "se cobra dentro de este presupuesto y con menos la "
+                    "respuesta llega truncada y sin JSON."
+                )
+            })
 
     def __str__(self):
         return f"Configuración Global de Modelo IA ({self.model_name})"

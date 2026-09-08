@@ -6,12 +6,13 @@ from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.test import SimpleTestCase
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import FeedSource, News
+from .models import AIModelSetting, FeedSource, News
 from .services import FeedService, CerebrasRateLimiter
 from .tasks import purge_old_news
 from .views import NEWS_NOTIFICATION_SETTLE_DELAY, PAGE_SIZE, _collapse_html_whitespace
@@ -403,6 +404,52 @@ class CerebrasRateLimiterTests(SimpleTestCase):
         self.assertEqual(
             FeedService._reasoning_config('zai-glm-4.7'), (None, 512)
         )
+
+    def test_admin_setting_overrides_the_reasoning_of_the_model(self):
+        """Lo elegido a mano en el admin manda sobre la tabla por modelo."""
+        # 'none' es una eleccion explicita de no razonar, no un "sin dato".
+        setting = AIModelSetting(model_name='qwen-3.8-27b', reasoning_effort='none')
+        self.assertEqual(
+            FeedService._reasoning_config('qwen-3.8-27b', setting), (None, 4096)
+        )
+
+        # Al subir el esfuerzo a mano sin fijar presupuesto, se garantiza el
+        # minimo medido: si no, el razonamiento truncaria la respuesta.
+        setting = AIModelSetting(model_name='gpt-oss-120b', reasoning_effort='high')
+        effort, tokens = FeedService._reasoning_config('gpt-oss-120b', setting)
+        self.assertEqual(effort, 'high')
+        self.assertGreaterEqual(tokens, AIModelSetting.MIN_REASONING_TOKENS)
+
+        # Un presupuesto propio manda sobre todo lo demas.
+        setting = AIModelSetting(
+            model_name='qwen-3.8-27b', reasoning_effort='low',
+            max_completion_tokens=8192,
+        )
+        self.assertEqual(
+            FeedService._reasoning_config('qwen-3.8-27b', setting), ('low', 8192)
+        )
+
+        # En automatico (cadena vacia) se respeta la tabla por modelo.
+        setting = AIModelSetting(model_name='qwen-3.8-27b', reasoning_effort='')
+        self.assertEqual(
+            FeedService._reasoning_config('qwen-3.8-27b', setting), ('low', 4096)
+        )
+
+    def test_admin_refuses_reasoning_with_a_budget_that_does_not_fit(self):
+        """La combinacion que rompe la ingesta en silencio no se puede guardar."""
+        setting = AIModelSetting(
+            model_name='qwen-3.8-27b', reasoning_effort='low',
+            max_completion_tokens=512,
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            setting.full_clean()
+        self.assertIn('max_completion_tokens', ctx.exception.error_dict)
+
+        # Sin razonamiento, un presupuesto corto es legitimo.
+        AIModelSetting(
+            model_name='qwen-3.8-27b', reasoning_effort='none',
+            max_completion_tokens=512,
+        ).full_clean()
 
     def test_reasoning_budget_reaches_the_request(self):
         """El presupuesto del modelo tiene que llegar a la peticion."""
