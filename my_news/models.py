@@ -2,6 +2,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 
+from . import ai_providers
+
 class VisibleNewsManager(models.Manager):
     """Manager para noticias visibles (no eliminadas, no filtradas, no redundantes, no filtradas por IA)"""
     def get_queryset(self):
@@ -131,7 +133,14 @@ class AIFilterInstruction(models.Model):
         return self.instruction
 
 class AIModelSetting(models.Model):
-    """Modelo de IA usado para procesar noticias, independiente del proveedor."""
+    """Proveedor y modelo de IA con que se resumen las noticias.
+
+    Los detalles de cada proveedor (limites medidos, por que se eligio, que se
+    descarto) estan en ``my_news/ai_providers.py``.
+    """
+
+    SIN_RESPALDO = ''
+    RESPALDO_CHOICES = [(SIN_RESPALDO, 'Sin respaldo')] + ai_providers.PROVIDER_CHOICES
 
     REASONING_AUTO = ''
     REASONING_CHOICES = [
@@ -141,16 +150,35 @@ class AIModelSetting(models.Model):
         ('medium', 'Medio'),
         ('high', 'Alto'),
     ]
-    # Presupuesto mínimo que necesita una respuesta con razonamiento. Medido en
-    # septiembre de 2026 sobre el prompt real con qwen-3.8-27b: con 512 falla el
-    # 100% de las llamadas y con 2.048 el 12%.
-    MIN_REASONING_TOKENS = 4096
+    MIN_REASONING_TOKENS = ai_providers.MIN_REASONING_TOKENS
 
+    provider = models.CharField(
+        max_length=20,
+        default=ai_providers.DEFAULT_PROVIDER,
+        choices=ai_providers.PROVIDER_CHOICES,
+        verbose_name="Proveedor",
+        help_text="Quién genera los resúmenes. El primero que se intenta.",
+    )
     model_name = models.CharField(
         max_length=100,
-        default='qwen-3.8-27b',
+        blank=True,
+        default=ai_providers.DEFAULT_MODELS[ai_providers.DEFAULT_PROVIDER],
         verbose_name="Modelo IA Global",
-        help_text="Nombre del modelo de IA a utilizar para resúmenes (ej: 'qwen-3.8-27b')."
+        help_text=(
+            "Modelo del proveedor de arriba (ej: 'gemini-3.5-flash-lite'). "
+            "Vacío usa el modelo por defecto de ese proveedor."
+        ),
+    )
+    fallback_provider = models.CharField(
+        max_length=20,
+        blank=True,
+        default=ai_providers.DEFAULT_FALLBACK,
+        choices=RESPALDO_CHOICES,
+        verbose_name="Proveedor de respaldo",
+        help_text=(
+            "A quién recurrir cuando el principal se queda sin cuota, en vez "
+            "de pausar la ingesta. Usa su modelo por defecto. Vacío lo desactiva."
+        ),
     )
     reasoning_effort = models.CharField(
         max_length=10,
@@ -159,23 +187,23 @@ class AIModelSetting(models.Model):
         choices=REASONING_CHOICES,
         verbose_name="Razonamiento",
         help_text=(
-            "Cuánto razona el modelo antes de responder. 'Automático' usa el "
-            "valor probado para cada modelo. Medido: 'bajo' no mejora el "
-            "resumen (que es transcripción) pero estabiliza el short_answer; "
-            "'medio' y 'alto' lo empeoran, volviéndolo nulo en titulares que "
-            "sí esconden el dato."
-        )
+            "Solo afecta a Groq; Gemini 3.5 Lite no gasta tokens de "
+            "razonamiento (medido). 'Automático' usa el valor probado de cada "
+            "modelo. Medido: 'bajo' no mejora el resumen, que es transcripción, "
+            "pero estabiliza el short_answer; 'medio' y 'alto' lo empeoran, "
+            "volviéndolo nulo en titulares que sí esconden el dato."
+        ),
     )
     max_completion_tokens = models.PositiveIntegerField(
         null=True,
         blank=True,
         verbose_name="Tokens de respuesta",
         help_text=(
-            "Presupuesto de salida por noticia. Vacío usa el valor probado "
-            "para cada modelo. OJO: el razonamiento se cobra aquí dentro, así "
-            f"que con razonamiento hacen falta {MIN_REASONING_TOKENS} o la "
-            "respuesta llega truncada y sin JSON, perdiendo la noticia."
-        )
+            "Presupuesto de salida por noticia en Groq. Vacío usa el valor "
+            "probado para cada modelo. OJO: el razonamiento se cobra aquí "
+            f"dentro, así que por encima de 'bajo' hacen falta {MIN_REASONING_TOKENS} "
+            "o la respuesta llega truncada y sin JSON, perdiendo la noticia."
+        ),
     )
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -186,8 +214,9 @@ class AIModelSetting(models.Model):
         llega recortada, llega truncada y sin JSON.
         """
         super().clean()
-        razona = self.reasoning_effort not in (self.REASONING_AUTO, 'none')
-        if razona and self.max_completion_tokens is not None                 and self.max_completion_tokens < self.MIN_REASONING_TOKENS:
+        razona = self.reasoning_effort not in (self.REASONING_AUTO, 'none', 'low')
+        if (razona and self.max_completion_tokens is not None
+                and self.max_completion_tokens < self.MIN_REASONING_TOKENS):
             raise ValidationError({
                 'max_completion_tokens': (
                     f"Con razonamiento '{self.reasoning_effort}' hacen falta al "

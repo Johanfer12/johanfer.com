@@ -13,7 +13,16 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import AIModelSetting, FeedSource, News
-from .services import FeedService, CerebrasRateLimiter
+from .ai_providers import (
+    AIProviderError,
+    AIRateLimiter,
+    GroqProvider,
+    _espera_por_cabeceras,
+    _segundos_de_retry,
+    cadena_de_proveedores,
+    razonamiento_de,
+)
+from .services import FeedService
 from .tasks import purge_old_news
 from .views import NEWS_NOTIFICATION_SETTLE_DELAY, PAGE_SIZE, _collapse_html_whitespace
 
@@ -71,11 +80,11 @@ class FilterWordPatternTests(SimpleTestCase):
         )
 
 
-class CerebrasContentPreparationTests(SimpleTestCase):
+class ContentPreparationTests(SimpleTestCase):
     def test_html_feed_content_is_converted_to_plain_text(self):
         content = '<p>El <a href="https://example.com">WiFi 7</a> llega a casa.</p><script>bad()</script>'
 
-        cleaned = FeedService.prepare_content_for_cerebras('Titulo', content)
+        cleaned = FeedService.prepare_content_for_ai('Titulo', content)
 
         self.assertEqual(cleaned, 'El WiFi 7 llega a casa.')
 
@@ -86,7 +95,7 @@ class CerebrasContentPreparationTests(SimpleTestCase):
             'Según los últimos rumores, AMD prepara una subida de precio.'
         )
 
-        cleaned = FeedService.prepare_content_for_cerebras(title, content)
+        cleaned = FeedService.prepare_content_for_ai(title, content)
 
         self.assertNotIn(title, cleaned)
         self.assertIn('Según los últimos rumores', cleaned)
@@ -98,14 +107,14 @@ class CerebrasContentPreparationTests(SimpleTestCase):
             'Este verano nos van a faltar horas para jugar.'
         )
 
-        cleaned = FeedService.prepare_content_for_cerebras('Splatoon Raiders', content)
+        cleaned = FeedService.prepare_content_for_ai('Splatoon Raiders', content)
 
         self.assertNotIn('Linkedin twitter instagram', cleaned)
         self.assertNotIn('17772 publicaciones', cleaned)
         self.assertIn('Este verano', cleaned)
 
     def test_content_is_limited_before_prompting(self):
-        cleaned = FeedService.prepare_content_for_cerebras('Titulo', 'a' * 3000, content_limit=120)
+        cleaned = FeedService.prepare_content_for_ai('Titulo', 'a' * 3000, content_limit=120)
 
         self.assertEqual(len(cleaned), 120)
 
@@ -114,42 +123,43 @@ class CerebrasContentPreparationTests(SimpleTestCase):
             'Dato decisivo ubicado después del antiguo límite.'
         )
 
-        cleaned = FeedService.prepare_content_for_cerebras('Titulo', content)
+        cleaned = FeedService.prepare_content_for_ai('Titulo', content)
 
         self.assertGreater(len(cleaned), 2500)
         self.assertIn('Dato decisivo', cleaned)
 
     def test_default_limit_caps_content_at_10000_characters(self):
-        cleaned = FeedService.prepare_content_for_cerebras('Titulo', 'a' * 12000)
+        cleaned = FeedService.prepare_content_for_ai('Titulo', 'a' * 12000)
 
         self.assertEqual(len(cleaned), 10000)
 
 
-class CerebrasRateLimiterTests(SimpleTestCase):
+class AIRateLimiterTests(SimpleTestCase):
     def setUp(self):
-        FeedService._CEREBRAS_RATE_LIMITER = CerebrasRateLimiter()
-        FeedService._CEREBRAS_RATE_LIMITER.SAFE_RPM_CAP = 500
+        self.limiter = AIRateLimiter()
+        self.limiter.SAFE_RPM_CAP = 500
+        GroqProvider._LIMITER = self.limiter
 
     def test_starting_limits_come_from_the_measured_free_plan(self):
         """MODEL_LIMITS es solo el valor de arranque, y viene de una medida.
 
-        Septiembre de 2026, plan gratuito: gpt-oss-120b da 5 peticiones y
-        30.000 tokens por minuto. Mientras no llegan cabeceras se les aplica
-        SAFETY_FACTOR, de ahi 22.500 y 3.
+        Septiembre de 2026, plan gratuito de Groq: gpt-oss-120b da 8.000 tokens
+        por minuto. Mientras no llegan cabeceras se les aplica SAFETY_FACTOR,
+        de ahi 6.000 y 22.
         """
-        limiter = CerebrasRateLimiter()
+        limiter = AIRateLimiter()
 
-        self.assertEqual(limiter.MODEL_LIMITS['gpt-oss-120b'], {'tpm': 30_000, 'rpm': 5})
-        self.assertEqual(limiter.get_limits('gpt-oss-120b'), (22_500, 3))
+        self.assertEqual(limiter.MODEL_LIMITS['openai/gpt-oss-120b'], {'tpm': 8_000, 'rpm': 30})
+        self.assertEqual(limiter.get_limits('openai/gpt-oss-120b'), (6_000, 22))
 
     def test_reset_header_duration_is_parsed(self):
-        limiter = CerebrasRateLimiter()
+        limiter = AIRateLimiter()
 
         self.assertEqual(limiter.parse_reset_seconds('7.66s'), 7.66)
         self.assertEqual(limiter.parse_reset_seconds('2m59.56s'), 179.56)
 
     def test_response_headers_update_remaining_capacity(self):
-        limiter = CerebrasRateLimiter()
+        limiter = AIRateLimiter()
 
         limiter.update_from_headers({
             'x-ratelimit-remaining-tokens-minute': '1234',
@@ -175,7 +185,7 @@ class CerebrasRateLimiterTests(SimpleTestCase):
         justo eso; el refactor de tightest_window lo corrigio y la expectativa
         se quedo atras.
         """
-        limiter = CerebrasRateLimiter()
+        limiter = AIRateLimiter()
 
         limiter.update_from_headers({
             'x-ratelimit-remaining-requests-day': '42',
@@ -186,17 +196,17 @@ class CerebrasRateLimiterTests(SimpleTestCase):
         self.assertIsNone(limiter.limit_requests)
 
     def test_a_per_minute_cap_does_feed_the_budget(self):
-        limiter = CerebrasRateLimiter()
+        limiter = AIRateLimiter()
 
         limiter.update_from_headers({'x-ratelimit-limit-requests-minute': '5'})
 
         # Al tope medido no se le aplica SAFETY_FACTOR: es exacto.
         self.assertEqual(limiter.limit_requests, 5)
-        self.assertEqual(limiter.get_limits('gpt-oss-120b')[1], 5)
+        self.assertEqual(limiter.get_limits('openai/gpt-oss-120b')[1], 5)
 
     def test_the_tightest_window_wins_and_carries_its_own_reset(self):
         """Con el dia agotado hay que esperar al reset del dia, no al del minuto."""
-        limiter = CerebrasRateLimiter()
+        limiter = AIRateLimiter()
 
         limiter.update_from_headers({
             'x-ratelimit-remaining-requests-minute': '4',
@@ -211,15 +221,15 @@ class CerebrasRateLimiterTests(SimpleTestCase):
         self.assertAlmostEqual(falta, 150, delta=2)
 
     def test_long_header_reset_defers_processing(self):
-        limiter = CerebrasRateLimiter()
+        limiter = AIRateLimiter()
         limiter.remaining_tokens = 1
         limiter.reset_tokens_at = limiter.window_start + 120
 
-        with self.assertRaises(CerebrasRateLimiter.Deferred):
-            limiter.acquire('qwen-3.8-27b', 'x' * 1000, 1024)
+        with self.assertRaises(AIRateLimiter.Deferred):
+            limiter.acquire('openai/gpt-oss-120b', 'x' * 1000, 1024)
 
     def test_missing_reset_header_uses_local_window(self):
-        limiter = CerebrasRateLimiter()
+        limiter = AIRateLimiter()
         limiter.remaining_requests = 0
         waits = []
 
@@ -228,13 +238,13 @@ class CerebrasRateLimiterTests(SimpleTestCase):
             limiter.remaining_requests = None
 
         limiter._sleep_or_defer = fake_sleep_or_defer
-        limiter.acquire('qwen-3.8-27b', 'prompt', 8)
+        limiter.acquire('openai/gpt-oss-120b', 'prompt', 8)
 
         self.assertEqual(waits[0][1], 'sin requests disponibles')
         self.assertGreater(waits[0][0], 0)
 
     def test_local_window_reset_clears_stale_header_capacity_without_reset_header(self):
-        limiter = CerebrasRateLimiter()
+        limiter = AIRateLimiter()
         limiter.remaining_requests = 0
         limiter.window_start -= limiter.window_seconds + 1
 
@@ -243,421 +253,213 @@ class CerebrasRateLimiterTests(SimpleTestCase):
         self.assertIsNone(limiter.remaining_requests)
 
     def test_retry_after_is_read_from_response_headers(self):
-        class Response:
-            headers = {'Retry-After': '42'}
+        headers = {'Retry-After': '42'}
 
-        error = Exception('429 rate limit exceeded')
-        error.response = Response()
+        self.assertEqual(_espera_por_cabeceras(headers, self.limiter), 42)
 
-        self.assertEqual(FeedService._extract_retry_after_seconds(error), 42)
+    def test_retry_delay_is_read_from_rate_limit_headers(self):
+        headers = {
+            'x-ratelimit-remaining-tokens-minute': '0',
+            'x-ratelimit-reset-tokens-minute': '11.38',
+        }
+        self.limiter.update_from_headers(headers)
 
-    def test_retry_delay_is_read_from_cerebras_rate_limit_headers(self):
-        class Response:
-            headers = {
-                'x-ratelimit-remaining-tokens-minute': '0',
-                'x-ratelimit-reset-tokens-minute': '11.38',
-            }
-
-        error = Exception('429 rate limit exceeded')
-        error.response = Response()
-
-        self.assertEqual(FeedService._extract_retry_after_seconds(error), 12)
+        self.assertEqual(_espera_por_cabeceras(headers, self.limiter), 12)
 
     def test_retry_after_is_read_from_error_message(self):
-        error = Exception('Rate limit reached. Please try again in 12.4s.')
-
-        self.assertEqual(FeedService._extract_retry_after_seconds(error), 13)
+        self.assertEqual(
+            _segundos_de_retry('Rate limit reached. Please try again in 12.4s.'), 13
+        )
 
     def test_retry_after_reads_minute_duration_from_error_message(self):
-        error = Exception('Rate limit reached. Please try again in 10m46.271999999s.')
-
-        self.assertEqual(FeedService._extract_retry_after_seconds(error), 647)
-
-    def test_long_retry_after_postpones_news_instead_of_sleeping(self):
-        class Response:
-            headers = {'Retry-After': '600'}
-
-        class Completions:
-            def create(self, **kwargs):
-                error = Exception('429 rate limit exceeded')
-                error.response = Response()
-                raise error
-
-        class Chat:
-            completions = Completions()
-
-        class Client:
-            chat = Chat()
-
-        description, short_answer, ai_filter = FeedService.process_content_with_cerebras(
-            'Titulo',
-            'Descripcion original',
-            Client(),
-            'qwen-3.8-27b',
-            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
-            max_retries=2,
-        )
-
-        self.assertIsNone(description)
-        self.assertIsNone(short_answer)
-        self.assertIsNone(ai_filter)
-
-    def test_single_large_request_does_not_wait_forever(self):
-        limiter = CerebrasRateLimiter()
-        limiter.MODEL_LIMITS = {'tiny-model': {'tpm': 100, 'rpm': 20}}
-
-        estimated_tokens = limiter.acquire('tiny-model', 'x' * 1000, 1024)
-
-        self.assertGreater(estimated_tokens, 25)
-
-    def test_cerebras_failure_returns_empty_result_instead_of_original_content(self):
-        class Completions:
-            def create(self, **kwargs):
-                raise Exception('429 rate limit exceeded')
-
-        class Chat:
-            completions = Completions()
-
-        class Client:
-            chat = Chat()
-
-        description, short_answer, ai_filter = FeedService.process_content_with_cerebras(
-            'Titulo',
-            'Descripcion original sin procesar',
-            Client(),
-            'qwen-3.8-27b',
-            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
-            max_retries=1,
-        )
-
-        self.assertIsNone(description)
-        self.assertIsNone(short_answer)
-        self.assertIsNone(ai_filter)
-
-    def test_json_validation_error_retries_without_response_format(self):
-        class Message:
-            content = '{"summary": "Resumen procesado.", "short_answer": null, "ai_filter": null}'
-
-        class Choice:
-            message = Message()
-
-        class Response:
-            choices = [Choice()]
-
-        class Completions:
-            def __init__(self):
-                self.calls = []
-
-            def create(self, **kwargs):
-                self.calls.append(kwargs)
-                if len(self.calls) == 1:
-                    raise Exception('Error code: 400 - json_validate_failed')
-                return Response()
-
-        class Chat:
-            def __init__(self):
-                self.completions = Completions()
-
-        class Client:
-            def __init__(self):
-                self.chat = Chat()
-
-        client = Client()
-        description, short_answer, ai_filter = FeedService.process_content_with_cerebras(
-            'Titulo',
-            'Descripcion original',
-            client,
-            'gpt-oss-120b',
-            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
-            max_retries=2,
-        )
-
-        self.assertEqual(description, 'Resumen procesado.')
-        self.assertIsNone(short_answer)
-        self.assertIsNone(ai_filter)
+        """Groq escribe la espera compuesta: minutos y segundos juntos."""
         self.assertEqual(
-            client.chat.completions.calls[0]['response_format']['type'],
-            'json_schema',
+            _segundos_de_retry('Rate limit reached. Please try again in 10m46.271999999s.'),
+            647,
         )
-        self.assertEqual(
-            client.chat.completions.calls[1]['response_format']['type'],
-            'json_object',
+
+
+class ProveedorFalso:
+    """Proveedor de mentira: devuelve lo que se le diga o lanza lo que se le diga."""
+
+    def __init__(self, nombre='falso', respuesta=None, error=None):
+        self.nombre = nombre
+        self.respuesta = respuesta
+        self.error = error
+        self.llamadas = []
+
+    def complete(self, prompt):
+        self.llamadas.append(prompt)
+        if self.error is not None:
+            raise self.error
+        return self.respuesta
+
+
+RESPUESTA_OK = '{"summary": "Resumen procesado.", "short_answer": null, "ai_filter": null}'
+
+
+def _procesar(cadena, titulo='Titulo', contenido='Descripcion original'):
+    """Ejecuta process_news_content con una cadena de proveedores fija."""
+    with patch('my_news.services.cadena_de_proveedores', return_value=cadena):
+        return FeedService.process_news_content(
+            titulo, contenido, FeedService._DEFAULT_FILTER_INSTRUCTIONS,
         )
-        self.assertEqual(client.chat.completions.calls[1]['reasoning_effort'], 'low')
+
+
+class NewsContentProcessingTests(SimpleTestCase):
+    """La ruta que convierte una noticia en resumen, con proveedores de mentira."""
+
+    def setUp(self):
+        FeedService._clear_ai_failure()
+
+    def test_a_good_response_becomes_summary_and_fields(self):
+        proveedor = ProveedorFalso(respuesta=(
+            '{"summary": "Resumen **con negrita**.", '
+            '"short_answer": "El dato oculto.", "ai_filter": "futbol"}'
+        ))
+        resumen, short, filtro = _procesar([proveedor])
+
+        self.assertIn('<strong>con negrita</strong>', resumen)
+        self.assertEqual(short, 'El dato oculto.')
+        self.assertEqual(filtro, 'futbol')
+        self.assertIsNone(FeedService._LAST_AI_FAILURE)
+
+    def test_a_provider_failure_returns_nothing_instead_of_original_content(self):
+        """Nunca guardar el texto original como si fuera un resumen."""
+        proveedor = ProveedorFalso(error=AIProviderError('rate_limit', 'sin ritmo'))
+        self.assertEqual(_procesar([proveedor]), (None, None, None))
+
+    def test_the_fallback_provider_takes_over_when_the_first_runs_out_of_quota(self):
+        """El caso que motivo todo esto: sin cuota, seguir en vez de pausar."""
+        primero = ProveedorFalso('gemini', error=AIProviderError('quota', 'sin cuota'))
+        segundo = ProveedorFalso('groq', respuesta=RESPUESTA_OK)
+
+        resumen, _, _ = _procesar([primero, segundo])
+
+        self.assertEqual(resumen, 'Resumen procesado.')
+        self.assertEqual(len(segundo.llamadas), 1)
+        self.assertIsNone(FeedService._LAST_AI_FAILURE)
+
+    def test_a_badly_built_request_does_not_bother_the_fallback(self):
+        """Si la peticion va mal construida, en el otro proveedor fallaria igual."""
+        primero = ProveedorFalso('gemini', error=AIProviderError(
+            'error', 'peticion invalida', puede_reintentar_otro=False))
+        segundo = ProveedorFalso('groq', respuesta=RESPUESTA_OK)
+
+        self.assertEqual(_procesar([primero, segundo]), (None, None, None))
+        self.assertEqual(segundo.llamadas, [])
+
+    def test_the_reported_failure_is_the_last_one(self):
+        primero = ProveedorFalso('gemini', error=AIProviderError('quota', 'gemini sin cuota'))
+        segundo = ProveedorFalso('groq', error=AIProviderError('quota', 'groq sin cuota'))
+
+        _procesar([primero, segundo])
+
+        self.assertEqual(FeedService._LAST_AI_FAILURE['kind'], 'quota')
+        self.assertEqual(FeedService._LAST_AI_FAILURE['reason'], 'groq sin cuota')
+
+    def test_an_unexpected_crash_in_one_provider_does_not_stop_the_chain(self):
+        primero = ProveedorFalso('gemini', error=RuntimeError('algo raro'))
+        segundo = ProveedorFalso('groq', respuesta=RESPUESTA_OK)
+
+        resumen, _, _ = _procesar([primero, segundo])
+        self.assertEqual(resumen, 'Resumen procesado.')
+
+    def test_an_empty_response_is_not_saved_as_summary(self):
+        self.assertEqual(_procesar([ProveedorFalso(respuesta='   ')]), (None, None, None))
+
+    def test_a_non_json_response_is_not_saved_as_summary(self):
+        proveedor = ProveedorFalso(respuesta='Lo siento, no puedo ayudarte con eso.')
+        self.assertEqual(_procesar([proveedor]), (None, None, None))
+
+    def test_json_wrapped_in_reasoning_text_is_extracted(self):
+        """Algunos modelos anteponen su razonamiento al JSON."""
+        proveedor = ProveedorFalso(
+            respuesta='Vale, primero analizo el titular y luego respondo.\n' + RESPUESTA_OK)
+        resumen, _, _ = _procesar([proveedor])
+        self.assertEqual(resumen, 'Resumen procesado.')
+
+    def test_a_missing_summary_falls_back_to_the_original_text(self):
+        proveedor = ProveedorFalso(
+            respuesta='{"summary": null, "short_answer": null, "ai_filter": null}')
+        resumen, _, _ = _procesar([proveedor], contenido='Texto original de la noticia.')
+        self.assertIn('Texto original', resumen)
+
+
+class ReasoningConfigTests(SimpleTestCase):
+    """El razonamiento y su presupuesto, que van juntos a la fuerza."""
 
     def test_reasoning_models_get_a_budget_that_fits_their_reasoning(self):
-        """El bloque de razonamiento se cobra dentro de max_completion_tokens.
+        """El razonamiento se cobra dentro de max_completion_tokens.
 
         Si el presupuesto no le da, la respuesta no llega recortada: llega
-        truncada y SIN JSON, y la noticia se pierde. Medido con el prompt real
-        en septiembre de 2026: qwen razona ~3.600 caracteres y con 512 falla el
-        100% de las llamadas; gpt-oss razona ~650 y le sobra con 512.
+        truncada y SIN JSON, y la noticia se pierde. Medido en septiembre de
+        2026 sobre el prompt real: gpt-oss razona ~650 caracteres y le sobra
+        con 512.
         """
-        self.assertEqual(
-            FeedService._reasoning_config('qwen-3.8-27b'), ('low', 4096)
-        )
-        self.assertEqual(
-            FeedService._reasoning_config('gpt-oss-120b'), ('low', 512)
-        )
+        self.assertEqual(razonamiento_de('openai/gpt-oss-120b'), ('low', 512))
 
-        # Un modelo que no razona no recibe reasoning_effort y le basta 512.
-        self.assertEqual(
-            FeedService._reasoning_config('zai-glm-4.7'), (None, 512)
-        )
+        # Un modelo que no esta en la tabla no recibe reasoning_effort.
+        self.assertEqual(razonamiento_de('gemini-3.5-flash-lite'), (None, 512))
 
-    def test_admin_setting_overrides_the_reasoning_of_the_model(self):
-        """Lo elegido a mano en el admin manda sobre la tabla por modelo."""
+    def test_admin_setting_overrides_the_table(self):
         # 'none' es una eleccion explicita de no razonar, no un "sin dato".
-        setting = AIModelSetting(model_name='qwen-3.8-27b', reasoning_effort='none')
-        self.assertEqual(
-            FeedService._reasoning_config('qwen-3.8-27b', setting), (None, 4096)
-        )
+        ajuste = AIModelSetting(reasoning_effort='none')
+        self.assertEqual(razonamiento_de('openai/gpt-oss-120b', ajuste), (None, 512))
 
-        # Al subir el esfuerzo a mano sin fijar presupuesto, se garantiza el
-        # minimo medido: si no, el razonamiento truncaria la respuesta.
-        setting = AIModelSetting(model_name='gpt-oss-120b', reasoning_effort='high')
-        effort, tokens = FeedService._reasoning_config('gpt-oss-120b', setting)
-        self.assertEqual(effort, 'high')
+        # Al subir el esfuerzo sin fijar presupuesto se garantiza el minimo.
+        ajuste = AIModelSetting(reasoning_effort='high')
+        esfuerzo, tokens = razonamiento_de('openai/gpt-oss-120b', ajuste)
+        self.assertEqual(esfuerzo, 'high')
         self.assertGreaterEqual(tokens, AIModelSetting.MIN_REASONING_TOKENS)
 
         # Un presupuesto propio manda sobre todo lo demas.
-        setting = AIModelSetting(
-            model_name='qwen-3.8-27b', reasoning_effort='low',
-            max_completion_tokens=8192,
-        )
-        self.assertEqual(
-            FeedService._reasoning_config('qwen-3.8-27b', setting), ('low', 8192)
-        )
+        ajuste = AIModelSetting(reasoning_effort='low', max_completion_tokens=8192)
+        self.assertEqual(razonamiento_de('openai/gpt-oss-120b', ajuste), ('low', 8192))
 
-        # En automatico (cadena vacia) se respeta la tabla por modelo.
-        setting = AIModelSetting(model_name='qwen-3.8-27b', reasoning_effort='')
+        # En automatico (cadena vacia) se respeta la tabla.
         self.assertEqual(
-            FeedService._reasoning_config('qwen-3.8-27b', setting), ('low', 4096)
+            razonamiento_de('openai/gpt-oss-120b', AIModelSetting(reasoning_effort='')),
+            ('low', 512),
         )
 
     def test_admin_refuses_reasoning_with_a_budget_that_does_not_fit(self):
         """La combinacion que rompe la ingesta en silencio no se puede guardar."""
-        setting = AIModelSetting(
-            model_name='qwen-3.8-27b', reasoning_effort='low',
-            max_completion_tokens=512,
-        )
+        ajuste = AIModelSetting(reasoning_effort='high', max_completion_tokens=512)
         with self.assertRaises(ValidationError) as ctx:
-            setting.full_clean()
+            ajuste.full_clean()
         self.assertIn('max_completion_tokens', ctx.exception.error_dict)
 
         # Sin razonamiento, un presupuesto corto es legitimo.
-        AIModelSetting(
-            model_name='qwen-3.8-27b', reasoning_effort='none',
-            max_completion_tokens=512,
-        ).full_clean()
+        AIModelSetting(reasoning_effort='none', max_completion_tokens=512).full_clean()
 
-    def test_reasoning_budget_reaches_the_request(self):
-        """El presupuesto del modelo tiene que llegar a la peticion."""
-        class Message:
-            content = '{"summary": "Resumen.", "short_answer": null, "ai_filter": null}'
 
-        class Choice:
-            message = Message()
+class ProviderChainTests(SimpleTestCase):
+    """Que proveedores se intentan y en que orden."""
 
-        class Completions:
-            def __init__(self):
-                self.calls = []
+    def test_defaults_are_gemini_with_groq_as_backup(self):
+        cadena = cadena_de_proveedores(None)
+        self.assertEqual([p.nombre for p in cadena], ['gemini', 'groq'])
+        self.assertEqual(cadena[0].model_name, 'gemini-3.5-flash-lite')
 
-            def create(self, **kwargs):
-                self.calls.append(kwargs)
-                return type('R', (), {'choices': [Choice()]})()
+    def test_the_admin_choice_decides_the_order(self):
+        ajuste = AIModelSetting(provider='groq', model_name='', fallback_provider='gemini')
+        cadena = cadena_de_proveedores(ajuste)
+        self.assertEqual([p.nombre for p in cadena], ['groq', 'gemini'])
+        # Sin model_name, cada proveedor usa el suyo.
+        self.assertEqual(cadena[0].model_name, 'openai/gpt-oss-120b')
 
-        class Chat:
-            def __init__(self):
-                self.completions = Completions()
+    def test_the_backup_can_be_switched_off(self):
+        ajuste = AIModelSetting(provider='gemini', fallback_provider='')
+        self.assertEqual(len(cadena_de_proveedores(ajuste)), 1)
 
-        class Client:
-            def __init__(self):
-                self.chat = Chat()
+    def test_an_unknown_provider_falls_back_to_the_default(self):
+        ajuste = AIModelSetting(provider='inventado', fallback_provider='')
+        self.assertEqual(cadena_de_proveedores(ajuste)[0].nombre, 'gemini')
 
-        client = Client()
-        FeedService.process_content_with_cerebras(
-            'Titulo',
-            'Descripcion original',
-            client,
-            'qwen-3.8-27b',
-            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
-            max_retries=1,
-        )
-
-        call = client.chat.completions.calls[0]
-        self.assertEqual(call['max_completion_tokens'], 4096)
-        self.assertEqual(call['reasoning_effort'], 'low')
-
-    def test_cerebras_response_headers_are_recorded_from_raw_response(self):
-        class Message:
-            content = '{"summary": "Resumen con headers.", "short_answer": null, "ai_filter": null}'
-
-        class Choice:
-            message = Message()
-
-        class Response:
-            choices = [Choice()]
-
-        class RawResponse:
-            headers = {
-                'x-ratelimit-remaining-tokens-minute': '4321',
-                'x-ratelimit-remaining-requests-day': '999',
-                'x-ratelimit-reset-tokens-minute': '1.5s',
-            }
-
-            def parse(self):
-                return Response()
-
-        class RawCompletions:
-            def create(self, **kwargs):
-                return RawResponse()
-
-        class Completions:
-            with_raw_response = RawCompletions()
-
-        class Chat:
-            completions = Completions()
-
-        class Client:
-            chat = Chat()
-
-        description, short_answer, ai_filter = FeedService.process_content_with_cerebras(
-            'Titulo',
-            'Descripcion original',
-            Client(),
-            'qwen-3.8-27b',
-            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
-            max_retries=1,
-        )
-
-        self.assertEqual(description, 'Resumen con headers.')
-        self.assertIsNone(short_answer)
-        self.assertIsNone(ai_filter)
-        self.assertEqual(FeedService._CEREBRAS_RATE_LIMITER.remaining_tokens, 4321)
-        self.assertEqual(FeedService._CEREBRAS_RATE_LIMITER.remaining_requests, 999)
-
-    def test_reasoning_wrapped_json_is_extracted(self):
-        class Message:
-            content = '''
-Okay, primero razono sobre la noticia.
-
-{
-  "summary": "Motorola presento tres plegables con diferencias internas de procesador, pantalla y camaras.",
-  "short_answer": null,
-  "ai_filter": null
-}
-'''
-
-        class Choice:
-            message = Message()
-
-        class Response:
-            choices = [Choice()]
-
-        class Completions:
-            def create(self, **kwargs):
-                return Response()
-
-        class Chat:
-            completions = Completions()
-
-        class Client:
-            chat = Chat()
-
-        description, short_answer, ai_filter = FeedService.process_content_with_cerebras(
-            'Motorola Razr 70',
-            'Descripcion original',
-            Client(),
-            'qwen-3.8-27b',
-            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
-            max_retries=1,
-        )
-
-        self.assertEqual(
-            description,
-            'Motorola presento tres plegables con diferencias internas de procesador, pantalla y camaras.'
-        )
-        self.assertIsNone(short_answer)
-        self.assertIsNone(ai_filter)
-
-    def test_html_converted_reasoning_json_is_extracted(self):
-        response = '''<think><br>Okay, razono.<br></think><br>{<br>
-  "summary": "Resumen limpio.",
-  "short_answer": null,
-  "ai_filter": null<br>}'''
-
-        parsed = FeedService._parse_model_json(response)
-
-        self.assertEqual(parsed['summary'], 'Resumen limpio.')
-        self.assertIsNone(parsed['short_answer'])
-        self.assertIsNone(parsed['ai_filter'])
-
-    def test_invalid_non_json_response_is_not_saved_as_summary(self):
-        class Message:
-            content = 'Okay, voy a razonar pero nunca devuelvo JSON valido.'
-
-        class Choice:
-            message = Message()
-
-        class Response:
-            choices = [Choice()]
-
-        class Completions:
-            def create(self, **kwargs):
-                return Response()
-
-        class Chat:
-            completions = Completions()
-
-        class Client:
-            chat = Chat()
-
-        description, short_answer, ai_filter = FeedService.process_content_with_cerebras(
-            'Titulo',
-            'Descripcion original',
-            Client(),
-            'qwen-3.8-27b',
-            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
-            max_retries=1,
-        )
-
-        self.assertIsNone(description)
-        self.assertIsNone(short_answer)
-        self.assertIsNone(ai_filter)
-
-    def test_empty_cerebras_response_is_not_saved_as_summary(self):
-        class Message:
-            content = ''
-
-        class Choice:
-            message = Message()
-
-        class Response:
-            choices = [Choice()]
-
-        class Completions:
-            def create(self, **kwargs):
-                return Response()
-
-        class Chat:
-            completions = Completions()
-
-        class Client:
-            chat = Chat()
-
-        description, short_answer, ai_filter = FeedService.process_content_with_cerebras(
-            'Titulo',
-            'Descripcion original',
-            Client(),
-            'qwen-3.8-27b',
-            FeedService._DEFAULT_FILTER_INSTRUCTIONS,
-            max_retries=1,
-        )
-
-        self.assertIsNone(description)
-        self.assertIsNone(short_answer)
-        self.assertIsNone(ai_filter)
+    def test_the_backup_never_repeats_the_primary(self):
+        ajuste = AIModelSetting(provider='groq', fallback_provider='groq')
+        self.assertEqual(len(cadena_de_proveedores(ajuste)), 1)
 
 
 class FeedIngestionBudgetTests(TestCase):
@@ -669,9 +471,8 @@ class FeedIngestionBudgetTests(TestCase):
 
     @patch('my_news.services.EmbeddingService.check_redundancy', return_value=(False, None, 0.0))
     @patch('my_news.services.FeedService.initialize_vector_index', return_value=None)
-    @patch('my_news.services.FeedService.initialize_cerebras', return_value=object())
     @patch('my_news.services.FeedService.initialize_gemini', return_value=object())
-    @patch('my_news.services.FeedService.process_content_with_cerebras')
+    @patch('my_news.services.FeedService.process_news_content')
     @patch('my_news.services.feedparser.parse')
     @patch('my_news.services.requests.get')
     def test_ai_budget_does_not_drop_unprocessed_entries(
@@ -680,7 +481,6 @@ class FeedIngestionBudgetTests(TestCase):
         mock_parse,
         mock_process,
         _initialize_gemini,
-        _initialize_cerebras,
         _initialize_vector_index,
         _check_redundancy,
     ):

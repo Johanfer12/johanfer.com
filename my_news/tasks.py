@@ -229,7 +229,6 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
     Solo cuenta como procesada si se guardan cambios.
     """
     try:
-        cerebras_client = FeedService.initialize_cerebras()
         try:
             ai_model_setting = (
                 AIModelSetting.objects.first()
@@ -256,11 +255,9 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
 
         processed = 0
         for news in qs:
-            processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_cerebras(
+            processed_description, short_answer, ai_filter_reason = FeedService.process_news_content(
                 news.title,
                 news.description or '',
-                cerebras_client,
-                ai_model_name,
                 filter_instructions_text,
                 ai_model_setting=ai_model_setting,
             )

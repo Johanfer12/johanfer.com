@@ -97,7 +97,7 @@ CRON_LOG_PATH = os.getenv('CRON_LOG_PATH', str(BASE_DIR.parent / 'log_cron_books
 CRONTAB_COMMAND_SUFFIX = f'>> {CRON_LOG_PATH} 2>&1'
 # Se probó a añadir `--skip-checks` como sufijo y NO sirve de nada aquí: los
 # system checks cuestan 24 s porque cargan todos los modelos y el admin, lo que
-# arrastra el stack pesado (google-genai, Cerebras, bs4, feedparser, numpy), y
+# arrastra el stack pesado (google-genai, bs4, feedparser, numpy), y
 # `crontab run` tiene que importar esa misma pila para ejecutar la tarea. Medido:
 # la pasada tarda lo mismo con flag (55,0 s) que sin él (55,4 s).
 CRONJOBS = [
@@ -236,9 +236,12 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Cerebras API (para procesamiento de noticias). El modelo de IA activo se
-# configura en la BD (my_news.AIModelSetting, editable desde el admin).
-CEREBRAS_API_KEY = os.getenv('CEREBRAS_API_KEY')
+# Claves de los proveedores de IA. Gemini genera los resumenes (y los
+# embeddings) y Groq hace de respaldo cuando Gemini agota su cuota diaria; el
+# proveedor y el modelo activos se eligen en la BD (my_news.AIModelSetting,
+# editable desde el admin).
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')
 
 # Gemini Embeddings
 GEMINI_EMBEDDING_MODEL = os.getenv('GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001')

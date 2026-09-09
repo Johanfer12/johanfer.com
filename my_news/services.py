@@ -4,7 +4,7 @@ from django.utils import timezone
 import pytz
 from .models import News, FeedSource, FilterWord, AIFilterInstruction, AIModelSetting
 import re
-# google-genai y cerebras se importan dentro de las funciones que los usan:
+# google-genai y qdrant se importan dentro de las funciones que los usan:
 # entre los dos son ~10 s y ~155 MB en la Pi, y el proceso web que sirve el feed
 # no llama a ninguno. Solo los necesitan la ingesta y los comandos.
 import time
@@ -22,6 +22,12 @@ import logging
 from django.conf import settings
 from Bookshelf.html_sanitizer import sanitize_html
 from .ingestion_status import report_ok, report_paused
+from .ai_providers import (
+    AIProviderError,
+    DEFAULT_MODELS,
+    DEFAULT_PROVIDER,
+    cadena_de_proveedores,
+)
 
 try:
     from .vector_index import VectorIndexService, VectorIndexUnavailable
@@ -34,252 +40,8 @@ logger = logging.getLogger(__name__)
 
 # Modelo de IA por defecto para resúmenes; el valor activo vive en la BD
 # (AIModelSetting, editable desde el admin) y este es solo el fallback.
-DEFAULT_AI_MODEL = 'qwen-3.8-27b'
+DEFAULT_AI_MODEL = DEFAULT_MODELS[DEFAULT_PROVIDER]
 DEFAULT_AI_CONTENT_LIMIT = 10_000
-
-
-class CerebrasRateLimiter:
-    """Rate limiter simple por proceso para no superar cuotas de Cerebras."""
-
-    DEFAULT_RPM = 300
-    DEFAULT_TPM = 500_000
-    SAFETY_FACTOR = 0.75
-    SAFE_RPM_CAP = 250
-    MAX_RETRY_SLEEP_SECONDS = 90
-    MODEL_LIMITS = {
-        # Valores de arranque, solo para la primera petición de cada proceso:
-        # a partir de la primera respuesta mandan las cabeceras.
-        # Medidos en septiembre de 2026 leyendo las cabeceras x-ratelimit-* de
-        # una llamada real a cada modelo, con la cuenta en el plan gratuito.
-        # Los topes por minuto van aquí; los de hora y día quedan para las
-        # cabeceras, que es donde tightest_window los mira.
-        'qwen-3.8-27b': {'tpm': 150_000, 'rpm': 450},
-        'gpt-oss-120b': {'tpm': 30_000, 'rpm': 5},
-        'zai-glm-4.7': {'tpm': 500_000, 'rpm': 500},
-    }
-
-    def __init__(self):
-        self.window_seconds = 60.0
-        self.window_start = time.monotonic()
-        self.used_tokens = 0
-        self.used_requests = 0
-        self.remaining_tokens = None
-        self.remaining_requests = None
-        self.reset_tokens_at = None
-        self.reset_requests_at = None
-        self.limit_tokens = None
-        self.limit_requests = None
-        # Cuál de las tres ventanas (minuto/hora/día) es la que va más justa.
-        # Solo informativo, para que el aviso diga si lo agotado es la cuota
-        # del día o un pico pasajero del minuto.
-        self.tightest_tokens_window = None
-        self.tightest_requests_window = None
-
-    class Deferred(Exception):
-        """Señal interna: conviene pausar esta corrida y reintentar luego."""
-        pass
-
-    def get_limits(self, model_name):
-        model_limits = self.MODEL_LIMITS.get(model_name or '', {})
-        # Lo que diga la API manda sobre la tabla escrita a mano: los topes
-        # cambian al cambiar de plan y aquí se envejecen sin avisar. La tabla
-        # queda como valor de arranque, para la primera petición de un proceso
-        # nuevo, cuando todavía no ha llegado ninguna cabecera.
-        #
-        # Al valor medido no se le aplica el margen de seguridad: es exacto, y
-        # además viene acompañado del margen restante, que es un segundo freno.
-        # Recortar un 25% de un tope de 5 peticiones por minuto costaría casi la
-        # mitad del ritmo sin comprar ninguna garantía.
-        if self.limit_tokens:
-            safe_tpm = max(1, int(self.limit_tokens))
-        else:
-            tpm = int(model_limits.get('tpm') or self.DEFAULT_TPM)
-            safe_tpm = max(1, int(tpm * self.SAFETY_FACTOR))
-
-        if self.limit_requests:
-            safe_rpm = max(1, min(int(self.limit_requests), self.SAFE_RPM_CAP))
-        else:
-            rpm = int(model_limits.get('rpm') or self.DEFAULT_RPM)
-            safe_rpm = max(1, min(int(rpm * self.SAFETY_FACTOR), self.SAFE_RPM_CAP))
-
-        return safe_tpm, safe_rpm
-
-    def estimate_tokens(self, prompt, max_completion_tokens=1024):
-        prompt_text = prompt or ''
-        prompt_tokens = max(1, len(prompt_text) // 4)
-        return prompt_tokens + int(max_completion_tokens or 0)
-
-    def seconds_until_next_window(self):
-        elapsed = time.monotonic() - self.window_start
-        return max(0.0, self.window_seconds - elapsed)
-
-    def parse_reset_seconds(self, value):
-        if not value:
-            return None
-        text = str(value).strip().lower()
-        try:
-            return max(0.0, float(text.rstrip('s')))
-        except ValueError:
-            pass
-
-        match = re.fullmatch(r'(?:(\d+(?:\.\d+)?)m)?(?:(\d+(?:\.\d+)?)s)?', text)
-        if not match:
-            return None
-
-        minutes = float(match.group(1) or 0)
-        seconds = float(match.group(2) or 0)
-        return max(0.0, minutes * 60 + seconds)
-
-    def _read_header(self, headers, name):
-        if not headers:
-            return None
-        return headers.get(name) or headers.get(name.title()) or headers.get(name.lower())
-
-    def _read_number(self, headers, name):
-        raw = self._read_header(headers, name)
-        if raw is None:
-            return None
-        try:
-            return int(float(raw))
-        except (TypeError, ValueError):
-            return None
-
-    def tightest_window(self, headers, kind):
-        """Ventana más apretada de las tres que publica Cerebras.
-
-        Se miran minuto, hora y día y gana la que tenga menos margen. Antes solo
-        se leía la del minuto para los tokens, así que agotar la cuota diaria no
-        frenaba nada: se enviaba la petición y el límite se descubría al recibir
-        el error. Cada margen viaja junto a SU reset, porque son de duraciones
-        muy distintas — esperar el reset del minuto cuando lo agotado es el día
-        haría reintentar en vano durante horas.
-
-        Devuelve ``(margen, reset_en_segundos, ventana)`` o ``None``.
-        """
-        best = None
-        for window in ('minute', 'hour', 'day'):
-            remaining = self._read_number(headers, f'x-ratelimit-remaining-{kind}-{window}')
-            if remaining is None:
-                continue
-            reset = self.parse_reset_seconds(
-                self._read_header(headers, f'x-ratelimit-reset-{kind}-{window}')
-            )
-            if best is None or remaining < best[0]:
-                best = (remaining, reset, window)
-
-        if best is None:
-            # Formato antiguo, sin sufijo de ventana.
-            remaining = self._read_number(headers, f'x-ratelimit-remaining-{kind}')
-            if remaining is None:
-                return None
-            reset = self.parse_reset_seconds(
-                self._read_header(headers, f'x-ratelimit-reset-{kind}')
-            )
-            best = (remaining, reset, 'desconocida')
-
-        return best
-
-    def update_from_headers(self, headers):
-        now = time.monotonic()
-
-        tokens = self.tightest_window(headers, 'tokens')
-        if tokens is None:
-            self.remaining_tokens = None
-            self.reset_tokens_at = None
-            self.tightest_tokens_window = None
-        else:
-            remaining, reset, window = tokens
-            self.remaining_tokens = remaining
-            self.reset_tokens_at = now + reset if reset is not None else None
-            self.tightest_tokens_window = window
-
-        requests_left = self.tightest_window(headers, 'requests')
-        if requests_left is None:
-            self.remaining_requests = None
-            self.reset_requests_at = None
-            self.tightest_requests_window = None
-        else:
-            remaining, reset, window = requests_left
-            self.remaining_requests = remaining
-            self.reset_requests_at = now + reset if reset is not None else None
-            self.tightest_requests_window = window
-
-        # Los topes por minuto son los que alimentan el presupuesto local, que
-        # razona en ventanas de 60 s. Los de hora y día no sirven ahí: tomar el
-        # tope diario como si fuera por minuto permitiría una ráfaga enorme.
-        self.limit_tokens = (
-            self._read_number(headers, 'x-ratelimit-limit-tokens-minute')
-            or self._read_number(headers, 'x-ratelimit-limit-tokens')
-        )
-        self.limit_requests = (
-            self._read_number(headers, 'x-ratelimit-limit-requests-minute')
-            or self._read_number(headers, 'x-ratelimit-limit-requests')
-        )
-
-    def _sleep_or_defer(self, wait_time, reason):
-        if wait_time is None:
-            return
-        wait_time = max(0.0, float(wait_time))
-        if wait_time > self.MAX_RETRY_SLEEP_SECONDS:
-            raise CerebrasRateLimiter.Deferred(
-                f"Cerebras rate limit: {reason}; reset en {wait_time:.1f}s"
-            )
-        if wait_time > 0:
-            logger.warning(f"Rate limit Cerebras: esperando {wait_time:.1f}s ({reason}).")
-            time.sleep(wait_time)
-
-    def reset_if_needed(self):
-        if time.monotonic() - self.window_start >= self.window_seconds:
-            self.window_start = time.monotonic()
-            self.used_tokens = 0
-            self.used_requests = 0
-            if self.reset_requests_at is None:
-                self.remaining_requests = None
-            if self.reset_tokens_at is None:
-                self.remaining_tokens = None
-
-    def acquire(self, model_name, prompt, max_completion_tokens=1024):
-        estimated_tokens = self.estimate_tokens(prompt, max_completion_tokens)
-        token_limit, request_limit = self.get_limits(model_name)
-
-        while True:
-            self.reset_if_needed()
-            now = time.monotonic()
-            if self.remaining_requests is not None and self.remaining_requests <= 0:
-                wait_time = (self.reset_requests_at - now + 1) if self.reset_requests_at else self.seconds_until_next_window() + 1
-                self._sleep_or_defer(wait_time, 'sin requests disponibles')
-                self.remaining_requests = None
-                continue
-            if self.remaining_tokens is not None and estimated_tokens > self.remaining_tokens:
-                wait_time = (self.reset_tokens_at - now + 1) if self.reset_tokens_at else self.seconds_until_next_window() + 1
-                self._sleep_or_defer(wait_time, 'tokens insuficientes')
-                self.remaining_tokens = None
-                continue
-
-            would_exceed_tokens = self.used_tokens + estimated_tokens > token_limit
-            would_exceed_requests = self.used_requests + 1 > request_limit
-
-            if not would_exceed_tokens and not would_exceed_requests:
-                self.used_tokens += estimated_tokens
-                self.used_requests += 1
-                return estimated_tokens
-
-            if estimated_tokens > token_limit and self.used_tokens == 0 and self.used_requests == 0:
-                logger.warning(
-                    f"Rate limit Cerebras local: una petición estimada en {estimated_tokens} tokens "
-                    f"supera el límite seguro de {token_limit}; se enviará una sola petición."
-                )
-                self.used_tokens = estimated_tokens
-                self.used_requests = 1
-                return estimated_tokens
-
-            wait_time = self.seconds_until_next_window() + 1
-            logger.warning(
-                f"Rate limit Cerebras local: esperando {wait_time:.1f}s "
-                f"(modelo={model_name}, estimado={estimated_tokens} tokens, "
-                f"usados={self.used_tokens}/{token_limit})."
-            )
-            time.sleep(wait_time)
 
 
 class EmbeddingService:
@@ -499,13 +261,11 @@ class FeedService:
     }
 
     _GEMINI_CLIENT = None
-    _CEREBRAS_CLIENT = None
     # Último fallo al hablar con la IA, para poder explicarlo en el feed en vez
     # de dejar solo un feed que no crece. Lo consume fetch_and_save_news al
     # pausar la ingesta; se limpia en cuanto una llamada vuelve a funcionar.
     _LAST_AI_FAILURE = None
     _VECTOR_INDEX = None
-    _CEREBRAS_RATE_LIMITER = CerebrasRateLimiter()
 
     @staticmethod
     def initialize_gemini():
@@ -517,17 +277,6 @@ class FeedService:
             from google import genai
             FeedService._GEMINI_CLIENT = genai.Client(api_key=api_key)
         return FeedService._GEMINI_CLIENT
-
-    @staticmethod
-    def initialize_cerebras():
-        """Cliente Cerebras - para procesamiento de contenido (resúmenes)."""
-        if FeedService._CEREBRAS_CLIENT is None:
-            api_key = getattr(settings, 'CEREBRAS_API_KEY', None) or os.environ.get('CEREBRAS_API_KEY')
-            if not api_key:
-                raise ValueError("CEREBRAS_API_KEY no configurada. Agrégala en settings.py o como variable de entorno.")
-            from cerebras.cloud.sdk import Cerebras
-            FeedService._CEREBRAS_CLIENT = Cerebras(api_key=api_key)
-        return FeedService._CEREBRAS_CLIENT
 
     @staticmethod
     def initialize_vector_index():
@@ -609,125 +358,6 @@ class FeedService:
         FeedService._LAST_AI_FAILURE = None
 
     @staticmethod
-    def _classify_ai_error(error, retry_seconds=None):
-        """Traduce el error del proveedor a un motivo entendible.
-
-        El 402 es el caso que motivó esto: la cuenta se quedó sin cuota y desde
-        fuera se veía igual que un día sin noticias.
-        """
-        texto = str(error)
-        if '402' in texto or 'payment_required' in texto.lower():
-            return (
-                'quota',
-                'La cuenta de Cerebras se quedó sin cuota (error 402). '
-                'Hay que revisar el plan o la facturación.',
-            )
-        if '429' in texto or 'rate_limit' in texto.lower():
-            limitador = FeedService._CEREBRAS_RATE_LIMITER
-            ventana = limitador.tightest_tokens_window or limitador.tightest_requests_window
-            nombres = {'minute': 'del minuto', 'hour': 'de la hora', 'day': 'del día'}
-            detalle_ventana = nombres.get(ventana, '')
-            larga = retry_seconds is not None and retry_seconds > 600
-            if detalle_ventana:
-                return (
-                    'quota' if larga else 'rate_limit',
-                    f'Se agotó la cuota {detalle_ventana} de la IA.',
-                )
-            return ('rate_limit', 'La IA está limitando las peticiones por ritmo.')
-        return ('error', 'La IA devolvió un error al generar el resumen.')
-
-    @staticmethod
-    def _extract_retry_after_seconds(error):
-        response = getattr(error, 'response', None)
-        headers = getattr(response, 'headers', None)
-        if headers:
-            FeedService._CEREBRAS_RATE_LIMITER.update_from_headers(headers)
-            retry_after = headers.get('retry-after') or headers.get('Retry-After')
-            if retry_after:
-                try:
-                    return max(1, int(float(retry_after)))
-                except (TypeError, ValueError):
-                    pass
-            # ``update_from_headers`` ya dejó, para tokens y para peticiones, el
-            # margen de la ventana más apretada junto a su reset. Si alguno está
-            # agotado, ese reset es la espera real: puede ser medio minuto o
-            # puede ser hasta mañana, y quien decide qué hacer con una espera
-            # larga es quien llama (por encima de MAX_RETRY_SLEEP_SECONDS se
-            # pospone la noticia en vez de dormir).
-            limiter = FeedService._CEREBRAS_RATE_LIMITER
-            esperas = []
-            for restante, reset_en in (
-                (limiter.remaining_tokens, limiter.reset_tokens_at),
-                (limiter.remaining_requests, limiter.reset_requests_at),
-            ):
-                if restante is not None and restante <= 0 and reset_en is not None:
-                    esperas.append(reset_en - time.monotonic())
-            if esperas:
-                return max(1, int(max(esperas)) + 1)
-
-        match = re.search(r'try again in ([0-9.]+s|(?:[0-9.]+m)?[0-9.]+s)', str(error), re.IGNORECASE)
-        if match:
-            retry_seconds = FeedService._CEREBRAS_RATE_LIMITER.parse_reset_seconds(match.group(1))
-            if retry_seconds is not None:
-                return max(1, int(retry_seconds) + 1)
-
-        return None
-
-    @staticmethod
-    def _is_cerebras_json_validation_error(error):
-        error_text = str(error).lower()
-        return 'json_validate_failed' in error_text or 'failed to validate json' in error_text
-
-    # Modelos de razonamiento, con el presupuesto de salida que necesita cada
-    # uno. El bloque de razonamiento se cobra dentro de max_completion_tokens,
-    # así que un presupuesto corto no recorta el razonamiento: deja la
-    # respuesta truncada y SIN JSON. Medido en septiembre de 2026 sobre el
-    # prompt real, 8 noticias por 3 repeticiones: qwen razona largo (~3.600
-    # caracteres) y con 512 falla el 100% de las llamadas, con 2.048 el 12%
-    # y con 4.096 ninguna; gpt-oss razona breve (~650) y le sobra con 512.
-    # Al subir el presupuesto, subir también el techo medido aquí.
-    _REASONING_MODELS = {
-        'qwen-3.8-27b': {'effort': 'low', 'max_completion_tokens': 4096},
-        'gpt-oss-120b': {'effort': 'low', 'max_completion_tokens': 512},
-    }
-    # Sin razonamiento la respuesta son solo los tres campos del JSON: ~130
-    # tokens medidos, y 512 deja margen de sobra.
-    _DEFAULT_MAX_COMPLETION_TOKENS = 512
-
-    @staticmethod
-    def _reasoning_config(model_name, setting=None):
-        """Devuelve (reasoning_effort, max_completion_tokens) para el modelo.
-
-        Manda lo que haya elegido a mano en el admin (AIModelSetting); si está
-        en automático se usa la tabla de arriba. El esfuerzo es None en los
-        modelos que no razonan.
-
-        El recomendado es 'low': medido sobre el prompt real, 'medium' y 'high'
-        no mejoran el resumen —que es transcripción y sale igual— y en cambio
-        vuelven nulo el short_answer de titulares que sí esconden el dato.
-        """
-        config = FeedService._REASONING_MODELS.get(model_name) or {}
-        effort = config.get('effort')
-        max_tokens = config.get(
-            'max_completion_tokens', FeedService._DEFAULT_MAX_COMPLETION_TOKENS
-        )
-
-        elegido = (getattr(setting, 'reasoning_effort', '') or '').strip()
-        if elegido:
-            # 'none' es una elección explícita de no razonar, no un "sin dato".
-            effort = None if elegido == 'none' else elegido
-            # Sin presupuesto propio, el de la tabla puede no darle al esfuerzo
-            # elegido a mano: se sube al mínimo medido para que quepa.
-            if effort and not getattr(setting, 'max_completion_tokens', None):
-                max_tokens = max(max_tokens, AIModelSetting.MIN_REASONING_TOKENS)
-
-        propio = getattr(setting, 'max_completion_tokens', None)
-        if propio:
-            max_tokens = propio
-
-        return effort, max_tokens
-
-    @staticmethod
     def _parse_model_json(response_text):
         """Parsea JSON aunque el modelo haya agregado texto antes o despues."""
         def scan(text):
@@ -770,7 +400,7 @@ class FeedService:
         return cleaned or None
 
     @staticmethod
-    def prepare_content_for_cerebras(
+    def prepare_content_for_ai(
         title,
         original_content,
         content_limit=DEFAULT_AI_CONTENT_LIMIT,
@@ -819,160 +449,101 @@ class FeedService:
         return clean_text
 
     @staticmethod
-    def process_content_with_cerebras(
+    def _formatear_resumen(texto):
+        """Pasa el markdown ligero que a veces cuela el modelo a HTML seguro."""
+        html_text = re.sub(r'^\* (.+?)$', r' <strong>\1</strong>', texto, flags=re.MULTILINE)
+        html_text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html_text)
+        html_text = html_text.replace('\n\n', '<br><br>').replace('\n', '<br>')
+        return sanitize_html(html_text)
+
+    @staticmethod
+    def process_news_content(
         title,
         original_content,
-        cerebras_client,
-        model_name,
         filter_instructions_text,
-        max_retries=2,
         content_limit=DEFAULT_AI_CONTENT_LIMIT,
         ai_model_setting=None,
     ):
-        """Genera el resumen principal, la respuesta corta y determina si debe filtrarse por IA."""
+        """Genera resumen, respuesta corta y motivo de filtro para una noticia.
 
-        instructions_section = (filter_instructions_text or FeedService._DEFAULT_FILTER_INSTRUCTIONS)
-        base_content = FeedService.prepare_content_for_cerebras(title, original_content, content_limit=content_limit)
-        plain_content = base_content
+        Prueba los proveedores en orden (primario y respaldo) y solo salta al
+        siguiente cuando el fallo lo justifica: quedarse sin cuota si, una
+        peticion mal construida no, porque fallaria igual en el otro.
 
-        safe_title = (title or "").replace("{", "{{").replace("}", "}}")
-        safe_content = base_content.replace("{", "{{").replace("}", "}}")
-        safe_instructions = instructions_section.replace("{", "{{").replace("}", "}}")
+        Devuelve ``(resumen_html, short_answer, ai_filter)`` o ``(None, None,
+        None)`` si ninguno pudo, dejando el motivo en ``_LAST_AI_FAILURE`` para
+        que el feed lo explique.
+        """
+        instructions_section = filter_instructions_text or FeedService._DEFAULT_FILTER_INSTRUCTIONS
+        base_content = FeedService.prepare_content_for_ai(
+            title, original_content, content_limit=content_limit
+        )
 
+        # Las llaves se escapan porque el prompt se arma con str.format y un
+        # titular con '{' reventaria la plantilla.
         prompt = FeedService._PROMPT_TEMPLATE.format(
-            title=safe_title,
-            content=safe_content,
-            instructions=safe_instructions
+            title=(title or '').replace('{', '{{').replace('}', '}}'),
+            content=base_content.replace('{', '{{').replace('}', '}}'),
+            instructions=instructions_section.replace('{', '{{').replace('}', '}}'),
         )
-        reasoning_effort, max_completion_tokens = FeedService._reasoning_config(
-            model_name, ai_model_setting
-        )
-        response_format_mode = "json_schema"
 
-        for attempt in range(max_retries):
+        ultimo_fallo = None
+        for proveedor in cadena_de_proveedores(ai_model_setting):
             try:
-                FeedService._CEREBRAS_RATE_LIMITER.acquire(model_name, prompt, max_completion_tokens)
-                request_kwargs = {
-                    "model": model_name,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "Eres un asistente que analiza noticias y responde ÚNICAMENTE con JSON válido."
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    "temperature": 0.3,
-                    "max_completion_tokens": max_completion_tokens,
-                }
-                if reasoning_effort:
-                    request_kwargs["reasoning_effort"] = reasoning_effort
-                if response_format_mode == "json_schema":
-                    request_kwargs["response_format"] = FeedService._NEWS_ANALYSIS_RESPONSE_FORMAT
-                elif response_format_mode == "json_object":
-                    request_kwargs["response_format"] = {"type": "json_object"}
+                respuesta = proveedor.complete(prompt)
+            except AIProviderError as e:
+                ultimo_fallo = e
+                logger.warning('%s: %s', proveedor.nombre, e.reason)
+                if not e.puede_reintentar_otro:
+                    break
+                continue
+            except Exception as e:  # noqa: BLE001 - un proveedor no debe tumbar la pasada
+                ultimo_fallo = AIProviderError(
+                    'error', f'{proveedor.nombre} falló de forma inesperada.', str(e)
+                )
+                logger.exception('Fallo inesperado en %s', proveedor.nombre)
+                continue
 
-                completions = cerebras_client.chat.completions
-                raw_completions = getattr(completions, 'with_raw_response', None)
-                if raw_completions is not None:
-                    raw_response = raw_completions.create(**request_kwargs)
-                    FeedService._CEREBRAS_RATE_LIMITER.update_from_headers(
-                        getattr(raw_response, 'headers', None)
-                    )
-                    response = raw_response.parse()
-                else:
-                    response = completions.create(**request_kwargs)
-                response_text = response.choices[0].message.content or ''
-                if not response_text.strip():
-                    logger.warning(f"Cerebras devolvió contenido vacío (intento {attempt + 1}/{max_retries}).")
-                    if attempt == max_retries - 1:
-                        return None, None, None
-                    time.sleep(5)
-                    continue
-                try:
-                    result_json = FeedService._parse_model_json(response_text)
-                    summary_text = FeedService._clean_optional_text(result_json.get('summary'))
-                    short_answer = FeedService._clean_optional_text(result_json.get('short_answer'))
-                    ai_filter_reason = FeedService._clean_optional_text(result_json.get('ai_filter'))
+            resultado = FeedService._interpretar_respuesta(respuesta, base_content, proveedor)
+            if resultado is not None:
+                FeedService._clear_ai_failure()
+                return resultado
+            ultimo_fallo = AIProviderError(
+                'error', f'{proveedor.nombre} no devolvió un JSON utilizable.', respuesta[:400]
+            )
 
-                    if not summary_text:
-                        if plain_content:
-                            summary_text = plain_content[:600]
-                        elif short_answer:
-                            summary_text = short_answer
-                        else:
-                            logger.warning("JSON recibido no contiene 'summary' ni 'short_answer' válidos.")
-                            continue
-
-                    processed_summary = summary_text
-                    processed_summary = re.sub(r'^\* (.+?)$', r' <strong>\1</strong>', processed_summary, flags=re.MULTILINE)
-                    processed_summary = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', processed_summary)
-                    processed_summary = processed_summary.replace('\n\n', '<br><br>').replace('\n', '<br>')
-                    processed_summary = processed_summary.replace('', '<br>')
-
-                    FeedService._clear_ai_failure()
-                    return sanitize_html(processed_summary), short_answer, ai_filter_reason
-
-                except json.JSONDecodeError as json_e:
-                    logger.warning(f"Error decodificando JSON de Cerebras (intento {attempt + 1}): {json_e}")
-                    logger.debug(f"Texto recibido: {response_text[:200]}...")
-                    if attempt == max_retries - 1:
-                        logger.warning("Fallo de JSON en último intento; no se guardará respuesta cruda del modelo.")
-                        return None, None, None
-                    time.sleep(5)
-                    continue
-
-            except Exception as e:
-                error_str = str(e)
-                if isinstance(e, CerebrasRateLimiter.Deferred):
-                    logger.warning(str(e))
-                    kind, reason = FeedService._classify_ai_error(e)
-                    FeedService._note_ai_failure(kind, reason, error_str)
-                    return None, None, None
-                if FeedService._is_cerebras_json_validation_error(e) and response_format_mode:
-                    if response_format_mode == "json_schema":
-                        response_format_mode = "json_object"
-                        logger.warning("Cerebras rechazó json_schema; reintentando con json_object.")
-                    else:
-                        response_format_mode = None
-                        logger.warning("Cerebras rechazó el modo JSON estricto; reintentando sin response_format.")
-                    continue
-                if "429" in error_str or "rate_limit" in error_str.lower():
-                    retry_after = FeedService._extract_retry_after_seconds(e)
-                    wait_time = retry_after or max(FeedService._CEREBRAS_RATE_LIMITER.seconds_until_next_window() + 1, 120)
-                    if wait_time > FeedService._CEREBRAS_RATE_LIMITER.MAX_RETRY_SLEEP_SECONDS:
-                        logger.warning(
-                            f"Cerebras pidió esperar {wait_time}s por rate limit; "
-                            "se pospone esta noticia para una próxima actualización."
-                        )
-                        kind, reason = FeedService._classify_ai_error(e, wait_time)
-                        FeedService._note_ai_failure(kind, reason, error_str, wait_time)
-                        return None, None, None
-                    if attempt >= max_retries - 1:
-                        logger.warning(
-                            f"Límite de peticiones Cerebras en último intento; "
-                            f"se pospone esta noticia {wait_time}s para una próxima actualización."
-                        )
-                        kind, reason = FeedService._classify_ai_error(e, wait_time)
-                        FeedService._note_ai_failure(kind, reason, error_str, wait_time)
-                        return None, None, None
-                    logger.warning(f"Límite de peticiones Cerebras (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
-                    time.sleep(wait_time)
-                    continue
-                elif "500" in error_str and attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 5
-                    logger.warning(f"Error interno de Cerebras (500) (intento {attempt + 1}/{max_retries}). Esperando {wait_time} segundos...")
-                    time.sleep(wait_time)
-                    continue
-                logger.exception("Error procesando contenido con Cerebras: %s", error_str)
-                kind, reason = FeedService._classify_ai_error(e)
-                FeedService._note_ai_failure(kind, reason, error_str)
-                return None, None, None
-
-        logger.warning("Se agotaron los reintentos para procesar contenido con Cerebras.")
+        if ultimo_fallo is not None:
+            FeedService._note_ai_failure(
+                ultimo_fallo.kind, ultimo_fallo.reason,
+                ultimo_fallo.detail, ultimo_fallo.retry_seconds,
+            )
         return None, None, None
+
+    @staticmethod
+    def _interpretar_respuesta(respuesta, base_content, proveedor):
+        """Convierte el texto del modelo en la terna final, o None si no vale."""
+        if not (respuesta or '').strip():
+            logger.warning('%s devolvió contenido vacío.', proveedor.nombre)
+            return None
+        try:
+            datos = FeedService._parse_model_json(respuesta)
+        except json.JSONDecodeError as e:
+            logger.warning('JSON inválido de %s: %s', proveedor.nombre, e)
+            return None
+
+        summary = FeedService._clean_optional_text(datos.get('summary'))
+        short_answer = FeedService._clean_optional_text(datos.get('short_answer'))
+        ai_filter = FeedService._clean_optional_text(datos.get('ai_filter'))
+
+        if not summary:
+            # Sin resumen la noticia se queda sin cuerpo: antes de descartarla
+            # se cae al texto original recortado, que es peor pero es algo.
+            summary = base_content[:600] or short_answer
+        if not summary:
+            logger.warning('%s no devolvió summary ni short_answer.', proveedor.nombre)
+            return None
+
+        return FeedService._formatear_resumen(summary), short_answer, ai_filter
 
     @staticmethod
     def extract_image_from_description(description):
@@ -1074,10 +645,9 @@ class FeedService:
         ai_failure = None
 
         logger.info("Inicializando modelos...")
-        # Cliente Gemini solo para embeddings
+        # Gemini solo para embeddings: los resúmenes los pide
+        # process_news_content al proveedor que toque.
         gemini_client = FeedService.initialize_gemini()
-        # Cliente Cerebras para procesamiento de contenido (resúmenes)
-        cerebras_client = FeedService.initialize_cerebras()
         vector_index = FeedService.initialize_vector_index()
 
         # Obtener modelo de IA desde el admin (base de datos) o usar default
@@ -1100,7 +670,7 @@ class FeedService:
         )
 
         sources = list(FeedSource.objects.filter(active=True))
-        logger.info(f"Procesando {len(sources)} fuentes activas con Cerebras ({ai_model_name})")
+        logger.info(f"Procesando {len(sources)} fuentes activas con {ai_model_name}")
         new_articles_count = 0
         
         # Calcular la fecha límite (15 días atrás)
@@ -1218,7 +788,7 @@ class FeedService:
                         guid=guid,
                         title=entry.title[:500],
                         # Fila oculta: guardar solo texto plano recortado
-                        description=FeedService.prepare_content_for_cerebras(
+                        description=FeedService.prepare_content_for_ai(
                             entry.title, entry.get('description', '') or '', content_limit=2000
                         ),
                         link=entry.link,
@@ -1283,7 +853,7 @@ class FeedService:
                         original_description = block_value
 
             # Texto plano para filtrado y embeddings (sin markup, sin truncar)
-            plain_description = FeedService.prepare_content_for_cerebras(
+            plain_description = FeedService.prepare_content_for_ai(
                 entry.title, original_description, content_limit=None
             )
 
@@ -1338,7 +908,7 @@ class FeedService:
                     source.deep_search or len(full_content['text']) > len(plain_description)
                 ):
                     original_description = full_content['text']
-                    plain_description = FeedService.prepare_content_for_cerebras(
+                    plain_description = FeedService.prepare_content_for_ai(
                         entry.title, original_description, content_limit=None
                     )
                     # El mismo límite amplio cubre tanto el RSS como el artículo
@@ -1411,12 +981,10 @@ class FeedService:
 
             ai_attempts += 1
 
-            # Si no se filtró por palabra clave ni es redundante, procesar con IA (Cerebras)
-            processed_description, short_answer, ai_filter_reason = FeedService.process_content_with_cerebras(
+            # Si no se filtró por palabra clave ni es redundante, procesar con IA
+            processed_description, short_answer, ai_filter_reason = FeedService.process_news_content(
                 entry.title,
                 original_description,
-                cerebras_client,
-                ai_model_name,
                 filter_instructions_text,
                 content_limit=ai_content_limit,
                 ai_model_setting=ai_model_setting,
@@ -1425,7 +993,7 @@ class FeedService:
                 ai_was_processed = True
             else:
                 logger.warning(
-                    "Cerebras no generó resumen; se pausa la ingesta para reintentar luego."
+                    "La IA no generó resumen; se pausa la ingesta para reintentar luego."
                 )
                 ai_failure = FeedService._LAST_AI_FAILURE or {
                     'kind': 'error',

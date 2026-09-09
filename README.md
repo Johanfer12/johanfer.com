@@ -87,11 +87,12 @@ Esta aplicación permite recopilar, filtrar y visualizar noticias de diferentes 
   - Filtrado automático basado en palabras clave personalizables.
   - Filtrado inteligente mediante instrucciones de IA configurables.
   - Detección de noticias redundantes mediante análisis de similitud vectorial (embeddings).
-- Procesamiento con IA (Cerebras para resúmenes, Gemini para embeddings):
+- Procesamiento con IA (Gemini para resúmenes y embeddings, Groq de respaldo):
   - Generación de resúmenes concisos y objetivos de noticias.
   - Extracción de respuestas cortas para titulares tipo pregunta o clickbait.
   - Análisis automático de relevancia y calidad del contenido.
-  - El modelo activo se configura en la BD (AIModelSetting, editable desde el admin) con nombre neutral de proveedor.
+  - El proveedor y el modelo activos se configuran en la BD (AIModelSetting, editable desde el admin).
+  - Si el proveedor principal se queda sin cuota, el de respaldo continúa en vez de pausar la ingesta.
 - Capacidad de extracción profunda de contenido:
   - Recuperación del texto completo de artículos cuando es necesario.
   - Extracción de imágenes de alta calidad de los artículos originales.

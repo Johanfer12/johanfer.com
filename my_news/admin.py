@@ -93,8 +93,11 @@ class AIFilterInstructionAdmin(ImportExportModelAdmin):
 
 @admin.register(AIModelSetting)
 class AIModelSettingAdmin(admin.ModelAdmin):
-    list_display = ('model_name', 'reasoning_effort', 'max_completion_tokens', 'updated_at')
-    fields = ('model_name', 'reasoning_effort', 'max_completion_tokens')
+    list_display = ('provider', 'model_name', 'fallback_provider', 'updated_at')
+    fields = (
+        'provider', 'model_name', 'fallback_provider',
+        'reasoning_effort', 'max_completion_tokens',
+    )
 
     def has_add_permission(self, request):
         return not AIModelSetting.objects.exists()
