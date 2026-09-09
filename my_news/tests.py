@@ -16,6 +16,7 @@ from .models import AIModelSetting, FeedSource, News
 from .ai_providers import (
     AIProviderError,
     AIRateLimiter,
+    GeminiProvider,
     GroqProvider,
     _espera_por_cabeceras,
     _segundos_de_retry,
@@ -1086,3 +1087,35 @@ class NewsCardSingleSourceTests(TestCase):
         )
 
         self.assertIn('news-card-container', response.json()['card']['html'])
+
+class GeminiThinkingTests(SimpleTestCase):
+    """El nivel de pensamiento solo se manda si se ha elegido uno."""
+
+    def _config_enviada(self, ajuste):
+        capturado = {}
+
+        class ModelosFalsos:
+            def generate_content(self, model, contents, config):
+                capturado['config'] = config
+                return SimpleNamespace(candidates=[], text=RESPUESTA_OK)
+
+        cliente = SimpleNamespace(models=ModelosFalsos())
+        with patch.object(GeminiProvider, 'cliente', classmethod(lambda cls: cliente)):
+            GeminiProvider(setting=ajuste).complete('prompt')
+        return capturado['config']
+
+    def test_no_thinking_config_is_sent_by_default(self):
+        """Sin elegir nivel, no se toca: el modelo trae el suyo."""
+        config = self._config_enviada(AIModelSetting())
+        self.assertIsNone(getattr(config, 'thinking_config', None))
+
+    def test_the_chosen_level_reaches_the_request(self):
+        config = self._config_enviada(AIModelSetting(thinking_level='HIGH'))
+        self.assertEqual(config.thinking_config.thinking_level, 'HIGH')
+
+    def test_groq_ignores_the_thinking_level(self):
+        """thinking_level es de Gemini; el razonamiento de Groq va aparte."""
+        self.assertEqual(
+            razonamiento_de('openai/gpt-oss-120b', AIModelSetting(thinking_level='HIGH')),
+            ('low', 512),
+        )

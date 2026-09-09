@@ -180,6 +180,19 @@ class AIModelSetting(models.Model):
             "de pausar la ingesta. Usa su modelo por defecto. Vacío lo desactiva."
         ),
     )
+    thinking_level = models.CharField(
+        max_length=10,
+        blank=True,
+        default='',
+        choices=ai_providers.THINKING_CHOICES,
+        verbose_name="Pensamiento (Gemini)",
+        help_text=(
+            "Solo afecta a Gemini. Medido en gemini-3.5-flash-lite: de los "
+            "cuatro niveles solo 'Alto' piensa de verdad; los demás dan cero "
+            "tokens de pensamiento y no cambian nada. 'Alto' cuesta el triple "
+            "de tokens y ~19 s por noticia en vez de 1,4 s."
+        ),
+    )
     reasoning_effort = models.CharField(
         max_length=10,
         blank=True,

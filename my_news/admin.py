@@ -96,7 +96,7 @@ class AIModelSettingAdmin(admin.ModelAdmin):
     list_display = ('provider', 'model_name', 'fallback_provider', 'updated_at')
     fields = (
         'provider', 'model_name', 'fallback_provider',
-        'reasoning_effort', 'max_completion_tokens',
+        'thinking_level', 'reasoning_effort', 'max_completion_tokens',
     )
 
     def has_add_permission(self, request):

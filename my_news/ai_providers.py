@@ -59,6 +59,16 @@ DEFAULT_MODELS = {
 DEFAULT_PROVIDER = GEMINI
 DEFAULT_FALLBACK = GROQ
 
+# Niveles de pensamiento de Gemini. Vacio = lo que traiga el modelo por defecto.
+# En gemini-3.5-flash-lite solo HIGH engancha de verdad (ver GeminiProvider).
+THINKING_CHOICES = [
+    ('', 'Por defecto del modelo'),
+    ('MINIMAL', 'Mínimo'),
+    ('LOW', 'Bajo'),
+    ('MEDIUM', 'Medio'),
+    ('HIGH', 'Alto (el único que piensa en Flash Lite)'),
+]
+
 
 class AIProviderError(Exception):
     """Fallo de un proveedor, ya traducido a algo que el feed pueda contar.
@@ -387,10 +397,13 @@ class BaseProvider:
 class GeminiProvider(BaseProvider):
     """Google AI Studio. Cliente compartido con los embeddings.
 
-    Medido: ``gemini-3.5-flash-lite`` no gasta tokens de razonamiento
-    (``thoughts_token_count`` = 0), asi que no hay ``thinking_config`` que
-    ajustar; ponerlo a ``thinking_budget=0`` ademas da 400 en los modelos 3.x,
-    que usan ``thinking_level``.
+    Sobre el pensamiento en ``gemini-3.5-flash-lite``, medido en septiembre de
+    2026: de los cuatro niveles, **solo HIGH piensa de verdad**. Por defecto,
+    MINIMAL, LOW y MEDIUM dan ``thoughts_token_count`` = 0 y el total cuadra
+    exactamente con entrada mas salida, o sea que son no-ops. HIGH si engancha:
+    2.290 tokens de pensamiento, el triple de coste y ~19 s por noticia.
+    ``thinking_budget=0`` no vale: da 400 en los modelos 3.x, que usan
+    ``thinking_level``.
     """
 
     nombre = GEMINI
@@ -409,15 +422,20 @@ class GeminiProvider(BaseProvider):
     def complete(self, prompt):
         from google.genai import types
 
+        opciones = dict(
+            response_mime_type='application/json',
+            response_schema=GEMINI_RESPONSE_SCHEMA,
+            temperature=0.3,
+        )
+        nivel = (getattr(self.setting, 'thinking_level', '') or '').strip()
+        if nivel:
+            opciones['thinking_config'] = types.ThinkingConfig(thinking_level=nivel)
+
         try:
             respuesta = self.cliente().models.generate_content(
                 model=self.model_name,
                 contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type='application/json',
-                    response_schema=GEMINI_RESPONSE_SCHEMA,
-                    temperature=0.3,
-                ),
+                config=types.GenerateContentConfig(**opciones),
             )
         except Exception as e:
             raise _traducir_error_gemini(e) from e
