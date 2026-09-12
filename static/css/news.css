@@ -144,7 +144,16 @@ html.instagram-webview .news-card-container {
     -webkit-backface-visibility: hidden;
     border-radius: var(--news-card-radius);
     overflow: hidden;
-    border: 1px solid rgba(198, 214, 242, 0.16);
+    /* El filo va como sombra interior y NO como `border`.
+     *
+     * Cada cara se rasteriza en su propia capa para poder girar (perspective
+     * en el contenedor, preserve-3d en la tarjeta, backface-visibility aqui), y
+     * en esa capa el recorte redondeado se come el borde de un pixel justo en
+     * las curvas: los tramos rectos conservaban la linea y las esquinas la
+     * perdian, asi que el canto inferior parecia cortado. El borde se pinta por
+     * fuera del recorte y siempre pierde; una sombra interior se pinta dentro
+     * de la caja y sigue el radio exacto. */
+    box-shadow: inset 0 0 0 1px rgba(198, 214, 242, 0.16);
 }
 
 .card-front {
@@ -189,11 +198,19 @@ html.instagram-webview .news-card-container {
     flex: 0 0 auto;
     font-size: var(--news-title-size);
     font-weight: 700;
-    margin: 10px 15px 5px 15px;
+    /* El relleno es sitio para la sombra y el margen lo descuenta, asi que el
+     * texto no se mueve: la variante recortada de abajo lleva overflow:hidden
+     * para la elipsis, y sin este hueco la sombra se cortaria contra la caja.
+     * Los 15px de margen original se reparten entre margen y relleno. */
+    padding: 0 6px 10px;
+    margin: 10px 9px -5px 9px;
     color: #f2f5fb;
     line-height: 1.28;
     word-break: normal;
     overflow-wrap: anywhere;
+    text-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.75),
+        0 4px 10px rgba(0, 0, 0, 0.5);
 }
 
 .news-title.is-title-clamped {
@@ -202,6 +219,13 @@ html.instagram-webview .news-card-container {
     -webkit-box-orient: vertical;
     -webkit-line-clamp: var(--title-lines, 4);
     line-clamp: var(--title-lines, 4);
+    /* El recorte por lineas NO admite el truco del relleno inferior: el hueco
+     * que se abre por debajo de la elipsis deja asomar media linea siguiente,
+     * y se ve como un titulo cortado por la mitad. Aqui la sombra se queda
+     * corta a proposito, dentro del interlineado, que es lo unico que cabe. */
+    padding-bottom: 0;
+    margin-bottom: 5px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
 }
 
 .news-title,
