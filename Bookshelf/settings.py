@@ -36,9 +36,13 @@ VISITS_ALLOW_LOCAL_WITHOUT_LOGIN = os.getenv(
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'raspberrypi.local', 'www.johanfer.com', 'johanfer.com', '192.168.1.7']
 
-SITE_NAME = 'Mi Bitácora'
-SITE_TAGLINE = 'Lo que leo, veo, escucho y descubro.'
-SITE_META_DESCRIPTION = 'Mi Bitácora: lo que leo, escucho y descubro en un solo lugar.'
+SITE_NAME = 'Rincón de Johan'
+# Etiqueta del icono en la pantalla de inicio. Va aparte porque ahí el nombre
+# completo no cabe: Android corta alrededor de los 12 caracteres y iOS aún
+# antes, así que sin esto el icono se vería como "Rincón de Jo...".
+SITE_SHORT_NAME = 'Rincón'
+SITE_TAGLINE = 'Un poco de mi mundo...'
+SITE_META_DESCRIPTION = 'Mis libros, música, series y noticias en un solo lugar.'
 
 
 # Application definition

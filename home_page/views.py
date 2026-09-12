@@ -375,7 +375,7 @@ def manifest_webmanifest(request):
     manifest = {
         'id': '/',
         'name': settings.SITE_NAME,
-        'short_name': settings.SITE_NAME,
+        'short_name': settings.SITE_SHORT_NAME,
         'description': settings.SITE_META_DESCRIPTION,
         'lang': 'es',
         'dir': 'ltr',
@@ -392,9 +392,9 @@ def manifest_webmanifest(request):
             dict(icon('pwa-icon-maskable-512.png', 512), purpose='maskable'),
         ],
         'shortcuts': [
-            {'name': 'Mis Noticias', 'url': '/noticias/', 'icons': shortcut_icon},
-            {'name': 'Mis Libros', 'url': reverse('home_page:bookshelf'), 'icons': shortcut_icon},
-            {'name': 'Mi TV', 'url': '/viendo/', 'icons': shortcut_icon},
+            {'name': 'Noticias', 'url': '/noticias/', 'icons': shortcut_icon},
+            {'name': 'Libros', 'url': reverse('home_page:bookshelf'), 'icons': shortcut_icon},
+            {'name': 'TV', 'url': '/viendo/', 'icons': shortcut_icon},
         ],
     }
     response = JsonResponse(manifest, json_dumps_params={'ensure_ascii': False, 'indent': 2})

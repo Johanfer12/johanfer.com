@@ -573,7 +573,7 @@ class DownloadAsWebpTests(TestCase):
 class SitemapTests(TestCase):
     """El sitemap tiene que listar todas las secciones publicas.
 
-    Se olvidaba Mi TV: estaba en el menu y en robots.txt como rastreable, pero
+    Se olvidaba la seccion TV: estaba en el menu y en robots.txt como rastreable, pero
     no en el sitemap, asi que era la unica seccion que los buscadores tenian que
     encontrar por su cuenta.
     """

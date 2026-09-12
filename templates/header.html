@@ -5,13 +5,13 @@
     <div class="header-title">
       <h1>
         {% if request.path == '/bookshelf/' %}
-          Mis Libros
+          Libros
         {% elif request.path|slice:":8" == '/viendo/' %}
-          Mi TV
+          TV
         {% elif request.path == '/visitas/' %}
           Visitas
         {% elif request.path|slice:":9" == '/spotify/' %}
-          Mi Música
+          Música
         {% elif request.path == '/about/' %}
           Acerca de
         {% elif request.path|slice:":9" == '/noticias' %}
@@ -20,10 +20,10 @@
           {% elif request.path|slice:":24" == '/noticias/configuracion/' %}
             Configuración del feed
           {% else %}
-            Mis Noticias
+            Noticias
           {% endif %}
         {% else %}
-          Mis Libros
+          Libros
         {% endif %}
       </h1>
       {% if request.path == '/bookshelf/' %}

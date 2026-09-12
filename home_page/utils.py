@@ -35,7 +35,7 @@ def convert_to_webp(source_path, destination_path):
 def download_as_webp(url, file_path, *, error_label):
     """Descarga una imagen y la deja convertida a webp en `file_path`.
 
-    La usan las portadas de libros y las caratulas de Mi TV, que hacian lo
+    La usan las portadas de libros y las caratulas de la seccion TV, que hacian lo
     mismo con dos copias del mismo try/finally. El temporal se borra pase lo
     que pase, y un fallo se registra sin tumbar la sincronizacion entera: una
     imagen que falta se vuelve a intentar en la siguiente pasada.
