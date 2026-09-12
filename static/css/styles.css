@@ -776,6 +776,30 @@ a:hover {
     text-shadow: 0 0 8px rgba(240, 212, 150, 0.35);
 }
 
+@media (min-width: 768px) {
+    /* En escritorio la ficha es apaisada: mas ancha y mas baja, y el hueco que
+     * se gana va entero a la portada.
+     *
+     * Manda el ANCHO de la portada y el alto se deduce de su proporcion, nunca
+     * al reves. Atarla al alto disponible parecia mas listo —llenaba la ficha
+     * entera— pero las portadas no comparten proporcion, asi que la imagen se
+     * estiraba, desbordaba su carril y se comia el texto de al lado.
+     *
+     * El tope de 315px no es redondo: medidas las 281 portadas, la mas
+     * alargada es 1,76 de alto por ancho (la mediana es 1,53). 315 x 1,76 = 554
+     * y el hueco util de la ficha es 558, asi que hasta la peor entra sin que el
+     * modal la recorte. Si se sube el tope de ancho hay que subir tambien el de
+     * alto, y al reves. */
+    .book-modal-content {
+        width: min(1180px, 94vw);
+        max-height: min(calc(100vh - 32px), 600px);
+    }
+
+    .book-modal-cover {
+        flex: 0 0 clamp(280px, 24vw, 315px);
+    }
+}
+
 @media (max-width: 767px) {
     /* En móvil la portada ya se vio en el grid: prioriza el texto. */
     .book-modal-cover {
