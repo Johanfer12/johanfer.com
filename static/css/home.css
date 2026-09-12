@@ -62,10 +62,17 @@ body::after {
 .content-container {
     position: relative;
     overflow: hidden;
-    background: linear-gradient(155deg, rgba(255, 255, 255, 0.2), var(--glass-bg-soft) 18%, var(--glass-bg) 68%);
-    border: 1px solid var(--glass-border);
-    backdrop-filter: blur(22px) saturate(120%);
-    -webkit-backdrop-filter: blur(22px) saturate(120%);
+    /* Cristal esmerilado. Cuatro piezas, y ninguna sobra:
+     *  - el fondo baja de opacidad para que se vea el nebulosa de detras,
+     *  - el desenfoque sube y anade brillo, que es lo que vuelve lechoso lo que
+     *    hay debajo en vez de solo borroso,
+     *  - el grano de ::after da la micro-textura del esmerilado,
+     *  - los dos inset del box-shadow hacen el canto: claro arriba, oscuro
+     *    abajo, que es como se lee el grosor del vidrio. */
+    background: linear-gradient(155deg, rgba(255, 255, 255, 0.22), rgba(42, 38, 84, 0.34) 18%, rgba(18, 30, 62, 0.44) 68%);
+    border: 1px solid rgba(207, 220, 241, 0.34);
+    backdrop-filter: blur(30px) saturate(190%) brightness(0.86);
+    -webkit-backdrop-filter: blur(30px) saturate(190%) brightness(0.86);
     padding: 46px;
     border-radius: 28px;
     /* Dos capas: una corta y oscura que hace de contacto y otra ancha y difusa
@@ -74,7 +81,9 @@ body::after {
     box-shadow:
         0 6px 14px rgba(2, 8, 18, 0.5),
         0 44px 96px rgba(2, 8, 18, 0.72),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        inset 0 1px 0 rgba(255, 255, 255, 0.42),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+        inset 0 -24px 48px rgba(2, 8, 18, 0.22);
     text-align: center;
     width: min(880px, 90vw);
 }
@@ -94,9 +103,18 @@ body::after {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background:
-        radial-gradient(120% 120% at 100% 0%, rgba(214, 188, 143, 0.1), transparent 36%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 26%);
+    /* El grano es una turbulencia SVG en linea, no una imagen: no viaja por red,
+     * no hay que recopilarla con collectstatic y escala sin pixelarse.
+     * Ajustado para que sea fino y no aspero: mas frecuencia (el punto es mas
+     * pequeno), UNA sola octava (varias apelmazan el ruido en grumos), medio
+     * pixel de desenfoque y baja opacidad. Se tiene que intuir, no ver. */
+    background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='1' stitchTiles='stitch'/%3E%3CfeGaussianBlur stdDeviation='0.35'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E"),
+        radial-gradient(120% 120% at 100% 0%, rgba(214, 188, 143, 0.12), transparent 36%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 26%);
+    background-size: 120px 120px, auto, auto;
+    opacity: 0.3;
+    mix-blend-mode: soft-light;
 }
 
 .welcome-text {
@@ -109,9 +127,9 @@ body::after {
     letter-spacing: 0.015em;
     text-wrap: balance;
     text-shadow:
-        0 3px 3px rgba(0, 0, 0, 0.75),
-        0 12px 18px rgba(0, 0, 0, 0.6),
-        0 26px 44px rgba(0, 0, 0, 0.7);
+        0 3px 3px rgba(0, 0, 0, 0.88),
+        0 12px 18px rgba(0, 0, 0, 0.72),
+        0 28px 46px rgba(0, 0, 0, 0.78);
 }
 
 .welcome-text p {
@@ -164,10 +182,10 @@ body::after {
     /* Tres capas sobre un trazo fino: el contacto casi sin desenfoque es el que
      * despega el icono del cristal, los otros dos dan el volumen. */
     filter:
-        opacity(0.96)
-        drop-shadow(0 3px 2px rgba(0, 0, 0, 0.75))
-        drop-shadow(0 10px 12px rgba(0, 0, 0, 0.6))
-        drop-shadow(0 24px 36px rgba(0, 0, 0, 0.7));
+        opacity(0.97)
+        drop-shadow(0 4px 3px rgba(0, 0, 0, 0.92))
+        drop-shadow(0 12px 14px rgba(0, 0, 0, 0.78))
+        drop-shadow(0 30px 42px rgba(0, 0, 0, 0.82));
 }
 
 .main-icon:hover {
@@ -178,9 +196,9 @@ body::after {
     transform: scale(1.05);
     filter:
         opacity(1)
-        drop-shadow(0 5px 3px rgba(0, 0, 0, 0.78))
-        drop-shadow(0 16px 18px rgba(0, 0, 0, 0.65))
-        drop-shadow(0 34px 50px rgba(0, 0, 0, 0.75));
+        drop-shadow(0 6px 4px rgba(0, 0, 0, 0.94))
+        drop-shadow(0 18px 20px rgba(0, 0, 0, 0.8))
+        drop-shadow(0 40px 56px rgba(0, 0, 0, 0.85));
 }
 
 .main-icon h2 {
@@ -191,9 +209,9 @@ body::after {
     letter-spacing: 0.015em;
     text-wrap: balance;
     text-shadow:
-        0 2px 2px rgba(0, 0, 0, 0.8),
-        0 8px 12px rgba(0, 0, 0, 0.6),
-        0 18px 30px rgba(0, 0, 0, 0.55);
+        0 2px 2px rgba(0, 0, 0, 0.92),
+        0 8px 12px rgba(0, 0, 0, 0.75),
+        0 20px 32px rgba(0, 0, 0, 0.7);
 }
 
 .main-icon a:focus-visible {
@@ -379,6 +397,6 @@ body::after {
          * debajo de 900px, y sin las cajas un `filter: none` dejaba los iconos
          * completamente planos sobre el panel. La sombra es estatica; lo que
          * costaba aqui era animarla al pasar por encima, no pintarla. */
-        filter: opacity(0.96) drop-shadow(0 3px 5px rgba(0, 0, 0, 0.7)) !important;
+        filter: opacity(0.97) drop-shadow(0 4px 5px rgba(0, 0, 0, 0.88)) !important;
     }
 }

@@ -34,8 +34,27 @@
     margin: 0;
     letter-spacing: 0.015em;
     white-space: nowrap;
+    /* La elipsis exige overflow:hidden, y eso recorta la sombra contra el borde
+     * de la caja: el h1 mide 28px de alto y la sombra baja 24px, asi que se
+     * cortaba en seco. El relleno le da sitio dentro del recorte y el margen
+     * negativo lo descuenta, de modo que nada se mueve de sitio. */
     overflow: hidden;
     text-overflow: ellipsis;
+    padding: 0 10px 18px;
+    margin: 0 -10px -18px;
+    /* Mismo esquema que la portada: una capa de contacto corta y una ambiental.
+     * Aqui con menos recorrido, que el rotulo es de 24px y no de 40. */
+    text-shadow:
+        0 2px 2px rgba(0, 0, 0, 0.7),
+        0 8px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* El subtitulo no lleva recorte, pero si la misma sombra: si no, queda plano
+   justo debajo de un titulo con relieve. */
+.header-title .total {
+    text-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.6),
+        0 5px 10px rgba(0, 0, 0, 0.4);
 }
 
 .header-nav {
@@ -59,14 +78,30 @@
     justify-content: center;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(198, 214, 242, 0.16);
-    transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+    /* Contacto + ambiental fuera, y un filo claro arriba dentro: las tres son
+     * las mismas piezas que dan el relieve en la portada, a escala de boton. */
+    box-shadow:
+        0 2px 3px rgba(2, 8, 18, 0.5),
+        0 8px 16px rgba(2, 8, 18, 0.38),
+        inset 0 1px 0 rgba(255, 255, 255, 0.16);
+    transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
     flex: 0 0 auto;
+}
+
+/* El icono tiene su propia sombra, igual que en la portada: sin ella el trazo
+ * se queda pegado al fondo del boton y el relieve se nota a medias. */
+.header-nav :is(a, summary) svg {
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.6));
 }
 
 .header-nav :is(a, summary):hover {
     transform: translateY(-2px);
     border-color: rgba(216, 228, 248, 0.46);
     background: rgba(255, 255, 255, 0.1);
+    box-shadow:
+        0 4px 5px rgba(2, 8, 18, 0.55),
+        0 14px 24px rgba(2, 8, 18, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 
 /* Contador de visitas ajenas desde Colombia sobre el icono de visitas */
