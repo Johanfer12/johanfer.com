@@ -26,6 +26,18 @@
     box-sizing: inherit;
 }
 
+/* El destello azul que pintan los navegadores de Android al tocar cualquier
+ * cosa pulsable. Se apagaba caso por caso en news.css —la tarjeta y el modo
+ * lectura— y seguia saliendo en todo lo demas: botones, enlaces, pestanas,
+ * el menu de la cabecera. Se declara aqui, en la hoja comun, porque la
+ * propiedad se HEREDA: basta con ponerla en la raiz para todo el documento.
+ *
+ * No toca la seleccion de texto (eso es ::selection) ni el foco de teclado
+ * (:focus-visible se sigue pintando): solo quita el rectangulo del toque. */
+html {
+    -webkit-tap-highlight-color: transparent;
+}
+
 html::before {
     content: '';
     position: fixed;

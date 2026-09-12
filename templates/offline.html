@@ -14,6 +14,11 @@
             height: 100%;
             margin: 0;
         }
+        /* Repetido a proposito: esta pagina no carga base.css (va embebida
+         * para pintarse sin red), asi que no hereda la regla comun. */
+        html {
+            -webkit-tap-highlight-color: transparent;
+        }
         body {
             background: #070715;
             color: #e6e8f0;

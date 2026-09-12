@@ -973,12 +973,12 @@ body.comments-modal-open {
         padding: 0 0 24px;
     }
 
-    /* Deshabilitar resaltado azul al tocar en móviles */
+    /* Sin seleccion de texto al arrastrar: la tarjeta se desliza para borrar.
+     * El resaltado azul del toque ya lo apaga base.css para todo el sitio. */
     .news-card-container {
         width: 100%;
         height: auto;
         aspect-ratio: 33 / 40;
-        -webkit-tap-highlight-color: transparent; /* iOS/Safari */
         -webkit-user-select: none; /* Safari */
         -moz-user-select: none; /* Firefox */
         -ms-user-select: none; /* Internet Explorer/Edge */
@@ -1357,7 +1357,6 @@ body.comments-modal-open {
     transition: opacity 0.3s ease;
     overflow: hidden;
     touch-action: pan-y; /* Solo gestos verticales/horizontales, no scroll */
-    -webkit-tap-highlight-color: transparent;
     color-scheme: dark;
 }
 
