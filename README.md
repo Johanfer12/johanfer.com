@@ -60,8 +60,45 @@ Sección "Mi TV": sincroniza el historial de visualización desde la API de Simk
   - El anime se resuelve aparte: Simkl lo parte por temporada y lo numera en absoluto, así que se consulta su índice de episodios para traducirlo a la numeración real.
 - Pósters y metadatos desde TMDB (calificación pública, episodios disponibles, sinopsis en español), convertidos a WebP en `media/Posters` (un póster por obra; los episodios comparten el de su serie).
 - Una tarjeta por obra: los episodios de una serie se agrupan mostrando cuántos llevas y el último visto (ej. `T01E08`).
-- Listón diagonal "Viendo" en series con actividad reciente que aún tienen episodios pendientes.
+- Listón diagonal "Viendo" en series con actividad reciente y episodios pendientes emitidos o de la temporada que ya se está viendo. Una temporada/cour futuro sin estrenar no mantiene el listón al terminar la anterior.
 - Botones flotantes para alternar entre series y películas (`/viendo/?tipo=...`).
+
+### Normalización de series/anime y recuperación de Nuvio
+
+El sync solicita `full_anime_seasons` y usa el `tvdb` de cada episodio como
+equivalencia explícita, también si el anime llega dentro de `shows`. Un cambio de
+TMDB conserva la identidad existente cuando el ID Simkl es inequívoco. Las partes
+de Bleach 1300367 y 2671730 mantienen la identidad histórica 329809; la reparación
+no fusiona la serie original ni reemplaza fechas de Trakt. Los fallos al descargar
+catálogos abortan la transacción y no borran episodios.
+
+La migración `watching.0009` conserva el pendiente por entrada Simkl para que un
+sync incremental no olvide otra temporada/cour de la misma obra. Tras desplegar,
+ejecutar `python manage.py migrate` y una sincronización completa.
+
+Si Nuvio guarda una marca local pero no la envía correctamente a Simkl, se puede
+recuperar desde `nuvio_watched.properties` (perfil explícito, por defecto 1):
+
+```powershell
+python manage.py recover_nuvio_watched "$env:APPDATA\Nuvio\nuvio_watched.properties" --content-id mal:41467 --since "2026-09-12T00:00:00-05:00"
+# Añadir --apply para escribir las marcas pendientes y verificarlas en Simkl.
+```
+
+La simulación no escribe. Solo se leen marcas explícitas de visto, no progreso
+parcial; los episodios ya presentes en Simkl se omiten sin cambiar su fecha.
+Si hay correspondencias sin resolver, `--apply` se detiene antes de escribir.
+Una confirmación HTTP por sí sola no cuenta como éxito: se vuelve a leer el
+historial. No se modifica el archivo de Nuvio ni se activan rewatches.
+
+La traducción entre numeraciones de catálogos se configura en
+`watching/anime_mapping.py`. Está verificado Bleach TYBW T4 de Cinemeta/MAL 41467
+contra el cour Simkl 2671730 y TVDB T17E41 en adelante. Cada episodio se valida
+contra el catálogo actual. Para otras correspondencias verificadas, añadir a
+`WATCHING_SERIES_ANIME_MAPPINGS` en los settings un diccionario con claves
+`(identificador_origen, temporada)` y valores `simkl_id`, `tvdb_season`, `offset`.
+No se extrapolan temporadas ni se emparejan obras por títulos parecidos.
+Esta recuperación es explícita; no reemplaza la corrección del envío en Nuvio ni
+vigila automáticamente los archivos de otros dispositivos.
 
 ### Estadísticas de mi TV
 

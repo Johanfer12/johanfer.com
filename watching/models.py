@@ -98,6 +98,7 @@ class SimklSyncState(models.Model):
     # por coma. Se calculan en el sync, que es quien tiene el catálogo de episodios de
     # Simkl, para que la vista no llame a la API en cada render.
     pending_ids = models.TextField(blank=True, default='', verbose_name="Con episodios pendientes")
+    entry_pending = models.JSONField(default=dict, blank=True, verbose_name='Pendientes por entrada Simkl')
 
     class Meta:
         verbose_name = 'Estado de sync Simkl'

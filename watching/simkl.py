@@ -60,12 +60,12 @@ def _get(path, authenticated=True, **params):
     response = requests.get(f"{API_BASE}{path}", params=query, headers=headers, timeout=90)
     response.raise_for_status()
     if not response.content:
-        return None
+        raise ValueError(f'Respuesta vacía de Simkl en {path}')
     try:
         return response.json()
     except json.JSONDecodeError:
         logger.warning("Respuesta no-JSON de Simkl en %s", path)
-        return None
+        raise ValueError(f'Respuesta no JSON de Simkl en {path}') from None
 
 
 # --- Flujo PIN (setup manual, una sola vez) ------------------------------------
@@ -97,14 +97,34 @@ def fetch_all_items(date_from=None):
     `extended=full` es prerrequisito de `episode_watched_at`, y sin
     `include_all_episodes` no vienen los episodios de lo completed/dropped.
     """
-    return _get(
+    result = _get(
         '/sync/all-items/all/all',
-        extended='full',
+        extended='full_anime_seasons',
         episode_watched_at='yes',
         include_all_episodes='yes',
-        language='es',
         date_from=date_from,
-    ) or {}
+    )
+    if (not isinstance(result, dict) or set(result) - {'shows', 'anime', 'movies'}
+            or any(not isinstance(v, list) for v in result.values())):
+        raise ValueError('Biblioteca Simkl inválida; no se reconcilia el historial')
+    return result
+
+
+def add_anime_history(simkl_id, number, watched_at):
+    """Escritura por ID exacto del cour y episodio nativo, sin temporada ni rewatch."""
+    response = requests.post(
+        f'{API_BASE}/sync/history',
+        params={'client_id': _client_id(), 'app-name': APP_NAME, 'app-version': APP_VERSION},
+        headers={'Authorization': f'Bearer {_access_token()}', 'User-Agent': USER_AGENT},
+        json={'shows': [{'ids': {'simkl': simkl_id}, 'episodes': [
+            {'number': number, 'watched_at': watched_at.isoformat()},
+        ]}]}, timeout=90,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if not isinstance(result, dict) or any((result.get('not_found') or {}).values()):
+        raise ValueError('Simkl no reconoció la marca; no se declara recuperada')
+    return result
 
 
 def fetch_episodes(simkl_id, is_anime=False):

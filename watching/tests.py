@@ -271,7 +271,7 @@ class RefreshFromSimklTests(TestCase):
         y con un id de TMDB que abriría una tarjeta aparte. `SIMKL_WORK_OVERRIDES` lo
         devuelve a su obra, y es él quien dice que la serie sigue en curso."""
         mock_episodes.return_value = [
-            {'season': None, 'episode': n, 'type': 'episode', 'title': f'Ep {n}',
+            {'season': None, 'episode': n, 'type': 'episode', 'title': f'Ep {n}', 'aired': True,
              'tvdb': {'season': 17, 'episode': 40 + n}} for n in range(1, 9)
         ]
         cour = {
