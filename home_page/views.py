@@ -242,62 +242,149 @@ def _owner_signatures():
     return ips, visitor_ids
 
 
-def _group_visits_by_country(visits, current_visitor_id, current_ip):
-    groups = {}
+def _owner_marks(request):
+    """Señas que identifican mis visitas: las del login más la sesión de ahora."""
     owner_ips, owner_visitor_ids = _owner_signatures()
+    current_ip = get_client_ip(request)
+    current_visitor_id = _get_visitor_id(request)
+    if current_ip:
+        owner_ips.add(current_ip)
+    if current_visitor_id:
+        owner_visitor_ids.add(current_visitor_id)
+    return owner_ips, owner_visitor_ids
 
-    for visit in visits:
-        iso2 = (visit.country_code or '').upper()
+
+def _mine_filter(owner_ips, owner_visitor_ids):
+    mine = Q(pk__in=[])  # Neutro: sin firmas, ninguna visita es mía.
+    if owner_ips:
+        mine |= Q(ip_address__in=owner_ips)
+    if owner_visitor_ids:
+        mine |= Q(visitor_id__in=owner_visitor_ids)
+    return mine
+
+
+def _group_key(country_code, country):
+    """Clave estable de un país, y traducible a un filtro SQL.
+
+    Se agrupa por country_code cuando lo hay, para que 'US' y 'United States'
+    no salgan como dos países; las filas sin código caen en su nombre.
+    """
+    iso2 = (country_code or '').strip().upper()
+    if iso2:
+        return f'cc:{iso2}'
+    return f'name:{(country or "").strip().casefold()}'
+
+
+def _group_queryset(visit_qs, group_key):
+    """Reduce un queryset al país de esa clave. None si la clave no vale."""
+    if group_key.startswith('cc:'):
+        iso2 = group_key[3:]
+        if not (len(iso2) == 2 and iso2.isalpha()):
+            return None
+        return visit_qs.filter(country_code__iexact=iso2)
+    if group_key.startswith('name:'):
+        return visit_qs.filter(country_code='', country__iexact=group_key[5:])
+    return None
+
+
+def _country_groups(visit_qs, mine):
+    """Resumen por país: una consulta agregada, sin traerse las visitas.
+
+    Con miles de filas, pintar todas las tablas de golpe costaba segundos de
+    plantilla y megabytes de HTML. Las filas se piden por país (visits_rows).
+    """
+    rows = (
+        visit_qs
+        .values('country_code', 'country')
+        .annotate(total=Count('id'), mine_total=Count('id', filter=mine))
+    )
+
+    groups = {}
+    for row in rows:
+        iso2 = (row['country_code'] or '').strip().upper()
         if not iso2:
-            iso2 = _extract_iso2_from_country_text(visit.country)
+            iso2 = _extract_iso2_from_country_text(row['country'])
 
-        country_name = (visit.country or '').strip()
+        country_name = (row['country'] or '').strip()
         country_label = country_name or iso2 or 'País desconocido'
-        country_key = f'iso:{iso2}' if iso2 else f'name:{country_label.casefold()}'
-        is_self = (
-            bool(current_visitor_id and visit.visitor_id == current_visitor_id)
-            or bool(current_ip and visit.ip_address == current_ip)
-            or (visit.ip_address in owner_ips)
-            or bool(visit.visitor_id and visit.visitor_id in owner_visitor_ids)
-        )
+        key = _group_key(row['country_code'], row['country'])
 
-        visit.country_flag = _iso2_to_flag(iso2)
-        visit.country_iso2 = iso2.lower() if iso2 else ''
-        visit.is_self = is_self
-
-        if country_key not in groups:
-            groups[country_key] = {
+        group = groups.get(key)
+        if group is None:
+            group = groups[key] = {
+                'key': key,
                 'country': country_label,
-                'country_flag': visit.country_flag,
-                'country_iso2': visit.country_iso2,
+                'country_flag': _iso2_to_flag(iso2),
+                'country_iso2': iso2.lower() if iso2 else '',
                 'is_local': country_label.casefold() == 'local',
                 'is_unknown': country_label == 'País desconocido',
-                'visits': [],
                 'visit_count': 0,
                 'self_count': 0,
             }
-
-        group = groups[country_key]
         if group['country'] in (iso2, 'País desconocido') and country_name:
             group['country'] = country_name
-        group['visits'].append(visit)
-        group['visit_count'] += 1
-        group['self_count'] += int(is_self)
+        group['visit_count'] += row['total']
+        group['self_count'] += row['mine_total']
 
     grouped_visits = list(groups.values())
-    grouped_visits.sort(key=lambda group: not (
-        group['country_iso2'] == 'co'
-        or group['country'].casefold() == 'colombia'
+    grouped_visits.sort(key=lambda group: (
+        not (
+            group['country_iso2'] == 'co'
+            or group['country'].casefold() == 'colombia'
+        ),
+        -group['visit_count'],
     ))
     return grouped_visits
 
 
-@user_passes_test(
+VISITS_ROWS_PAGE_SIZE = 300
+
+visits_access_required = user_passes_test(
     lambda u: u.is_superuser or (
         settings.DEBUG and settings.VISITS_ALLOW_LOCAL_WITHOUT_LOGIN
     ),
     login_url='/noticias/login/',
 )
+
+
+def _is_ajax(request):
+    return request.headers.get('x-requested-with') == 'XMLHttpRequest'
+
+
+def _delete_visits(request, filtered_qs):
+    """Aplica la acción de borrado del POST. Devuelve cuántas visitas se fueron."""
+    delete_one = (request.POST.get('delete_one') or '').strip()
+    action = (request.POST.get('action') or '').strip()
+    deleted = 0
+
+    if delete_one.isdigit():
+        deleted, _ = filtered_qs.filter(id=int(delete_one)).delete()
+    elif action == 'delete_selected':
+        selected_ids = [
+            visit_id
+            for value in request.POST.getlist('selected_visits')
+            for visit_id in value.split(',')
+            if visit_id.isdigit()
+        ]
+        if selected_ids:
+            deleted, _ = filtered_qs.filter(id__in=selected_ids).delete()
+    elif action == 'delete_group':
+        # Borrado por país: no se mandan ids, así no depende de cuántas filas
+        # se hayan cargado en el modal ni viaja una lista de miles de números.
+        group_qs = _group_queryset(filtered_qs, (request.POST.get('group') or '').strip())
+        if group_qs is not None:
+            if request.POST.get('self_only') == '1':
+                owner_ips, owner_visitor_ids = _owner_marks(request)
+                group_qs = group_qs.filter(_mine_filter(owner_ips, owner_visitor_ids))
+            deleted, _ = group_qs.delete()
+    elif action == 'delete_all_filtered':
+        deleted, _ = filtered_qs.delete()
+
+    invalidate_badge()
+    return deleted
+
+
+@visits_access_required
 def visits(request):
     # Guardar la página de origen para decidir el botón de retorno (igual que en About)
     referer_path = urlparse(request.META.get('HTTP_REFERER', '')).path
@@ -317,49 +404,80 @@ def visits(request):
     filtered_qs = _apply_visits_filters(filters)
 
     if request.method == 'POST':
-        delete_one = (request.POST.get('delete_one') or '').strip()
-        action = (request.POST.get('action') or '').strip()
+        deleted = _delete_visits(request, filtered_qs)
 
-        if delete_one.isdigit():
-            filtered_qs.filter(id=int(delete_one)).delete()
-        elif action == 'delete_selected':
-            selected_ids = [
-                visit_id
-                for value in request.POST.getlist('selected_visits')
-                for visit_id in value.split(',')
-                if visit_id.isdigit()
-            ]
-            if selected_ids:
-                filtered_qs.filter(id__in=selected_ids).delete()
-        elif action == 'delete_all_filtered':
-            filtered_qs.delete()
-
-        invalidate_badge()
+        if _is_ajax(request):
+            # Sin recargar: el modal abierto se queda donde estaba.
+            group_key = (request.POST.get('group') or '').strip()
+            group_qs = _group_queryset(filtered_qs, group_key) if group_key else None
+            owner_ips, owner_visitor_ids = _owner_marks(request)
+            payload = {
+                'deleted': deleted,
+                'total_visits': filtered_qs.count(),
+            }
+            if group_qs is not None:
+                mine = _mine_filter(owner_ips, owner_visitor_ids)
+                payload['group_count'] = group_qs.count()
+                payload['group_self_count'] = group_qs.filter(mine).count()
+            return JsonResponse(payload)
 
         query_string = urlencode({k: v for k, v in filters.items() if v})
         if query_string:
             return redirect(f"{request.path}?{query_string}")
         return redirect(request.path)
 
-    visits_list = list(filtered_qs.order_by('-visited_at'))
+    owner_ips, owner_visitor_ids = _owner_marks(request)
+    mine = _mine_filter(owner_ips, owner_visitor_ids)
+    visit_groups = _country_groups(filtered_qs, mine)
 
     # Entrar aquí es haberlas mirado: la insignia de la cabecera se apaga.
     # Solo lo que se está viendo; con un filtro activo, el resto sigue pendiente.
     mark_seen(filtered_qs)
 
-    current_ip = get_client_ip(request)
-    current_visitor_id = _get_visitor_id(request)
-    visit_groups = _group_visits_by_country(
-        visits_list,
-        current_visitor_id,
-        current_ip,
-    )
-
     return render(request, 'visits.html', {
         'visit_groups': visit_groups,
-        'total_visits': len(visits_list),
+        'total_visits': sum(group['visit_count'] for group in visit_groups),
         'filters': filters,
+        'rows_page_size': VISITS_ROWS_PAGE_SIZE,
     })
+
+
+@visits_access_required
+def visits_rows(request):
+    """Filas de un país, ya en JSON y por tandas.
+
+    La página solo pinta las tarjetas; la tabla de un país se pide al abrir su
+    modal, que es cuando se mira de verdad.
+    """
+    filters = _get_visits_filters(request)
+    group_qs = _group_queryset(_apply_visits_filters(filters), (request.GET.get('group') or '').strip())
+    if group_qs is None:
+        return JsonResponse({'error': 'grupo desconocido'}, status=400)
+
+    try:
+        offset = max(int(request.GET.get('offset') or 0), 0)
+    except ValueError:
+        offset = 0
+
+    owner_ips, owner_visitor_ids = _owner_marks(request)
+    page = list(
+        group_qs.order_by('-visited_at', '-id')
+        .values('id', 'visited_at', 'ip_address', 'visitor_id', 'path', 'user_agent')
+        [offset:offset + VISITS_ROWS_PAGE_SIZE + 1]
+    )
+    has_more = len(page) > VISITS_ROWS_PAGE_SIZE
+    page = page[:VISITS_ROWS_PAGE_SIZE]
+
+    rows = [{
+        'id': row['id'],
+        'visited_at': dj_timezone.localtime(row['visited_at']).strftime('%Y-%m-%d %H:%M:%S'),
+        'ip_address': row['ip_address'],
+        'path': row['path'],
+        'user_agent': row['user_agent'] or '-',
+        'is_self': row['ip_address'] in owner_ips or bool(row['visitor_id'] and row['visitor_id'] in owner_visitor_ids),
+    } for row in page]
+
+    return JsonResponse({'rows': rows, 'has_more': has_more, 'offset': offset + len(rows)})
 
 
 def manifest_webmanifest(request):

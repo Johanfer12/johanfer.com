@@ -31,7 +31,7 @@
       {% elif request.path == '/viendo/' %}
         <p class="total">{{ total_watched }} {{ watch_noun }}{{ total_watched|pluralize }}</p>
       {% elif request.path == '/visitas/' %}
-        <p class="total">{{ total_visits }} visitas</p>
+        <p class="total"><span class="header-counter">{{ total_visits }}</span> visitas</p>
       {% elif request.path == '/spotify/' %}
         <p class="total">Top canciones</p>
       {% elif request.path == '/noticias/' %}

@@ -473,6 +473,28 @@
     vertical-align: middle;
 }
 
+/* Las filas de un pais llegan por AJAX al abrir su modal: aviso de carga y
+   boton para pedir la siguiente tanda. */
+.rows-status {
+    margin: 0;
+    padding: 22px 12px;
+    color: rgba(226, 235, 250, 0.72);
+    text-align: center;
+}
+
+.load-more-rows {
+    display: block;
+    margin: 12px auto 18px;
+}
+
+/* `hidden` tiene que ganarle al display de .btn y compania. */
+.self-summary[hidden],
+.rows-status[hidden],
+.load-more-rows[hidden],
+.country-delete-self[hidden] {
+    display: none;
+}
+
 .visits-empty {
     padding: 34px 20px;
     border: 1px solid rgba(207, 220, 241, 0.27);

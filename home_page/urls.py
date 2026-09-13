@@ -14,6 +14,7 @@ urlpatterns = [
     path('sitemap.xml', views.sitemap_xml, name='sitemap_xml'),
     path('bookshelf/', views.bookshelf, name='bookshelf'),
     path('visitas/', views.visits, name='visits'),
+    path('visitas/filas/', views.visits_rows, name='visits_rows'),
     path('bookshelf/stats/', views.stats, name='stats'),
     path('about/', views.about, name='about'),
 ]

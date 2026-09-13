@@ -13,6 +13,7 @@ from django.utils import timezone as dj_timezone
 
 from django.core.cache import cache
 
+from . import views
 from .models import Book, OwnerSignature, VisitLog
 from .utils import build_shelf_url, download_as_webp, sync_currently_reading
 from .visit_stats import badge_count
@@ -245,11 +246,13 @@ class VisitsViewTests(TestCase):
         self.assertContains(response, 'data-confirm-delete="selected"')
         self.assertContains(response, 'data-confirm-delete="country"')
         self.assertContains(response, 'data-confirm-delete="filtered"')
-        self.assertContains(response, 'data-confirm-delete="one"')
+        self.assertContains(response, 'data-confirm-delete="self"')
         self.assertNotContains(response, 'id="select-all-visits"')
         self.assertNotContains(response, 'onclick="return confirm(')
 
-    def test_shows_all_visits_without_pagination(self):
+    def test_the_page_only_carries_country_cards_not_their_rows(self):
+        # Con miles de visitas, pintar todas las tablas costaba segundos de
+        # plantilla: la tarjeta lleva el total y las filas se piden aparte.
         VisitLog.objects.bulk_create([
             VisitLog(
                 ip_address=f'203.0.113.{index % 250}',
@@ -263,8 +266,110 @@ class VisitsViewTests(TestCase):
         response = self.client.get('/visitas/')
 
         self.assertEqual(response.context['visit_groups'][0]['visit_count'], 125)
-        self.assertNotContains(response, 'Siguiente')
-        self.assertNotContains(response, 'pagination')
+        self.assertContains(response, 'data-group-key="cc:NL"')
+        self.assertNotContains(response, '/page/0/')
+
+    def test_country_rows_endpoint_serves_the_visits_of_one_country(self):
+        VisitLog.objects.create(
+            ip_address='203.0.113.80',
+            country_code='NL',
+            country='Netherlands',
+            path='/holanda/',
+        )
+        VisitLog.objects.create(
+            ip_address='203.0.113.81',
+            country_code='TR',
+            country='Turkey',
+            path='/turquia/',
+        )
+
+        response = self.client.get('/visitas/filas/', {'group': 'cc:NL'})
+
+        payload = response.json()
+        self.assertEqual([row['path'] for row in payload['rows']], ['/holanda/'])
+        self.assertFalse(payload['has_more'])
+
+    def test_country_rows_endpoint_rejects_an_unknown_group(self):
+        response = self.client.get('/visitas/filas/', {'group': 'cc:NOPE'})
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_country_rows_endpoint_pages_the_visits(self):
+        VisitLog.objects.bulk_create([
+            VisitLog(
+                ip_address='203.0.113.90',
+                country_code='NL',
+                country='Netherlands',
+                path=f'/pagina/{index}/',
+            )
+            for index in range(views.VISITS_ROWS_PAGE_SIZE + 5)
+        ])
+
+        first = self.client.get('/visitas/filas/', {'group': 'cc:NL'}).json()
+        second = self.client.get(
+            '/visitas/filas/',
+            {'group': 'cc:NL', 'offset': first['offset']},
+        ).json()
+
+        self.assertEqual(len(first['rows']), views.VISITS_ROWS_PAGE_SIZE)
+        self.assertTrue(first['has_more'])
+        self.assertEqual(len(second['rows']), 5)
+        self.assertFalse(second['has_more'])
+
+    def test_deleting_a_country_needs_no_id_list(self):
+        colombia = VisitLog.objects.create(
+            ip_address='181.50.0.9',
+            country_code='CO',
+            country='Colombia',
+            path='/',
+        )
+        turkey = VisitLog.objects.create(
+            ip_address='203.0.113.91',
+            country_code='TR',
+            country='Turkey',
+            path='/',
+        )
+
+        response = self.client.post(
+            '/visitas/',
+            {'action': 'delete_group', 'group': 'cc:CO'},
+            headers={'x-requested-with': 'XMLHttpRequest'},
+        )
+
+        self.assertEqual(response.json()['deleted'], 1)
+        self.assertFalse(VisitLog.objects.filter(pk=colombia.pk).exists())
+        self.assertTrue(VisitLog.objects.filter(pk=turkey.pk).exists())
+
+    def test_deleting_only_mine_keeps_the_rest_of_the_country(self):
+        mine = VisitLog.objects.create(
+            ip_address='190.0.0.1',
+            visitor_id='visitor-owner',
+            country_code='CO',
+            country='Colombia',
+            path='/bookshelf/',
+        )
+        other = VisitLog.objects.create(
+            ip_address='181.50.0.9',
+            visitor_id='visitor-other',
+            country_code='CO',
+            country='Colombia',
+            path='/',
+        )
+
+        response = self.client.post(
+            '/visitas/',
+            {'action': 'delete_group', 'group': 'cc:CO', 'self_only': '1'},
+            headers={'x-requested-with': 'XMLHttpRequest'},
+        )
+
+        payload = response.json()
+        self.assertEqual(payload['deleted'], 1)
+        # El modal se queda abierto, así que la respuesta trae los contadores
+        # con los que repintarlo.
+        self.assertEqual(payload['group_count'], 1)
+        self.assertEqual(payload['group_self_count'], 0)
+        self.assertFalse(VisitLog.objects.filter(pk=mine.pk).exists())
+        self.assertTrue(VisitLog.objects.filter(pk=other.pk).exists())
 
     def test_colombia_is_always_the_first_country(self):
         VisitLog.objects.create(
@@ -311,8 +416,12 @@ class VisitsViewTests(TestCase):
         })
 
         self.assertEqual(response.context['total_visits'], 1)
-        self.assertContains(response, '/selected-day/')
-        self.assertNotContains(response, '/other-day/')
+        rows = self.client.get('/visitas/filas/', {
+            'group': 'name:colombia',
+            'from': selected_day.isoformat(),
+            'to': selected_day.isoformat(),
+        }).json()['rows']
+        self.assertEqual([row['path'] for row in rows], ['/selected-day/'])
 
     def test_date_fields_use_native_editable_date_inputs(self):
         response = self.client.get('/visitas/')
@@ -360,9 +469,13 @@ class VisitsViewTests(TestCase):
 
         response = self.client.get('/visitas/')
 
+        self.assertContains(response, 'data-self-count="1"')
         self.assertContains(response, 'Eliminar mías')
-        # El botón se lleva las marcadas: una sola fila la lleva.
-        self.assertContains(response, 'data-self="1"', count=1)
+        rows = self.client.get('/visitas/filas/', {'group': 'cc:CO'}).json()['rows']
+        self.assertEqual(
+            {row['ip_address']: row['is_self'] for row in rows},
+            {'190.0.0.1': True, '181.50.0.9': False},
+        )
 
     def test_hides_the_delete_mine_button_when_no_visit_is_mine(self):
         VisitLog.objects.create(
@@ -375,7 +488,10 @@ class VisitsViewTests(TestCase):
 
         response = self.client.get('/visitas/')
 
-        self.assertNotContains(response, 'Eliminar mías')
+        # El botón viaja oculto: al borrar sin recargar, el JavaScript lo
+        # enseña o lo esconde según el contador que devuelve el servidor.
+        self.assertContains(response, 'data-self-count="0"')
+        self.assertContains(response, 'data-confirm-delete="self" hidden')
 
     def test_delete_all_respects_the_active_filters(self):
         colombia_visit = VisitLog.objects.create(
