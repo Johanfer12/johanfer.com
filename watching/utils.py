@@ -338,7 +338,6 @@ def _work_rows(item, media_type, episode_index):
     return rows
 
 
-@transaction.atomic
 def refresh_watching_from_simkl(full=False):
     """Sincroniza el historial desde Simkl.
 
@@ -362,40 +361,17 @@ def refresh_watching_from_simkl(full=False):
     date_from = None if full or needs_baseline else (state.last_activity_at or None)
     payload = simkl.fetch_all_items(date_from=date_from)
 
-    _repair_work_identities()
+    prepared, skipped = _prepare_sync_items(payload)
+    return _apply_sync_items(prepared, skipped, state, stamp, full, date_from)
 
-    existing = {
-        item.dedup_key: item
-        for item in WatchedItem.objects.only(
-            'id', 'dedup_key', 'watched_at', 'source', 'user_rating', 'episode_title'
-        )
-    }
-    # Simkl cataloga las películas de anime como series de un episodio, así que al
-    # leerlas volverían como T01E01 y duplicarían la película que ya existe. Manda lo
-    # que ya está en la BD: si esa obra es una película, no se crean episodios de ella.
-    movie_tmdb_ids = set(
-        WatchedItem.objects.filter(media_type='movie').values_list('tmdb_id', flat=True)
-    )
-    # Título ya establecido para cada obra. Simkl nombra distinto que Trakt (sobre todo
-    # el anime: "Youjo Senki II" por "Saga of Tanya the Evil"), y como la tarjeta toma el
-    # título del evento más reciente, un episodio nuevo le cambiaría el nombre a la serie.
-    # Lo mismo con el año de estreno, que alimenta el gráfico de décadas.
-    known_works = {
-        tmdb_id: (title, year)
-        for tmdb_id, title, year in WatchedItem.objects.exclude(tmdb_id__isnull=True)
-        .order_by('watched_at')
-        .values_list('tmdb_id', 'title', 'year')
-    }
+
+def _prepare_sync_items(payload):
+    """Resolver catálogos y metadatos sin mantener bloqueada la base de datos."""
+    prepared = []
+    skipped = 0
     tmdb_cache = {}
     episode_cache = {}
-    created = 0
-    updated = 0
-    skipped = 0
-    seen_keys = set()
-    touched_works = {}  # (media_type, tmdb_id) -> datos de la obra en Simkl
-    pending_works = set()  # tmdb_id de las obras a las que les queda algo por ver
-    entry_pending = {} if date_from is None else dict(state.entry_pending)
-    touched_pending = {}
+    movie_tmdb_ids = set(WatchedItem.objects.filter(media_type='movie').values_list('tmdb_id', flat=True))
     stable_ids = {}
     for sid, tid in WatchedItem.objects.filter(media_type='episode', simkl_id__isnull=False).values_list('simkl_id', 'tmdb_id'):
         stable_ids.setdefault(sid, set()).add(tid)
@@ -441,80 +417,112 @@ def refresh_watching_from_simkl(full=False):
                 _episode_index(episode_cache, ids.get('simkl'), item_is_anime)
                 if media_type == 'episode' else {}
             )
-            # Antes del corte por `rows`: el cour que se está emitiendo aún no tiene
-            # ningún episodio visto, y es justo el que dice que la obra sigue en curso.
-            is_pending = (
-                media_type == 'episode'
-                and item.get('status') == 'watching'
-                and _pending_after_last_watched(item, episode_index)
-            )
-            if media_type == 'episode':
-                entry_key = str(ids.get('simkl') or f'{group_key}:{tmdb_id}')
-                previous_pending = touched_pending.get(entry_key, {}).get('pending', False)
-                touched_pending[entry_key] = {'tmdb_id': tmdb_id, 'pending': bool(is_pending or previous_pending)}
-            if is_pending:
-                pending_works.add(tmdb_id)
-
             rows = _work_rows(item, media_type, episode_index)
-            if not rows:
+            metadata = (_get_tmdb_metadata(tmdb_cache, tmdb_type, tmdb_id,
+                        (media.get('title') or '').strip()) if rows else {})
+            prepared.append((group_key, media_type, item_is_anime, item, media, ids,
+                             tmdb_id, episode_index, rows, metadata))
+    return prepared, skipped
+
+
+@transaction.atomic
+def _apply_sync_items(prepared, skipped, state, stamp, full, date_from):
+    _repair_work_identities()
+
+    existing = {
+        item.dedup_key: item
+        for item in WatchedItem.objects.only(
+            'id', 'dedup_key', 'watched_at', 'source', 'user_rating', 'episode_title'
+        )
+    }
+    # Título ya establecido para cada obra. Simkl nombra distinto que Trakt (sobre todo
+    # el anime: "Youjo Senki II" por "Saga of Tanya the Evil"), y como la tarjeta toma el
+    # título del evento más reciente, un episodio nuevo le cambiaría el nombre a la serie.
+    # Lo mismo con el año de estreno, que alimenta el gráfico de décadas.
+    known_works = {
+        tmdb_id: (title, year)
+        for tmdb_id, title, year in WatchedItem.objects.exclude(tmdb_id__isnull=True)
+        .order_by('watched_at')
+        .values_list('tmdb_id', 'title', 'year')
+    }
+    created = 0
+    updated = 0
+    seen_keys = set()
+    touched_works = {}  # (media_type, tmdb_id) -> datos de la obra en Simkl
+    pending_works = set()  # tmdb_id de las obras a las que les queda algo por ver
+    entry_pending = {} if date_from is None else dict(state.entry_pending)
+    touched_pending = {}
+    for group_key, media_type, item_is_anime, item, media, ids, tmdb_id, episode_index, rows, metadata in prepared:
+        # Antes del corte por `rows`: el cour que se está emitiendo aún no tiene
+        # ningún episodio visto, y es justo el que dice que la obra sigue en curso.
+        is_pending = (
+            media_type == 'episode'
+            and item.get('status') == 'watching'
+            and _pending_after_last_watched(item, episode_index)
+        )
+        if media_type == 'episode':
+            entry_key = str(ids.get('simkl') or f'{group_key}:{tmdb_id}')
+            previous_pending = touched_pending.get(entry_key, {}).get('pending', False)
+            touched_pending[entry_key] = {'tmdb_id': tmdb_id, 'pending': bool(is_pending or previous_pending)}
+        if is_pending:
+            pending_works.add(tmdb_id)
+
+        if not rows:
+            continue
+
+        # Se acumula: varias entradas de Simkl pueden mapear a una sola obra nuestra
+        # (el anime viene partido por temporada). Si se sobrescribiera, los
+        # contadores de una secuela pasarían por los de la serie entera.
+        work = touched_works.setdefault((media_type, tmdb_id), {
+            'user_rating': None, 'watched_episodes_count': 0, 'available_episodes': 0,
+            'entries': {},
+        })
+        work['user_rating'] = work['user_rating'] or item.get('user_rating')
+        entry = work['entries'].setdefault(ids.get('simkl') or (group_key, str(ids)), [0, 0])
+        entry[0] = max(entry[0], item.get('watched_episodes_count') or 0)
+        entry[1] = max(entry[1], _available_episodes(item, metadata) or 0)
+        work['watched_episodes_count'] = sum(e[0] for e in work['entries'].values())
+        work['available_episodes'] = sum(e[1] for e in work['entries'].values())
+
+        known_title, known_year = known_works.get(tmdb_id, (None, None))
+
+        for season, episode, watched_at, episode_title in rows:
+            dedup_key = WatchedItem.build_dedup_key(media_type, tmdb_id, season, episode)
+            seen_keys.add(dedup_key)
+            known = existing.get(dedup_key)
+
+            if known is not None:
+                # Solo se corrige la fecha de lo que vino de Simkl: los registros
+                # de Trakt conservan la suya, que es la real.
+                if known.source == 'simkl' and known.watched_at != watched_at:
+                    known.watched_at = watched_at
+                    known.save(update_fields=['watched_at'])
+                    updated += 1
                 continue
 
-            metadata = _get_tmdb_metadata(
-                tmdb_cache, tmdb_type, tmdb_id, (media.get('title') or '').strip()
+            watched = WatchedItem.objects.create(
+                dedup_key=dedup_key,
+                source='simkl',
+                media_type=media_type,
+                title=known_title or (media.get('title') or '').strip() or 'Sin título',
+                episode_title=episode_title,
+                season=season,
+                episode=episode,
+                year=known_year or media.get('year'),
+                overview=metadata.get('overview', ''),
+                public_rating=metadata.get('public_rating'),
+                watched_at=watched_at,
+                tmdb_id=tmdb_id,
+                imdb_id=ids.get('imdb') or '',
+                simkl_id=ids.get('simkl'),
+                detail_url=_detail_url(media_type, ids, item_is_anime),
             )
-            # Se acumula: varias entradas de Simkl pueden mapear a una sola obra nuestra
-            # (el anime viene partido por temporada). Si se sobrescribiera, los
-            # contadores de una secuela pasarían por los de la serie entera.
-            work = touched_works.setdefault((media_type, tmdb_id), {
-                'user_rating': None, 'watched_episodes_count': 0, 'available_episodes': 0,
-                'entries': {},
-            })
-            work['user_rating'] = work['user_rating'] or item.get('user_rating')
-            entry = work['entries'].setdefault(ids.get('simkl') or (group_key, str(ids)), [0, 0])
-            entry[0] = max(entry[0], item.get('watched_episodes_count') or 0)
-            entry[1] = max(entry[1], _available_episodes(item, metadata) or 0)
-            work['watched_episodes_count'] = sum(e[0] for e in work['entries'].values())
-            work['available_episodes'] = sum(e[1] for e in work['entries'].values())
+            existing[dedup_key] = watched
+            created += 1
 
-            known_title, known_year = known_works.get(tmdb_id, (None, None))
-
-            for season, episode, watched_at, episode_title in rows:
-                dedup_key = WatchedItem.build_dedup_key(media_type, tmdb_id, season, episode)
-                seen_keys.add(dedup_key)
-                known = existing.get(dedup_key)
-
-                if known is not None:
-                    # Solo se corrige la fecha de lo que vino de Simkl: los registros
-                    # de Trakt conservan la suya, que es la real.
-                    if known.source == 'simkl' and known.watched_at != watched_at:
-                        known.watched_at = watched_at
-                        known.save(update_fields=['watched_at'])
-                        updated += 1
-                    continue
-
-                watched = WatchedItem.objects.create(
-                    dedup_key=dedup_key,
-                    source='simkl',
-                    media_type=media_type,
-                    title=known_title or (media.get('title') or '').strip() or 'Sin título',
-                    episode_title=episode_title,
-                    season=season,
-                    episode=episode,
-                    year=known_year or media.get('year'),
-                    overview=metadata.get('overview', ''),
-                    public_rating=metadata.get('public_rating'),
-                    watched_at=watched_at,
-                    tmdb_id=tmdb_id,
-                    imdb_id=ids.get('imdb') or '',
-                    simkl_id=ids.get('simkl'),
-                    detail_url=_detail_url(media_type, ids, item_is_anime),
-                )
-                existing[dedup_key] = watched
-                created += 1
-
-                poster_path = os.path.join(settings.MEDIA_ROOT, 'Posters', watched.poster_name)
-                if not os.path.exists(poster_path) and metadata.get('poster_url'):
-                    download_poster(metadata['poster_url'], watched.poster_name)
+            poster_path = os.path.join(settings.MEDIA_ROOT, 'Posters', watched.poster_name)
+            if not os.path.exists(poster_path) and metadata.get('poster_url'):
+                transaction.on_commit(lambda url=metadata['poster_url'], name=watched.poster_name: download_poster(url, name))
 
     _update_work_aggregates(touched_works)
     deleted = _reconcile(seen_keys) if full and not skipped else 0

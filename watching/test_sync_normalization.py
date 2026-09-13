@@ -9,7 +9,8 @@ from unittest.mock import patch
 import requests
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import SimpleTestCase, TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, TransactionTestCase, override_settings
+from django.db import connection
 
 from . import simkl
 from .anime_mapping import UnresolvedEpisode, resolve_series_anime
@@ -154,6 +155,19 @@ class NormalizationSyncTests(TestCase):
             refresh_watching_from_simkl()
         self.assertEqual(SimklSyncState.load().pending_tmdb_ids, {67386, 999})
         self.assertFalse(SimklSyncState.load().entry_pending['222']['pending'])
+
+
+class SyncTransactionTests(TransactionTestCase):
+    def test_external_calls_do_not_hold_the_write_transaction(self):
+        def catalog(*args, **kwargs):
+            self.assertFalse(connection.in_atomic_block)
+            return []
+        def metadata(*args, **kwargs):
+            self.assertFalse(connection.in_atomic_block)
+            return {}
+        with patch('watching.utils.simkl.fetch_activities', return_value={'all': 'new'}), patch('watching.utils.simkl.fetch_all_items', return_value={'shows': [SIMKL_SHOW]}), patch('watching.utils.simkl.fetch_episodes', side_effect=catalog), patch('watching.utils._get_tmdb_metadata', side_effect=metadata):
+            refresh_watching_from_simkl(full=True)
+        self.assertEqual(WatchedItem.objects.count(), 2)
 
 
 class RecoveryCommandTests(SimpleTestCase):
