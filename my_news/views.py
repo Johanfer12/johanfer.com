@@ -23,6 +23,7 @@ from .tasks import retry_summarize_pending
 import subprocess
 import platform
 import hashlib
+import json
 import time
 import logging
 from urllib.parse import urlparse
@@ -1119,6 +1120,99 @@ def test_redundancy(request):
         # Podrías devolver una página de error o un JsonResponse
         # Para mantener la consistencia con la plantilla, podrías renderizarla con un mensaje de error
         return render(request, 'redundancy_test.html', {'error_message': f'Ocurrió un error: {str(e)}'})
+
+
+# Ventanas del panel de estadísticas. 15 es lo que conserva `purge_old_news`,
+# así que esa opción equivale a «todo lo que hay en la base».
+NEWS_STATS_WINDOWS = (1, 7, 15)
+NEWS_STATS_RETENTION_DAYS = 15
+
+
+def _news_stats_rows(days):
+    """Noticias por fuente y por día, repartidas entre feed y descartadas.
+
+    Se agrupa en Python y no en SQL: son ~2.300 filas y así el día se calcula
+    en la zona horaria local, que SQLite no convierte por su cuenta.
+    """
+    # El corte es la medianoche local del primer día de la ventana, no «hace N
+    # horas»: si no, entran noticias del día anterior al primero de la gráfica
+    # y el total de las tarjetas no cuadra con el de las barras por día.
+    first_day = timezone.localdate() - timedelta(days=days - 1)
+    _, cutoff, _ = _day_bounds_local(first_day)
+    rows = News.objects.filter(published_date__gte=cutoff).values_list(
+        'source__name', 'published_date',
+        'is_filtered', 'is_ai_filtered', 'is_redundant', 'is_ai_processed',
+    )
+
+    per_source = {}
+    per_day = {}
+    for name, published, filtered, ai_filtered, redundant, processed in rows:
+        # La fuente es obligatoria, pero su nombre puede quedar en blanco.
+        name = name or 'Sin nombre'
+        # Mismo criterio que el manager de noticias visibles, menos el borrado
+        # personal: lo leído sigue contando como que llegó al feed.
+        in_feed = processed and not (filtered or ai_filtered or redundant)
+        bucket = per_source.setdefault(name, {'feed': 0, 'discarded': 0})
+        bucket['feed' if in_feed else 'discarded'] += 1
+
+        day = timezone.localtime(published).date().isoformat()
+        day_bucket = per_day.setdefault(day, {'feed': 0, 'discarded': 0})
+        day_bucket['feed' if in_feed else 'discarded'] += 1
+
+    return per_source, per_day
+
+
+@require_GET
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+def news_stats(request):
+    """Cuántas noticias trae cada fuente y cuántas se quedan por el camino."""
+    try:
+        days = int(request.GET.get('dias') or 7)
+    except (TypeError, ValueError):
+        days = 7
+    if days not in NEWS_STATS_WINDOWS:
+        days = 7
+
+    per_source, per_day = _news_stats_rows(days)
+
+    # De más a menos, que es como se quiere leer un ranking de fuentes.
+    ordered = sorted(
+        per_source.items(),
+        key=lambda item: (-(item[1]['feed'] + item[1]['discarded']), item[0]),
+    )
+    source_labels = [name for name, _ in ordered]
+    source_feed = [counts['feed'] for _, counts in ordered]
+    source_discarded = [counts['discarded'] for _, counts in ordered]
+
+    # Todos los días de la ventana, también los que no trajeron nada: un hueco
+    # es justo lo que se quiere ver si la ingesta se paró.
+    today = timezone.localdate()
+    day_keys = [(today - timedelta(days=offset)).isoformat() for offset in range(days - 1, -1, -1)]
+    day_feed = [per_day.get(day, {}).get('feed', 0) for day in day_keys]
+    day_discarded = [per_day.get(day, {}).get('discarded', 0) for day in day_keys]
+
+    total_feed = sum(source_feed)
+    total_discarded = sum(source_discarded)
+    total = total_feed + total_discarded
+
+    context = {
+        'days': days,
+        'windows': NEWS_STATS_WINDOWS,
+        'retention_days': NEWS_STATS_RETENTION_DAYS,
+        'total_news_window': total,
+        'total_feed': total_feed,
+        'total_discarded': total_discarded,
+        'discarded_share': round(total_discarded * 100 / total) if total else 0,
+        'daily_average': round(total / days, 1) if days else 0,
+        'source_count': len(ordered),
+        'source_labels_json': json.dumps(source_labels),
+        'source_feed_json': json.dumps(source_feed),
+        'source_discarded_json': json.dumps(source_discarded),
+        'day_labels_json': json.dumps([day[8:10] + '/' + day[5:7] for day in day_keys]),
+        'day_feed_json': json.dumps(day_feed),
+        'day_discarded_json': json.dumps(day_discarded),
+    }
+    return render(request, 'news_stats.html', context)
 
 
 @require_GET

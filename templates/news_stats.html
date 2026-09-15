@@ -1,0 +1,91 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>Estadísticas del feed</title>
+    {% include 'head_base.html' %}
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'css/stats.css' %}">
+    <link rel="stylesheet" href="{% static 'css/news_stats.css' %}">
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    {% include 'head_charts.html' %}
+    {% include 'pwa_head.html' %}
+</head>
+<body class="has-header stats-page news-stats-page">
+    {% include 'header.html' %}
+    <div class="statistics-container">
+        <div class="statistics-content">
+            <h2>Estadísticas del feed</h2>
+
+            <nav class="news-stats-windows" aria-label="Periodo">
+                {% for window in windows %}
+                <a href="?dias={{ window }}" {% if window == days %}class="is-active" aria-current="page"{% endif %}>
+                    {% if window == 1 %}Hoy{% else %}{{ window }} días{% endif %}
+                </a>
+                {% endfor %}
+            </nav>
+
+            <p class="news-stats-note">
+                La base solo conserva {{ retention_days }} días, así que «{{ retention_days }} días»
+                es todo lo que hay. Se cuenta por fecha de publicación, que es la
+                referencia que usa la purga.
+            </p>
+
+            <div class="news-stats-tiles">
+                <div class="news-stats-tile">
+                    <span class="news-stats-value">{{ total_news_window }}</span>
+                    <span class="news-stats-label">noticias recogidas</span>
+                </div>
+                <div class="news-stats-tile">
+                    <span class="news-stats-value">{{ total_feed }}</span>
+                    <span class="news-stats-label">llegaron al feed</span>
+                </div>
+                <div class="news-stats-tile">
+                    <span class="news-stats-value">{{ discarded_share }}%</span>
+                    <span class="news-stats-label">descartadas ({{ total_discarded }})</span>
+                </div>
+                <div class="news-stats-tile">
+                    <span class="news-stats-value">{{ daily_average }}</span>
+                    <span class="news-stats-label">al día de media</span>
+                </div>
+            </div>
+
+            {% if total_news_window %}
+            <div class="charts-row">
+                <div class="chart-container">
+                    <h3>Noticias por fuente</h3>
+                    <div class="chart-canvas-frame">
+                        <canvas id="perSourceChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <h3>Noticias por día</h3>
+                    <div class="chart-canvas-frame">
+                        <canvas id="perDayChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <p class="news-stats-empty">No hay noticias en este periodo.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if total_news_window %}
+    <script>
+        const sourceLabels = JSON.parse('{{ source_labels_json|escapejs }}');
+        const sourceFeed = JSON.parse('{{ source_feed_json|escapejs }}');
+        const sourceDiscarded = JSON.parse('{{ source_discarded_json|escapejs }}');
+        const dayLabels = JSON.parse('{{ day_labels_json|escapejs }}');
+        const dayFeed = JSON.parse('{{ day_feed_json|escapejs }}');
+        const dayDiscarded = JSON.parse('{{ day_discarded_json|escapejs }}');
+    </script>
+    <script src="{% static 'js/charts_common.js' %}"></script>
+    <script src="{% static 'js/news_stats.js' %}"></script>
+    {% endif %}
+    <script src="{% static 'js/background_motion.js' %}"></script>
+</body>
+</html>

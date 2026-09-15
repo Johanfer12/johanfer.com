@@ -1,0 +1,82 @@
+/* Panel de estadísticas del feed. Se apoya en stats.css, que ya trae el
+   contenedor y las tarjetas de gráfica; aquí solo va lo propio. */
+
+.news-stats-windows {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 0 0 12px;
+}
+
+.news-stats-windows a {
+    padding: 7px 15px;
+    border: 1px solid var(--card-border, rgba(198, 214, 242, 0.24));
+    border-radius: 999px;
+    color: var(--text-secondary, #c6d6f2);
+    background: rgba(255, 255, 255, 0.045);
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.news-stats-windows a:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.news-stats-windows a.is-active {
+    color: #081120;
+    background: var(--accent-strong, #8fb4e8);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.news-stats-note,
+.news-stats-empty {
+    max-width: 640px;
+    margin: 0 auto 20px;
+    color: var(--text-secondary, #c6d6f2);
+    font-size: 0.82rem;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.news-stats-empty {
+    padding: 30px;
+    border: 1px dashed rgba(198, 214, 242, 0.25);
+    border-radius: 14px;
+    font-size: 0.95rem;
+}
+
+.news-stats-tiles {
+    display: grid;
+    /* Cuatro en escritorio, dos en móvil; sin consultas de medios porque el
+       auto-fit ya lo resuelve con el ancho disponible. */
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin: 0 0 24px;
+}
+
+.news-stats-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 15px;
+    border: 1px solid var(--card-border, rgba(198, 214, 242, 0.24));
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.04);
+    text-align: center;
+}
+
+.news-stats-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.1;
+}
+
+.news-stats-label {
+    color: var(--text-secondary, #c6d6f2);
+    font-size: 0.78rem;
+}
