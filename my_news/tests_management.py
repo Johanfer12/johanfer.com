@@ -159,12 +159,13 @@ class FeedManagementTests(TestCase):
         self.client.post(delete_url, {'confirmation': 'delete'})
         self.assertFalse(FilterWord.objects.filter(pk=self.word_filter.pk).exists())
 
-    def test_management_dashboard_uses_only_three_content_queries(self):
+    def test_management_dashboard_keeps_its_queries_bounded(self):
         self.login()
 
-        # Dos consultas pertenecen a la sesión/autenticación; el panel usa una
-        # por cada tipo de contenido sin consultas adicionales para los totales.
-        with self.assertNumQueries(5):
+        # Dos consultas son de sesión/autenticación. Del resto: fuentes,
+        # filtros de IA, el total de palabras que casan, la primera tanda y
+        # los totales de la pestaña. Ninguna crece con el número de filtros.
+        with self.assertNumQueries(7):
             response = self.client.get(reverse('my_news:feed_management'))
 
         self.assertEqual(response.status_code, 200)
@@ -212,3 +213,125 @@ class FeedManagementTests(TestCase):
         self.assertEqual(accepted.status_code, 302)
         self.assertFalse(FeedSource.objects.filter(pk=self.source.pk).exists())
         self.assertFalse(News.objects.filter(guid='management-delete').exists())
+
+
+class WordFilterSearchTests(TestCase):
+    """Búsqueda y carga por tandas de las palabras filtro."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser(
+            username='admin', email='admin@example.com', password='pass'
+        )
+        self.client.force_login(self.user)
+        # Más de una tanda, para que la paginación se ejercite de verdad.
+        self.total = 95
+        FilterWord.objects.bulk_create([
+            FilterWord(word=f'palabra-{index:03d}', active=index % 2 == 0)
+            for index in range(self.total)
+        ])
+        self.vox = FilterWord.objects.create(word='Vox', active=True)
+
+    def rows(self, **params):
+        return self.client.get(reverse('my_news:word_filter_rows'), params)
+
+    def test_dashboard_only_renders_the_first_batch(self):
+        response = self.client.get(reverse('my_news:feed_management'))
+
+        from my_news.views import WORD_FILTERS_PAGE_SIZE
+        self.assertEqual(
+            response.content.count(b'data-word-filter-card'), WORD_FILTERS_PAGE_SIZE
+        )
+        self.assertContains(response, 'data-word-filter-search')
+        # El contador de la pestaña sigue hablando del total, no de lo pintado.
+        self.assertContains(response, f'/{self.total + 1}</span>')
+
+    def test_icons_are_declared_once_instead_of_per_card(self):
+        response = self.client.get(reverse('my_news:feed_management'))
+
+        # El dibujo de la papelera aparece una vez, en el sprite; las tarjetas
+        # solo lo referencian. Era la mayor parte del peso de la página.
+        self.assertContains(response, 'id="ic-filter-delete"', count=1)
+        self.assertContains(response, 'href="#ic-filter-delete"', count=40)
+
+    def test_search_matches_anywhere_in_the_word_and_ignores_case(self):
+        response = self.rows(q='vox')
+
+        payload = response.json()
+        self.assertEqual(payload['matched'], 1)
+        self.assertIn('Vox', payload['html'])
+
+    def test_search_covers_rows_beyond_the_loaded_batch(self):
+        # 'palabra-094' cae fuera de la primera tanda: si la búsqueda mirara
+        # solo lo cargado, no aparecería.
+        payload = self.rows(q='palabra-094').json()
+
+        self.assertEqual(payload['matched'], 1)
+        self.assertIn('palabra-094', payload['html'])
+
+    def test_batches_walk_the_whole_list_without_repeating(self):
+        first = self.rows().json()
+        second = self.rows(offset=first['next_offset']).json()
+        third = self.rows(offset=second['next_offset']).json()
+
+        self.assertEqual(first['matched'], self.total + 1)
+        self.assertTrue(first['has_more'])
+        self.assertTrue(second['has_more'])
+        self.assertFalse(third['has_more'])
+        self.assertEqual(
+            first['returned'] + second['returned'] + third['returned'], self.total + 1
+        )
+
+    def test_state_filter_splits_active_from_paused(self):
+        active = self.rows(estado='active').json()
+        paused = self.rows(estado='paused').json()
+
+        self.assertEqual(active['matched'] + paused['matched'], self.total + 1)
+        self.assertEqual(paused['matched'], FilterWord.objects.filter(active=False).count())
+
+    def test_unknown_state_falls_back_to_all(self):
+        self.assertEqual(self.rows(estado='inventado').json()['matched'], self.total + 1)
+
+    def test_negative_offset_does_not_walk_off_the_list(self):
+        payload = self.rows(offset=-20).json()
+
+        self.assertEqual(payload['next_offset'], 40)
+        self.assertIn('palabra-000', payload['html'])
+
+    def test_unreadable_offset_starts_from_the_beginning(self):
+        self.assertEqual(self.rows(offset='abc').json()['next_offset'], 40)
+
+    def test_search_without_matches_returns_an_empty_batch(self):
+        payload = self.rows(q='no-existe-esta-palabra').json()
+
+        self.assertEqual(payload['matched'], 0)
+        self.assertEqual(payload['html'], '')
+        self.assertFalse(payload['has_more'])
+
+    def test_rows_endpoint_is_bounded_and_superuser_only(self):
+        with self.assertNumQueries(4):
+            self.rows(q='palabra')
+
+        self.client.logout()
+        response = self.rows()
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/noticias/login/', response.url)
+
+    def test_ajax_toggle_answers_json_without_redirecting(self):
+        response = self.client.post(
+            reverse('my_news:word_filter_toggle', args=[self.vox.pk]),
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload['active'])
+        self.vox.refresh_from_db()
+        self.assertFalse(self.vox.active)
+
+    def test_plain_toggle_still_redirects_for_the_no_javascript_path(self):
+        response = self.client.post(
+            reverse('my_news:word_filter_toggle', args=[self.vox.pk])
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('word-filters', response.url)

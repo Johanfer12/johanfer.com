@@ -15,6 +15,7 @@
 </head>
 <body class="has-header management-page">
     {% include 'header.html' %}
+    {% include 'feed_management_word_icons.html' %}
 
     <main class="management-shell">
         <section class="management-hero">
@@ -25,7 +26,7 @@
             </div>
             <nav class="management-jump" aria-label="Secciones de configuración" role="tablist">
                 <a id="management-tab-sources" href="#sources" role="tab" aria-controls="sources" aria-selected="false" tabindex="-1" data-management-tab>Fuentes <span>{{ active_sources }}/{{ sources|length }}</span></a>
-                <a id="management-tab-word-filters" href="#word-filters" role="tab" aria-controls="word-filters" aria-selected="true" data-management-tab>Palabras <span>{{ active_word_filters }}/{{ word_filters|length }}</span></a>
+                <a id="management-tab-word-filters" href="#word-filters" role="tab" aria-controls="word-filters" aria-selected="true" data-management-tab>Palabras <span>{{ active_word_filters }}/{{ total_word_filters }}</span></a>
                 <a id="management-tab-ai-filters" href="#ai-filters" role="tab" aria-controls="ai-filters" aria-selected="false" tabindex="-1" data-management-tab>IA <span>{{ active_ai_filters }}/{{ ai_filters|length }}</span></a>
             </nav>
         </section>
@@ -84,39 +85,41 @@
                 </div>
                 <a class="management-primary" href="{% url 'my_news:word_filter_create' %}">+ Nuevo filtro</a>
             </div>
-            <div class="management-grid management-grid-words">
+            {% comment %}
+            El formulario es GET de verdad para que la búsqueda funcione sin
+            JavaScript; el script lo intercepta y pide las filas por fetch.
+            {% endcomment %}
+            <form class="management-search" method="get" action="{% url 'my_news:feed_management' %}" data-word-filter-search>
+                <div class="management-search-field">
+                    <svg class="management-search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                    <input type="search" id="word-filter-search" name="q" value="{{ word_filter_search }}"
+                           placeholder="Buscar entre {{ total_word_filters }} palabras filtro"
+                           aria-label="Buscar palabras filtro" autocomplete="off" spellcheck="false">
+                    <button class="management-search-clear" type="button" data-word-filter-clear
+                            aria-label="Limpiar búsqueda" {% if not word_filter_search %}hidden{% endif %}>&times;</button>
+                </div>
+                <select name="estado" aria-label="Estado del filtro" data-word-filter-estado>
+                    <option value="all" {% if word_filter_state == 'all' %}selected{% endif %}>Todos</option>
+                    <option value="active" {% if word_filter_state == 'active' %}selected{% endif %}>Activos</option>
+                    <option value="paused" {% if word_filter_state == 'paused' %}selected{% endif %}>Pausados</option>
+                </select>
+                <button class="management-secondary" type="submit">Buscar</button>
+            </form>
+            <p class="management-search-summary" data-word-filter-summary aria-live="polite"></p>
+            <div class="management-grid management-grid-words" data-word-filter-grid
+                 data-rows-url="{% url 'my_news:word_filter_rows' %}"
+                 data-next-offset="{{ next_word_filter_offset }}"
+                 data-has-more="{{ has_more_word_filters|yesno:'true,false' }}"
+                 data-matched="{{ matched_word_filters }}">
                 {% for filter in word_filters %}
-                <article class="management-card management-card-compact management-word-card {% if not filter.active %}is-inactive{% endif %}">
-                    <div class="management-word-row management-word-main">
-                        <span class="status-pill {% if filter.active %}is-active{% endif %}">{% if filter.active %}Activo{% else %}Pausado{% endif %}</span>
-                        <h3 title="{{ filter.word }}">{{ filter.word }}</h3>
-                        <span class="management-count">{{ filter.news_count }} filtradas</span>
-                    </div>
-                    <div class="management-word-row management-word-secondary">
-                        <p>{% if filter.title_only %}Solo en el título{% else %}Título y descripción{% endif %}</p>
-                        <div class="management-actions management-icon-actions">
-                        <form method="post" action="{% url 'my_news:word_filter_toggle' filter.pk %}">
-                            {% csrf_token %}
-                            <button class="management-secondary management-icon-button" type="submit" aria-label="{% if filter.active %}Pausar{% else %}Activar{% endif %} {{ filter.word }}" title="{% if filter.active %}Pausar{% else %}Activar{% endif %}">
-                                {% if filter.active %}
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
-                                {% else %}
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7Z"/></svg>
-                                {% endif %}
-                            </button>
-                        </form>
-                        <a class="management-secondary management-icon-button" href="{% url 'my_news:word_filter_edit' filter.pk %}" aria-label="Editar {{ filter.word }}" title="Editar" data-word-filter-edit data-word="{{ filter.word }}" data-active="{{ filter.active|yesno:'true,false' }}" data-title-only="{{ filter.title_only|yesno:'true,false' }}">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/></svg>
-                        </a>
-                        <a class="management-danger management-icon-button" href="{% url 'my_news:word_filter_delete' filter.pk %}" aria-label="Eliminar {{ filter.word }}" title="Eliminar">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>
-                        </a>
-                        </div>
-                    </div>
-                </article>
+                {% include 'feed_management_word_card.html' %}
                 {% empty %}
-                <div class="management-empty">No hay filtros por palabra.</div>
+                <div class="management-empty" data-word-filter-empty>No hay filtros por palabra que coincidan.</div>
                 {% endfor %}
+            </div>
+            <div class="management-load-more">
+                <button class="management-secondary" type="button" data-word-filter-more
+                        {% if not has_more_word_filters %}hidden{% endif %}>Cargar más</button>
             </div>
         </section>
 

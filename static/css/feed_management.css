@@ -661,3 +661,120 @@
         transition: none;
     }
 }
+
+/* Buscador de palabras filtro -------------------------------------------- */
+
+.management-search {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 0 0 14px;
+}
+
+.management-search-field {
+    position: relative;
+    flex: 1 1 260px;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+}
+
+.management-search-icon {
+    position: absolute;
+    left: 12px;
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: var(--text-secondary);
+    stroke-width: 2;
+    stroke-linecap: round;
+    pointer-events: none;
+}
+
+.management-search-field input {
+    width: 100%;
+    /* Hueco a cada lado para la lupa y la equis, que van encima del campo. */
+    padding: 11px 38px 11px 37px;
+    border: 1px solid rgba(198, 214, 242, 0.24);
+    border-radius: 11px;
+    color: #fff;
+    background: rgba(4, 10, 22, 0.62);
+    font: inherit;
+    outline: none;
+}
+
+.management-search-field input::-webkit-search-cancel-button {
+    /* La equis nativa se esconde: la sustituye el botón propio, que además
+       tiene que avisar al script para relanzar la búsqueda. */
+    appearance: none;
+}
+
+.management-search-field input:focus {
+    border-color: var(--accent-strong);
+    box-shadow: 0 0 0 3px rgba(143, 180, 232, 0.13);
+}
+
+.management-search-clear {
+    position: absolute;
+    right: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    color: var(--text-secondary);
+    background: transparent;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.management-search-clear:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.management-search select {
+    min-height: 43px;
+    padding: 0 11px;
+    border: 1px solid rgba(198, 214, 242, 0.24);
+    border-radius: 11px;
+    color: #fff;
+    background: rgba(4, 10, 22, 0.62);
+    font: inherit;
+    outline: none;
+    cursor: pointer;
+}
+
+.management-search select:focus {
+    border-color: var(--accent-strong);
+}
+
+.management-search-summary {
+    margin: 0 0 14px 4px;
+    color: var(--text-secondary);
+    font-size: 0.84rem;
+    min-height: 1em;
+}
+
+.management-load-more {
+    display: flex;
+    justify-content: center;
+    margin-top: 16px;
+}
+
+/* El atributo `hidden` tiene que ganar a los `display` de estos botones.
+   `[hidden]` solo trae un `display:none` de la hoja del navegador, así que
+   cualquier `display` de autor lo pisa: sin esto, ocultar «Cargar más» o la
+   equis de limpiar desde el script no los quitaba de la vista. */
+.management-primary[hidden],
+.management-secondary[hidden],
+.management-danger[hidden],
+.management-danger-solid[hidden],
+.management-search-clear[hidden] {
+    display: none;
+}

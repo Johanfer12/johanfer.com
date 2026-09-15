@@ -37,6 +37,9 @@ from .comment_extractors import (
 logger = logging.getLogger(__name__)
 
 PAGE_SIZE = 25
+# Palabras filtro por tanda en la configuración. Con 150 reglas, pintarlas
+# todas de golpe eran 354 KB de HTML; la búsqueda hace el resto.
+WORD_FILTERS_PAGE_SIZE = 40
 # TTL corto: el caché es LocMem (independiente por worker de gunicorn y por
 # proceso), así que la invalidación por versión no cruza procesos. Con 5s la
 # ventana de datos desactualizados queda acotada a algo imperceptible.
@@ -372,16 +375,32 @@ def _management_redirect(section):
 @superuser_required
 def feed_management(request):
     sources = list(FeedSource.objects.annotate(news_count=Count('news')).order_by('name'))
-    word_filters = list(
-        FilterWord.objects.annotate(news_count=Count('filtered_news')).order_by('word')
-    )
     ai_filters = list(AIFilterInstruction.objects.order_by('-created_at'))
+
+    # Las palabras filtro llegan por tandas: la página trae la primera y el
+    # resto se pide a `word_filter_rows`. Los totales salen de agregados, no
+    # de recorrer la lista, que ya no está entera aquí.
+    search = (request.GET.get('q') or '').strip()
+    state = _word_filter_state(request.GET.get('estado'))
+    word_filters, matched_word_filters, _, has_more_word_filters = _word_filter_page(search, state, 0)
+    word_filter_totals = FilterWord.objects.aggregate(
+        total=Count('pk'),
+        active=Count('pk', filter=Q(active=True)),
+    )
+
     context = {
         'sources': sources,
         'word_filters': word_filters,
         'ai_filters': ai_filters,
+        'word_filter_search': search,
+        'word_filter_state': state,
+        'matched_word_filters': matched_word_filters,
+        'has_more_word_filters': has_more_word_filters,
+        'next_word_filter_offset': len(word_filters),
+        'word_filters_page_size': WORD_FILTERS_PAGE_SIZE,
+        'total_word_filters': word_filter_totals['total'],
         'active_sources': sum(source.active for source in sources),
-        'active_word_filters': sum(word_filter.active for word_filter in word_filters),
+        'active_word_filters': word_filter_totals['active'],
         'active_ai_filters': sum(ai_filter.active for ai_filter in ai_filters),
     }
     return render(request, 'feed_management.html', context)
@@ -394,6 +413,70 @@ def _render_management_form(request, form, *, title, eyebrow, back_section, subm
         'form_eyebrow': eyebrow,
         'back_section': back_section,
         'submit_label': submit_label,
+    })
+
+
+def _word_filter_base(search=None, state=None):
+    """Palabras filtro que casan con la búsqueda y el estado, sin recuentos.
+
+    La búsqueda va contra la base y no contra lo ya pintado: la lista se carga
+    por tandas, así que filtrar en el navegador solo miraría el trozo cargado.
+    """
+    qs = FilterWord.objects.all()
+    if search:
+        qs = qs.filter(word__icontains=search)
+    if state == 'active':
+        qs = qs.filter(active=True)
+    elif state == 'paused':
+        qs = qs.filter(active=False)
+    return qs
+
+
+def _word_filter_state(value):
+    return value if value in ('active', 'paused') else 'all'
+
+
+def _word_filter_page(search, state, offset):
+    """Una tanda de palabras más el total que casa con la búsqueda."""
+    # El total se cuenta sobre el queryset SIN anotar: con el `annotate` el
+    # COUNT se envuelve en una subconsulta agrupada que no hace falta para
+    # contar filas.
+    matched = _word_filter_base(search, state).count()
+    rows_qs = (
+        _word_filter_base(search, state)
+        .annotate(news_count=Count('filtered_news'))
+        .order_by('word', 'pk')
+    )
+    # Devuelve el desplazamiento ya acotado: quien lo llama lo necesita para
+    # decir por dónde sigue, y con uno negativo la cuenta saldría mal.
+    offset = max(0, offset)
+    rows = list(rows_qs[offset:offset + WORD_FILTERS_PAGE_SIZE])
+    return rows, matched, offset, offset + len(rows) < matched
+
+
+@require_GET
+@superuser_required
+def word_filter_rows(request):
+    """Tanda de palabras filtro en JSON, para buscar sin recargar la página."""
+    search = (request.GET.get('q') or '').strip()
+    state = _word_filter_state(request.GET.get('estado'))
+    try:
+        offset = int(request.GET.get('offset') or 0)
+    except (TypeError, ValueError):
+        offset = 0
+
+    rows, matched, offset, has_more = _word_filter_page(search, state, offset)
+    html = ''.join(
+        render_to_string('feed_management_word_card.html', {'filter': word_filter}, request=request)
+        for word_filter in rows
+    )
+    return JsonResponse({
+        'status': 'success',
+        'html': html,
+        'matched': matched,
+        'returned': len(rows),
+        'next_offset': offset + len(rows),
+        'has_more': has_more,
     })
 
 
@@ -484,10 +567,18 @@ def ai_filter_edit(request, pk):
     )
 
 
+def _is_ajax(request):
+    return request.headers.get('x-requested-with') == 'XMLHttpRequest'
+
+
 def _toggle_management_object(request, obj, section, label):
     obj.active = not obj.active
     obj.save(update_fields=['active'])
     state = 'activado' if obj.active else 'desactivado'
+    if _is_ajax(request):
+        # Sin recargar: la configuración pierde la búsqueda escrita y la
+        # posición de la lista si se responde con el redirect de siempre.
+        return JsonResponse({'status': 'success', 'active': obj.active, 'message': f'{label} {state}.'})
     messages.success(request, f'{label} {state}.')
     return _management_redirect(section)
 

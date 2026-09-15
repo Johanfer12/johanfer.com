@@ -1,0 +1,19 @@
+{% comment %}
+Iconos de la tarjeta de palabra filtro, declarados una sola vez por página.
+
+Antes cada tarjeta llevaba sus tres SVG en línea. Con 150 filtros eso son 450
+copias del mismo dibujo en la misma respuesta, y era la mayor parte de los
+354 KB que pesaba la página.
+
+Mismo patrón que `news_icons.html`: el sprite se saca de pantalla en vez de
+ocultarse con display:none, que es la forma segura de que <use> siga
+resolviendo en todos los navegadores. El color sale de currentColor, o sea
+del botón que contiene el icono.
+{% endcomment %}
+<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"
+     style="position:absolute;width:0;height:0;overflow:hidden">
+  <symbol id="ic-filter-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+  <symbol id="ic-filter-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7Z"/></symbol>
+  <symbol id="ic-filter-edit" viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/></symbol>
+  <symbol id="ic-filter-delete" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></symbol>
+</svg>

@@ -20,6 +20,7 @@ urlpatterns = [
     path('configuracion/fuentes/<int:pk>/editar/', views.source_edit, name='source_edit'),
     path('configuracion/fuentes/<int:pk>/estado/', views.source_toggle, name='source_toggle'),
     path('configuracion/fuentes/<int:pk>/eliminar/', views.source_delete, name='source_delete'),
+    path('configuracion/filtros/lista/', views.word_filter_rows, name='word_filter_rows'),
     path('configuracion/filtros/nuevo/', views.word_filter_create, name='word_filter_create'),
     path('configuracion/filtros/<int:pk>/editar/', views.word_filter_edit, name='word_filter_edit'),
     path('configuracion/filtros/<int:pk>/estado/', views.word_filter_toggle, name='word_filter_toggle'),

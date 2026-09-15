@@ -1,0 +1,41 @@
+{% comment %}
+Una tarjeta de palabra filtro. Se incluye desde la página completa y desde el
+fragmento que sirve `word_filter_rows`, para que ambas pinten exactamente lo
+mismo sin duplicar el marcado.
+
+Los SVG salen del sprite de `feed_management_word_icons.html`.
+
+El pausar/activar sigue siendo un <form> de verdad y no un botón con JS: así
+funciona sin JavaScript. El script lo intercepta para no recargar la página y
+no perder la búsqueda que hubiera escrita.
+{% endcomment %}
+<article class="management-card management-card-compact management-word-card {% if not filter.active %}is-inactive{% endif %}" data-word-filter-card data-filter-id="{{ filter.pk }}">
+    <div class="management-word-row management-word-main">
+        <span class="status-pill {% if filter.active %}is-active{% endif %}">{% if filter.active %}Activo{% else %}Pausado{% endif %}</span>
+        <h3 title="{{ filter.word }}">{{ filter.word }}</h3>
+        <span class="management-count">{{ filter.news_count }} filtradas</span>
+    </div>
+    <div class="management-word-row management-word-secondary">
+        <p>{% if filter.title_only %}Solo en el título{% else %}Título y descripción{% endif %}</p>
+        <div class="management-actions management-icon-actions">
+            <form method="post" action="{% url 'my_news:word_filter_toggle' filter.pk %}" data-word-filter-toggle>
+                {% csrf_token %}
+                <button class="management-secondary management-icon-button" type="submit"
+                        aria-label="{% if filter.active %}Pausar{% else %}Activar{% endif %} {{ filter.word }}"
+                        title="{% if filter.active %}Pausar{% else %}Activar{% endif %}">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-filter-{% if filter.active %}pause{% else %}play{% endif %}"></use></svg>
+                </button>
+            </form>
+            <a class="management-secondary management-icon-button" href="{% url 'my_news:word_filter_edit' filter.pk %}"
+               aria-label="Editar {{ filter.word }}" title="Editar" data-word-filter-edit
+               data-word="{{ filter.word }}" data-active="{{ filter.active|yesno:'true,false' }}"
+               data-title-only="{{ filter.title_only|yesno:'true,false' }}">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-filter-edit"></use></svg>
+            </a>
+            <a class="management-danger management-icon-button" href="{% url 'my_news:word_filter_delete' filter.pk %}"
+               aria-label="Eliminar {{ filter.word }}" title="Eliminar">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-filter-delete"></use></svg>
+            </a>
+        </div>
+    </div>
+</article>
