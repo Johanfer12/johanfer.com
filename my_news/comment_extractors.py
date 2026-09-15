@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 import xml.etree.ElementTree as ElementTree
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone as datetime_timezone
@@ -28,6 +29,12 @@ REQUEST_HEADERS = {
         "Chrome/138.0 Safari/537.36"
     ),
     "Accept-Language": "es-ES,es;q=0.9,en;q=0.7",
+}
+# CloudFront responde 403 al User-Agent de navegador que usan los demás
+# extractores; con el del bot del propio proyecto sirve la página entera.
+WOWHEAD_REQUEST_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; johanfer-news-bot/1.0)",
+    "Accept-Language": "en-US,en;q=0.9",
 }
 
 
@@ -126,12 +133,82 @@ def _extract_assigned_json(html: str, marker: str) -> dict[str, Any]:
     return value
 
 
-def _request_html(url: str, *, params: dict[str, Any] | None = None) -> str:
+def _extract_listview(html: str, template: str) -> dict[str, Any]:
+    """Lee el ``new Listview({...})`` cuya plantilla coincide con ``template``.
+
+    Una página puede montar varios Listview (comentarios, noticias
+    relacionadas), así que no vale con quedarse con el primero.
+    """
+    marker = "new Listview("
+    decoder = json.JSONDecoder()
+    index = html.find(marker)
+    while index >= 0:
+        json_start = html.find("{", index + len(marker))
+        if json_start < 0:
+            break
+        try:
+            value, _ = decoder.raw_decode(html[json_start:])
+        except json.JSONDecodeError:
+            value = None
+        if isinstance(value, dict) and value.get("template") == template:
+            return value
+        index = html.find(marker, index + len(marker))
+
+    raise CommentExtractionError("No se encontró la información de comentarios.")
+
+
+# Citas anidadas: el cuerpo no puede contener otra apertura, así que cada
+# pasada resuelve las de dentro y la siguiente las de fuera.
+_BBCODE_QUOTE_RE = re.compile(
+    r"\[quote(?:=([^\]]*))?\]((?:(?!\[quote)[\s\S])*?)\[/quote\]",
+    re.IGNORECASE,
+)
+_BBCODE_IMG_RE = re.compile(r"\[img\][\s\S]*?\[/img\]", re.IGNORECASE)
+_BBCODE_URL_RE = re.compile(r"\[url=[^\]]*\]([\s\S]*?)\[/url\]", re.IGNORECASE)
+_BBCODE_TAG_RE = re.compile(r"\[/?[a-z][a-z0-9]*(?:=[^\]]*)?\]", re.IGNORECASE)
+_BLANK_LINES_RE = re.compile(r"\n{3,}")
+_COMMENT_COUNT_RE = re.compile(r'data-show-label="Show\s+([\d.,]+)\s+Comments?"', re.IGNORECASE)
+MAX_BBCODE_PASSES = 8
+
+
+def _bbcode_to_text(value: Any) -> str:
+    """Convierte el BBCode de Wowhead en texto plano legible."""
+    if value is None:
+        return ""
+
+    text = str(value).replace("\r\n", "\n").replace("\r", "\n")
+    text = _BBCODE_IMG_RE.sub("", text)
+
+    for _ in range(MAX_BBCODE_PASSES):
+        text, replacements = _BBCODE_QUOTE_RE.subn(_render_quote, text)
+        if not replacements:
+            break
+
+    text = _BBCODE_URL_RE.sub(lambda match: match.group(1), text)
+    text = _BBCODE_TAG_RE.sub("", text)
+    return _BLANK_LINES_RE.sub("\n\n", text).strip()
+
+
+def _render_quote(match: "re.Match[str]") -> str:
+    author = (match.group(1) or "").strip()
+    quoted = match.group(2).strip()
+    if not quoted:
+        return ""
+    quote = "«" + quoted + "»"
+    return (f"{author}: {quote}" if author else quote) + "\n"
+
+
+def _request_html(
+    url: str,
+    *,
+    params: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
+) -> str:
     try:
         response = requests.get(
             url,
             params=params,
-            headers=REQUEST_HEADERS,
+            headers=headers or REQUEST_HEADERS,
             timeout=REQUEST_TIMEOUT,
         )
         response.raise_for_status()
@@ -407,11 +484,69 @@ class ElChapuzasDisqusCommentExtractor(CommentExtractor):
         }
 
 
+class WowheadCommentExtractor(CommentExtractor):
+    """Comentarios que Wowhead incrusta en la propia página de la noticia."""
+
+    source_name = "Wowhead"
+    domains = ("wowhead.com",)
+    listview_template = "news-comment"
+
+    def _total_from_page(self, html: str, fallback: int) -> int:
+        """El botón de plegar anuncia el total, incluidas páginas posteriores."""
+        match = _COMMENT_COUNT_RE.search(html)
+        if match is None:
+            return fallback
+        try:
+            return int(match.group(1).replace(",", "").replace(".", ""))
+        except ValueError:
+            return fallback
+
+    def extract(
+        self,
+        url: str,
+        *,
+        guid: str | None = None,
+        title: str | None = None,
+    ) -> dict[str, Any]:
+        article_html = _request_html(url, headers=WOWHEAD_REQUEST_HEADERS)
+        listview = _extract_listview(article_html, self.listview_template)
+
+        raw_comments = listview.get("data") or []
+        comments = []
+        for item in raw_comments[:MAX_COMMENTS]:
+            if not isinstance(item, dict):
+                continue
+            body = _plain_text(_bbcode_to_text(item.get("body")))
+            if not body:
+                continue
+            comments.append({
+                "id": str(item.get("id") or ""),
+                "user": item.get("user") or "Anónimo",
+                "comment": body,
+                "date": str(item["date"]) if item.get("date") else None,
+                # Wowhead no anida: las respuestas se citan dentro del texto.
+                "parent_id": None,
+                "depth": 0,
+                # Tampoco publica votos; None evita pintar un cero que mentiría.
+                "votes": None,
+                "upvotes": None,
+                "downvotes": None,
+                "media": [],
+            })
+
+        return {
+            "source": self.source_name,
+            "total": self._total_from_page(article_html, len(comments)),
+            "comments": comments,
+        }
+
+
 # El orden permite registrar primero extractores más específicos si dos
 # adaptadores llegaran a compartir dominio.
 COMMENT_EXTRACTORS: tuple[CommentExtractor, ...] = (
     ElChapuzasDisqusCommentExtractor(),
     WebediaCommentExtractor(),
+    WowheadCommentExtractor(),
 )
 
 

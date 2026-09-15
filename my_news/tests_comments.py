@@ -9,8 +9,10 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .comment_extractors import (
+    CommentExtractionError,
     ElChapuzasDisqusCommentExtractor,
     WebediaCommentExtractor,
+    WowheadCommentExtractor,
     get_comment_extractor,
     supports_comment_extraction,
 )
@@ -48,10 +50,15 @@ class CommentExtractorRegistryTests(SimpleTestCase):
             get_comment_extractor('https://elchapuzasinformatico.com/noticia/'),
             ElChapuzasDisqusCommentExtractor,
         )
+        self.assertIsInstance(
+            get_comment_extractor('https://www.wowhead.com/news=382891/rutas'),
+            WowheadCommentExtractor,
+        )
 
     def test_registry_does_not_match_domain_suffix_attacks(self):
         self.assertFalse(supports_comment_extraction('https://xataka.com.example.org/noticia'))
         self.assertFalse(supports_comment_extraction('https://example.org/?next=xataka.com'))
+        self.assertFalse(supports_comment_extraction('https://wowhead.com.example.org/noticia'))
 
 
 class WebediaCommentExtractorTests(SimpleTestCase):
@@ -336,3 +343,161 @@ class NewsCommentsViewTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()['status'], 'unsupported')
+
+
+NL = chr(10)
+CRNL = chr(13) + chr(10)
+OPEN_Q = chr(171)
+CLOSE_Q = chr(187)
+
+
+def wowhead_page(comments, *, label=None, extra_listview=''):
+    """Reproduce la página de Wowhead: botón con el total y el Listview."""
+    toggle = ''
+    if label is not None:
+        toggle = f'<div data-show-label="{label}" id="comments-button-toggle-group"></div>'
+    payload = json.dumps({'id': 'posts', 'template': 'news-comment', 'data': comments})
+    return (
+        f'{toggle}{extra_listview}'
+        f'<div id="lv-posts"></div><script>new Listview({payload});</script>'
+    )
+
+
+class WowheadCommentExtractorTests(SimpleTestCase):
+    ARTICLE_URL = 'https://www.wowhead.com/forever/news/tres-rutas-382891'
+
+    @patch('my_news.comment_extractors.requests.get')
+    def test_extracts_comments_from_the_article_listview(self, get_mock):
+        get_mock.return_value = response_with_text(wowhead_page(
+            [
+                {
+                    'id': 6418258,
+                    'bodyPrefix': '[db=classicplus]',
+                    'body': 'Noice. Honestly, the ironforge run is nostalgic.',
+                    'date': '2026-09-15T09:07:26-05:00',
+                    'user': 'Sp33dey',
+                },
+                {
+                    'id': 6418259,
+                    'body': 'Hopefully they add more Zeppelins',
+                    'date': '2026-09-15T09:08:34-05:00',
+                    'user': 'Dekabe',
+                },
+            ],
+            label='Show 19 Comments',
+        ))
+
+        result = WowheadCommentExtractor().extract(self.ARTICLE_URL)
+
+        self.assertEqual(result['source'], 'Wowhead')
+        # El botón manda sobre el recuento: hay más comentarios paginados.
+        self.assertEqual(result['total'], 19)
+        self.assertEqual(len(result['comments']), 2)
+        self.assertEqual(result['comments'][0]['id'], '6418258')
+        self.assertEqual(result['comments'][0]['user'], 'Sp33dey')
+        self.assertEqual(
+            result['comments'][0]['comment'],
+            'Noice. Honestly, the ironforge run is nostalgic.',
+        )
+        self.assertEqual(result['comments'][0]['date'], '2026-09-15T09:07:26-05:00')
+        self.assertIsNone(result['comments'][0]['votes'])
+        self.assertIsNone(result['comments'][0]['parent_id'])
+        self.assertEqual(result['comments'][0]['depth'], 0)
+        self.assertEqual(result['comments'][0]['media'], [])
+
+    @patch('my_news.comment_extractors.requests.get')
+    def test_uses_the_bot_user_agent_cloudfront_accepts(self, get_mock):
+        get_mock.return_value = response_with_text(wowhead_page([]))
+
+        WowheadCommentExtractor().extract(self.ARTICLE_URL)
+
+        user_agent = get_mock.call_args.kwargs['headers']['User-Agent']
+        self.assertIn('johanfer-news-bot', user_agent)
+        self.assertNotIn('Chrome', user_agent)
+
+    @patch('my_news.comment_extractors.requests.get')
+    def test_ignores_listviews_that_are_not_comments(self, get_mock):
+        other = '<script>new Listview({"id":"posts","template":"news","data":[{"id":1}]});</script>'
+        get_mock.return_value = response_with_text(wowhead_page(
+            [{'id': 7, 'body': 'El bueno', 'date': None, 'user': 'Ada'}],
+            extra_listview=other,
+        ))
+
+        result = WowheadCommentExtractor().extract(self.ARTICLE_URL)
+
+        self.assertEqual(len(result['comments']), 1)
+        self.assertEqual(result['comments'][0]['comment'], 'El bueno')
+        self.assertIsNone(result['comments'][0]['date'])
+
+    @patch('my_news.comment_extractors.requests.get')
+    def test_falls_back_to_the_listview_size_without_a_toggle_label(self, get_mock):
+        get_mock.return_value = response_with_text(wowhead_page(
+            [{'id': 7, 'body': 'Uno', 'user': 'Ada'}, {'id': 8, 'body': 'Dos', 'user': 'Linus'}],
+        ))
+
+        self.assertEqual(WowheadCommentExtractor().extract(self.ARTICLE_URL)['total'], 2)
+
+    @patch('my_news.comment_extractors.requests.get')
+    def test_rejects_pages_without_the_comments_listview(self, get_mock):
+        get_mock.return_value = response_with_text('<div id="lv-posts"></div>')
+
+        with self.assertRaises(CommentExtractionError):
+            WowheadCommentExtractor().extract(self.ARTICLE_URL)
+
+    @patch('my_news.comment_extractors.requests.get')
+    def test_reports_a_blocked_article_as_a_controlled_error(self, get_mock):
+        get_mock.return_value = response_with_http_error()
+
+        with self.assertRaises(CommentExtractionError):
+            WowheadCommentExtractor().extract(self.ARTICLE_URL)
+
+
+class WowheadBBCodeTests(SimpleTestCase):
+    """El cuerpo llega en BBCode, no en HTML como el resto de fuentes."""
+
+    def extract_one(self, body):
+        with patch('my_news.comment_extractors.requests.get') as get_mock:
+            get_mock.return_value = response_with_text(wowhead_page(
+                [{'id': 1, 'body': body, 'user': 'Ada'}],
+            ))
+            result = WowheadCommentExtractor().extract('https://www.wowhead.com/news=1/x')
+        return result['comments'][0]['comment']
+
+    def test_renders_a_quote_with_its_author(self):
+        self.assertEqual(
+            self.extract_one(
+                '[quote=Dekabe]More Zeppelins[/quote]' + CRNL + CRNL + 'Should add Thunder Bluff'
+            ),
+            'Dekabe: ' + OPEN_Q + 'More Zeppelins' + CLOSE_Q + NL + NL + 'Should add Thunder Bluff',
+        )
+
+    def test_renders_nested_quotes_from_the_inside_out(self):
+        self.assertEqual(
+            self.extract_one('[quote=Ada][quote=Linus]Raiz[/quote]Medio[/quote]Fuera'),
+            ('Ada: ' + OPEN_Q + 'Linus: ' + OPEN_Q + 'Raiz' + CLOSE_Q + NL + 'Medio'
+             + CLOSE_Q + NL + 'Fuera'),
+        )
+
+    def test_keeps_the_label_of_a_link_and_drops_images(self):
+        self.assertEqual(
+            self.extract_one(
+                'Mira [url=https://ejemplo.test/a]esto[/url] [img]https://x.test/i.png[/img]'
+            ),
+            'Mira esto',
+        )
+
+    def test_strips_remaining_markup_and_collapses_blank_lines(self):
+        self.assertEqual(
+            self.extract_one('[b]Negrita[/b]' + NL * 4 + 'Final'),
+            'Negrita' + NL + NL + 'Final',
+        )
+
+    def test_skips_comments_left_empty_after_cleaning(self):
+        with patch('my_news.comment_extractors.requests.get') as get_mock:
+            get_mock.return_value = response_with_text(wowhead_page([
+                {'id': 1, 'body': '[img]https://x.test/i.png[/img]', 'user': 'Ada'},
+                {'id': 2, 'body': 'Con texto', 'user': 'Linus'},
+            ]))
+            result = WowheadCommentExtractor().extract('https://www.wowhead.com/news=1/x')
+
+        self.assertEqual([c['id'] for c in result['comments']], ['2'])

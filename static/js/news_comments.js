@@ -135,6 +135,9 @@
                 header.appendChild(metadata);
             }
 
+            // Wowhead no publica votos: sin dato no se pinta el indicador,
+            // porque un cero se leeria como "nadie lo ha votado".
+            const hasVotes = comment.votes !== null && comment.votes !== undefined;
             const votes = Number(comment.votes) || 0;
             const voteIndicator = document.createElement('span');
             const hasVoteBreakdown = comment.upvotes !== null && comment.upvotes !== undefined
@@ -180,7 +183,7 @@
                 `;
             }
             voteIndicator.setAttribute('aria-label', voteIndicator.title);
-            header.appendChild(voteIndicator);
+            if (hasVotes) header.appendChild(voteIndicator);
 
             const replyCount = threadRoots.get(comment.id) || 0;
             if (replyCount) {
