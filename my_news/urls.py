@@ -30,6 +30,7 @@ urlpatterns = [
     path('configuracion/filtros-ia/<int:pk>/estado/', views.ai_filter_toggle, name='ai_filter_toggle'),
     path('configuracion/filtros-ia/<int:pk>/eliminar/', views.ai_filter_delete, name='ai_filter_delete'),
     path('redundancy-test/', views.test_redundancy, name='redundancy_test'),
+    path('redundancy-test/filas/', views.redundancy_rows, name='redundancy_rows'),
     path('estadisticas/', views.news_stats, name='news_stats'),
     path('system-stats/', views.system_stats, name='system_stats'),
     path('image-proxy/', views.image_proxy, name='image_proxy'),

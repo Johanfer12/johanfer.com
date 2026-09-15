@@ -41,6 +41,10 @@ PAGE_SIZE = 25
 # Palabras filtro por tanda en la configuración. Con 150 reglas, pintarlas
 # todas de golpe eran 354 KB de HTML; la búsqueda hace el resto.
 WORD_FILTERS_PAGE_SIZE = 40
+# Filas por tanda en la página de redundancia. Cada una lleva el texto
+# completo de la noticia (dos, en los pares redundantes), así que pintar el
+# día entero eran 365 KB de HTML.
+REDUNDANCY_PAGE_SIZE = 25
 # TTL corto: el caché es LocMem (independiente por worker de gunicorn y por
 # proceso), así que la invalidación por versión no cruza procesos. Con 5s la
 # ventana de datos desactualizados queda acotada a algo imperceptible.
@@ -971,55 +975,85 @@ def toggle_save_news(request, pk):
         return JsonResponse({'status': 'error', 'message': str(e)})
 
 
+REDUNDANCY_TABS = ('keyword', 'ai', 'redundant')
+
+
+def _redundancy_day_bounds(value):
+    """Día local de la página de redundancia, tolerando una fecha inválida."""
+    try:
+        selected_date = datetime.strptime(value, '%Y-%m-%d').date() if value else None
+    except (TypeError, ValueError):
+        selected_date = None
+    return _day_bounds_local(selected_date)
+
+
+def _redundancy_tab_queryset(tab, start_dt, end_dt):
+    """Las tres listas del día, cada una excluyendo las categorías anteriores.
+
+    El orden importa: una noticia redundante que además casó con una palabra
+    filtro se cuenta una sola vez, en la categoría de más peso.
+    """
+    day_qs = News.objects.filter(created_at__gte=start_dt, created_at__lt=end_dt)
+    if tab == 'keyword':
+        return day_qs.filter(
+            filtered_by__isnull=False, is_redundant=False, is_ai_filtered=False
+        ).select_related('source', 'filtered_by').order_by('-created_at', '-id')
+    if tab == 'ai':
+        return day_qs.filter(
+            is_ai_filtered=True, is_redundant=False
+        ).select_related('source').order_by('-created_at', '-id')
+    return day_qs.filter(
+        is_redundant=True, similar_to__isnull=False
+    ).select_related('similar_to', 'source', 'similar_to__source').order_by('-created_at', '-id')
+
+
+@require_GET
+@superuser_required
+def redundancy_rows(request):
+    """Tanda de filas de una pestaña, para no pintar el día entero de golpe."""
+    tab = request.GET.get('tab')
+    if tab not in REDUNDANCY_TABS:
+        return JsonResponse({'status': 'error', 'message': 'Pestaña desconocida.'}, status=400)
+
+    _, start_dt, end_dt = _redundancy_day_bounds(request.GET.get('date'))
+    try:
+        offset = max(0, int(request.GET.get('offset') or 0))
+    except (TypeError, ValueError):
+        offset = 0
+
+    qs = _redundancy_tab_queryset(tab, start_dt, end_dt)
+    matched = qs.count()
+    rows = list(qs[offset:offset + REDUNDANCY_PAGE_SIZE])
+    html = render_to_string(
+        'redundancy_test_rows.html', {'tab': tab, 'rows': rows}, request=request
+    )
+    return JsonResponse({
+        'status': 'success',
+        'html': html,
+        'matched': matched,
+        'returned': len(rows),
+        'next_offset': offset + len(rows),
+        'has_more': offset + len(rows) < matched,
+    })
+
+
 @require_GET
 @superuser_required
 def test_redundancy(request):
     """Vista para probar la detección de redundancia en noticias"""
     try:
-        # Obtener fecha seleccionada o fecha de hoy
-        bogota_tz = pytz.timezone('America/Bogota')
-        selected_date_str = request.GET.get('date')
+        # Los mismos límites que usa `redundancy_rows`: si cada uno calculara
+        # su día por su cuenta, los contadores de las pestañas podrían no
+        # cuadrar con las filas que se cargan dentro.
+        selected_date, day_start, day_end = _redundancy_day_bounds(request.GET.get('date'))
 
-        if selected_date_str:
-            try:
-                selected_date = timezone.datetime.strptime(selected_date_str, '%Y-%m-%d').date()
-            except ValueError:
-                selected_date = timezone.now().astimezone(bogota_tz).date()
-        else:
-            selected_date = timezone.now().astimezone(bogota_tz).date()
-
-        # Convertir a UTC para consultas
-        today_start_utc = bogota_tz.localize(timezone.datetime.combine(selected_date, timezone.datetime.min.time())).astimezone(pytz.utc)
-        today_end_utc = bogota_tz.localize(timezone.datetime.combine(selected_date, timezone.datetime.max.time())).astimezone(pytz.utc)
-
-        # Queryset base para noticias creadas hoy
         news_today_qs = News.objects.filter(
-            created_at__gte=today_start_utc,
-            created_at__lte=today_end_utc
+            created_at__gte=day_start,
+            created_at__lt=day_end,
         )
         total_today = news_today_qs.count()
 
-        # Obtener noticias redundantes del día (para mostrar la lista)
-        redundant_news_today_list = News.objects.filter(
-            is_redundant=True,
-            similar_to__isnull=False,
-            created_at__gte=today_start_utc,
-            created_at__lte=today_end_utc
-        ).select_related('similar_to', 'source', 'similar_to__source').order_by('-created_at')
-
-        # Obtener listas de noticias para cada pestaña
-        # 1. Noticias filtradas por keywords (pero no redundantes ni IA)
-        keyword_filtered_news = news_today_qs.filter(
-            filtered_by__isnull=False,
-            is_redundant=False,
-            is_ai_filtered=False
-        ).select_related('source', 'filtered_by').order_by('-created_at')
-
-        # 2. Noticias filtradas por IA (pero no redundantes)
-        ai_filtered_news = news_today_qs.filter(
-            is_ai_filtered=True,
-            is_redundant=False
-        ).select_related('source').order_by('-created_at')
+        # Las filas de las tres pestañas las pide `redundancy_rows` al abrirlas.
 
         # Calcular estadísticas para la barra (lógica revisada para exclusividad)
         if total_today > 0:
@@ -1097,9 +1131,8 @@ def test_redundancy(request):
 
         # Preparar el contexto
         context = {
-            'redundant_news': redundant_news_today_list, # Lista para mostrar abajo
-            'keyword_filtered_news': keyword_filtered_news,  # Nueva variable para la pestaña de keywords
-            'ai_filtered_news': ai_filtered_news,  # Nueva variable para la pestaña de IA
+            'rows_url': reverse('my_news:redundancy_rows'),
+            'rows_page_size': REDUNDANCY_PAGE_SIZE,
             'total_redundant': total_redundant_all_time,
             'current_date': selected_date,
             'total_today': total_today,

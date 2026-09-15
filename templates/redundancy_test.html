@@ -465,6 +465,43 @@
         .visible { background-color: #8fb4e8; }
         .keyword { background-color: #d6bc8f; }
         .ai { background-color: #a7b8d6; }
+
+        .tab-status {
+            padding: 14px 0;
+            color: #9fb3d1;
+            font-size: 0.85rem;
+            text-align: center;
+        }
+
+        .tab-more {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .load-more-button {
+            padding: 9px 18px;
+            border: 1px solid rgba(198, 214, 242, 0.24);
+            border-radius: 10px;
+            color: #eef3fb;
+            background: rgba(255, 255, 255, 0.055);
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .load-more-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* `hidden` tiene que ganar al `display` que trae el botón. */
+        .load-more-button[hidden],
+        .tab-status[hidden] {
+            display: none;
+        }
+
+        .news-reason-keyword { color: #ffbb33; }
+        .news-reason-ai { color: #aa66cc; }
     </style>
     {% include 'pwa_head.html' %}
 </head>
@@ -538,83 +575,33 @@
                     </button>
                 </div>
 
-                <!-- Contenido de pestaña: Filtradas por Keyword -->
-                <div class="tab-content active" id="keyword-tab">
-                    {% if keyword_filtered_news %}
-                        {% for news in keyword_filtered_news %}
-                        <div class="single-news-item keyword-filtered-item">
-                            <h3 class="news-title">{{ news.title }}</h3>
-                            <div class="news-description">{{ news.description|sanitize }}</div>
-                            <div class="news-meta">
-                                <span class="news-source">{{ news.source.name }}</span> - 
-                                {{ news.published_date|date:"d/m/Y H:i" }}
-                                {% if news.filtered_by %}
-                                    <br><span style="color: #ffbb33;">Filtrada por: {{ news.filtered_by.word }}</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="no-data">
-                            No hay noticias filtradas por keywords para mostrar
-                        </div>
-                    {% endif %}
+                {% comment %}
+                Las tres pestañas llegan vacías y piden sus filas al abrirse.
+                Antes la página traía el día entero de las tres, con el texto
+                completo de cada noticia.
+                {% endcomment %}
+                <div class="tab-content active" id="keyword-tab" data-rows-tab="keyword">
+                    <div class="tab-rows" data-rows-target></div>
+                    <div class="tab-status" data-rows-status aria-live="polite">Cargando…</div>
+                    <div class="tab-more">
+                        <button type="button" class="load-more-button" data-rows-more hidden>Cargar más</button>
+                    </div>
                 </div>
 
-                <!-- Contenido de pestaña: Filtradas por IA -->
-                <div class="tab-content" id="ai-tab">
-                    {% if ai_filtered_news %}
-                        {% for news in ai_filtered_news %}
-                        <div class="single-news-item ai-filtered-item">
-                            <h3 class="news-title">{{ news.title }}</h3>
-                            <div class="news-description">{{ news.description|sanitize }}</div>
-                            <div class="news-meta">
-                                <span class="news-source">{{ news.source.name }}</span> - 
-                                {{ news.published_date|date:"d/m/Y H:i" }}
-                                {% if news.ai_filter_reason %}
-                                    <br><span style="color: #aa66cc;">Razón IA: {{ news.ai_filter_reason }}</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="no-data">
-                            No hay noticias filtradas por IA para mostrar
-                        </div>
-                    {% endif %}
+                <div class="tab-content" id="ai-tab" data-rows-tab="ai">
+                    <div class="tab-rows" data-rows-target></div>
+                    <div class="tab-status" data-rows-status aria-live="polite">Cargando…</div>
+                    <div class="tab-more">
+                        <button type="button" class="load-more-button" data-rows-more hidden>Cargar más</button>
+                    </div>
                 </div>
 
-                <!-- Contenido de pestaña: Noticias Redundantes -->
-                <div class="tab-content" id="redundant-tab">
-                    {% if redundant_news %}
-                        {% for news in redundant_news %}
-                        <div class="redundancy-pair">
-                            <div class="similarity-score">{{ news.similarity_score|floatformat:4 }}</div>
-                            
-                            <div class="news-item original">
-                                <h3 class="news-title">{{ news.similar_to.title }}</h3>
-                                <div class="news-description">{{ news.similar_to.description|sanitize }}</div>
-                                <div class="news-meta">
-                                    <span class="news-source">{{ news.similar_to.source.name }}</span> - 
-                                    {{ news.similar_to.published_date|date:"d/m/Y H:i" }}
-                                </div>
-                            </div>
-                            
-                            <div class="news-item redundant-item">
-                                <h3 class="news-title">{{ news.title }}</h3>
-                                <div class="news-description">{{ news.description|sanitize }}</div>
-                                <div class="news-meta">
-                                    <span class="news-source">{{ news.source.name }}</span> - 
-                                    {{ news.published_date|date:"d/m/Y H:i" }}
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="no-data">
-                            No se han detectado noticias redundantes
-                        </div>
-                    {% endif %}
+                <div class="tab-content" id="redundant-tab" data-rows-tab="redundant">
+                    <div class="tab-rows" data-rows-target></div>
+                    <div class="tab-status" data-rows-status aria-live="polite">Cargando…</div>
+                    <div class="tab-more">
+                        <button type="button" class="load-more-button" data-rows-more hidden>Cargar más</button>
+                    </div>
                 </div>
 
                 <!-- Contenido de pestaña: Estadísticas por Fuente -->
@@ -653,10 +640,77 @@
     </div>
     
     <script>
+    const REDUNDANCY_ROWS_URL = '{{ rows_url }}';
+    const REDUNDANCY_DATE = '{{ current_date|date:"Y-m-d" }}';
+    </script>
+    <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Manejar cambio de pestañas
         const tabButtons = document.querySelectorAll('.tab-button');
         const tabContents = document.querySelectorAll('.tab-content');
+
+        // Cada panel pide sus filas la primera vez que se abre, y luego por
+        // tandas. Así la página no carga el día entero de las tres pestañas.
+        const loaded = new Set();
+
+        async function loadRows(panel, { append = false } = {}) {
+            if (!panel) return;
+            const tab = panel.dataset.rowsTab;
+            const target = panel.querySelector('[data-rows-target]');
+            const status = panel.querySelector('[data-rows-status]');
+            const more = panel.querySelector('[data-rows-more]');
+            const params = new URLSearchParams({
+                tab,
+                date: REDUNDANCY_DATE,
+                offset: append ? (panel.dataset.nextOffset || '0') : '0',
+            });
+
+            if (more) more.disabled = true;
+            if (status) {
+                status.hidden = false;
+                status.textContent = 'Cargando…';
+            }
+            try {
+                const response = await fetch(`${REDUNDANCY_ROWS_URL}?${params}`, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+
+                if (append) {
+                    target.insertAdjacentHTML('beforeend', data.html);
+                } else {
+                    target.innerHTML = data.html;
+                }
+                panel.dataset.nextOffset = String(data.next_offset);
+                if (more) more.hidden = !data.has_more;
+                if (status) {
+                    const shown = data.next_offset;
+                    if (data.matched === 0) {
+                        status.textContent = 'No hay noticias en esta categoría.';
+                    } else if (shown < data.matched) {
+                        status.textContent = `Mostrando ${shown} de ${data.matched}.`;
+                    } else {
+                        status.hidden = true;
+                    }
+                }
+                loaded.add(tab);
+            } catch (error) {
+                if (status) {
+                    status.hidden = false;
+                    status.textContent = 'No se pudieron cargar las noticias.';
+                }
+                // Sin marcarla como cargada: al volver a la pestaña reintenta.
+            } finally {
+                if (more) more.disabled = false;
+            }
+        }
+
+        document.querySelectorAll('[data-rows-more]').forEach((button) => {
+            button.addEventListener('click', () => {
+                loadRows(button.closest('[data-rows-tab]'), { append: true });
+            });
+        });
 
         tabButtons.forEach(button => {
             button.addEventListener('click', function() {
@@ -673,9 +727,14 @@
                 const targetContent = document.getElementById(targetTab + '-tab');
                 if (targetContent) {
                     targetContent.classList.add('active');
+                    if (targetContent.dataset.rowsTab && !loaded.has(targetTab)) {
+                        loadRows(targetContent);
+                    }
                 }
             });
         });
+
+        loadRows(document.querySelector('.tab-content.active[data-rows-tab]'));
 
         // Manejar selector de fecha
         const datePickerInput = document.getElementById('date-picker');

@@ -1,0 +1,52 @@
+{% load sanitizers %}
+{% comment %}
+Filas de una pestaña de la página de redundancia. Lo sirve `redundancy_rows`
+cuando se abre la pestaña o se piden más: la página ya no las trae, porque
+cada fila lleva el texto completo de la noticia (dos, en los pares) y el día
+entero eran 365 KB.
+
+`tab` decide la forma de la fila; `rows` son las noticias de la tanda.
+{% endcomment %}
+{% if tab == 'redundant' %}
+    {% for news in rows %}
+    <div class="redundancy-pair">
+        <div class="similarity-score">{{ news.similarity_score|floatformat:4 }}</div>
+
+        <div class="news-item original">
+            <h3 class="news-title">{{ news.similar_to.title }}</h3>
+            <div class="news-description">{{ news.similar_to.description|sanitize }}</div>
+            <div class="news-meta">
+                <span class="news-source">{{ news.similar_to.source.name }}</span> -
+                {{ news.similar_to.published_date|date:"d/m/Y H:i" }}
+            </div>
+        </div>
+
+        <div class="news-item redundant-item">
+            <h3 class="news-title">{{ news.title }}</h3>
+            <div class="news-description">{{ news.description|sanitize }}</div>
+            <div class="news-meta">
+                <span class="news-source">{{ news.source.name }}</span> -
+                {{ news.published_date|date:"d/m/Y H:i" }}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    {% for news in rows %}
+    <div class="single-news-item {% if tab == 'ai' %}ai-filtered-item{% else %}keyword-filtered-item{% endif %}">
+        <h3 class="news-title">{{ news.title }}</h3>
+        <div class="news-description">{{ news.description|sanitize }}</div>
+        <div class="news-meta">
+            <span class="news-source">{{ news.source.name }}</span> -
+            {{ news.published_date|date:"d/m/Y H:i" }}
+            {% if tab == 'ai' %}
+                {% if news.ai_filter_reason %}
+                <br><span class="news-reason news-reason-ai">Razón IA: {{ news.ai_filter_reason }}</span>
+                {% endif %}
+            {% elif news.filtered_by %}
+                <br><span class="news-reason news-reason-keyword">Filtrada por: {{ news.filtered_by.word }}</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+{% endif %}
