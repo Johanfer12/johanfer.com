@@ -252,16 +252,71 @@
 .header-tools summary { cursor: pointer; list-style: none; }
 .header-tools summary::-webkit-details-marker { display: none; }
 .header-tools summary:focus-visible { outline: 2px solid #b7d4ff; outline-offset: 3px; }
+/* El panel es la misma pieza de cristal que la cabecera, no una caja aparte:
+   antes iba con un azul plano y un borde propio, sin desenfoque ni filo, y se
+   veia pegado debajo como si fuera de otra pagina. El fondo termina casi opaco
+   porque esto se abre sobre el contenido y el texto tiene que leerse. */
 .header-tools-panel {
-    position: absolute; right: 0; top: calc(100% + 8px);
-    width: 220px; max-width: calc(100vw - 40px); padding: 6px;
-    border: 1px solid #465775; border-radius: 12px;
-    background: #101c30; box-shadow: 0 12px 30px #0006;
+    position: absolute; right: 0; top: calc(100% + 10px);
+    /* Se ajusta al texto mas largo en vez de fijar un ancho: con un ancho fijo
+       sobraba sitio a los lados de casi todas las opciones. La columna es
+       obligatoria: las opciones son `inline-flex` y con `max-content` se
+       pondrian en fila. */
+    display: flex; flex-direction: column;
+    width: max-content; min-width: 140px; max-width: calc(100vw - 40px); padding: 6px;
+    border: 1px solid rgba(207, 220, 241, 0.27);
+    border-radius: 16px;
+    /* El degradado de `.header`, pero algo mas cerrado: el panel se abre sobre
+       las tarjetas y con la transparencia de la cabecera el texto se perdia
+       contra lo que hubiera detras. Sigue dejando pasar el morado del fondo,
+       que es lo que evitaba que se viera como un recuadro azul aparte. */
+    background: linear-gradient(155deg,
+        rgba(255, 255, 255, 0.16),
+        rgba(20, 31, 48, 0.62) 18%,
+        rgba(9, 16, 28, 0.86) 74%);
+    backdrop-filter: blur(18px) saturate(120%);
+    -webkit-backdrop-filter: blur(18px) saturate(120%);
+    /* Contacto, ambiental y filo claro arriba: las mismas tres capas que dan
+       relieve a la cabecera y a sus botones. */
+    box-shadow:
+        0 4px 6px rgba(2, 8, 18, 0.5),
+        0 18px 34px rgba(2, 8, 18, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
+
+/* Una lista, no una fila de botones: sin recuadro propio, sin sombra y sin el
+   salto vertical del hover, que en un menu desplegable descoloca el puntero.
+   Filas bajas y texto centrado, para que el panel no parezca una columna de
+   botones sueltos. */
 .header-nav .header-tools-panel a {
-    width: auto; height: auto; min-height: 36px; padding: 8px 10px;
-    justify-content: flex-start; font-size: 14px; border: 0; background: transparent;
-    transform: none;
+    width: auto; height: auto; min-height: 30px; padding: 6px 10px;
+    justify-content: center; text-align: center; font-size: 13.5px; font-weight: 700;
+    border: 1px solid transparent; border-radius: 9px;
+    background: transparent; box-shadow: none; transform: none;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
+
+.header-nav .header-tools-panel a + a { margin-top: 1px; }
+
 .header-nav .header-tools-panel a:hover,
-.header-nav .header-tools-panel a:focus-visible { background: #ffffff14; }
+.header-nav .header-tools-panel a:focus-visible {
+    transform: none;
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(216, 228, 248, 0.32);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+/* El panel entra con un desplegado corto para que no aparezca de golpe. */
+.header-tools[open] .header-tools-panel {
+    animation: header-tools-in 0.16s ease-out;
+    transform-origin: top right;
+}
+
+@keyframes header-tools-in {
+    from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .header-tools[open] .header-tools-panel { animation: none; }
+}

@@ -12,6 +12,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone as dj_timezone
 
 from django.core.cache import cache
+from django.urls import reverse
 
 from . import views
 from .models import Book, OwnerSignature, VisitLog
@@ -710,3 +711,85 @@ class SitemapTests(TestCase):
 
         self.assertNotIn('/noticias/', cuerpo)
         self.assertNotIn('/j_admin/', cuerpo)
+
+
+class VisitsBadgeLiveUpdateTests(TestCase):
+    """Sondeo que mantiene la insignia al día sin recargar la página."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = get_user_model().objects.create_superuser(
+            username='admin-sondeo',
+            email='admin-sondeo@example.com',
+            password='test-password',
+        )
+
+    def setUp(self):
+        cache.clear()
+
+    def _colombian_visit(self, ip):
+        return VisitLog.objects.create(
+            ip_address=ip, visitor_id=f'visitante-{ip}',
+            country_code='CO', country='Colombia', path='/bookshelf/',
+        )
+
+    def badge(self):
+        return self.client.get(reverse('home_page:visits_badge_state'))
+
+    def test_endpoint_reports_the_same_number_the_header_paints(self):
+        self.client.force_login(self.admin)
+        self._colombian_visit('181.50.0.9')
+        cache.clear()
+
+        self.assertEqual(self.badge().json()['badge'], badge_count())
+
+    def test_endpoint_follows_the_count_up_and_down(self):
+        self.client.force_login(self.admin)
+        self.assertEqual(self.badge().json()['badge'], 0)
+
+        self._colombian_visit('181.50.0.9')
+        cache.clear()
+        self.assertEqual(self.badge().json()['badge'], 1)
+
+        # Mirar las visitas las apaga, y el sondeo lo refleja sin recargar.
+        self.client.get('/visitas/')
+        cache.clear()
+        self.assertEqual(self.badge().json()['badge'], 0)
+
+    def test_endpoint_is_superuser_only(self):
+        response = self.badge()
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/noticias/login/', response.url)
+
+        self.client.force_login(get_user_model().objects.create_user('lector', password='x'))
+        self.assertEqual(self.badge().status_code, 302)
+
+    def test_polling_does_not_register_itself_as_a_visit(self):
+        # El sondeo manda la cabecera de AJAX; sin ella cada consulta de la
+        # insignia se anotaría como una visita más.
+        self.client.force_login(self.admin)
+        before = VisitLog.objects.count()
+
+        self.client.get(
+            reverse('home_page:visits_badge_state'),
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            REMOTE_ADDR='181.50.0.44',
+        )
+
+        self.assertEqual(VisitLog.objects.count(), before)
+
+    def test_header_carries_what_the_script_needs(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get('/bookshelf/')
+
+        self.assertContains(response, 'data-badge-url="/visitas/insignia/"')
+        self.assertContains(response, 'js/visits_badge.js')
+
+    def test_the_visits_page_itself_does_not_poll(self):
+        # Allí no hay insignia que refrescar: el botón ni siquiera se pinta.
+        self.client.force_login(self.admin)
+
+        response = self.client.get('/visitas/')
+
+        self.assertNotContains(response, 'js/visits_badge.js')

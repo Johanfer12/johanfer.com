@@ -3,11 +3,12 @@ from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.http import HttpResponse
 from django.contrib.auth.decorators import user_passes_test
+from django.views.decorators.http import require_GET
 from .models import Book
 from .models import VisitLog
 from .models import OwnerSignature
 from .middleware import get_client_ip
-from .visit_stats import invalidate_badge, mark_seen
+from .visit_stats import badge_count, invalidate_badge, mark_seen
 from django.db.models import Count, Sum
 from django.db.models import F, Q
 from django.urls import reverse
@@ -440,6 +441,19 @@ def visits(request):
         'filters': filters,
         'rows_page_size': VISITS_ROWS_PAGE_SIZE,
     })
+
+
+@require_GET
+@visits_access_required
+def visits_badge_state(request):
+    """Cuántas visitas pendientes hay ahora mismo, para la insignia.
+
+    La cabecera la pinta al renderizar la página, así que sin esto el número se
+    queda congelado hasta la siguiente recarga. `badge_count` va cacheado y la
+    caché se invalida al registrar una visita, de modo que el sondeo normal no
+    llega ni a tocar la base.
+    """
+    return JsonResponse({'status': 'success', 'badge': badge_count()})
 
 
 @visits_access_required

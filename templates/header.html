@@ -44,7 +44,7 @@
     </div>
     <nav class="header-nav">
         {% if request.user.is_authenticated and request.user.is_superuser and request.path != '/visitas/' %}
-            <a href="/visitas/" class="visits-link" title="{% if visits_badge_count %}{{ visits_badge_count }} visita{{ visits_badge_count|pluralize }} desde Colombia{% else %}Visitas{% endif %}">
+            <a href="/visitas/" class="visits-link" data-badge-url="{% url 'home_page:visits_badge_state' %}" data-badge-count="{{ visits_badge_count|default:0 }}" title="{% if visits_badge_count %}{{ visits_badge_count }} visita{{ visits_badge_count|pluralize }} desde Colombia{% else %}Visitas{% endif %}">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" class="bi bi-person-fill" viewBox="0 0 16 16">
                 <path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
               </svg>
@@ -130,3 +130,6 @@
   </div>
 </header>
 <script src="{% static 'js/header_tools.js' %}" defer></script>
+{% if request.user.is_authenticated and request.user.is_superuser and request.path != '/visitas/' %}
+<script src="{% static 'js/visits_badge.js' %}" defer></script>
+{% endif %}

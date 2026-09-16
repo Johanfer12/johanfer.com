@@ -15,6 +15,7 @@ urlpatterns = [
     path('bookshelf/', views.bookshelf, name='bookshelf'),
     path('visitas/', views.visits, name='visits'),
     path('visitas/filas/', views.visits_rows, name='visits_rows'),
+    path('visitas/insignia/', views.visits_badge_state, name='visits_badge_state'),
     path('bookshelf/stats/', views.stats, name='stats'),
     path('about/', views.about, name='about'),
 ]
