@@ -13,6 +13,8 @@ Reglas de la API que importan aquí:
 
 import json
 import logging
+import random
+import time
 
 import requests
 from django.conf import settings
@@ -24,6 +26,39 @@ APP_NAME = 'johanfer-com'
 APP_VERSION = '1.0'
 USER_AGENT = f'{APP_NAME}/{APP_VERSION}'
 PIN_VERIFICATION_URL = 'https://simkl.com/pin'
+
+# Reintentos de los GET, con el patrón que documenta Simkl en
+# https://api.simkl.org/conventions/errors: espera exponencial con jitter para los
+# transitorios y nada de insistir en los deterministas (400, 401, 403, 404, 409, 412),
+# que fallarían igual y solo gastarían cuota hasta provocar un 429. El 412 además
+# puede ser un bloqueo ya activo: repetirlo lo alargaría.
+#
+# El reintento vive AQUÍ y no en la tarea a propósito: así solo se repite la llamada
+# que falló. Reintentar la pasada entera volvería a pedir /sync/all-items, que es
+# justo la llamada que la documentación advierte no repetir en un timer.
+#
+# Los POST se quedan fuera: un exceso de escrituras no devuelve 429, dispara un
+# bloqueo temporal del client_id que los reintentos alargan.
+RETRY_STATUSES = frozenset({429, 500, 502, 503})
+RETRY_ATTEMPTS = 5  # 1 + 4 reintentos, esperando 1, 2, 4 y 8 s
+RETRY_BASE_DELAY = 1.0
+MAX_RETRY_DELAY = 60.0
+
+
+def _retry_after_seconds(response):
+    """Segundos que pide la respuesta, si los pide. El 503 puede traer `Retry-After`."""
+    raw = (response.headers.get('Retry-After') or '').strip()
+    if raw.isdigit():
+        return min(float(raw), MAX_RETRY_DELAY)
+    return None
+
+
+def _retry_delay(retry_number, retry_after=None):
+    """1, 2, 4, 8... más un jitter de 0-1 s para no sincronizar con otros clientes."""
+    if retry_after is not None:
+        return retry_after
+    backoff = RETRY_BASE_DELAY * (2 ** retry_number)
+    return min(backoff, MAX_RETRY_DELAY) + random.random()
 
 
 def _client_id():
@@ -57,7 +92,33 @@ def _get(path, authenticated=True, **params):
     if authenticated:
         headers['Authorization'] = f'Bearer {_access_token()}'
 
-    response = requests.get(f"{API_BASE}{path}", params=query, headers=headers, timeout=90)
+    last_error = None
+    retry_after = None
+    for attempt in range(RETRY_ATTEMPTS):
+        if attempt:
+            delay = _retry_delay(attempt - 1, retry_after)
+            logger.warning(
+                "Fallo transitorio de Simkl en %s (%s); reintento %s de %s en %.1f s.",
+                path, last_error, attempt, RETRY_ATTEMPTS - 1, delay,
+            )
+            time.sleep(delay)
+        retry_after = None
+        try:
+            response = requests.get(f"{API_BASE}{path}", params=query, headers=headers, timeout=90)
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            # La petición ni siquiera llegó a salir (DNS caído, WiFi reconectando).
+            # No le ha costado nada a Simkl, así que repetirla no le añade carga.
+            last_error = exc
+            continue
+        if response.status_code in RETRY_STATUSES:
+            last_error = f'HTTP {response.status_code}'
+            retry_after = _retry_after_seconds(response)
+            continue
+        break
+    else:
+        # Agotados los intentos: si el último fue de red no hay respuesta que mirar.
+        if isinstance(last_error, Exception):
+            raise last_error
     response.raise_for_status()
     if not response.content:
         raise ValueError(f'Respuesta vacía de Simkl en {path}')

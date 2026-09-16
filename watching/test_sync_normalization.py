@@ -16,6 +16,7 @@ from . import simkl
 from .anime_mapping import UnresolvedEpisode, resolve_series_anime
 from .models import SimklSyncState, WatchedItem
 from .nuvio import read_watched, recovery_candidates
+from .tasks import NETWORK_RETRY_DELAYS, update_watching_cron
 from .tests import SIMKL_SHOW
 from .utils import _pending_after_last_watched, refresh_watching_from_simkl
 
@@ -208,3 +209,100 @@ class RecoveryCommandTests(SimpleTestCase):
         with self.assertRaises(CommandError):
             call_command('recover_nuvio_watched', 'unused', content_id='mal:41467', since='2026-09-12T00:00:00-05:00', apply=True, stdout=io.StringIO())
         write.assert_called_once()
+
+
+@override_settings(SIMKL_CLIENT_ID='cid', SIMKL_ACCESS_TOKEN='tok')
+class SimklRetryTests(SimpleTestCase):
+    """El reintento vive en el cliente para que solo se repita la llamada que falló."""
+
+    def _response(self, status, payload=None, headers=None):
+        response = requests.Response()
+        response.status_code = status
+        response.headers.update(headers or {})
+        response._content = json.dumps(payload if payload is not None else {}).encode()
+        return response
+
+    @patch('watching.simkl.time.sleep')
+    @patch('watching.simkl.requests.get')
+    def test_recovers_from_a_dns_outage(self, get, sleep):
+        # El fallo del 15/09/2026: la petición no llega a salir.
+        get.side_effect = [requests.ConnectionError('dns'), self._response(200, {'all': 'x'})]
+        self.assertEqual(simkl.fetch_activities(), {'all': 'x'})
+        self.assertEqual(get.call_count, 2)
+
+    @patch('watching.simkl.time.sleep')
+    @patch('watching.simkl.requests.get')
+    def test_gives_up_and_reraises_the_network_error(self, get, sleep):
+        get.side_effect = requests.ConnectionError('dns')
+        with self.assertRaises(requests.ConnectionError):
+            simkl.fetch_activities()
+        self.assertEqual(get.call_count, simkl.RETRY_ATTEMPTS)
+
+    @patch('watching.simkl.time.sleep')
+    @patch('watching.simkl.requests.get')
+    def test_backs_off_exponentially_with_jitter(self, get, sleep):
+        get.side_effect = requests.ConnectionError('dns')
+        with self.assertRaises(requests.ConnectionError):
+            simkl.fetch_activities()
+        waits = [call.args[0] for call in sleep.call_args_list]
+        self.assertEqual(len(waits), simkl.RETRY_ATTEMPTS - 1)
+        for wait, expected in zip(waits, (1, 2, 4, 8)):
+            self.assertGreaterEqual(wait, expected)
+            self.assertLess(wait, expected + 1)
+
+    @patch('watching.simkl.time.sleep')
+    @patch('watching.simkl.requests.get')
+    def test_retries_the_transient_statuses(self, get, sleep):
+        get.side_effect = [self._response(503), self._response(500), self._response(200, {'ok': 1})]
+        self.assertEqual(simkl.fetch_activities(), {'ok': 1})
+        self.assertEqual(get.call_count, 3)
+
+    @patch('watching.simkl.time.sleep')
+    @patch('watching.simkl.requests.get')
+    def test_honours_retry_after(self, get, sleep):
+        get.side_effect = [self._response(503, headers={'Retry-After': '7'}), self._response(200, {'ok': 1})]
+        simkl.fetch_activities()
+        self.assertEqual(sleep.call_args.args[0], 7.0)
+
+    @patch('watching.simkl.time.sleep')
+    @patch('watching.simkl.requests.get')
+    def test_does_not_retry_deterministic_errors(self, get, sleep):
+        # Insistir en un 401 o un 412 gasta cuota y alarga un bloqueo ya activo.
+        for status in (400, 401, 403, 404, 412):
+            get.reset_mock()
+            get.side_effect = None
+            get.return_value = self._response(status)
+            with self.assertRaises(requests.HTTPError):
+                simkl.fetch_activities()
+            self.assertEqual(get.call_count, 1, f'no debe reintentar un {status}')
+        sleep.assert_not_called()
+
+
+class WatchingCronRetryTests(SimpleTestCase):
+    """Un corte de red no puede costar 24 h de historial, pero un 4xx no se repite."""
+
+    @patch('watching.tasks.time.sleep')
+    @patch('watching.tasks.refresh_watching_from_simkl')
+    def test_retries_the_pass_after_a_network_outage(self, refresh, sleep):
+        refresh.side_effect = [requests.ConnectionError('dns'), 3]
+        update_watching_cron()
+        self.assertEqual(refresh.call_count, 2)
+        self.assertEqual(sleep.call_args.args[0], NETWORK_RETRY_DELAYS[0])
+
+    @patch('watching.tasks.time.sleep')
+    @patch('watching.tasks.refresh_watching_from_simkl')
+    def test_stops_after_the_configured_delays(self, refresh, sleep):
+        refresh.side_effect = requests.ConnectionError('dns')
+        update_watching_cron()
+        self.assertEqual(refresh.call_count, len(NETWORK_RETRY_DELAYS) + 1)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], list(NETWORK_RETRY_DELAYS))
+
+    @patch('watching.tasks.time.sleep')
+    @patch('watching.tasks.refresh_watching_from_simkl')
+    def test_does_not_repeat_the_pass_for_an_api_error(self, refresh, sleep):
+        # Un 401 o un fallo del propio código fallaría igual: repetirlo solo gastaría
+        # otra descarga de /sync/all-items.
+        refresh.side_effect = requests.HTTPError('401')
+        update_watching_cron()
+        self.assertEqual(refresh.call_count, 1)
+        sleep.assert_not_called()
