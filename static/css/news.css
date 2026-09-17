@@ -719,6 +719,35 @@ body.comments-modal-open {
     overflow-wrap: anywhere;
 }
 
+/* Cita que no se pudo colgar de un padre: la del artículo, o la de alguien que
+   quedó fuera de la página cargada. Se pinta como bloque para que no se lea
+   como si fueran palabras de quien comenta. */
+.news-comment-quote {
+    margin: 7px 0 0;
+    padding: 6px 10px;
+    border-left: 3px solid rgba(115, 199, 238, 0.55);
+    border-radius: 0 8px 8px 0;
+    background: rgba(18, 38, 66, 0.55);
+}
+
+.news-comment-quote-author {
+    display: block;
+    margin-bottom: 3px;
+    color: rgba(143, 180, 232, 0.95);
+    font-size: 0.82em;
+    font-style: normal;
+    font-weight: 600;
+}
+
+.news-comment-quote-text {
+    margin: 0;
+    color: rgba(226, 234, 247, 0.72);
+    font-size: 0.94em;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 .news-comment-media {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

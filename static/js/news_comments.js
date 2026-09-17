@@ -62,6 +62,44 @@
         sourceLink.hidden = true;
     };
 
+    // Wowhead manda el cuerpo troceado en bloques porque sus citas no son texto
+    // del autor: las que no se pudieron colgar de su padre (van al artículo, o a
+    // alguien de otra página de comentarios) se pintan aparte. El resto de
+    // fuentes no trae bloques y sigue con un solo párrafo.
+    const buildBody = (comment) => {
+        const blocks = Array.isArray(comment.blocks) && comment.blocks.length
+            ? comment.blocks
+            : [{type: 'text', text: comment.comment || ''}];
+
+        return blocks.reduce((nodes, block) => {
+            const text = String(block.text || '');
+            if (!text) return nodes;
+
+            if (block.type === 'quote') {
+                const quote = document.createElement('blockquote');
+                quote.className = 'news-comment-quote';
+                if (block.author) {
+                    const author = document.createElement('cite');
+                    author.className = 'news-comment-quote-author';
+                    author.textContent = block.author;
+                    quote.appendChild(author);
+                }
+                const quoted = document.createElement('p');
+                quoted.className = 'news-comment-quote-text';
+                quoted.textContent = text;
+                quote.appendChild(quoted);
+                nodes.push(quote);
+                return nodes;
+            }
+
+            const paragraph = document.createElement('p');
+            paragraph.className = 'news-comment-text';
+            paragraph.textContent = text;
+            nodes.push(paragraph);
+            return nodes;
+        }, []);
+    };
+
     const renderComments = (payload) => {
         title.textContent = payload.title || 'Comentarios';
         sourceLink.href = payload.article_url || '#';
@@ -197,12 +235,8 @@
                 header.appendChild(toggle);
             }
 
-            const body = document.createElement('p');
-            body.className = 'news-comment-text';
-            body.textContent = comment.comment || '';
-
             item.appendChild(header);
-            if (body.textContent) item.appendChild(body);
+            buildBody(comment).forEach((node) => item.appendChild(node));
 
             const mediaItems = Array.isArray(comment.media) ? comment.media : [];
             if (mediaItems.length) {

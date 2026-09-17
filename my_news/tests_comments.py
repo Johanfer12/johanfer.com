@@ -452,6 +452,145 @@ class WowheadCommentExtractorTests(SimpleTestCase):
             WowheadCommentExtractor().extract(self.ARTICLE_URL)
 
 
+class WowheadThreadTests(SimpleTestCase):
+    """Wowhead sirve los comentarios en plano: el hilo sale de la cita inicial."""
+
+    ARTICLE_URL = 'https://www.wowhead.com/news=1/x'
+
+    def extract(self, bodies):
+        """``bodies`` son pares (usuario, cuerpo) en el orden de la página."""
+        with patch('my_news.comment_extractors.requests.get') as get_mock:
+            get_mock.return_value = response_with_text(wowhead_page([
+                {'id': index + 1, 'user': user, 'body': body}
+                for index, (user, body) in enumerate(bodies)
+            ]))
+            return WowheadCommentExtractor().extract(self.ARTICLE_URL)['comments']
+
+    def test_a_quoted_comment_becomes_the_parent_and_loses_the_quote(self):
+        comments = self.extract([
+            ('fatalelement', 'Why make spirit claws increase threat'),
+            ('h347h', '[quote=fatalelement]Why make spirit claws increase threat[/quote]'
+                      + CRNL + CRNL + 'Because you have to manage threat.'),
+        ])
+
+        self.assertIsNone(comments[0]['parent_id'])
+        self.assertEqual(comments[1]['parent_id'], '1')
+        self.assertEqual(comments[1]['depth'], 1)
+        # La cita ya no hace falta: el comentario cuelga de quien la escribió.
+        self.assertEqual(comments[1]['comment'], 'Because you have to manage threat.')
+
+    def test_a_reply_to_a_reply_hangs_from_the_nearest_one(self):
+        comments = self.extract([
+            ('Ada', 'Primero'),
+            ('Linus', '[quote=Ada]Primero[/quote]' + CRNL + 'Segundo'),
+            ('Ada', '[quote=Linus][quote=Ada]Primero[/quote]' + CRNL + 'Segundo[/quote]'
+                    + CRNL + 'Tercero'),
+        ])
+
+        self.assertEqual([c['parent_id'] for c in comments], [None, '1', '2'])
+        self.assertEqual([c['depth'] for c in comments], [0, 1, 2])
+        self.assertEqual(comments[2]['comment'], 'Tercero')
+
+    def test_an_authorless_quote_is_the_article_and_not_a_reply(self):
+        comments = self.extract([
+            ('samserif', '[quote]Hay cosas raras en SoD[/quote]' + CRNL + CRNL + 'Ya, rarísimo'),
+        ])
+
+        self.assertIsNone(comments[0]['parent_id'])
+        self.assertEqual(comments[0]['depth'], 0)
+        # Sin padre del que colgar, la cita se sigue pintando en el cuerpo.
+        self.assertIn(OPEN_Q + 'Hay cosas raras en SoD' + CLOSE_Q, comments[0]['comment'])
+
+    def test_a_quote_of_someone_outside_the_page_stays_flat(self):
+        comments = self.extract([
+            ('Ada', '[quote=Alguien]De una página anterior[/quote]' + CRNL + 'Respondo'),
+        ])
+
+        self.assertIsNone(comments[0]['parent_id'])
+        self.assertIn('Alguien: ' + OPEN_Q + 'De una página anterior' + CLOSE_Q,
+                      comments[0]['comment'])
+
+    def test_a_trimmed_quote_still_finds_the_last_comment_of_that_user(self):
+        comments = self.extract([
+            ('Ada', 'Un texto largo del que solo se cita un trozo suelto'),
+            ('Linus', '[quote=Ada]solo se cita un trozo[/quote]' + CRNL + 'Vale'),
+        ])
+
+        self.assertEqual(comments[1]['parent_id'], '1')
+
+    def test_a_reply_is_placed_under_its_parent_and_not_where_it_was_written(self):
+        comments = self.extract([
+            ('Ada', 'Primero'),
+            ('Linus', 'De otro tema'),
+            ('Grace', '[quote=Ada]Primero[/quote]' + CRNL + 'Respondo a Ada'),
+        ])
+
+        # En la página la respuesta iba la última; aquí sigue a quien contesta.
+        self.assertEqual([c['id'] for c in comments], ['1', '3', '2'])
+        self.assertEqual([c['depth'] for c in comments], [0, 1, 0])
+
+    def test_a_comment_that_is_only_a_quote_keeps_it_instead_of_disappearing(self):
+        comments = self.extract([
+            ('Ada', 'Primero'),
+            ('Linus', '[quote=Ada]Primero[/quote]'),
+        ])
+
+        self.assertEqual(len(comments), 2)
+        self.assertEqual(comments[1]['parent_id'], '1')
+        self.assertIn('Primero', comments[1]['comment'])
+
+
+class WowheadQuoteBlockTests(SimpleTestCase):
+    """Las citas que no se cuelgan de un padre viajan como bloque aparte."""
+
+    def blocks(self, body):
+        with patch('my_news.comment_extractors.requests.get') as get_mock:
+            get_mock.return_value = response_with_text(wowhead_page(
+                [{'id': 1, 'body': body, 'user': 'Ada'}],
+            ))
+            result = WowheadCommentExtractor().extract('https://www.wowhead.com/news=1/x')
+        return result['comments'][0]['blocks']
+
+    def test_an_article_quote_is_a_block_of_its_own(self):
+        self.assertEqual(
+            self.blocks('[quote]Lo que decía la noticia[/quote]' + CRNL + CRNL + 'Mi opinión'),
+            [
+                {'type': 'quote', 'author': '', 'text': 'Lo que decía la noticia'},
+                {'type': 'text', 'text': 'Mi opinión'},
+            ],
+        )
+
+    def test_a_quote_keeps_the_author_when_it_has_one(self):
+        self.assertEqual(
+            self.blocks('[quote=Linus]Lo suyo[/quote]' + CRNL + 'Lo mío')[0],
+            {'type': 'quote', 'author': 'Linus', 'text': 'Lo suyo'},
+        )
+
+    def test_text_between_two_quotes_keeps_its_place(self):
+        self.assertEqual(
+            [block['type'] for block in self.blocks(
+                '[quote]Una[/quote]En medio[quote]Otra[/quote]Al final'
+            )],
+            ['quote', 'text', 'quote', 'text'],
+        )
+
+    def test_a_resolved_reply_has_no_quote_block_left(self):
+        with patch('my_news.comment_extractors.requests.get') as get_mock:
+            get_mock.return_value = response_with_text(wowhead_page([
+                {'id': 1, 'user': 'Ada', 'body': 'Primero'},
+                {'id': 2, 'user': 'Linus', 'body': '[quote=Ada]Primero[/quote]' + CRNL + 'Segundo'},
+            ]))
+            comments = WowheadCommentExtractor().extract('https://www.wowhead.com/news=1/x')['comments']
+
+        self.assertEqual(comments[1]['blocks'], [{'type': 'text', 'text': 'Segundo'}])
+
+    def test_an_unclosed_quote_does_not_lose_the_text(self):
+        self.assertEqual(
+            self.blocks('[quote=Linus]Se quedó abierta' + CRNL + 'y sigue'),
+            [{'type': 'text', 'text': 'Se quedó abierta' + NL + 'y sigue'}],
+        )
+
+
 class WowheadBBCodeTests(SimpleTestCase):
     """El cuerpo llega en BBCode, no en HTML como el resto de fuentes."""
 

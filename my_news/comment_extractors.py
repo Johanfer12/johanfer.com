@@ -189,6 +189,132 @@ def _bbcode_to_text(value: Any) -> str:
     return _BLANK_LINES_RE.sub("\n\n", text).strip()
 
 
+# Wowhead no anida sus comentarios: una respuesta se reconoce porque abre con
+# la cita de otro usuario. Para colgarla de su padre hace falta el par
+# (autor, texto citado) antes de convertir el BBCode a texto.
+_BBCODE_QUOTE_TAG_RE = re.compile(r"\[quote(?:=[^\]]*)?\]|\[/quote\]", re.IGNORECASE)
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _matching_quote_close(text: str, opening: "re.Match[str]") -> "re.Match[str] | None":
+    """Cierre de ``opening`` contando las aperturas que lleva dentro."""
+    depth = 1
+    index = opening.end()
+    while depth:
+        tag = _BBCODE_QUOTE_TAG_RE.search(text, index)
+        if tag is None:
+            return None
+        depth += -1 if tag.group(0).startswith("[/") else 1
+        index = tag.end()
+    return tag
+
+
+def _quote_author(opening: "re.Match[str]") -> str:
+    tag = opening.group(0)
+    return tag[len("[quote="):-1].strip() if "=" in tag else ""
+
+
+def _split_leading_quote(value: Any) -> tuple[str, str, str] | None:
+    """Parte ``[quote=autor]citado[/quote]resto`` inicial en sus tres piezas.
+
+    Solo cuenta la cita que abre el comentario y solo si trae autor: es la que
+    Wowhead pone al responder. Una cita sin autor es el texto del artículo, y
+    una en mitad del cuerpo es un apoyo del argumento, no a quién se contesta.
+    """
+    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n").lstrip()
+    opening = _BBCODE_QUOTE_TAG_RE.match(text)
+    if opening is None:
+        return None
+    author = _quote_author(opening)
+    closing = _matching_quote_close(text, opening) if author else None
+    if closing is None:
+        return None
+    return author, text[opening.end():closing.start()], text[closing.end():].strip()
+
+
+def _comparable_text(value: Any) -> str:
+    return _WHITESPACE_RE.sub(" ", _plain_text(_bbcode_to_text(value))).strip().casefold()
+
+
+def _parent_for_quote(comments: list[dict[str, Any]], author: str, quoted: str) -> dict[str, Any] | None:
+    """Busca entre los comentarios ya leídos el que cita esta respuesta.
+
+    Se compara en los dos sentidos porque ninguno contiene al otro siempre: la
+    cita suele copiar el comentario entero, pero si aquel era a su vez una
+    respuesta su cuerpo ya viene sin la cita que sí arrastra la copia.
+    """
+    candidates = [c for c in comments if str(c["user"]).casefold() == author.casefold()]
+    if not candidates:
+        return None
+
+    needle = _comparable_text(quoted)
+    for candidate in reversed(candidates):
+        haystack = _comparable_text(candidate["comment"])
+        if needle and haystack and (needle in haystack or haystack in needle):
+            return candidate
+    # Sin coincidencia de texto (cita recortada o editada) queda el último
+    # comentario de esa persona, que es a lo que se responde casi siempre.
+    return candidates[-1]
+
+
+def _bbcode_blocks(value: Any) -> list[dict[str, str]]:
+    """Separa el cuerpo en bloques de cita y de texto, en el orden en que van.
+
+    La cita deja de ser una línea más entre comillas y pasa a ser un bloque que
+    la plantilla puede pintar aparte. Las citas anidadas se quedan dentro del
+    bloque, con el mismo formato de siempre: son el contexto de la de fuera.
+    """
+    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    blocks: list[dict[str, str]] = []
+
+    def add_text(fragment: str) -> None:
+        rendered = _plain_text(_bbcode_to_text(fragment))
+        if rendered:
+            blocks.append({"type": "text", "text": rendered})
+
+    position = 0
+    while position < len(text):
+        opening = _BBCODE_QUOTE_TAG_RE.search(text, position)
+        while opening is not None and opening.group(0).startswith("[/"):
+            # Cierre suelto sin apertura: no abre bloque, lo limpia el renderizador.
+            opening = _BBCODE_QUOTE_TAG_RE.search(text, opening.end())
+        if opening is None:
+            break
+        closing = _matching_quote_close(text, opening)
+        if closing is None:
+            # Cita sin cerrar: el resto se trata como texto corriente.
+            break
+
+        add_text(text[position:opening.start()])
+        quoted = _plain_text(_bbcode_to_text(text[opening.end():closing.start()]))
+        if quoted:
+            blocks.append({"type": "quote", "author": _quote_author(opening), "text": quoted})
+        position = closing.end()
+
+    add_text(text[position:])
+    return blocks
+
+
+def _as_thread_order(comments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Reordena la lista plana para que cada respuesta siga a su padre.
+
+    Wowhead los sirve por fecha, así que una respuesta puede quedar a varios
+    comentarios de distancia del suyo: sangrada, pero debajo de un vecino con el
+    que no habla. Entre hermanos se conserva el orden cronológico original.
+    """
+    children: dict[str | None, list[dict[str, Any]]] = {}
+    for comment in comments:
+        children.setdefault(comment["parent_id"], []).append(comment)
+
+    ordered: list[dict[str, Any]] = []
+    stack = list(reversed(children.get(None, [])))
+    while stack:
+        comment = stack.pop()
+        ordered.append(comment)
+        stack.extend(reversed(children.get(comment["id"], [])))
+    return ordered
+
+
 def _render_quote(match: "re.Match[str]") -> str:
     author = (match.group(1) or "").strip()
     quoted = match.group(2).strip()
@@ -516,17 +642,29 @@ class WowheadCommentExtractor(CommentExtractor):
         for item in raw_comments[:MAX_COMMENTS]:
             if not isinstance(item, dict):
                 continue
-            body = _plain_text(_bbcode_to_text(item.get("body")))
+
+            # La jerarquía se reconstruye de la cita inicial: Wowhead sirve los
+            # comentarios en plano y del más antiguo al más nuevo, así que el
+            # padre de una respuesta ya está leído cuando llega.
+            quote = _split_leading_quote(item.get("body"))
+            parent = _parent_for_quote(comments, quote[0], quote[1]) if quote else None
+            # Colgada de su padre, la cita sobra; se conserva si era lo único
+            # que decía el comentario, que si no se quedaría vacío.
+            raw_body = quote[2] if parent is not None and quote[2] else item.get("body")
+
+            body = _plain_text(_bbcode_to_text(raw_body))
             if not body:
                 continue
             comments.append({
+                # Las citas que quedan (al artículo, o a alguien de otra página)
+                # viajan como bloque aparte para que no se lean como texto propio.
+                "blocks": _bbcode_blocks(raw_body),
                 "id": str(item.get("id") or ""),
                 "user": item.get("user") or "Anónimo",
                 "comment": body,
                 "date": str(item["date"]) if item.get("date") else None,
-                # Wowhead no anida: las respuestas se citan dentro del texto.
-                "parent_id": None,
-                "depth": 0,
+                "parent_id": parent["id"] if parent else None,
+                "depth": parent["depth"] + 1 if parent else 0,
                 # Tampoco publica votos; None evita pintar un cero que mentiría.
                 "votes": None,
                 "upvotes": None,
@@ -537,7 +675,7 @@ class WowheadCommentExtractor(CommentExtractor):
         return {
             "source": self.source_name,
             "total": self._total_from_page(article_html, len(comments)),
-            "comments": comments,
+            "comments": _as_thread_order(comments),
         }
 
 
