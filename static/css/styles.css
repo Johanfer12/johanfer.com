@@ -245,6 +245,30 @@ a:hover {
     top: 28px;
 }
 
+/* Aviso de "sin calificar" en la esquina opuesta al listón "Viendo": los dos
+   nunca coinciden en una tarjeta, pero así ninguno tapa al otro si algún día sí. */
+.rating-alert {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(11, 20, 44, 0.72);
+    border: 1px solid var(--accent-warm);
+    box-shadow: 0 4px 10px rgba(3, 10, 20, 0.45);
+    z-index: 2;
+}
+
+.rating-alert svg {
+    width: 16px;
+    height: 16px;
+    fill: var(--accent-warm);
+}
+
 .book-search-btn {
     position: fixed;
     bottom: 76px;

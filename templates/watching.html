@@ -29,6 +29,13 @@
                     {% if card.is_watching %}
                     <div class="watching-ribbon"><span>Viendo</span></div>
                     {% endif %}
+                    {% if card.needs_rating %}
+                    <div class="rating-alert" title="Sin calificar" role="img" aria-label="Sin calificar">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 2.8 1.6 20.4h20.8L12 2.8zm0 5.4 6.6 11.2H5.4L12 8.2zm-.9 3.2v3.8h1.8v-3.8h-1.8zm0 5.1v1.8h1.8v-1.8h-1.8z"/>
+                        </svg>
+                    </div>
+                    {% endif %}
                 </div>
 
                 <div class="book-info">

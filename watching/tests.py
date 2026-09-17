@@ -2,6 +2,7 @@ from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import requests
+from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -515,6 +516,64 @@ class WatchingViewTests(TestCase):
 
         self.assertFalse(response.context['cards'][0]['is_watching'])
         self.assertNotContains(response, 'watching-ribbon')
+
+    def _login_owner(self):
+        User = get_user_model()
+        owner = User.objects.create_superuser('johan', 'johan@example.test', 'clave-de-prueba')
+        self.client.force_login(owner)
+        return owner
+
+    def test_owner_sees_the_rating_alert_on_what_is_no_longer_in_progress(self):
+        now = timezone.now()
+        self._create_episode(500, 1, 1, now, title='Serie Sin Nota')
+        self._create_episode(600, 1, 1, now, title='Serie En Curso')
+        self._set_pending(600)
+        self._login_owner()
+
+        response = self.client.get(reverse('watching:index'))
+
+        cards = {card['latest'].title: card for card in response.context['cards']}
+        self.assertTrue(cards['Serie Sin Nota']['needs_rating'])
+        # Lo que se está viendo todavía no toca calificarlo.
+        self.assertFalse(cards['Serie En Curso']['needs_rating'])
+        self.assertContains(response, 'rating-alert', count=1)
+
+    def test_a_rated_work_has_no_alert(self):
+        item = self._create_episode(500, 1, 1, timezone.now())
+        item.user_rating = 8
+        item.save(update_fields=['user_rating'])
+        self._login_owner()
+
+        response = self.client.get(reverse('watching:index'))
+
+        self.assertFalse(response.context['cards'][0]['needs_rating'])
+        self.assertNotContains(response, 'rating-alert')
+
+    def test_movies_without_rating_also_warn(self):
+        self._create_movie(42, timezone.now())
+        self._login_owner()
+
+        response = self.client.get(reverse('watching:index'), {'tipo': 'peliculas'})
+
+        self.assertTrue(response.context['cards'][0]['needs_rating'])
+
+    def test_a_visitor_never_sees_the_rating_alert(self):
+        self._create_episode(500, 1, 1, timezone.now())
+
+        response = self.client.get(reverse('watching:index'))
+
+        self.assertNotIn('needs_rating', response.context['cards'][0])
+        self.assertNotContains(response, 'rating-alert')
+
+    def test_the_json_of_the_infinite_scroll_carries_the_alert(self):
+        self._create_episode(500, 1, 1, timezone.now())
+        self._login_owner()
+
+        response = self.client.get(
+            reverse('watching:index'), HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+
+        self.assertTrue(response.json()['cards'][0]['needs_rating'])
 
     def test_rewatched_movie_groups_and_shows_play_count(self):
         now = timezone.now()

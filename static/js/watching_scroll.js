@@ -5,6 +5,16 @@ const fallbackPoster = watchContainer ? watchContainer.dataset.fallbackPoster : 
 let currentTipo = 'series';
 let currentOrden = '';
 
+// Aviso de "sin calificar": el mismo marcado que pinta la plantilla, que solo
+// lo manda cuando la sesión es la del dueño del historial.
+const ratingAlert = `
+    <div class="rating-alert" title="Sin calificar" role="img" aria-label="Sin calificar">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2.8 1.6 20.4h20.8L12 2.8zm0 5.4 6.6 11.2H5.4L12 8.2zm-.9 3.2v3.8h1.8v-3.8h-1.8zm0 5.1v1.8h1.8v-1.8h-1.8z"/>
+        </svg>
+    </div>
+`;
+
 const posterImg = (card) => `
     <img src="${escapeHtml(card.poster_url)}"
          alt="${escapeHtml(card.title)}"
@@ -39,6 +49,7 @@ const createWatchItem = (card) => {
             <div class="book-cover" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-watch-${card.id}" aria-label="Ver detalles de ${escapeHtml(card.title)}" onclick="openModal('watch-${card.id}')">
                 ${posterImg(card)}
                 ${card.is_watching ? '<div class="watching-ribbon"><span>Viendo</span></div>' : ''}
+                ${card.needs_rating ? ratingAlert : ''}
             </div>
             <div class="book-info">
                 <a href="${escapeHtml(card.detail_url)}"

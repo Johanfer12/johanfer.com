@@ -105,6 +105,13 @@ def watching(request):
             and card['latest'].watched_at >= watching_cutoff
         )
 
+    # Aviso de pendiente por calificar: es una tarea del dueño del historial, así
+    # que solo se calcula para él. Lo que aún se está viendo queda fuera: la nota
+    # se pone al terminar, y marcarlo antes sería reclamar algo que no toca.
+    if request.user.is_superuser:
+        for card in show_cards + movie_cards:
+            card['needs_rating'] = not card['latest'].user_rating and not card.get('is_watching')
+
     if tipo == 'peliculas':
         cards, watch_label, watch_noun = movie_cards, 'películas', 'película'
     else:
@@ -142,6 +149,7 @@ def watching(request):
                 'watched_at': timezone.localtime(latest.watched_at).strftime('%d/%m/%Y'),
                 'overview': sanitize_html(latest.overview) if latest.overview else '',
                 'is_watching': card.get('is_watching', False),
+                'needs_rating': card.get('needs_rating', False),
             })
         return JsonResponse({
             'cards': card_data,
