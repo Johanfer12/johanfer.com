@@ -519,7 +519,7 @@ class WatchingViewTests(TestCase):
 
     def _login_owner(self):
         User = get_user_model()
-        owner = User.objects.create_superuser('johan', 'johan@example.test', 'clave-de-prueba')
+        owner = User.objects.create_user('johan', 'johan@example.test', 'clave-de-prueba')
         self.client.force_login(owner)
         return owner
 
@@ -536,7 +536,7 @@ class WatchingViewTests(TestCase):
         self.assertTrue(cards['Serie Sin Nota']['needs_rating'])
         # Lo que se está viendo todavía no toca calificarlo.
         self.assertFalse(cards['Serie En Curso']['needs_rating'])
-        self.assertContains(response, 'rating-alert', count=1)
+        self.assertContains(response, 'class="rating-alert"', count=1)
 
     def test_a_rated_work_has_no_alert(self):
         item = self._create_episode(500, 1, 1, timezone.now())
@@ -547,7 +547,7 @@ class WatchingViewTests(TestCase):
         response = self.client.get(reverse('watching:index'))
 
         self.assertFalse(response.context['cards'][0]['needs_rating'])
-        self.assertNotContains(response, 'rating-alert')
+        self.assertNotContains(response, 'class="rating-alert"')
 
     def test_movies_without_rating_also_warn(self):
         self._create_movie(42, timezone.now())
@@ -563,7 +563,7 @@ class WatchingViewTests(TestCase):
         response = self.client.get(reverse('watching:index'))
 
         self.assertNotIn('needs_rating', response.context['cards'][0])
-        self.assertNotContains(response, 'rating-alert')
+        self.assertNotContains(response, 'class="rating-alert"')
 
     def test_the_json_of_the_infinite_scroll_carries_the_alert(self):
         self._create_episode(500, 1, 1, timezone.now())

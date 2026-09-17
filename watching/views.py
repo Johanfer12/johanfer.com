@@ -106,9 +106,10 @@ def watching(request):
         )
 
     # Aviso de pendiente por calificar: es una tarea del dueño del historial, así
-    # que solo se calcula para él. Lo que aún se está viendo queda fuera: la nota
-    # se pone al terminar, y marcarlo antes sería reclamar algo que no toca.
-    if request.user.is_superuser:
+    # que solo se calcula con la sesión iniciada. Lo que aún se está viendo queda
+    # fuera: la nota se pone al terminar, y marcarlo antes sería pedir algo que
+    # todavía no toca.
+    if request.user.is_authenticated:
         for card in show_cards + movie_cards:
             card['needs_rating'] = not card['latest'].user_rating and not card.get('is_watching')
 

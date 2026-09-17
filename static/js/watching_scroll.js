@@ -10,7 +10,9 @@ let currentOrden = '';
 const ratingAlert = `
     <div class="rating-alert" title="Sin calificar" role="img" aria-label="Sin calificar">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 2.8 1.6 20.4h20.8L12 2.8zm0 5.4 6.6 11.2H5.4L12 8.2zm-.9 3.2v3.8h1.8v-3.8h-1.8zm0 5.1v1.8h1.8v-1.8h-1.8z"/>
+            <path class="rating-alert-shape" d="M10.28 3.3 1.57 18.6a2 2 0 0 0 1.74 2.99h17.38a2 2 0 0 0 1.74-2.99L13.72 3.3a2 2 0 0 0-3.44 0z"/>
+            <rect class="rating-alert-mark" x="11" y="8.9" width="2" height="5.9" rx="1"/>
+            <rect class="rating-alert-mark" x="11" y="16.4" width="2" height="2.2" rx="1"/>
         </svg>
     </div>
 `;

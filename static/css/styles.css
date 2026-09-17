@@ -246,27 +246,42 @@ a:hover {
 }
 
 /* Aviso de "sin calificar" en la esquina opuesta al listón "Viendo": los dos
-   nunca coinciden en una tarjeta, pero así ninguno tapa al otro si algún día sí. */
+   nunca coinciden en una tarjeta, pero así ninguno tapa al otro si algún día sí.
+   Triángulo macizo sobre cristal oscuro: la carátula de debajo puede ser de
+   cualquier color, y un icono de solo contorno se pierde en las claras. */
 .rating-alert {
     position: absolute;
     top: 8px;
     left: 8px;
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
-    background: rgba(11, 20, 44, 0.72);
-    border: 1px solid var(--accent-warm);
-    box-shadow: 0 4px 10px rgba(3, 10, 20, 0.45);
+    border-radius: 10px;
+    background: rgba(9, 16, 36, 0.62);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid rgba(214, 188, 143, 0.5);
+    box-shadow: 0 6px 14px rgba(3, 10, 20, 0.5);
     z-index: 2;
 }
 
 .rating-alert svg {
-    width: 16px;
-    height: 16px;
+    display: block;
+    width: 18px;
+    height: 18px;
+    filter: drop-shadow(0 1px 2px rgba(3, 10, 20, 0.55));
+}
+
+.rating-alert-shape {
     fill: var(--accent-warm);
+}
+
+/* El signo va en el azul del fondo, no en blanco: así se lee como un hueco del
+   triángulo y no como una segunda figura encima. */
+.rating-alert-mark {
+    fill: #0b142c;
 }
 
 .book-search-btn {
