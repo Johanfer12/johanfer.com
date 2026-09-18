@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Generado por `python manage.py generate_pwa_icons`. No editar a mano. -->
+  <defs>
+    <linearGradient id="cielo" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#341b63"/>
+      <stop offset="0.5" stop-color="#131b46"/>
+      <stop offset="1" stop-color="#070715"/>
+    </linearGradient>
+    <mask id="luna">
+      <circle cx="28.77" cy="35.23" r="20.43" fill="#fff"/>
+      <circle cx="41.68" cy="21.25" r="17.74" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="64" height="64" rx="14.08" fill="url(#cielo)"/>
+  <circle cx="28.77" cy="35.23" r="20.43"
+          fill="#c6d6f5" mask="url(#luna)"/>
+  <polygon points="48.13,7.27 50.07,13.93 56.73,15.87 50.07,17.82 48.13,24.47 46.18,17.82 39.53,15.87 46.18,13.93" fill="#c6d6f5"/>
+    <polygon points="36.57,21.79 37.6,25.32 41.14,26.36 37.6,27.39 36.57,30.92 35.54,27.39 32.0,26.36 35.54,25.32" fill="#c6d6f5"/>
+</svg>
