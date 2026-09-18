@@ -8,8 +8,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="{{ site_short_name }}">
 <link rel="manifest" href="{% url 'home_page:manifest' %}">
-{# El SVG gana al favicon.ico que declara cada plantilla: el navegador que lo
-   entiende lo prefiere, y el resto se queda con el ICO (16/32/48/64). #}
 <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}">
 <link rel="apple-touch-icon" href="{% static 'Img/apple-touch-icon.png' %}">
 <link rel="icon" type="image/png" sizes="192x192" href="{% static 'Img/pwa-icon-192.png' %}">
