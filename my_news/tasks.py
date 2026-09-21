@@ -111,10 +111,18 @@ def retry_missing_embeddings(limit: int = 25, days: int = 15):
             return 0
 
         gemini_client = FeedService.initialize_gemini()
+
+        # En lote, igual que la ingesta. De uno en uno esto gastaba hasta 25
+        # peticiones por pasada y el límite gratuito de embeddings son 100 por
+        # minuto: sumado a la ingesta de la misma pasada, se acercaba de más a
+        # un techo que no hace ninguna falta rozar.
+        embeddings = EmbeddingService.generate_embeddings_batch(
+            [f"{news.title} {news.description or ''}" for news in pendientes],
+            gemini_client,
+        )
+
         recuperadas = 0
-        for news in pendientes:
-            texto = f"{news.title} {news.description or ''}"
-            embedding = EmbeddingService.generate_embedding(texto, gemini_client)
+        for news, embedding in zip(pendientes, embeddings):
             if not embedding:
                 logger.warning(
                     "Sigue sin poder generarse el embedding de la noticia %s", news.id
@@ -135,6 +143,7 @@ def retry_missing_embeddings(limit: int = 25, days: int = 15):
             # Solo informativo: se anota el parecido, sin ocultar nada.
             if news.similarity_score is None:
                 news._embedding_vector = embedding
+                news._embedding_attempted = True
                 try:
                     _, similar, score = EmbeddingService.check_redundancy(
                         news, gemini_client, None, vector_index

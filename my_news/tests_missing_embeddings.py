@@ -58,17 +58,40 @@ class RetryMissingEmbeddingsTests(TestCase):
         return News.objects.create(**defaults)
 
     def run_retry(self, index, **kwargs):
+        """Ejercita el camino real: los embeddings se piden EN LOTE.
+
+        Antes se mockeaba `generate_embedding`, y al pasar el reintento a
+        lotes el test seguía pasando por el respaldo de uno en uno sin
+        ejercitar lo que de verdad corre en producción.
+        """
+        self.lotes = []
+
+        def lote_falso(textos, cliente, **_):
+            self.lotes.append(list(textos))
+            return [[0.1] * 8 for _ in textos]
+
         with patch("my_news.tasks.FeedService.initialize_vector_index", return_value=index), \
              patch("my_news.tasks.FeedService.initialize_gemini", return_value=object()), \
              patch(
-                 "my_news.tasks.EmbeddingService.generate_embedding",
-                 return_value=[0.1] * 8,
+                 "my_news.tasks.EmbeddingService.generate_embeddings_batch",
+                 side_effect=lote_falso,
              ), \
              patch(
                  "my_news.tasks.EmbeddingService.check_redundancy",
                  return_value=(False, None, 0.0),
              ):
             return retry_missing_embeddings(**kwargs)
+
+    def test_los_embeddings_se_piden_en_una_sola_llamada(self):
+        """De uno en uno se acercaba al límite de 100 peticiones por minuto."""
+        for _ in range(5):
+            self.make_news()
+
+        recuperadas = self.run_retry(FakeVectorIndex())
+
+        self.assertEqual(recuperadas, 5)
+        self.assertEqual(len(self.lotes), 1, "debería ser una sola llamada")
+        self.assertEqual(len(self.lotes[0]), 5)
 
     def test_indexa_la_noticia_que_se_quedo_sin_vector(self):
         news = self.make_news()

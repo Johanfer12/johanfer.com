@@ -28,13 +28,16 @@ class FeedSource(models.Model):
         help_text="Obtener el contenido completo del artículo desde la URL original"
     )
     similarity_threshold = models.FloatField(
-        default=0.85,
+        default=0.90,
         verbose_name="Umbral de Similitud",
         help_text=(
             "Valor entre 0 y 1. Noticias con similitud mayor o igual serán marcadas como "
-            "redundantes. 0.85 es el punto medido sobre el histórico: por encima son "
-            "duplicados reales y por debajo son noticias distintas. Con 0.92 solo se caza "
-            "un tercio de los duplicados."
+            "redundantes. 0.90 es el punto medido en septiembre de 2026 sobre 651 pares "
+            "reales: los duplicados de verdad viven de 0.92 para arriba y la franja "
+            "0.90-0.92 es mixta, mientras que por debajo de 0.90 lo que hay son noticias "
+            "distintas del mismo tema (PS5 contra Xbox, Thundermail contra Proton Mail). "
+            "El 0.85 anterior ocultaba el 28% del feed; con 0.90 es el 10%. Bajarlo de "
+            "0.90 no afina la detección: amplía el tema que se considera repetido."
         )
     )
     
