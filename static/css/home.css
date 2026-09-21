@@ -175,7 +175,12 @@ body::after {
     gap: 0.65rem;
 }
 
-.main-icon img {
+/* Los iconos son <svg> en linea, no <img> (el porque, en home_page.html).
+ * El blanco venia en un `style` dentro de cada fichero; al estar en el
+ * documento lo pone la hoja, que es donde se mira. */
+.main-icon svg {
+    display: block;
+    fill: #fff;
     width: clamp(112px, 13vw, 148px);
     height: clamp(112px, 13vw, 148px);
     transition: transform 0.22s ease, opacity 0.22s ease, filter 0.22s ease;
@@ -192,7 +197,7 @@ body::after {
     transform: translateY(-4px);
 }
 
-.main-icon:hover img {
+.main-icon:hover svg {
     transform: scale(1.05);
     filter:
         opacity(1)
@@ -307,7 +312,7 @@ body::after {
         gap: clamp(0.25rem, 0.8dvh, 0.6rem);
     }
 
-    .main-icon img {
+    .main-icon svg {
         width: clamp(64px, min(28vw, 13dvh), 140px);
         height: clamp(64px, min(28vw, 13dvh), 140px);
     }
@@ -390,8 +395,8 @@ body::after {
         transform: none !important;
     }
 
-    .main-icon img,
-    .main-icon:hover img {
+    .main-icon svg,
+    .main-icon:hover svg {
         transform: none !important;
         /* Una sola capa en lugar de tres, pero no cero: este bloque entra por
          * debajo de 900px, y sin las cajas un `filter: none` dejaba los iconos

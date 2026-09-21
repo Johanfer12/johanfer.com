@@ -14,12 +14,35 @@
  * pwa_head.html, que va al final.
  */
 
+/* `optional` y no `swap`, y la diferencia se nota a simple vista.
+ *
+ * Con `swap` el navegador pinta en la sans-serif del sistema y RECOMPONE al
+ * llegar Ubuntu. El salto es grande justo en los titulos, y el motivo es que
+ * aqui solo hay UNA cara, la normal: el negrita de los h1 y de los rotulos es
+ * sintetico, y un negrita sintetico no ensancha las letras. Medido contra la
+ * Arial de Windows sobre las cadenas reales de la portada:
+ *
+ *            peso 400      peso 700
+ *   Ubuntu     734 px        734 px   <- el mismo, es negrita fingido
+ *   Arial      751 px        806 px   <- negrita de verdad, un 10% mas ancho
+ *
+ * O sea que el texto normal bailaba un 2-3% pero los titulos casi un 10%.
+ *
+ * `optional` le da al navegador una ventana corta: si la fuente esta lista,
+ * la usa desde el primer pintado; si no, se queda en la del sistema para ESA
+ * carga y no recompone nunca. Con el preload de head_base.html y la fuente en
+ * el precache del service worker, llega a tiempo salvo en la primera visita
+ * con la cache vacia.
+ *
+ * Subir a `swap` otra vez solo tendria sentido con dos caras reales (normal y
+ * negrita) y un `size-adjust` por peso en una familia de respaldo; son 47 KB
+ * mas y bastante afinado para lo que arregla. */
 @font-face {
     font-family: 'Ubuntu';
     src: url('../fonts/ubuntu.woff2') format('woff2');
     font-weight: normal;
     font-style: normal;
-    font-display: swap;
+    font-display: optional;
 }
 
 *, *::before, *::after {

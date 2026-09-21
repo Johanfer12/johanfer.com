@@ -19,27 +19,40 @@
             <p>{{ site_tagline }}</p>
         </div>
         <div class="main-icons-container">
+        {% comment %}
+        Los cuatro iconos van EN LINEA y no como <img>. Pesan 337-813 bytes
+        entre los cuatro, pero eran cuatro peticiones aparte que terminaban
+        despues de que la caja ya estaba pintada: medido en frio, 779 ms los dos
+        primeros y 867 ms los dos ultimos, con la tarjeta pintada antes. De ahi
+        que los de abajo se vieran entrar tarde. Asi se pintan con el HTML.
+
+        Los ficheros de static/Img/ se quedan: los usa `og:image` en esta y en
+        otras siete plantillas, y ahi hace falta una URL absoluta. Si se edita
+        un icono hay que tocar los dos sitios.
+
+        El `fill` blanco se hereda del CSS en vez de ir en un `style` propio.
+        {% endcomment %}
             <div class="main-icon">
                 <a href="/bookshelf/">
-                    <img src="{% static 'Img/library-icon.svg' %}" alt="Biblioteca">
+                    <svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M2 3.498C2 2.67 2.671 2 3.5 2h1c.827 0 1.499.67 1.499 1.498V16.48c0 .827-.672 1.497-1.5 1.497h-1c-.828 0-1.499-.67-1.499-1.497zm1.5-.5a.5.5 0 0 0-.5.5V16.48a.5.5 0 0 0 .5.499h1a.5.5 0 0 0 .499-.5V3.499a.5.5 0 0 0-.5-.5zm3.498.5C6.998 2.67 7.67 2 8.498 2h1c.828 0 1.499.67 1.499 1.498V16.48c0 .827-.671 1.497-1.5 1.497h-1c-.827 0-1.499-.67-1.499-1.497zm1.5-.5a.5.5 0 0 0-.5.5V16.48a.5.5 0 0 0 .5.499h1a.5.5 0 0 0 .5-.5V3.499a.5.5 0 0 0-.5-.5zm7.22 3.159a1.5 1.5 0 0 0-1.87-1.106l-.745.21a1.5 1.5 0 0 0-1.06 1.741l2.003 9.8a1.5 1.5 0 0 0 1.839 1.151l.985-.25c.79-.2 1.274-.994 1.092-1.787zm-1.598-.145a.5.5 0 0 1 .624.368l2.243 9.76a.5.5 0 0 1-.364.595l-.985.25a.5.5 0 0 1-.613-.383l-2.003-9.8a.5.5 0 0 1 .353-.58z"/></svg>
                     <h2>Libros</h2>
                 </a>
             </div>
             <div class="main-icon">
                 <a href="/spotify/">
-                    <img src="{% static 'Img/spotify-icon.svg' %}" alt="Spotify">
+                    <svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="-0.56 0 20 20"><path d="M14.702 2.226A1 1 0 0 1 16 3.18V13.5a2.5 2.5 0 1 1-1-2V6.18L8 8.368V15.5a2.5 2.5 0 1 1-1-2V5.368a1 1 0 0 1 .702-.955zM8 7.32l7-2.187V3.18L8 5.368zM5.5 14a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3m6.5-.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 0 0-3 0"/></svg>
                     <h2>Música</h2>
                 </a>
             </div>
             <div class="main-icon">
                 <a href="/viendo/">
-                    <img src="{% static 'Img/watch-icon.svg' %}" alt="Series y películas">
+                    <svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="-0.26 -0.06 20 20"><path d="M16.13 5.38L7.038 8h9.46a.5.5 0 0 1 .5.5v7a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 3 15.5V8.571l-.257-.893a2.5 2.5 0 0 1 1.71-3.095L13.1 2.09a2.5 2.5 0 0 1 3.095 1.71l.277.96a.5.5 0 0 1-.342.62M3.84 7.88l.607-.175L5.889 5.21l-1.16.335A1.5 1.5 0 0 0 3.703 7.4zm1.992-.574l2.12-.612l1.443-2.497l-2.125.613l-.021.042zm5.627-1.622l1.442-2.498l-2.126.613l-.026.053l-1.41 2.443zm2.684-2.652l-.02.036l-1.279 2.216l2.527-.728l-.139-.48a1.5 1.5 0 0 0-1.09-1.044M4 9v6.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V9z"/></svg>
                     <h2>TV</h2>
                 </a>
             </div>
             <div class="main-icon">
                 <a href="/noticias/">
-                    <img src="{% static 'Img/news-icon.svg' %}" alt="Noticias">
+                    <svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0.35 -0.1 19.2 19.2"><path d="M5 6.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5M10.5 9a.5.5 0 0 0 0 1h2a.5.5 0 0 0 0-1zm-.5 3.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5M5.5 9a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zm.5 3v-2h2v2zM2 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1a2 2 0 0 1 2 2v5.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 2 13.5zm13 0a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v8.5A1.5 1.5 0 0 0 4.5 15h11a1.5 1.5 0 0 0 1.5-1.5V8a1 1 0 0 0-1-1v6.5a.5.5 0 0 1-1 0z"/></svg>
                     <h2>Noticias</h2>
                 </a>
             </div>

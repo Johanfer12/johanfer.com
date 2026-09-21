@@ -40,6 +40,7 @@ PWA_THEME_COLOR = '#070715'
 # lista no pueda quedarse con URLs viejas.
 PWA_PRECACHE_STATIC = (
     'favicon.ico',
+    'favicon.svg',
     'Img/pwa-icon-192.png',
     'Img/pwa-icon-512.png',
     'Img/pwa-icon-maskable-512.png',
@@ -570,6 +571,7 @@ def service_worker(request):
     response = render(request, 'sw.js', {
         'sw_version': version,
         'offline_url': offline_url,
+        'home_url': reverse('home_page:index'),
         'precache_urls': mark_safe(json.dumps(precache)),
     }, content_type='application/javascript; charset=utf-8')
     response['Service-Worker-Allowed'] = '/'
