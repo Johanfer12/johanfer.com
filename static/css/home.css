@@ -6,7 +6,7 @@ html {
 }
 
 body {
-    font-family: 'Ubuntu', sans-serif;
+    font-family: 'Nunito Sans', sans-serif;
     color: var(--text-primary);
     background-color: var(--bg-1);
     background-image:

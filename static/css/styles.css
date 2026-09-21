@@ -11,7 +11,7 @@ html {
 }
 
 body {
-    font-family: 'Ubuntu', sans-serif;
+    font-family: 'Nunito Sans', sans-serif;
     font-synthesis-weight: auto;
     color: var(--text-primary);
     background-color: var(--bg-1);
@@ -1044,7 +1044,7 @@ a:hover {
     backdrop-filter: blur(12px) saturate(140%);
     box-shadow: 0 10px 26px rgba(2, 8, 18, 0.38);
     color: var(--text-secondary);
-    font-family: 'Ubuntu', sans-serif;
+    font-family: 'Nunito Sans', sans-serif;
     font-size: 0.88rem;
     letter-spacing: 0.02em;
     white-space: nowrap;

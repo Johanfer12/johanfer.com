@@ -14,71 +14,49 @@
  * pwa_head.html, que va al final.
  */
 
-/* `optional` y no `swap`, y la diferencia se nota a simple vista.
+/* Nunito Sans, desde septiembre de 2026. Antes el sitio iba en Ubuntu.
  *
- * Con `swap` el navegador pinta en la sans-serif del sistema y RECOMPONE al
- * llegar Ubuntu. El salto es grande justo en los titulos, y el motivo es que
- * aqui solo hay UNA cara, la normal: el negrita de los h1 y de los rotulos es
- * sintetico, y un negrita sintetico no ensancha las letras. Medido contra la
- * Arial de Windows sobre las cadenas reales de la portada:
+ * Los nombres de fichero llevan el peso REAL (300 y 600) porque los anteriores
+ * mentian: `ubuntu.woff2` se declaraba `normal` y era la Light, y
+ * `ubuntu-medium.woff2` se declaraba `700` y era la Medium. Aqui el fichero
+ * dice lo que es y la declaracion dice el hueco que ocupa.
  *
- *            peso 400      peso 700
- *   Ubuntu     734 px        734 px   <- el mismo, es negrita fingido
- *   Arial      751 px        806 px   <- negrita de verdad, un 10% mas ancho
+ * Se declara el 300 como `normal` y el 600 como `700` para no tener que tocar
+ * los 33 sitios del CSS que piden peso. El reparto que hace el navegador:
+ *   400, 500   -> la de 300
+ *   600 a 800  -> la de 600
  *
- * O sea que el texto normal bailaba un 2-3% pero los titulos casi un 10%.
+ * Sin hinting a proposito: son mas de la mitad del peso del fichero, Android
+ * no los usa, y en Windows el texto de las tarjetas se pinta en escala de
+ * grises (el giro 3D de la tarjeta impide el ClearType), donde tampoco ayudan.
+ * Las dos caras juntas son 29 KB; las dos de Ubuntu eran 84 KB.
  *
- * `optional` le da al navegador una ventana corta: si la fuente esta lista,
- * la usa desde el primer pintado; si no, se queda en la del sistema para ESA
- * carga y no recompone nunca. Con el preload de head_base.html y la fuente en
- * el precache del service worker, llega a tiempo salvo en la primera visita
- * con la cache vacia.
+ * OJO con las metricas, que NO son las de Ubuntu:
+ *   caja de linea   Ubuntu 1,149 em   Nunito 1,364 em   (+19%)
+ *   altura de x     Ubuntu 517        Nunito 485        (-6%)
+ * Donde el CSS fija `line-height` no cambia nada, pero donde no lo fija
+ * —los titulos de la portada— la linea crece. Si se toca el tamano de algun
+ * titulo, comprobar la portada en un movil de 375x812, que va justa de alto.
  *
- * Subir a `swap` otra vez solo tendria sentido con dos caras reales (normal y
- * negrita) y un `size-adjust` por peso en una familia de respaldo; son 47 KB
- * mas y bastante afinado para lo que arregla. */
+ * `optional` y no `swap`: con `swap` el navegador pinta en la del sistema y
+ * RECOMPONE al llegar la nuestra, y eso es el salto que se veia. Con
+ * `optional` o llega a tiempo para el primer pintado o esa carga se queda en
+ * la del sistema, pero no recompone nunca. Con el preload de head_base.html y
+ * las dos caras en el precache del service worker, llega a tiempo salvo en la
+ * primera visita con la cache vacia. Si algun dia se prefiere garantizar
+ * siempre esta tipografia, la alternativa es `block`, que deja el texto
+ * invisible hasta que llegue en vez de usar la del sistema. */
 @font-face {
-    font-family: 'Ubuntu';
-    src: url('../fonts/ubuntu.woff2') format('woff2');
+    font-family: 'Nunito Sans';
+    src: url('../fonts/nunito-sans-300.woff2') format('woff2');
     font-weight: normal;
     font-style: normal;
     font-display: optional;
 }
 
-/* OJO con el fichero de arriba: se llama `ubuntu.woff2` y se declara `normal`,
- * pero por dentro es Ubuntu **Light** (usWeightClass 300, version 0.83). Se
- * deja declarado como normal a proposito, porque es el peso con el que esta
- * ajustado todo el sitio; corregirlo a 300 dejaria sin cara el texto de 400.
- *
- * Y esta, que se declara 700, es Ubuntu **Medium** (usWeightClass 500). El
- * nombre del peso declarado no describe el fichero: describe el hueco que
- * rellena. Hasta ahora no habia ninguna cara gruesa y el navegador engordaba
- * la Light para todo lo que pidiera peso.
- *
- * Por que Medium y no Bold, que es lo que parece que toca. Se probo Bold y
- * canta: la negrita sintetica que habia era la Light hinchada, o sea las
- * MISMAS formas abiertas, mientras que la Bold de verdad cierra los ojales de
- * la a, la e y la o y endereza los trazos. Al lado de un texto en Light se lee
- * como otra tipografia. La Medium mantiene el dibujo abierto y ademas cae mas
- * cerca en ancho:
- *
- *   "Rincon de Johan" a 100px      ancho     vs la sintetica
- *     Light sintetica (lo de antes)  733,8      ---
- *     Medium                         759,0     +3,4%
- *     Bold                           775,1     +5,6%
- *
- * Sale del mismo Ubuntu 0.83 que la Light y recortada a sus mismos 336
- * caracteres, asi que no hay ningun signo que tenga una cara y no la otra.
- * Las metricas verticales coinciden (upem 1000, ascenso 932, descenso -189),
- * de modo que los altos de linea no se mueven.
- *
- * Reparto que hace el navegador con las dos caras:
- *   400, 500   -> Light
- *   600 a 800  -> esta
- * Siguen siendo dos niveles, pero ahora los dos estan dibujados. */
 @font-face {
-    font-family: 'Ubuntu';
-    src: url('../fonts/ubuntu-medium.woff2') format('woff2');
+    font-family: 'Nunito Sans';
+    src: url('../fonts/nunito-sans-600.woff2') format('woff2');
     font-weight: 700;
     font-style: normal;
     font-display: optional;

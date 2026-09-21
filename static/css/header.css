@@ -166,8 +166,14 @@
         font-size: 17px;
     }
 
+    /* 12.5 y no 13: en un movil de 375 la caja del subtitulo son 162 px y con
+       tres digitos en el contador («200 noticias del 01/08/2026») el texto
+       pide 164 px con Nunito, asi que se parte en dos lineas y la cabecera
+       crece. No es culpa del cambio de tipografia: con Ubuntu pedia 161 px,
+       o sea que cabia por UN pixel y con cuatro digitos se habria partido
+       igual. A 12.5 px pide 158 y quedan 4 px de margen. */
     .total {
-        font-size: 13px;
+        font-size: 12.5px;
     }
 
     .header-nav {

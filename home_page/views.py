@@ -46,8 +46,8 @@ PWA_PRECACHE_STATIC = (
     'Img/pwa-icon-maskable-512.png',
     'Img/apple-touch-icon.png',
     # Comunes a las dieciséis páginas.
-    'fonts/ubuntu.woff2',
-    'fonts/ubuntu-medium.woff2',
+    'fonts/nunito-sans-300.woff2',
+    'fonts/nunito-sans-600.woff2',
     'css/tokens.css',
     'css/base.css',
     # La portada, que es la pantalla de arranque de la app.
