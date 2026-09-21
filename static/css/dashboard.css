@@ -1,11 +1,3 @@
-@font-face {
-    font-family: 'Ubuntu';
-    src: url('../fonts/ubuntu.woff2') format('woff2');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-}
-
 .content-container {
     background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
     border: 1px solid rgba(207, 220, 241, 0.27);
