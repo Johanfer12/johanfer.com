@@ -21,6 +21,15 @@ class FakeVectorIndex:
     def scroll_points(self, limit=256):
         return iter(self.points)
 
+    def known_guids(self, guids, batch_size=256):
+        """Contrato nuevo: se pregunta por guids concretos, no se recorre todo."""
+        indexados = {p.payload["news_id"] for p in self.points}
+        pedidos = set(guids)
+        return set(
+            News.objects.filter(id__in=indexados, guid__in=pedidos)
+            .values_list("guid", flat=True)
+        )
+
     def ensure_collection(self, dim):
         pass
 

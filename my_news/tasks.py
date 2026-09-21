@@ -1,4 +1,9 @@
-from .services import EmbeddingService, FeedService, DEFAULT_AI_MODEL
+from .services import (
+    EmbeddingService,
+    FeedService,
+    DEFAULT_AI_MODEL,
+    REDUNDANCY_WINDOW_DAYS,
+)
 from django.utils import timezone
 from datetime import timedelta
 from .models import News
@@ -16,29 +21,37 @@ logger = logging.getLogger(__name__)
 
 
 def purge_orphan_vectors(batch_size: int = 256):
-    """Elimina de Qdrant puntos cuyo news_id ya no existe en la base de datos."""
+    """Elimina de Qdrant los puntos que ya no sirven para nada.
+
+    OJO: que un punto no tenga fila en News **no** lo convierte en huérfano.
+    Desde que la ventana de duplicados es de un año, eso es lo normal: la
+    noticia se purga a los 15 días y su vector sigue vivo para reconocer
+    republicaciones. El criterio es la fecha, no la existencia de la fila.
+
+    Queda como red de seguridad contra puntos sin fecha utilizable (los que
+    escribiera una versión anterior), y corre una vez al día: recorre la
+    colección entera, que con la ventana larga son ~28.000 puntos.
+    """
     try:
         vector_index = FeedService.initialize_vector_index()
         if vector_index is None:
             return 0
 
-        existing_news_ids = set(News.objects.values_list('id', flat=True))
+        corte = timezone.now() - timedelta(days=REDUNDANCY_WINDOW_DAYS)
+        corte_ts = int(corte.timestamp())
         orphan_point_ids = []
 
         for point in vector_index.scroll_points(limit=batch_size):
             payload = getattr(point, 'payload', {}) or {}
-            news_id = payload.get('news_id')
-            if news_id is None:
+            published_ts = payload.get('published_ts')
+            if published_ts is None:
                 orphan_point_ids.append(point.id)
                 continue
 
             try:
-                normalized_news_id = int(news_id)
+                if int(published_ts) < corte_ts:
+                    orphan_point_ids.append(point.id)
             except (TypeError, ValueError):
-                orphan_point_ids.append(point.id)
-                continue
-
-            if normalized_news_id not in existing_news_ids:
                 orphan_point_ids.append(point.id)
 
         deleted_vectors = 0
@@ -74,28 +87,25 @@ def retry_missing_embeddings(limit: int = 25, days: int = 15):
             logger.warning("Qdrant no disponible; no se reintentan los embeddings pendientes.")
             return 0
 
-        indexados = set()
-        for point in vector_index.scroll_points(limit=256):
-            news_id = (getattr(point, 'payload', {}) or {}).get('news_id')
-            if news_id is not None:
-                try:
-                    indexados.add(int(news_id))
-                except (TypeError, ValueError):
-                    continue
-
         cutoff = timezone.now() - timedelta(days=days)
         # Se excluyen las que no se indexan por diseño: filtradas por palabra
         # (el filtro corta antes del embedding), redundantes y filtradas por IA.
-        pendientes = (
+        candidatas = list(
             News.objects.filter(
                 published_date__gte=cutoff,
                 filtered_by__isnull=True,
                 is_redundant=False,
                 is_ai_filtered=False,
-            )
-            .exclude(id__in=indexados)
-            .order_by('-published_date')[:limit]
+            ).order_by('-published_date')
         )
+
+        # Antes se recorría la colección entera para saber qué estaba indexado.
+        # Con 1.151 puntos costaba 161 ms, pero con la ventana de un año son
+        # ~28.000 puntos y ~3,9 s, 29 veces al día, para casi siempre no hacer
+        # nada. Preguntar por los guids concretos no depende del tamaño de la
+        # colección.
+        ya_indexados = vector_index.known_guids([n.guid for n in candidatas])
+        pendientes = [n for n in candidatas if n.guid not in ya_indexados][:limit]
 
         if not pendientes:
             return 0
@@ -166,8 +176,11 @@ def update_news_cron():
                 retry_missing_embeddings(limit=25, days=15)
             except Exception:
                 logger.exception("Error reintentando embeddings pendientes tras el cron")
-            # Ejecutar limpieza tras actualización
-            purge_old_news(15)
+            # Ejecutar limpieza tras actualización. El mantenimiento caro
+            # (repaso de huérfanos y PRAGMA optimize) se reserva a la última
+            # pasada del día: recorrer la colección entera 29 veces al día son
+            # escrituras y lecturas en la SD a cambio de nada.
+            purge_old_news(15, mantenimiento=timezone.localtime().hour >= 22)
     except portalocker.exceptions.LockException:
         # No es una avería: la pasada anterior sigue en marcha y terminará ella.
         logger.warning("Actualización de noticias omitida: ya hay otra ejecución en curso.")
@@ -180,31 +193,46 @@ def update_news_cron():
         )
 
 
-def purge_old_news(days: int = 15):
+def purge_old_news(days: int = 15, mantenimiento: bool = False):
     """Elimina noticias no guardadas más viejas que ``days`` días.
 
     Usa ``published_date`` como referencia y conserva las noticias que el
     usuario haya marcado como guardadas.
+
+    Los VECTORES no se borran con la noticia: sobreviven
+    ``REDUNDANCY_WINDOW_DAYS`` (un año) para poder reconocer republicaciones de
+    hace meses. Guardar el vector cuesta 3 KB; guardar la fila de la noticia
+    para acompañarlo costaría multiplicar por 24 la base de datos, y en una SD
+    eso son escrituras que no hacen falta.
+
+    ``mantenimiento`` activa las tareas caras que solo valen la pena una vez al
+    día: el repaso de huérfanos y el PRAGMA optimize.
     """
     try:
         cutoff = timezone.now() - timedelta(days=days)
         stale_news = News.objects.filter(published_date__lt=cutoff, is_saved=False)
-        stale_guids = list(stale_news.values_list('guid', flat=True))
         deleted_count, _ = stale_news.delete()
 
         deleted_vectors = 0
         vector_index = FeedService.initialize_vector_index()
         if vector_index is not None:
             try:
-                deleted_vectors += vector_index.delete_many(stale_guids)
+                # Una sola petición con un filtro de fecha, en lugar de
+                # enumerar los guids: el criterio es la fecha y Qdrant sabe
+                # aplicarlo él.
+                corte_vectores = timezone.now() - timedelta(days=REDUNDANCY_WINDOW_DAYS)
+                vector_index.delete_older_than(int(corte_vectores.timestamp()))
             except Exception:
                 logger.exception("Error eliminando vectores antiguos en Qdrant")
 
-            deleted_vectors += purge_orphan_vectors()
+            if mantenimiento:
+                deleted_vectors += purge_orphan_vectors()
 
         # Tras borrar filas, refrescar estadísticas del planificador de SQLite.
-        # (VACUUM completo se evita: bloquea toda la BD y corre cada 30 min.)
-        if deleted_count and connection.vendor == 'sqlite':
+        # Solo en la pasada de mantenimiento: PRAGMA optimize reescribe
+        # estadísticas, y hacerlo 29 veces al día son escrituras a la SD que no
+        # compran nada.
+        if mantenimiento and deleted_count and connection.vendor == 'sqlite':
             try:
                 with connection.cursor() as cursor:
                     cursor.execute('PRAGMA optimize')
@@ -214,8 +242,8 @@ def purge_old_news(days: int = 15):
         logger.info(
             f"Purga completada: {deleted_count} noticias no guardadas eliminadas (> {days} días)"
         )
-        if vector_index is not None:
-            logger.info(f"Qdrant sincronizado: {deleted_vectors} vectores eliminados")
+        if vector_index is not None and mantenimiento:
+            logger.info(f"Qdrant sincronizado: {deleted_vectors} vectores huérfanos eliminados")
         return deleted_count
     except Exception:
         logger.exception("Error purgando noticias antiguas")

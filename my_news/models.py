@@ -61,6 +61,14 @@ class News(models.Model):
     similar_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, 
                                   verbose_name="Noticia similar", related_name="similar_news")
     similarity_score = models.FloatField(null=True, blank=True, verbose_name="% Similitud")
+    # La ventana de duplicados es de un año pero las noticias se purgan a los
+    # 15 días, así que el original de un duplicado antiguo ya no tiene fila a
+    # la que apuntar con `similar_to`. Aquí queda su titular y enlace, sacados
+    # del payload de Qdrant, para poder revisarlo desde el admin.
+    similar_ref = models.CharField(
+        max_length=600, blank=True, default='',
+        verbose_name="Original (ya purgado)"
+    )
     is_redundant = models.BooleanField(default=False, verbose_name="Redundante")
     short_answer = models.TextField(null=True, blank=True, verbose_name="Respuesta corta")
     ai_filter_reason = models.TextField(null=True, blank=True, verbose_name="Razón Filtro IA")
