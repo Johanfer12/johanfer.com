@@ -45,6 +45,34 @@
     font-display: optional;
 }
 
+/* OJO con el fichero de arriba: se llama `ubuntu.woff2` y se declara `normal`,
+ * pero por dentro es Ubuntu **Light** (usWeightClass 300, version 0.83). Se
+ * deja declarado como normal a proposito, porque es el peso con el que esta
+ * ajustado todo el sitio; corregirlo a 300 dejaria sin cara el texto de 400.
+ *
+ * Esta es la negrita de verdad, que hasta ahora NO existia: el navegador
+ * engordaba la Light para todo lo que pidiera peso. Y como el engorde
+ * sintetico no cambia el ancho de las letras, los pesos 600, 650, 700 y 800
+ * que pide el CSS salian los cuatro identicos.
+ *
+ * Sacada del mismo Ubuntu 0.83 que la Light (ufl/ubuntu del repositorio de
+ * Google Fonts) y recortada a sus mismos 336 caracteres, asi que no hay ningun
+ * signo que tenga una cara y no la otra. Las metricas verticales coinciden al
+ * milimetro (upem 1000, ascenso 932, descenso -189), o sea que los altos de
+ * linea no se mueven.
+ *
+ * Con las dos caras, el reparto que hace el navegador queda asi:
+ *   500        -> Light, como hasta ahora
+ *   600 a 800  -> esta negrita
+ * Siguen siendo dos niveles, pero ahora los dos estan dibujados. */
+@font-face {
+    font-family: 'Ubuntu';
+    src: url('../fonts/ubuntu-bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: optional;
+}
+
 *, *::before, *::after {
     box-sizing: inherit;
 }
