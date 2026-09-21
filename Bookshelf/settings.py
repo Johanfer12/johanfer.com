@@ -158,28 +158,10 @@ if USE_LOCAL_DATABASE:
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'database.db',
-            'OPTIONS': {
-                # La base vive en la tarjeta SD de la Pi, así que lo que se
-                # optimiza aquí son las escrituras, no la velocidad.
-                #
-                # journal_mode=WAL: el modo por defecto ('delete') escribe cada
-                # transacción dos veces —al journal y a la base— y encima crea
-                # y borra el fichero de journal en cada una. WAL escribe una
-                # sola vez, en un fichero que se reutiliza.
-                #
-                # synchronous=NORMAL: con WAL solo fuerza el fsync en los
-                # checkpoints y no en cada commit. Es la combinación que
-                # recomienda SQLite para WAL; el riesgo que acepta es perder
-                # las últimas transacciones si se va la luz, nunca corromper
-                # la base. Aquí eso significa, como mucho, volver a bajar unas
-                # noticias en la siguiente pasada.
-                'init_command': (
-                    'PRAGMA journal_mode=WAL;'
-                    'PRAGMA synchronous=NORMAL;'
-                    'PRAGMA temp_store=MEMORY;'
-                ),
-                'transaction_mode': 'IMMEDIATE',
-            },
+            # Los PRAGMAs (WAL y compañía, para ahorrarle escrituras a la SD)
+            # se aplican por señal en Bookshelf/db_pragmas.py y NO aquí con
+            # OPTIONS['init_command']: esa opción para SQLite existe desde
+            # Django 5.1 y producción va con la 5.0, donde tumba el arranque.
         }
     }
 else:
