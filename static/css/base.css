@@ -50,24 +50,35 @@
  * deja declarado como normal a proposito, porque es el peso con el que esta
  * ajustado todo el sitio; corregirlo a 300 dejaria sin cara el texto de 400.
  *
- * Esta es la negrita de verdad, que hasta ahora NO existia: el navegador
- * engordaba la Light para todo lo que pidiera peso. Y como el engorde
- * sintetico no cambia el ancho de las letras, los pesos 600, 650, 700 y 800
- * que pide el CSS salian los cuatro identicos.
+ * Y esta, que se declara 700, es Ubuntu **Medium** (usWeightClass 500). El
+ * nombre del peso declarado no describe el fichero: describe el hueco que
+ * rellena. Hasta ahora no habia ninguna cara gruesa y el navegador engordaba
+ * la Light para todo lo que pidiera peso.
  *
- * Sacada del mismo Ubuntu 0.83 que la Light (ufl/ubuntu del repositorio de
- * Google Fonts) y recortada a sus mismos 336 caracteres, asi que no hay ningun
- * signo que tenga una cara y no la otra. Las metricas verticales coinciden al
- * milimetro (upem 1000, ascenso 932, descenso -189), o sea que los altos de
- * linea no se mueven.
+ * Por que Medium y no Bold, que es lo que parece que toca. Se probo Bold y
+ * canta: la negrita sintetica que habia era la Light hinchada, o sea las
+ * MISMAS formas abiertas, mientras que la Bold de verdad cierra los ojales de
+ * la a, la e y la o y endereza los trazos. Al lado de un texto en Light se lee
+ * como otra tipografia. La Medium mantiene el dibujo abierto y ademas cae mas
+ * cerca en ancho:
  *
- * Con las dos caras, el reparto que hace el navegador queda asi:
- *   500        -> Light, como hasta ahora
- *   600 a 800  -> esta negrita
+ *   "Rincon de Johan" a 100px      ancho     vs la sintetica
+ *     Light sintetica (lo de antes)  733,8      ---
+ *     Medium                         759,0     +3,4%
+ *     Bold                           775,1     +5,6%
+ *
+ * Sale del mismo Ubuntu 0.83 que la Light y recortada a sus mismos 336
+ * caracteres, asi que no hay ningun signo que tenga una cara y no la otra.
+ * Las metricas verticales coinciden (upem 1000, ascenso 932, descenso -189),
+ * de modo que los altos de linea no se mueven.
+ *
+ * Reparto que hace el navegador con las dos caras:
+ *   400, 500   -> Light
+ *   600 a 800  -> esta
  * Siguen siendo dos niveles, pero ahora los dos estan dibujados. */
 @font-face {
     font-family: 'Ubuntu';
-    src: url('../fonts/ubuntu-bold.woff2') format('woff2');
+    src: url('../fonts/ubuntu-medium.woff2') format('woff2');
     font-weight: 700;
     font-style: normal;
     font-display: optional;
