@@ -27,12 +27,36 @@ SESSION_VISITOR_KEY = 'visit_visitor_id'
 
 # PWA: color de marca y estáticos que el service worker guarda al instalarse.
 PWA_THEME_COLOR = '#070715'
+# Además de los iconos, se precarga TODO lo que pinta la pantalla de arranque
+# (`start_url` es `/`, la portada). Antes solo estaban los iconos, así que el
+# primer lanzamiento tras instalar bajaba las hojas, la fuente y los cuatro
+# iconos desde la Pi, con el TTFB que eso supone: la caja se pintaba, luego
+# entraba la tipografía y recomponía el texto, y luego aparecían los iconos.
+# Ya en caché, la misma portada sirve esos ficheros en menos de 20 ms.
+#
+# Son ~55 KB sobre los ~102 KB de PNG que ya había. OJO: la versión de la caché
+# sale del hash de esta lista, así que ahora un cambio en base.css o en home.css
+# rota la caché entera y se vuelve a bajar todo una vez. Es el precio de que la
+# lista no pueda quedarse con URLs viejas.
 PWA_PRECACHE_STATIC = (
     'favicon.ico',
     'Img/pwa-icon-192.png',
     'Img/pwa-icon-512.png',
     'Img/pwa-icon-maskable-512.png',
     'Img/apple-touch-icon.png',
+    # Comunes a las dieciséis páginas.
+    'fonts/ubuntu.woff2',
+    'css/tokens.css',
+    'css/base.css',
+    # La portada, que es la pantalla de arranque de la app.
+    'css/home.css',
+    'js/pwa.js',
+    'js/gyro_parallax.js',
+    'js/background_motion.js',
+    'Img/library-icon.svg',
+    'Img/spotify-icon.svg',
+    'Img/watch-icon.svg',
+    'Img/news-icon.svg',
 )
 
 

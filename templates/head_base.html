@@ -11,5 +11,18 @@ base.css también fija. Si base.css cargara después ganaría ella y la capa de
 estrellas se descolocaría en todo el sitio. Por eso esto no vive en
 pwa_head.html, que se incluye al final del <head>.
 {% endcomment %}
+{% comment %}
+La tipografia se precarga porque el navegador NO la descubre hasta haber
+parseado base.css y maquetado el texto. Medido en la portada con cache fria:
+todo lo demas arranca a los 677 ms y la fuente a los 967 ms, casi 300 ms tarde.
+Con `font-display: swap` eso significa pintar en la sans-serif del sistema y
+recomponer al llegar Ubuntu, que es un 9% mas estrecha: el titulo y los cuatro
+rotulos encogen a la vista. El preload la pide a la vez que las hojas.
+
+`crossorigin` es obligatorio aunque la fuente sea del propio dominio: las
+fuentes viajan en modo anonimo y sin el atributo el navegador descarga el
+archivo DOS veces y avisa por consola de que el preload no se uso.
+{% endcomment %}
+<link rel="preload" href="{% static 'fonts/ubuntu.woff2' %}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
 <link rel="stylesheet" href="{% static 'css/base.css' %}">
