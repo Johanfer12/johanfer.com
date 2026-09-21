@@ -287,6 +287,14 @@ class EmbeddingService:
                     top_k=5,
                     min_published_ts=min_ts,
                     exclude_guid=getattr(news_item, 'guid', None),
+                    # Solo vectores del mismo modelo. El payload guardaba
+                    # `model_version` desde siempre y nadie lo miraba: dos
+                    # modelos de las mismas dimensiones producen vectores
+                    # incomparables, y compararlos da puntuaciones sin
+                    # sentido sin que nada falle. Con la ventana en 15 días
+                    # la mezcla se limpiaba sola; con un año se arrastraría
+                    # doce meses.
+                    extra_must=vector_index.same_model_condition(),
                 )
                 if hits:
                     mejor_puntuacion = 0.0

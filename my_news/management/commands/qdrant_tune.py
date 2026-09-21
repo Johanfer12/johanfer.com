@@ -63,6 +63,25 @@ class Command(BaseCommand):
         self.stdout.write(f'Cuantización:{" ninguna" if cuantizacion is None else " int8"}')
         self.stdout.write(f'Flush:       {flush} s')
 
+        # Una mezcla de modelos no rompe nada visiblemente: las puntuaciones
+        # simplemente dejan de significar lo que significaban.
+        try:
+            versiones = indice.model_version_counts()
+        except Exception:
+            versiones = {}
+        if versiones:
+            actual = indice.current_model_version()
+            self.stdout.write('Modelos:')
+            for version, n in sorted(versiones.items(), key=lambda x: -x[1]):
+                marca = '  <- el de ahora' if version == actual else ''
+                self.stdout.write(f'  {version:32} {n:6}{marca}')
+            ajenos = sum(n for v, n in versiones.items() if v != actual)
+            if ajenos:
+                self.stdout.write(self.style.WARNING(
+                    f'  {ajenos} puntos son de otro modelo y la búsqueda los ignora. '
+                    'Son espacio ocupado sin uso: conviene reindexarlos o borrarlos.'
+                ))
+
         if not options['apply']:
             pendiente = []
             if cuantizacion is None:

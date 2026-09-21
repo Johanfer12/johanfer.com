@@ -26,6 +26,8 @@ from .services import (
 class IndiceFalso:
     """Devuelve los aciertos que se le indiquen y anota cómo se le consultó."""
 
+    CONDICION_MODELO = ['solo-el-modelo-actual']
+
     def __init__(self, hits):
         self.hits = hits
         self.ultima_busqueda = None
@@ -33,12 +35,16 @@ class IndiceFalso:
     def ensure_collection(self, dim):
         pass
 
+    def same_model_condition(self):
+        return list(self.CONDICION_MODELO)
+
     def search(self, vector, top_k, min_published_ts=None, exclude_guid=None,
                extra_must=None):
         self.ultima_busqueda = {
             'top_k': top_k,
             'min_published_ts': min_published_ts,
             'exclude_guid': exclude_guid,
+            'extra_must': extra_must,
         }
         return self.hits
 
@@ -276,3 +282,33 @@ class EmbeddingsEnLoteTests(TestCase):
         cliente = self.ClienteFalso()
         self.assertEqual(EmbeddingService.generate_embeddings_batch([], cliente), [])
         self.assertEqual(cliente.llamadas, [])
+
+
+class FiltroDeModeloTests(TestCase):
+    """Dos modelos de las mismas dimensiones dan vectores incomparables.
+
+    No falla nada al mezclarlos: las puntuaciones simplemente dejan de
+    significar lo que significaban, y con la ventana en un año la mezcla se
+    arrastraría doce meses en vez de limpiarse sola en quince días.
+    """
+
+    def setUp(self):
+        self.source = FeedSource.objects.create(
+            name='Fuente', url='https://example.com/rss'
+        )
+
+    def test_la_busqueda_exige_el_modelo_actual(self):
+        indice = IndiceFalso([])
+        noticia = News(
+            guid='g', title='T', description='C',
+            source=self.source, published_date=timezone.now(),
+        )
+        noticia._embedding_vector = [0.1] * 8
+
+        EmbeddingService.check_redundancy(noticia, object(), None, indice)
+
+        self.assertEqual(
+            indice.ultima_busqueda['extra_must'],
+            IndiceFalso.CONDICION_MODELO,
+            'la busqueda debe restringirse al modelo de embeddings actual',
+        )

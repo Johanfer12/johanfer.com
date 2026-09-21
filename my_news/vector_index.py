@@ -91,11 +91,47 @@ class VectorIndexService:
             field_name="guid_hash",
             field_schema=qm.PayloadSchemaType.KEYWORD,
         )
+        self.client.create_payload_index(
+            self.collection,
+            field_name="model_version",
+            field_schema=qm.PayloadSchemaType.KEYWORD,
+        )
         self._collection_ready = True
 
     @staticmethod
     def guid_hash(guid: str) -> str:
         return hashlib.sha256(guid.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def current_model_version() -> str:
+        from django.conf import settings
+        return getattr(settings, 'GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001')
+
+    def same_model_condition(self) -> list:
+        """Condición para comparar solo con vectores del mismo modelo.
+
+        El nombre de la colección lleva modelo y dimensiones, pero
+        ``GEMINI_EMBEDDING_MODEL`` es una variable de entorno independiente:
+        se puede cambiar el modelo sin cambiar la colección y acabar con dos
+        familias de vectores mezcladas. Si el modelo nuevo tiene las mismas
+        768 dimensiones, nada falla — simplemente las puntuaciones dejan de
+        significar lo que significaban.
+        """
+        return [
+            qm.FieldCondition(
+                key="model_version",
+                match=qm.MatchValue(value=self.current_model_version()),
+            )
+        ]
+
+    def model_version_counts(self) -> dict:
+        """Cuántos puntos hay de cada modelo. Para detectar mezclas."""
+        from collections import Counter
+        conteo = Counter()
+        for punto in self.scroll_points(limit=256):
+            payload = getattr(punto, 'payload', {}) or {}
+            conteo[payload.get('model_version') or '(sin versión)'] += 1
+        return dict(conteo)
 
     def upsert(self, guid: str, vector: List[float], payload: dict) -> None:
         point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, guid))
@@ -144,6 +180,16 @@ class VectorIndexService:
         """
         info = self.client.get_collection(self.collection)
         aplicado = {}
+
+        # La búsqueda filtra por model_version; sin índice de payload ese
+        # filtro obliga a mirar el payload de cada punto.
+        if 'model_version' not in (info.payload_schema or {}):
+            self.client.create_payload_index(
+                self.collection,
+                field_name="model_version",
+                field_schema=qm.PayloadSchemaType.KEYWORD,
+            )
+            aplicado['payload_index'] = 'model_version'
 
         if getattr(info.config, 'quantization_config', None) is None:
             self.client.update_collection(
