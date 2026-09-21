@@ -1,0 +1,16 @@
+# Una vez al día, no cada seis horas como la base: lo irrecuperable de Qdrant
+# son los vectores viejos, que no cambian. Los recientes se pueden regenerar
+# con `manage.py qdrant_backfill` mientras sus noticias sigan en la base.
+#
+# A las 02:45: fuera de la franja del cron de noticias (08:00-22:00), después
+# del backup de la base (00:15) y antes del mantenimiento semanal (03:30).
+[Unit]
+Description=Copia diaria de la base vectorial de johanfer.com
+
+[Timer]
+OnCalendar=*-*-* 02:45:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

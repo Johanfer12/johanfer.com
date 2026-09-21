@@ -13,10 +13,16 @@
 #   sudo chown -R johan:johan /var/lib/qdrant
 #   sudo systemctl enable --now qdrant
 #
-# El storage (/var/lib/qdrant/storage, ~37 MB) son DATOS, no configuración:
-# entra en la copia de seguridad. Si se pierde, los vectores se pueden
-# regenerar con `python manage.py qdrant_backfill`, que va por tandas hasta
-# agotar lo pendiente, pero cuesta una llamada a Gemini por noticia.
+# El storage (/var/lib/qdrant/storage, ~52 MB) son DATOS, no configuración, y
+# desde septiembre de 2026 son datos IRRECUPERABLES: con la ventana de
+# duplicados en un año, las noticias se purgan a los 15 días y sus vectores
+# siguen vivos, así que `manage.py qdrant_backfill` ya solo puede regenerar
+# los recientes —los que aún tienen su noticia en la base—, no el resto.
+#
+# Lo respalda `johanfer-qdrant-backup` (ver deploy/bin/ y deploy/systemd/),
+# que hace un snapshot por la API y lo sube al mismo restic que la base.
+# Hasta esa fecha este comentario decía que el storage "entra en la copia de
+# seguridad" y era falso: solo se respaldaba database.db.
 
 [Unit]
 Description=Qdrant Vector DB

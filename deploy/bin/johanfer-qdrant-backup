@@ -1,0 +1,80 @@
+#!/bin/bash
+# Copia de seguridad de la base vectorial (Qdrant).
+#
+# Instalar en /usr/local/sbin/johanfer-qdrant-backup (root, 0700) y activarlo
+# con johanfer-qdrant-backup.timer. Ver deploy/systemd/.
+#
+# POR QUÉ EXISTE. Hasta septiembre de 2026 solo se respaldaba database.db, y
+# era defendible: los vectores se regeneraban con `manage.py qdrant_backfill`
+# a partir de las noticias. Con la ventana de duplicados en un año eso dejó de
+# ser cierto: las noticias se purgan a los 15 días y sus vectores siguen
+# vivos, así que **los vectores antiguos ya no se pueden regenerar desde
+# ninguna parte**. Si se pierde el storage, se pierde la capacidad de
+# reconocer republicaciones hasta volver a acumular un año de historial.
+#
+# POR QUÉ UNA VEZ AL DÍA Y NO CADA SEIS HORAS COMO LA BASE. Justo la parte
+# irrecuperable es la que no cambia: los vectores viejos. Los del último
+# cuarto de hora sí se pueden regenerar con `qdrant_backfill`, porque sus
+# noticias siguen en la base. Además el snapshot es un fichero que cambia
+# entero en cada copia, así que restic apenas puede deduplicarlo: hacerlo
+# cuatro veces al día multiplicaría la subida sin comprar nada.
+#
+# Se usa la API de snapshots y no un `cp` del storage porque Qdrant está
+# escribiendo: copiar los ficheros en caliente daría una copia inconsistente.
+
+set -Eeuo pipefail
+umask 077
+
+QDRANT_URL=${QDRANT_URL:-http://127.0.0.1:6333}
+COLLECTION=${QDRANT_COLLECTION:-news_embeddings_gemini001_d768_v1}
+SNAPSHOT_DIR=/var/lib/qdrant/snapshots
+WORK_DIR=/var/lib/johanfer-backup
+CACHE_DIR=/var/cache/johanfer-restic
+
+export RCLONE_CONFIG=/root/.config/rclone/rclone.conf
+export RESTIC_REPOSITORY=rclone:johanfer-onedrive:Backups/Johanfer-Raspberry/restic
+export RESTIC_PASSWORD_FILE=/root/.config/restic/johanfer-password
+export RESTIC_CACHE_DIR="$CACHE_DIR"
+
+install -d -m 700 "$WORK_DIR" "$CACHE_DIR"
+
+# --- Crear el snapshot -------------------------------------------------------
+respuesta=$(curl -sS -f -X POST \
+  "$QDRANT_URL/collections/$COLLECTION/snapshots?wait=true" \
+  -H 'Content-Type: application/json')
+
+nombre=$(printf '%s' "$respuesta" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["result"]["name"])')
+
+if [ -z "$nombre" ]; then
+  echo "No se pudo crear el snapshot de Qdrant" >&2
+  exit 1
+fi
+
+origen="$SNAPSHOT_DIR/$COLLECTION/$nombre"
+destino="$WORK_DIR/qdrant-$COLLECTION.snapshot"
+
+# Borrar el snapshot del lado de Qdrant pase lo que pase: se queda en la SD y
+# ocupa lo mismo que la colección entera.
+limpiar_qdrant() {
+  curl -sS -X DELETE \
+    "$QDRANT_URL/collections/$COLLECTION/snapshots/$nombre?wait=true" >/dev/null || true
+}
+trap limpiar_qdrant EXIT
+
+if [ ! -f "$origen" ]; then
+  echo "El snapshot $nombre no aparece en $origen" >&2
+  exit 1
+fi
+
+# Se mueve a un nombre fijo para que restic vea siempre la misma ruta y pueda
+# comparar versiones; el nombre que genera Qdrant lleva la fecha.
+cp -f "$origen" "$destino.tmp"
+mv -f "$destino.tmp" "$destino"
+sha256sum "$destino" > "$destino.sha256"
+
+# --- Subirlo -----------------------------------------------------------------
+/usr/bin/restic backup "$destino" "$destino.sha256" \
+  --host raspberrypi --tag johanfer-qdrant
+
+echo "Copia de Qdrant completada: $nombre ($(du -h "$destino" | cut -f1))"

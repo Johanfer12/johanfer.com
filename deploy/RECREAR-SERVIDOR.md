@@ -82,6 +82,7 @@ pip install -U pip setuptools wheel && pip install -r requirements.txt
 
 cp deploy/env.example .env    # y rellenarlo con las claves reales
 # restaurar aquí database.db y media/ desde la copia de seguridad
+# (el storage de Qdrant se restaura aparte; ver 'Copias de seguridad')
 python manage.py migrate
 python manage.py collectstatic --noinput
 ```
@@ -222,3 +223,49 @@ python manage.py shell -c "from my_news.models import News; print(News.objects.c
 
 La primera petición tras reiniciar puede tardar ~20 s: es el arranque en frío de
 gunicorn con `--preload` en una Pi 3. No es un fallo.
+
+---
+
+## Copias de seguridad
+
+Restic cifrado sobre rclone a OneDrive
+(`Backups/Johanfer-Raspberry/restic`), en dos piezas con ritmos distintos
+porque lo que cuesta recuperar no es lo mismo:
+
+| qué | script | timer | retención |
+|---|---|---|---|
+| `database.db` | `/usr/local/sbin/johanfer-db-backup` | cada 6 h (00,06,12,18:15) | 14 diarias, 8 semanales, 12 mensuales |
+| Storage de Qdrant | `/usr/local/sbin/johanfer-qdrant-backup` | diario (02:45) | 7 diarias, 4 semanales, 6 mensuales |
+| Retención y `check --read-data` | `/usr/local/sbin/johanfer-backup-maintenance` | domingos 03:30 | — |
+
+Los scripts y units de Qdrant están versionados en
+[`deploy/bin/johanfer-qdrant-backup`](bin/johanfer-qdrant-backup) y
+[`deploy/systemd/`](systemd/). Los de la base viven solo en la Pi.
+
+```bash
+sudo install -m 700 -o root -g root deploy/bin/johanfer-qdrant-backup /usr/local/sbin/
+sudo install -m 644 -o root -g root deploy/systemd/johanfer-qdrant-backup.* /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now johanfer-qdrant-backup.timer
+```
+
+Hace falta además añadir la retención del tag nuevo a
+`johanfer-backup-maintenance`, que si no crecería sin límite:
+
+```bash
+/usr/bin/restic forget --host raspberrypi --tag johanfer-qdrant   --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+```
+
+**Qué se puede regenerar y qué no.** `database.db` se copia con
+`sqlite3.backup()` y no con `cp`, que con la base en WAL daría una copia
+inconsistente (ese método además consolida el `-wal`, así que no hay que
+llevarse los ficheros sueltos). El storage de Qdrant se copia con la API de
+snapshots, por lo mismo. Y desde que la ventana de duplicados es de un año,
+**los vectores antiguos no se regeneran desde ninguna parte**: su noticia se
+purgó a los 15 días. `manage.py qdrant_backfill` solo alcanza a los recientes.
+
+Restaurar Qdrant desde el snapshot:
+
+```bash
+sudo -u johan curl -X POST 'http://127.0.0.1:6333/collections/<coleccion>/snapshots/upload?priority=snapshot'   -H 'Content-Type: multipart/form-data' -F 'snapshot=@<fichero>.snapshot'
+```
+

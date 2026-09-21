@@ -1,0 +1,13 @@
+# Copia de seguridad de la base vectorial. Instalar en /etc/systemd/system/.
+# El script va en /usr/local/sbin/johanfer-qdrant-backup (ver deploy/bin/).
+[Unit]
+Description=Backup cifrado de la base vectorial (Qdrant) de johanfer.com
+After=network-online.target qdrant.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/johanfer-qdrant-backup
+UMask=0077
+Nice=15
+IOSchedulingClass=idle
