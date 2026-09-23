@@ -12,7 +12,8 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import AIModelSetting, FeedSource, News
+from .forms import FilterWordForm
+from .models import AIModelSetting, FeedSource, FilterWord, News
 from .ai_providers import (
     AIProviderError,
     AIRateLimiter,
@@ -79,6 +80,35 @@ class FilterWordPatternTests(SimpleTestCase):
             FeedService.should_filter_news('Star Warships llega al cine', '', patterns)[0],
             False,
         )
+
+    def test_filter_word_ignores_accents_both_ways(self):
+        sin_tilde = self.build_patterns(('trailer', True))
+        con_tilde = self.build_patterns(('Málaga', True))
+
+        self.assertTrue(FeedService.should_filter_news('Nuevo tráiler de Andor', '', sin_tilde)[0])
+        self.assertTrue(FeedService.should_filter_news('Lluvias en MALAGA', '', con_tilde)[0])
+        self.assertTrue(FeedService.should_filter_news('Pingüino', '', self.build_patterns(('pinguino', True)))[0])
+
+    def test_filter_word_keeps_the_enye(self):
+        patterns = self.build_patterns(('año', True))
+
+        self.assertTrue(FeedService.should_filter_news('El AÑO del dragón', '', patterns)[0])
+        self.assertFalse(FeedService.should_filter_news('Estudio sobre el ano', '', patterns)[0])
+
+    def test_title_only_ignores_description(self):
+        patterns = self.build_patterns(('Fable', True))
+
+        self.assertFalse(FeedService.should_filter_news(
+            'OpenAI responde a Anthropic', 'Tras el lanzamiento de Claude Fable 5.1...', patterns
+        )[0])
+
+
+class FilterWordDefaultTests(TestCase):
+    def test_new_filters_look_only_at_the_title(self):
+        """Buscar en la descripción ocultaba noticias por menciones de pasada."""
+        self.assertTrue(FilterWord.objects.create(word='Lidl').title_only)
+        # El formulario de alta sale con la casilla marcada.
+        self.assertIn('checked', str(FilterWordForm()['title_only']))
 
 
 class ContentPreparationTests(SimpleTestCase):

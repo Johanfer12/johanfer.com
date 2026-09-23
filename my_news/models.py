@@ -138,10 +138,19 @@ class FilterWord(models.Model):
         default=True,
         verbose_name="Activo"
     )
+    # Por defecto solo el título desde septiembre de 2026. Medido en la Pi: de
+    # 308 noticias ocultas por palabra, 192 (62%) lo fueron solo por la
+    # descripción, y ahí están los falsos positivos: «Fable» ocultaba noticias
+    # de IA que citaban el modelo, «Corte Inglés» o «Lidl» noticias que solo
+    # los mencionaban de pasada.
     title_only = models.BooleanField(
-        default=False,
+        default=True,
         verbose_name="Solo en título",
-        help_text="Si está activado, solo filtra noticias donde la palabra aparezca en el título"
+        help_text=(
+            "Si está activado, solo filtra noticias donde la palabra aparezca en el título. "
+            "Buscar también en la descripción da muchos falsos positivos: una mención de "
+            "pasada basta para ocultar la noticia."
+        )
     )
     created_at = models.DateTimeField(auto_now_add=True)
 

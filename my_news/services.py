@@ -609,10 +609,25 @@ class FeedService:
             )
 
     @staticmethod
+    def _plegar_acentos(texto):
+        """Quita tildes y diéresis para comparar: «tráiler» y «trailer» son la
+        misma palabra filtro. La ñ se conserva, porque «año» y «ano» no lo son.
+        """
+        descompuesto = unicodedata.normalize('NFD', texto or '')
+        caracteres = []
+        for c in descompuesto:
+            if unicodedata.combining(c) and not (
+                c == '̃' and caracteres and caracteres[-1] in 'nN'
+            ):
+                continue
+            caracteres.append(c)
+        return unicodedata.normalize('NFC', ''.join(caracteres))
+
+    @staticmethod
     def build_filter_word_patterns(filter_words):
         patterns = []
         for filter_word in filter_words:
-            raw_word = getattr(filter_word, 'word', '')
+            raw_word = FeedService._plegar_acentos(getattr(filter_word, 'word', ''))
             cleaned_word = raw_word.strip() if raw_word else ''
             if not cleaned_word:
                 continue
@@ -906,8 +921,14 @@ class FeedService:
         if not filter_word_patterns:
             return False, None
 
-        safe_title = title or ""
-        safe_description = description or ""
+        # Los patrones se compilan sobre la palabra sin tildes, así que el texto
+        # se pliega igual. La descripción solo si algún filtro la mira: plegar
+        # el cuerpo entero de un artículo para nada no sale gratis.
+        safe_title = FeedService._plegar_acentos(title or "")
+        if any(not title_only for _, _, title_only in filter_word_patterns):
+            safe_description = FeedService._plegar_acentos(description or "")
+        else:
+            safe_description = ""
 
         for filter_word, pattern, title_only in filter_word_patterns:
             if title_only:
