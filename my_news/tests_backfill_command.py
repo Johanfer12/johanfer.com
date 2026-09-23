@@ -23,7 +23,12 @@ class QdrantBackfillCommandTests(SimpleTestCase):
     def test_passes_the_window_and_the_batch_size_through(self):
         fake, _ = self.run_command([0], days=30, limit=5)
 
-        fake.assert_called_once_with(limit=5, days=30)
+        fake.assert_called_once_with(limit=5, days=30, desde_resumen=False)
+
+    def test_desde_resumen_is_opt_in(self):
+        fake, _ = self.run_command([0], desde_resumen=True)
+
+        fake.assert_called_once_with(limit=25, days=15, desde_resumen=True)
 
     def test_stops_at_the_pass_cap_and_says_so(self):
         fake, salida = self.run_command([1] * 3, passes=3)

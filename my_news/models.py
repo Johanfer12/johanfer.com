@@ -98,6 +98,36 @@ class News(models.Model):
     def __str__(self):
         return self.title
 
+class PendingEmbedding(models.Model):
+    """Noticia visible que se quedó sin vector en Qdrant durante la ingesta.
+
+    Existe porque después de la ingesta ya no queda el texto con el que se
+    vectoriza: ``News.description`` pasa a ser el resumen de la IA, 60-70
+    palabras en español, y el vector se calcula con el artículo original. Un
+    vector del resumen cae en otra zona del espacio y no reconoce a los
+    duplicados del artículo, así que el reintento necesita el texto original o,
+    si lo que falló fue Qdrant, el vector ya calculado.
+
+    Se borra al indexarse, y en cascada al purgarse la noticia.
+    """
+    news = models.OneToOneField(
+        News, on_delete=models.CASCADE, related_name='pending_embedding'
+    )
+    # El texto exacto que se mandó a vectorizar, ya limpio y recortado.
+    text = models.TextField(blank=True, default='')
+    # Solo si el embedding salió y lo que falló fue el upsert: así el reintento
+    # no gasta otra llamada a Gemini.
+    vector = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Vector pendiente"
+        verbose_name_plural = "Vectores pendientes"
+
+    def __str__(self):
+        return f"Pendiente: {self.news_id}"
+
+
 class FilterWord(models.Model):
     word = models.CharField(
         max_length=100,

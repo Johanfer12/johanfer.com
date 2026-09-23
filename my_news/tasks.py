@@ -7,6 +7,7 @@ from .services import (
 from django.utils import timezone
 from datetime import timedelta
 from .models import News
+from .models import PendingEmbedding
 from .models import AIModelSetting
 from .models import AIFilterInstruction
 from .ingestion_status import report_error
@@ -66,12 +67,26 @@ def purge_orphan_vectors(batch_size: int = 256):
         logger.exception("Error limpiando vectores huérfanos en Qdrant")
         return 0
 
-def retry_missing_embeddings(limit: int = 25, days: int = 15):
+def retry_missing_embeddings(limit: int = 25, days: int = 15, desde_resumen: bool = False):
     """Indexa las noticias que se quedaron sin vector por un fallo puntual.
 
     Una noticia sin embedding es invisible para la detección de duplicados de
     todas las que vengan después, así que conviene recuperarla aunque su propio
     control de duplicados ya no se pueda deshacer.
+
+    Trabaja sobre ``PendingEmbedding``, que la ingesta rellena al fallar: trae
+    el texto original con que se vectoriza o, si lo que falló fue Qdrant, el
+    vector ya hecho (y entonces no se gasta ninguna llamada a Gemini).
+
+    Antes se revectorizaba ``título + description``, y ``description`` ya es
+    el resumen de la IA: el vector salía de otro texto, en otro idioma y diez
+    veces más corto, y no reconocía a los duplicados del artículo original.
+
+    ``desde_resumen`` recupera ese camino viejo para las noticias sin
+    pendiente anotado (las de antes de este cambio, o todas si se pierde el
+    storage de Qdrant). Ese vector compara mal con artículos, pero es
+    mejor que nada tras un desastre; por eso solo lo pide
+    ``qdrant_backfill`` y nunca el cron.
 
     A propósito NO marca nada como redundante a posteriori: la noticia ya se
     publicó y el usuario puede haberla leído; hacerla desaparecer de la rejilla
@@ -79,7 +94,7 @@ def retry_missing_embeddings(limit: int = 25, days: int = 15):
     referencia a la más parecida y su puntuación, que es información suficiente
     para revisarlo desde el admin.
 
-    ``limit`` acota las llamadas a Gemini por pasada.
+    ``limit`` acota las noticias por pasada, y con ello las llamadas a Gemini.
     """
     try:
         vector_index = FeedService.initialize_vector_index()
@@ -88,41 +103,40 @@ def retry_missing_embeddings(limit: int = 25, days: int = 15):
             return 0
 
         cutoff = timezone.now() - timedelta(days=days)
-        # Se excluyen las que no se indexan por diseño: filtradas por palabra
-        # (el filtro corta antes del embedding), redundantes y filtradas por IA.
-        candidatas = list(
-            News.objects.filter(
-                published_date__gte=cutoff,
-                filtered_by__isnull=True,
-                is_redundant=False,
-                is_ai_filtered=False,
-            ).order_by('-published_date')
+        anotadas = list(
+            PendingEmbedding.objects.select_related('news')
+            .filter(news__published_date__gte=cutoff)
+            .order_by('-news__published_date')[:limit]
         )
+        # (noticia, texto a vectorizar o None, vector ya hecho o None, pendiente o None)
+        trabajo = [(p.news, p.text, p.vector, p) for p in anotadas]
 
-        # Antes se recorría la colección entera para saber qué estaba indexado.
-        # Con 1.151 puntos costaba 161 ms, pero con la ventana de un año son
-        # ~28.000 puntos y ~3,9 s, 29 veces al día, para casi siempre no hacer
-        # nada. Preguntar por los guids concretos no depende del tamaño de la
-        # colección.
-        ya_indexados = vector_index.known_guids([n.guid for n in candidatas])
-        pendientes = [n for n in candidatas if n.guid not in ya_indexados][:limit]
+        if desde_resumen and len(trabajo) < limit:
+            trabajo += [
+                (news, f"{news.title} {news.description or ''}", None, None)
+                for news in _sin_vector_ni_pendiente(vector_index, cutoff, limit - len(trabajo))
+            ]
 
-        if not pendientes:
+        if not trabajo:
             return 0
-
-        gemini_client = FeedService.initialize_gemini()
 
         # En lote, igual que la ingesta. De uno en uno esto gastaba hasta 25
         # peticiones por pasada y el límite gratuito de embeddings son 100 por
         # minuto: sumado a la ingesta de la misma pasada, se acercaba de más a
         # un techo que no hace ninguna falta rozar.
-        embeddings = EmbeddingService.generate_embeddings_batch(
-            [f"{news.title} {news.description or ''}" for news in pendientes],
-            gemini_client,
-        )
+        por_vectorizar = [i for i, (_, texto, vector, _) in enumerate(trabajo) if not vector and texto]
+        gemini_client = None
+        embeddings = [vector or None for _, _, vector, _ in trabajo]
+        if por_vectorizar:
+            gemini_client = FeedService.initialize_gemini()
+            nuevos = EmbeddingService.generate_embeddings_batch(
+                [trabajo[i][1] for i in por_vectorizar], gemini_client,
+            )
+            for i, vector in zip(por_vectorizar, nuevos):
+                embeddings[i] = vector
 
         recuperadas = 0
-        for news, embedding in zip(pendientes, embeddings):
+        for (news, _, _, pendiente), embedding in zip(trabajo, embeddings):
             if not embedding:
                 logger.warning(
                     "Sigue sin poder generarse el embedding de la noticia %s", news.id
@@ -136,9 +150,15 @@ def retry_missing_embeddings(limit: int = 25, days: int = 15):
                 )
             except Exception:
                 logger.exception("Error indexando la noticia %s en el reintento", news.id)
+                # Si el vector es nuevo, se guarda para no pagarlo otra vez.
+                if pendiente is not None and not pendiente.vector:
+                    pendiente.vector = list(embedding)
+                    pendiente.save(update_fields=['vector'])
                 continue
 
             recuperadas += 1
+            if pendiente is not None:
+                pendiente.delete()
 
             # Solo informativo: se anota el parecido, sin ocultar nada.
             if news.similarity_score is None:
@@ -159,12 +179,37 @@ def retry_missing_embeddings(limit: int = 25, days: int = 15):
         logger.info(
             "Reintento de embeddings: %s noticias indexadas de %s pendientes revisadas",
             recuperadas,
-            len(pendientes),
+            len(trabajo),
         )
         return recuperadas
     except Exception:
         logger.exception("Error reintentando embeddings pendientes")
         return 0
+
+
+def _sin_vector_ni_pendiente(vector_index, cutoff, limit):
+    """Noticias visibles de la ventana que no están en Qdrant ni anotadas."""
+    # Se excluyen las que no se indexan por diseño: filtradas por palabra o
+    # por título largo, redundantes y filtradas por IA. ``is_filtered`` hace
+    # falta además de ``filtered_by``: las de título largo se guardan
+    # filtradas sin palabra, y antes se colaban e indexaban como visibles.
+    candidatas = list(
+        News.objects.filter(
+            published_date__gte=cutoff,
+            is_filtered=False,
+            filtered_by__isnull=True,
+            is_redundant=False,
+            is_ai_filtered=False,
+            pending_embedding__isnull=True,
+        ).order_by('-published_date')
+    )
+
+    # Antes se recorría la colección entera para saber qué estaba indexado.
+    # Con 1.151 puntos costaba 161 ms, pero con la ventana de un año son
+    # ~28.000 puntos y ~3,9 s. Preguntar por los guids concretos no depende
+    # del tamaño de la colección.
+    ya_indexados = vector_index.known_guids([n.guid for n in candidatas])
+    return [n for n in candidatas if n.guid not in ya_indexados][:limit]
 
 
 def update_news_cron():
@@ -277,10 +322,12 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
             ai_model_name = DEFAULT_AI_MODEL
 
         try:
+            active_instructions = list(AIFilterInstruction.objects.filter(active=True))
             filter_instructions_text = FeedService.build_filter_instructions_text(
-                AIFilterInstruction.objects.filter(active=True)
+                active_instructions
             )
         except Exception:
+            active_instructions = []
             filter_instructions_text = FeedService._DEFAULT_FILTER_INSTRUCTIONS
 
         cutoff = timezone.now() - timedelta(days=days)
@@ -299,12 +346,15 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
                 ai_model_setting=ai_model_setting,
             )
 
-            if ai_filter_reason and isinstance(ai_filter_reason, str) and ai_filter_reason.strip():
+            ai_filter_reason = FeedService.resolve_ai_filter(
+                ai_filter_reason, active_instructions
+            )
+            if ai_filter_reason:
                 news.description = processed_description or news.description
                 news.short_answer = short_answer
                 news.is_filtered = True
                 news.is_ai_filtered = True
-                news.ai_filter_reason = ai_filter_reason.strip()
+                news.ai_filter_reason = ai_filter_reason
                 news.is_ai_processed = True
                 news.save()
                 processed += 1

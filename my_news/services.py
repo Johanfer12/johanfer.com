@@ -2,8 +2,11 @@ import feedparser
 from datetime import datetime, timedelta, timezone as dt_timezone
 from django.utils import timezone
 import pytz
-from .models import News, FeedSource, FilterWord, AIFilterInstruction, AIModelSetting
+from .models import (
+    News, FeedSource, FilterWord, AIFilterInstruction, AIModelSetting, PendingEmbedding,
+)
 import re
+import unicodedata
 # google-genai y qdrant se importan dentro de las funciones que los usan:
 # entre los dos son ~10 s y ~155 MB en la Pi, y el proceso web que sirve el feed
 # no llama a ninguno. Solo los necesitan la ingesta y los comandos.
@@ -522,6 +525,90 @@ class FeedService:
         return "\n".join(lines) if lines else FeedService._DEFAULT_FILTER_INSTRUCTIONS
 
     @staticmethod
+    def _normalizar_instruccion(texto):
+        """Forma comparable de una instrucción: sin mayúsculas, espacios de más
+        ni la puntuación con que el modelo suele envolverla (viñeta, comillas,
+        punto final)."""
+        normalizado = unicodedata.normalize('NFKC', texto or '').casefold()
+        normalizado = re.sub(r'\s+', ' ', normalizado).strip()
+        return normalizado.strip(' \'"«»“”‘’-*•.:;')
+
+    @staticmethod
+    def resolve_ai_filter(reason, instructions):
+        """Traduce el ``ai_filter`` del modelo a una instrucción activa, o None.
+
+        El prompt pide el texto literal de la instrucción, pero antes se daba
+        por bueno cualquier texto no vacío: un «Ninguna», un «No aplica» o un
+        ``"null"`` entre comillas ocultaban la noticia sin que nada lo delatara.
+        Ahora solo filtra lo que se puede atribuir a una instrucción concreta,
+        y se guarda su texto canónico para poder contar por instrucción.
+
+        Se admiten las dos desviaciones que se ven en la práctica: que el
+        modelo envuelva la instrucción («Coincide con: …») y que la recorte.
+        """
+        if not isinstance(reason, str) or not reason.strip():
+            return None
+
+        activas = []
+        for inst in instructions or []:
+            texto = getattr(inst, 'instruction', inst)
+            if isinstance(texto, str) and texto.strip():
+                activas.append(texto.strip())
+        motivo = FeedService._normalizar_instruccion(reason)
+        if not activas or not motivo:
+            logger.warning(
+                "El modelo pidió filtrar (%r) sin instrucciones activas; no se filtra.",
+                reason[:200],
+            )
+            return None
+
+        normalizadas = [(FeedService._normalizar_instruccion(t), t) for t in activas]
+        for norm, original in normalizadas:
+            if norm == motivo:
+                return original
+
+        # Envuelta: la instrucción aparece entera dentro de la respuesta. Si
+        # caben varias, la más larga es la más específica.
+        contenidas = [(norm, t) for norm, t in normalizadas if norm and norm in motivo]
+        if contenidas:
+            return max(contenidas, key=lambda par: len(par[0]))[1]
+
+        # Recortada: la respuesta es un trozo sustancial de una instrucción.
+        # El mínimo evita que una palabra suelta («noticias») case con todo.
+        recortadas = [
+            (norm, t) for norm, t in normalizadas
+            if motivo in norm and len(motivo) >= 15 and len(motivo) >= 0.6 * len(norm)
+        ]
+        if recortadas:
+            return min(recortadas, key=lambda par: len(par[0]))[1]
+
+        logger.warning(
+            "ai_filter no coincide con ninguna instrucción activa (%r); no se filtra.",
+            reason[:200],
+        )
+        return None
+
+    @staticmethod
+    def save_pending_embedding(news_item, text, vector):
+        """Deja anotada una noticia visible que no llegó a Qdrant.
+
+        ``text`` es lo que se mandó a vectorizar; ``vector``, el embedding si
+        salió y lo que falló fue el upsert. Ver ``PendingEmbedding``.
+        """
+        try:
+            PendingEmbedding.objects.update_or_create(
+                news=news_item,
+                defaults={
+                    'text': EmbeddingService._clean_for_embedding(text),
+                    'vector': list(vector) if vector else None,
+                },
+            )
+        except Exception:
+            logger.exception(
+                "No se pudo anotar el vector pendiente de la noticia %s", news_item.id
+            )
+
+    @staticmethod
     def build_filter_word_patterns(filter_words):
         patterns = []
         for filter_word in filter_words:
@@ -1035,8 +1122,9 @@ class FeedService:
         filter_word_patterns = FeedService.build_filter_word_patterns(
             FilterWord.objects.filter(active=True)
         )
+        active_instructions = list(AIFilterInstruction.objects.filter(active=True))
         filter_instructions_text = FeedService.build_filter_instructions_text(
-            AIFilterInstruction.objects.filter(active=True)
+            active_instructions
         )
 
         sources = list(FeedSource.objects.filter(active=True))
@@ -1175,12 +1263,14 @@ class FeedService:
                 continue
 
             # Una sola petición de embeddings para toda la tanda.
+            textos_embedding = [
+                f"{p['entry'].title} {p['plain_description']}" for p in preparadas
+            ]
             vectores = EmbeddingService.generate_embeddings_batch(
-                [f"{p['entry'].title} {p['plain_description']}" for p in preparadas],
-                gemini_client,
+                textos_embedding, gemini_client,
             )
 
-            for preparada, vector in zip(preparadas, vectores):
+            for preparada, vector, texto_embedding in zip(preparadas, vectores, textos_embedding):
                 entry = preparada['entry']
                 source = preparada['source']
                 published = preparada['published']
@@ -1283,8 +1373,11 @@ class FeedService:
                     break
 
                 # >>>>> LÓGICA DE FILTRADO IA (después de palabra clave) <<<<<
-                # Asegurarnos que ai_filter_reason es un string no vacío antes de usarlo
-                if ai_was_processed and ai_filter_reason and isinstance(ai_filter_reason, str) and ai_filter_reason.strip():
+                # Solo filtra si la respuesta corresponde a una instrucción activa.
+                ai_filter_reason = FeedService.resolve_ai_filter(
+                    ai_filter_reason, active_instructions
+                )
+                if ai_was_processed and ai_filter_reason:
                     logger.info(f"Noticia marcada para FILTRAR por IA. Razón: {ai_filter_reason}")
                 
                     try:
@@ -1314,8 +1407,6 @@ class FeedService:
                         continue
                     
                     continue # Pasar a la siguiente noticia
-                elif ai_filter_reason: # Si Gemini devolvió algo pero no es un string válido
-                    logger.warning(f"Gemini devolvió un valor para ai_filter ({ai_filter_reason}) pero no es la instrucción esperada. No se filtrará.")
                 # <<<<< FIN LÓGICA FILTRADO IA >>>>>
 
                 # Crear la nueva noticia (si no fue filtrada por IA ni por palabra)
@@ -1348,6 +1439,7 @@ class FeedService:
                     news_item._embedding_vector = embedding
                     recent_news_cache.append(news_item)
                     # Indexar en Qdrant (si está disponible) para futuras búsquedas
+                    indexada = False
                     if vector_index is not None:
                         try:
                             vector_index.ensure_collection(len(embedding))
@@ -1356,6 +1448,7 @@ class FeedService:
                                 embedding,
                                 FeedService.build_vector_payload(news_item),
                             )
+                            indexada = True
                         except Exception:
                             # No se silencia: una noticia sin indexar no participa en
                             # la detección de duplicados de las siguientes, y el fallo
@@ -1366,6 +1459,10 @@ class FeedService:
                                 news_item.id,
                                 news_item.title[:100],
                             )
+                    if not indexada:
+                        FeedService.save_pending_embedding(
+                            news_item, texto_embedding, embedding
+                        )
                 else:
                     # Sin embedding esta noticia no pasó por el control de duplicados
                     # y tampoco servirá para comparar las futuras.
@@ -1376,6 +1473,7 @@ class FeedService:
                         news_item.id,
                         news_item.title[:100],
                     )
+                    FeedService.save_pending_embedding(news_item, texto_embedding, None)
 
         
         # Actualizar la fecha de última obtención para todas las fuentes con una sola escritura
