@@ -9,15 +9,17 @@
                 <img src="{% static 'Img/News_Default.png' %}" data-fallback-src="{% static 'Img/News_Default.png' %}" alt="Imagen no disponible" class="news-image" loading="lazy" decoding="async">
                 {% endif %}
             </div>
-            <h3 class="news-title">{{ article.title }}</h3>
-            {% if article.short_answer %}
-            <div class="short-answer">{{ article.short_answer }}</div>
-            {% endif %}
-            <div class="news-meta">
-                <span class="meta-info">{{ article.source.name }} - {{ article.published_date|date:"d/m/Y H:i" }}</span>
-                {% if show_similarity_score and article.similarity_score %}
-                    <span class="similarity-score">{{ article.similarity_score|floatformat:2 }}</span>
+            <div class="news-front-text">
+                <h3 class="news-title">{{ article.title }}</h3>
+                {% if article.short_answer %}
+                <div class="short-answer">{{ article.short_answer }}</div>
                 {% endif %}
+                <div class="news-meta">
+                    <span class="meta-info">{{ article.source.name }} - {{ article.published_date|date:"d/m/Y H:i" }}</span>
+                    {% if show_similarity_score and article.similarity_score %}
+                        <span class="similarity-score">{{ article.similarity_score|floatformat:2 }}</span>
+                    {% endif %}
+                </div>
             </div>
         </div>
         <div class="card-back">

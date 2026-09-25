@@ -9,14 +9,25 @@ function openModal(bookId) {
         modal.classList.remove("modal-closing");
         modal.classList.add("modal-open");
         modal.style.display = "flex";
+        modal.querySelectorAll('.book-description-scroll').forEach(updateScrollFade);
         modal._returnFocus = document.activeElement;
         (modal.querySelector('.close') || modal).focus({preventScroll: true});
     }
 }
 
+// Difuminado al pie de la descripción mientras quede texto por debajo: la
+// barra de scroll solo asoma al pasar el ratón, y sin esto nada decía que la
+// sinopsis seguía. Se apaga al llegar al final para no velar la última línea.
+function updateScrollFade(scrollArea) {
+    const remaining = scrollArea.scrollHeight - scrollArea.clientHeight - scrollArea.scrollTop;
+    scrollArea.classList.toggle('has-more', remaining > 2);
+}
+
 document.addEventListener('scroll', function(event) {
     const scrollArea = event.target;
     if (!scrollArea.classList || !scrollArea.classList.contains('book-description-scroll')) return;
+
+    updateScrollFade(scrollArea);
 
     scrollArea.classList.add('is-scrolling');
     clearTimeout(scrollArea._scrollbarTimer);

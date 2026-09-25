@@ -30,7 +30,9 @@
         }
 
         const plural = count === 1 ? 'visita' : 'visitas';
-        link.title = count ? `${count} ${plural} desde Colombia` : 'Visitas';
+        const label = count ? `${count} ${plural} desde Colombia` : 'Visitas';
+        link.dataset.tip = label;
+        link.setAttribute('aria-label', label);
     }
 
     async function refresh() {

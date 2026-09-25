@@ -41,7 +41,6 @@ html.instagram-webview {
     --news-summary-size: 1rem;
     --news-meta-size: 0.94rem;
     --news-description-size: 1rem;
-    --news-media-height: 140px;
     width: 300px;
     height: 350px;
     position: relative;
@@ -61,7 +60,6 @@ html.instagram-webview {
         --news-summary-size: clamp(1rem, calc(0.93rem + 0.35cqi), 1.08rem);
         --news-meta-size: clamp(0.94rem, calc(0.87rem + 0.35cqi), 1rem);
         --news-description-size: clamp(1rem, calc(0.93rem + 0.35cqi), 1.08rem);
-        --news-media-height: clamp(140px, 46.67cqi, 154px);
     }
 }
 
@@ -73,7 +71,6 @@ html.instagram-webview {
         --news-summary-size: 14px;
         --news-meta-size: 13px;
         --news-description-size: 15px;
-        --news-media-height: 140px;
     }
 }
 
@@ -157,21 +154,42 @@ html.instagram-webview .news-card-container {
 }
 
 .card-front {
-    background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
+    background: rgba(9, 16, 28, 0.62);
     display: flex;
     flex-direction: column;
+    /* Tope del texto: por encima de esta franja siempre se ve imagen. Si el
+     * texto no cabe en el resto, fitTitleToSummary recorta el titulo. */
+    padding-top: 72px;
     transform: rotateY(0deg);
 }
 
+/* La imagen cubre la tarjeta entera y el texto va encima. Antes ocupaba una
+ * franja fija de 140px, y como todas las tarjetas miden lo mismo, un titular
+ * corto sin resumen dejaba un hueco vacio de media tarjeta. */
 .news-media-zone {
-    position: relative;
-    flex: 0 0 var(--news-media-height);
-    height: var(--news-media-height);
-    min-height: 140px;
-    max-height: 154px;
-    width: 100%;
+    position: absolute;
+    inset: 0;
     overflow: hidden;
     background: rgba(9, 16, 28, 0.54);
+}
+
+/* El degradado viaja con el texto y no con la tarjeta: asi oscurece justo lo
+ * que el texto tapa, sea una linea o seis, y deja la imagen limpia encima.
+ * margin-top:auto (y no justify-content:flex-end) para que lo que no quepa
+ * desborde hacia abajo, donde scrollHeight lo ve y el recorte del titulo
+ * puede reaccionar; hacia arriba seria invisible para esa medida. */
+.news-front-text {
+    position: relative;
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    padding-top: 48px;
+    background: linear-gradient(
+        to bottom,
+        rgba(8, 13, 24, 0) 0,
+        rgba(8, 13, 24, 0.78) 48px,
+        rgba(8, 13, 24, 0.94) 100%
+    );
 }
 
 .card-back {
@@ -203,7 +221,7 @@ html.instagram-webview .news-card-container {
      * para la elipsis, y sin este hueco la sombra se cortaria contra la caja.
      * Los 15px de margen original se reparten entre margen y relleno. */
     padding: 0 6px 10px;
-    margin: 10px 9px -5px 9px;
+    margin: 0 9px -5px 9px;
     color: #f2f5fb;
     line-height: 1.28;
     word-break: normal;
@@ -239,7 +257,6 @@ html.instagram-webview .news-card-container {
     font-size: var(--news-meta-size);
     line-height: 1.35;
     padding: 10px 15px;
-    margin-top: auto;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1279,7 +1296,6 @@ body.comments-modal-open {
     color: rgba(227, 233, 245, 0.68);
     font-weight: 500;
     margin: 0 15px 6px 15px;
-    margin-top: auto;
     line-height: 1.45;
     font-style: italic;
     word-break: normal;

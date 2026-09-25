@@ -118,8 +118,13 @@
         const mediaZone = container.querySelector('.news-media-zone');
         if (!mediaZone) return false;
 
+        // La imagen cubre toda la tarjeta y el texto va encima, asi que la
+        // zona que no gira es la imagen que queda a la vista: hasta el titulo.
         const containerRect = container.getBoundingClientRect();
-        const protectedHeight = mediaZone.offsetHeight;
+        const title = container.querySelector('.card-front .news-title');
+        const protectedBottom = title
+            ? title.getBoundingClientRect().top
+            : containerRect.top + mediaZone.offsetHeight;
         const bleed = 3;
         const x = pointerEvent.clientX;
         const y = pointerEvent.clientY;
@@ -127,7 +132,7 @@
         return x >= (containerRect.left - bleed) &&
             x <= (containerRect.right + bleed) &&
             y >= (containerRect.top - bleed) &&
-            y <= (containerRect.top + protectedHeight + bleed);
+            y <= protectedBottom;
     };
 
     const isPointerWithinCardBounds = (container, pointerEvent) => {

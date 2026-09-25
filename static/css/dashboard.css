@@ -14,7 +14,14 @@
 
 .music-playlist-page .content-container {
     width: min(1040px, 92%);
-    padding: 1.4rem;
+    padding: 0;
+    /* Sin marco propio: el reproductor ya es una tarjeta, y envolverlo en otra
+       dejaba un marco dentro de otro. */
+    background: none;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 
 h1, h3 {
@@ -56,6 +63,7 @@ h1, h3 {
     border: 0;
     border-radius: 12px;
     background: #121212;
+    box-shadow: 0 18px 38px rgba(2, 8, 18, 0.5);
 }
 
 .music-section {
@@ -145,7 +153,7 @@ h1, h3 {
 
     .music-playlist-page .content-container {
         width: 94%;
-        padding: 1rem;
+        padding: 0;
     }
 
     .music-grid {

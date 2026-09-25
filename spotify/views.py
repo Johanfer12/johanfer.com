@@ -6,7 +6,7 @@ import json
 
 TOP_PLAYLIST_ID = '1sZ3u7s7hpzjTc9I5BgwEb'
 TOP_PLAYLIST_URL = f'https://open.spotify.com/playlist/{TOP_PLAYLIST_ID}'
-TOP_PLAYLIST_EMBED_URL = f'https://open.spotify.com/embed/playlist/{TOP_PLAYLIST_ID}?utm_source=generator'
+TOP_PLAYLIST_EMBED_URL = f'https://open.spotify.com/embed/playlist/{TOP_PLAYLIST_ID}?utm_source=generator&theme=0'
 
 
 # Los datos de SpotifyFavorites/DeletedSongs ya no se sincronizan con la API

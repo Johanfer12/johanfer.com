@@ -135,7 +135,9 @@ body::after {
 .welcome-text p {
     margin: 0 auto;
     max-width: 640px;
-    color: var(--text-secondary);
+    /* Más claro que --text-secondary: va en la cara Light sobre el cristal, y
+       con el mismo tono que el resto del texto secundario se perdía. */
+    color: rgba(236, 241, 250, 0.9);
     font-size: clamp(1.02rem, 1.9vw, 1.18rem);
     line-height: 1.5;
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);

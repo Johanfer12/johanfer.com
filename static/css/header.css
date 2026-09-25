@@ -104,6 +104,71 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 
+/* Nombre del botón al pasar el ratón o llegar con el teclado. Antes era el
+ * `title` nativo, que tarda un segundo en salir y no se ve con el teclado.
+ * Solo con puntero fino: en táctil el primer toque navegaría igualmente. */
+.header-nav [data-tip] {
+    position: relative;
+}
+
+.header-nav [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translate(-50%, -4px);
+    padding: 5px 9px;
+    border-radius: 7px;
+    background: rgba(11, 20, 44, 0.94);
+    border: 1px solid rgba(198, 214, 242, 0.2);
+    box-shadow: 0 6px 14px rgba(2, 8, 18, 0.45);
+    color: #f2f5fb;
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+    z-index: 20;
+}
+
+/* El último botón pega con el borde derecho: su etiqueta se alinea a la
+ * derecha para no salirse de la pantalla. */
+.header-nav [data-tip]:last-child::after {
+    left: auto;
+    right: 0;
+    transform: translateY(-4px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .header-nav [data-tip]:hover::after {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, 0);
+    }
+
+    .header-nav [data-tip]:last-child:hover::after {
+        transform: none;
+    }
+}
+
+.header-nav [data-tip]:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0);
+}
+
+.header-nav [data-tip]:last-child:focus-visible::after {
+    transform: none;
+}
+
+/* Con el panel de herramientas abierto la etiqueta estorbaría encima. */
+.header-nav details[open] > [data-tip]::after {
+    display: none;
+}
+
 /* Contador de visitas ajenas desde Colombia sobre el icono de visitas */
 .header-nav :is(a, summary).visits-link {
     position: relative;

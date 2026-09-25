@@ -12,9 +12,10 @@
     .site-footer {
         padding: 16px 12px 20px;
         text-align: center;
-        font-size: 0.78rem;
+        font-size: 0.82rem;
         letter-spacing: 0.02em;
-        color: rgba(226, 234, 248, 0.42);
+        /* Al 0.42 se quedaba en ~3:1 sobre la parte clara del degradado. */
+        color: rgba(226, 234, 248, 0.62);
     }
 
     .site-footer:not(.site-footer--fixed) {
@@ -31,9 +32,9 @@
     }
 
     .site-footer a {
-        color: rgba(226, 234, 248, 0.58);
+        color: rgba(226, 234, 248, 0.8);
         text-decoration: none;
-        border-bottom: 1px solid rgba(226, 234, 248, 0.22);
+        border-bottom: 1px solid rgba(226, 234, 248, 0.3);
         transition: color 0.2s ease, border-color 0.2s ease;
     }
 

@@ -77,19 +77,19 @@ a:hover {
 
 .book-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
+    /* La portada llena su columna. Antes cada tramo de anchura fijaba un tamaño
+       (200, 250, 200 px) dentro de columnas elásticas, y entre un tramo y otro
+       quedaban tres portadas de 200 px en columnas de 300: huecos enormes. */
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 24px;
     margin: 0 auto;
     max-width: 1400px;
     padding: 0 20px;
-    justify-items: center;
 }
 
 .book-item {
     width: 100%;
-    max-width: 300px;
-    height: 450px;
-    margin: 0 auto;
+    aspect-ratio: 2 / 3;
 }
 
 .book-info-container {
@@ -388,6 +388,100 @@ a:hover {
     fill: currentColor;
 }
 
+/* Grupo de botones flotantes (Libros y TV). Iban sueltos, cada uno con su
+   `bottom` fijo, y en TV eran cuatro en columna tapando las portadas de la
+   derecha. Ahora se apilan solos y, salvo "volver arriba", quedan plegados
+   tras un único botón. Dentro del grupo pierden su posición propia. */
+.fab-stack {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.fab-stack .book-search-btn,
+.fab-stack .book-scroll-top-btn,
+.fab-stack .book-sort-btn,
+.fab-stack .watch-toggle-btn {
+    position: static;
+}
+
+.fab-menu {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.fab-stack:not(.is-open) .fab-menu {
+    display: none;
+}
+
+.fab-stack.is-open .fab-menu > * {
+    animation: fab-in 0.18s ease-out both;
+}
+
+@keyframes fab-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.9); }
+    to { opacity: 1; transform: none; }
+}
+
+.fab-toggle {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid var(--glass-border);
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
+    box-shadow: 0 8px 20px rgba(3, 10, 20, 0.45);
+    color: #f2f5fb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.fab-toggle:hover {
+    transform: scale(1.08);
+}
+
+.fab-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+}
+
+.fab-stack.is-open .fab-icon-open,
+.fab-stack:not(.is-open) .fab-icon-close {
+    display: none;
+}
+
+/* Con el menú plegado, un filtro de búsqueda activo quedaría escondido: el
+   punto dorado (el mismo tono de .is-clear) avisa de que hay uno puesto. */
+.fab-stack:not(.is-open):has(.book-search-btn.is-clear) .fab-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgb(214, 188, 143);
+    box-shadow: 0 0 0 2px rgba(11, 20, 44, 0.9);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fab-stack.is-open .fab-menu > * {
+        animation: none;
+    }
+}
+
 ::-webkit-scrollbar {
     width: 8px;
 }
@@ -511,9 +605,12 @@ a:hover {
 }
 
 @media (max-width: 767px) {
+    /* Centrado y no estirado: la ficha mide lo que su contenido y solo llega
+       al alto de la pantalla si lo necesita. Estirada, una serie con dos líneas
+       de sinopsis dejaba media pantalla de ficha vacía. */
     .modal {
         padding: 8px;
-        align-items: stretch;
+        align-items: center;
     }
 
     .modal-content {
@@ -589,15 +686,6 @@ a:hover {
 }
 
 @media (min-width: 1200px) {
-    .book-container {
-        grid-template-columns: repeat(6, 1fr);
-    }
-
-    .book-item {
-        width: 200px;
-        height: 300px;
-    }
-
     .book-info a.book-title {
         font-size: 1.2em;
     }
@@ -608,15 +696,6 @@ a:hover {
 }
 
 @media (max-width: 1199px) and (min-width: 992px) {
-    .book-container {
-        grid-template-columns: repeat(4, 1fr);
-    }
-
-    .book-item {
-        width: 250px;
-        height: 375px;
-    }
-
     .book-info a.book-title {
         font-size: 1.1em;
     }
@@ -627,15 +706,6 @@ a:hover {
 }
 
 @media (max-width: 991px) and (min-width: 768px) {
-    .book-container {
-        grid-template-columns: repeat(3, 1fr);
-    }
-
-    .book-item {
-        width: 200px;
-        height: 300px;
-    }
-
     .book-info a.book-title {
         font-size: 1em;
     }
@@ -647,16 +717,9 @@ a:hover {
 
 @media (max-width: 767px) {
     .book-container {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
         gap: 15px;
         padding: 0 15px;
-    }
-
-    .book-item {
-        width: calc((100vw - 50px) / 2);
-        height: calc(((100vw - 50px) / 2) * 1.5);
-        max-width: 200px;
-        max-height: 300px;
     }
 
     .book-info {
@@ -704,20 +767,30 @@ a:hover {
     -webkit-backdrop-filter: blur(6px) saturate(105%);
     backdrop-filter: blur(6px) saturate(105%);
     line-height: 1.55;
-    flex: 1 1 auto;
+    /* Mide lo que su texto y solo encoge (con scroll) si no cabe. Antes crecía
+     * hasta el alto de la portada, y una sinopsis de dos líneas dejaba una caja
+     * vacía de 300px. */
+    flex: 0 1 auto;
+    display: flex;
+    flex-direction: column;
     min-height: 0;
     overflow: hidden;
     overscroll-behavior: contain;
 }
 
 .book-description-scroll {
-    height: 100%;
+    flex: 1 1 auto;
     min-height: 0;
     padding-right: 7px;
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: thin;
     scrollbar-color: transparent transparent;
+}
+
+.book-description-scroll.has-more {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent);
 }
 
 .book-description-scroll:hover,
@@ -830,7 +903,10 @@ a:hover {
      * modal la recorte. Si se sube el tope de ancho hay que subir tambien el de
      * alto, y al reves. */
     .book-modal-content {
-        width: min(1180px, 94vw);
+        /* 1020 y no 1180: con 1180 la sinopsis iba a ~105 caracteres por
+         * línea, y pasadas las 80 cuesta encontrar el principio de la
+         * siguiente. La portada no cambia: su ancho no depende de este. */
+        width: min(1020px, 94vw);
         max-height: min(calc(100vh - 32px), 600px);
     }
 
@@ -1203,6 +1279,13 @@ a:hover {
     .book-scroll-top-btn,
     .header {
         box-shadow: 0 2px 8px rgba(2, 8, 18, 0.24) !important;
+    }
+
+    /* Sin blur el modal dejaba ver la rejilla detrás del texto: las portadas
+       y la cabecera se leían a través de la ficha. Se opaca con los mismos
+       tonos de su degradado. */
+    .modal-content {
+        background: linear-gradient(150deg, #2a3854, #18243b 34%, #0d172b 78%) !important;
     }
 
     /* Sin blur la pastilla se vería translúcida: se opaca, como el header. */

@@ -95,17 +95,29 @@
 
     {% include 'feed_loader.html' with loader_label='libros' %}
 
-    <button class="book-scroll-top-btn" id="bookScrollTopBtn" title="Volver arriba" aria-label="Volver arriba">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" aria-hidden="true">
-            <path d="M214.6 41.4c-12.5-12.5-32.8-12.5-45.3 0l-160 160c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L160 141.3V480c0 17.7 14.3 32 32 32s32-14.3 32-32V141.3L329.4 246.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3l-160-160z"/>
-        </svg>
-    </button>
-
-    <button class="book-search-btn" id="bookSearchBtn" title="Buscar libros" aria-label="Buscar libros">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true">
-            <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z"/>
-        </svg>
-    </button>
+    <div class="fab-stack" id="fabStack">
+        <button class="book-scroll-top-btn" id="bookScrollTopBtn" title="Volver arriba" aria-label="Volver arriba">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" aria-hidden="true">
+                <path d="M214.6 41.4c-12.5-12.5-32.8-12.5-45.3 0l-160 160c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L160 141.3V480c0 17.7 14.3 32 32 32s32-14.3 32-32V141.3L329.4 246.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3l-160-160z"/>
+            </svg>
+        </button>
+        <div class="fab-menu" id="fabMenu">
+            <button class="book-search-btn" id="bookSearchBtn" title="Buscar libros" aria-label="Buscar libros">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true">
+                    <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z"/>
+                </svg>
+            </button>
+            {% include 'sort_button.html' %}
+        </div>
+        <button type="button" class="fab-toggle" id="fabToggle" aria-expanded="false" aria-controls="fabMenu" title="Más opciones" aria-label="Más opciones">
+            <svg class="fab-icon-open" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M6 3a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm0 5a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm0 5a2 2 0 1 1 4 0 2 2 0 0 1-4 0z"/>
+            </svg>
+            <svg class="fab-icon-close" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M3.3 3.3a1 1 0 0 1 1.4 0L8 6.6l3.3-3.3a1 1 0 1 1 1.4 1.4L9.4 8l3.3 3.3a1 1 0 0 1-1.4 1.4L8 9.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L6.6 8 3.3 4.7a1 1 0 0 1 0-1.4z"/>
+            </svg>
+        </button>
+    </div>
 
     {% include 'sort_control.html' %}
 
@@ -132,6 +144,7 @@
     <script src="{% static 'js/search_modal.js' %}"></script>
     <script src="{% static 'js/books_search.js' %}"></script>
     <script src="{% static 'js/sort_modal.js' %}"></script>
+    <script src="{% static 'js/fab_stack.js' %}"></script>
     <script src="{% static 'js/background_motion.js' %}"></script>
 </body>
 </html>
