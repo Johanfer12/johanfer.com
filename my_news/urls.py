@@ -12,6 +12,7 @@ urlpatterns = [
     path('undo/<int:pk>/', views.undo_delete, name='undo_delete'),
     path('latest-deleted/', views.latest_deleted_news, name='latest_deleted_news'),
     path('update-feed/', views.update_feed, name='update_feed'),
+    path('update-feed/estado/', views.update_feed_status, name='update_feed_status'),
     path('check-new-news/', views.check_new_news, name='check_new_news'),
     path('get-page/', views.get_page, name='get_page'),
     path('comments/<int:pk>/', views.news_comments, name='news_comments'),

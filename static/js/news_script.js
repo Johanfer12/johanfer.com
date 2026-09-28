@@ -1748,19 +1748,55 @@
         if (e.key === 'Escape') setActionMenuOpen(false);
     });
 
-    // Botón de actualizar feed
-    DOM.updateFeedBtn?.addEventListener('click', function () {
+    // Botón de actualizar feed. La pasada corre en el servidor en segundo plano
+    // (tarda minutos y nginx corta a los 60 s), así que aquí solo se lanza y se
+    // pregunta por su estado hasta que termina.
+    const UPDATE_POLL_INTERVAL_MS = 5000;
+    const UPDATE_POLL_LIMIT_MS = 10 * 60 * 1000;
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    const waitForFeedUpdate = async since => {
+        const url = `/noticias/update-feed/estado/?since=${encodeURIComponent(since)}`;
+        const deadline = Date.now() + UPDATE_POLL_LIMIT_MS;
+        while (Date.now() < deadline) {
+            await wait(UPDATE_POLL_INTERVAL_MS);
+            try {
+                const data = await fetchJson(url);
+                if (data.status === 'done') return data;
+            } catch (e) {
+                // Un fallo suelto de red no significa que la pasada haya fallado.
+                err('Estado de la actualización:', e);
+            }
+        }
+        throw new Error('La actualización sigue en marcha; el feed se completará solo.');
+    };
+
+    DOM.updateFeedBtn?.addEventListener('click', async function () {
         if (isSavedView()) return;
         const btn = this;
         setButtonBusy(btn, true);
-        fetchJson('/noticias/update-feed/', {headers: {'X-CSRFToken': getCookie('csrftoken')}})
-            .then(data => {
-                if (data.status !== 'success') throw new Error(data.message);
-                updateCounters(data.total_news, data.total_pages);
-                checkForNewNews();
-            })
-            .catch(e => { err('Actualizar feed:', e); showFeedback('No se pudo actualizar el feed. Vuelve a intentarlo desde el menú de acciones.'); })
-            .finally(() => { setButtonBusy(btn, false); });
+        try {
+            const started = await fetchJson('/noticias/update-feed/', {
+                method: 'POST',
+                headers: {'X-CSRFToken': getCookie('csrftoken')},
+            });
+            if (started.status !== 'started' && started.status !== 'running') {
+                throw new Error(started.message);
+            }
+            const result = await waitForFeedUpdate(started.since);
+            if (result.total_news != null) updateCounters(result.total_news, result.total_pages);
+            checkForNewNews();
+            if (result.state !== 'ok') {
+                showFeedback(result.reason || 'La actualización no se completó.');
+            }
+        } catch (e) {
+            err('Actualizar feed:', e);
+            showFeedback(e.message?.startsWith('La actualización sigue')
+                ? e.message
+                : 'No se pudo actualizar el feed. Vuelve a intentarlo desde el menú de acciones.');
+        } finally {
+            setButtonBusy(btn, false);
+        }
     });
 
     // Botón deshacer

@@ -212,9 +212,22 @@ def _sin_vector_ni_pendiente(vector_index, cutoff, limit):
     return [n for n in candidatas if n.guid not in ya_indexados][:limit]
 
 
-def update_news_cron():
+def _update_lock_path():
     # En BASE_DIR y no en /tmp: ahí el sistema puede borrarlo en limpiezas/reinicios.
-    lock_path = os.path.join(settings.BASE_DIR, 'my_news_update.lock')
+    return os.path.join(settings.BASE_DIR, 'my_news_update.lock')
+
+
+def news_update_running():
+    """Indica si hay una pasada en marcha (del cron o lanzada desde el feed)."""
+    try:
+        with portalocker.Lock(_update_lock_path(), timeout=0):
+            return False
+    except portalocker.exceptions.LockException:
+        return True
+
+
+def update_news_cron():
+    lock_path = _update_lock_path()
     try:
         with portalocker.Lock(lock_path, timeout=0):
             # Completar algunas pendientes antes de traer nuevas, sin solapar el siguiente cron.

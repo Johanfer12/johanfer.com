@@ -8,7 +8,7 @@ from django.http import HttpResponse
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.contrib import messages
 from .services import FeedService
-from .ingestion_status import feed_alert
+from .ingestion_status import current_status, feed_alert
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.views import LoginView
 from django.urls import reverse
@@ -19,8 +19,10 @@ from django.core.cache import cache
 from datetime import datetime, time as datetime_time, timedelta
 import pytz
 from django.db.models import Q, Count, Max
-from .tasks import retry_summarize_pending
+from .tasks import news_update_running
+from django.conf import settings
 import subprocess
+import sys
 import platform
 import hashlib
 import json
@@ -751,27 +753,93 @@ class SavedNewsListView(NewsListView):
     template_name = 'news_list.html'
     saved_only = True
 
-@require_GET
+# La pasada que lanza el botón de actualizar. Antes corría dentro de la
+# petición, y una pasada tarda de uno a cinco minutos (264 s medidos con Gemini
+# dando 503 y Groq esperando su cuota por minuto): nginx corta a los 60 s con un
+# 504 y el botón daba error aunque la pasada terminara bien por detrás. Además
+# no tomaba el cerrojo del cron, así que podía solaparse con él, y cargaba en el
+# proceso web los clientes de IA que se importan tarde precisamente para que
+# gunicorn no los pague.
+#
+# Ahora es un proceso aparte (``manage.py update_news``) y el navegador pregunta
+# por ``update_feed_status`` hasta que ``IngestionStatus`` cambia. Se guarda la
+# referencia para recoger el proceso al terminar y que no quede un zombi, y su
+# hora de arranque para no achacar a un clic nuevo el fallo de uno anterior.
+_manual_update_process = None
+_manual_update_started = None
+
+
+def _manual_update_alive():
+    """Recoge el proceso lanzado desde el feed; devuelve si sigue vivo."""
+    proc = _manual_update_process
+    return proc is not None and proc.poll() is None
+
+
+def _launch_manual_update(started_at):
+    global _manual_update_process, _manual_update_started
+    _manual_update_started = started_at
+    log = open(settings.CRON_LOG_PATH, 'ab')
+    try:
+        _manual_update_process = subprocess.Popen(
+            [sys.executable, str(settings.BASE_DIR / 'manage.py'), 'update_news'],
+            cwd=str(settings.BASE_DIR),
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    finally:
+        # El hijo ya tiene su copia del descriptor.
+        log.close()
+
+
+@require_POST
 @user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
 def update_feed(request):
+    started_at = timezone.now()
+    if _manual_update_alive() or news_update_running():
+        # Ya hay una pasada en marcha (del cron o de otro clic): no se lanza
+        # otra, se espera a que esa deje su estado.
+        return JsonResponse({'status': 'running', 'since': started_at.isoformat()})
     try:
-        # Reintentar completar resúmenes pendientes antes de buscar nuevas
-        try:
-            retry_summarize_pending(limit=5, days=15)
-        except Exception:
-            pass
-        new_articles = FeedService.fetch_and_save_news(max_ai_items=20)
+        _launch_manual_update(started_at)
+    except Exception as e:
+        logger.exception("No se pudo lanzar la actualización manual de noticias")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    return JsonResponse({'status': 'started', 'since': started_at.isoformat()})
+
+
+@require_GET
+@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+def update_feed_status(request):
+    since = parse_datetime(request.GET.get('since') or '')
+    if since is None:
+        return JsonResponse({'status': 'error', 'message': 'Falta el parámetro since.'}, status=400)
+
+    status = current_status()
+    if status is not None and status.updated_at >= since:
+        # La pasada corrió en otro proceso: su caché LocMem no es el de aquí.
         _bump_cache_version()
         total_news, total_pages = _get_total_news_and_pages()
-        
         return JsonResponse({
-            'status': 'success',
-            'message': f'Feed actualizado. {new_articles} nuevos artículos obtenidos.',
+            'status': 'done',
+            'state': status.state,
+            'reason': status.reason,
+            'new_count': status.new_count,
             'total_news': total_news,
-            'total_pages': total_pages
+            'total_pages': total_pages,
         })
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)})
+
+    proc = _manual_update_process
+    own_launch = _manual_update_started is not None and _manual_update_started >= since
+    if own_launch and not _manual_update_alive() and proc.returncode:
+        # Murió antes de poder anotar nada (p. ej. al importar).
+        return JsonResponse({
+            'status': 'done',
+            'state': 'error',
+            'reason': f'La actualización terminó con código {proc.returncode}; ver el log del cron.',
+        })
+    return JsonResponse({'status': 'running'})
 
 @require_GET
 @user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
