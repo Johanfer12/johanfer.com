@@ -151,23 +151,6 @@ const setWatchedTotalLabel = (count) => {
     totalLabel.textContent = `${count} ${noun}${count === 1 ? '' : 's'}`.trim();
 };
 
-// Reescribe los enlaces de los toggles series/películas para que arrastren el
-// filtro activo (los href vienen del servidor y no saben de la búsqueda AJAX).
-const syncToggleLinks = (currentQuery) => {
-    document.querySelectorAll('.watch-toggle-btn').forEach((link) => {
-        const tipo = link.classList.contains('movies') ? 'peliculas' : 'series';
-        const params = new URLSearchParams();
-        params.set('tipo', tipo);
-        if (currentOrden && currentOrden !== 'fecha_desc') {
-            params.set('orden', currentOrden);
-        }
-        if (currentQuery) {
-            params.set('q', currentQuery);
-        }
-        link.setAttribute('href', `?${params.toString()}`);
-    });
-};
-
 document.addEventListener('DOMContentLoaded', function () {
     if (!watchContainer) return;
 
@@ -180,9 +163,8 @@ document.addEventListener('DOMContentLoaded', function () {
         endpoint: '/viendo/',
         params: () => ({tipo: currentTipo, orden: currentOrden}),
         render: renderCards,
-        onLoaded: (data, query) => {
+        onLoaded: (data) => {
             setWatchedTotalLabel(data.total_watched);
-            syncToggleLinks(query);
         },
     });
     window.watchingApplySearch = scroll.applySearch;

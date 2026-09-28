@@ -793,3 +793,64 @@ class VisitsBadgeLiveUpdateTests(TestCase):
         response = self.client.get('/visitas/')
 
         self.assertNotContains(response, 'js/visits_badge.js')
+
+
+class SiteNavTests(TestCase):
+    """La cabecera: título, sección marcada y adónde vuelve cada página."""
+
+    def test_stats_page_goes_back_to_its_section_with_an_arrow_not_the_house(self):
+        response = self.client.get('/bookshelf/stats/')
+
+        nav = response.context['site_nav']
+        self.assertEqual(nav['title'], 'Libros')
+        self.assertEqual(nav['subtitle'], 'Estadísticas')
+        self.assertEqual(nav['back'], {'url': '/bookshelf/', 'label': 'Volver a Libros'})
+        # La casa sigue, pero lleva a la portada.
+        self.assertContains(response, 'href="/" aria-label="Inicio"')
+
+    def test_the_current_section_is_marked(self):
+        response = self.client.get('/viendo/stats/')
+
+        current = [s['label'] for s in response.context['site_nav']['sections'] if s['current']]
+        self.assertEqual(current, ['TV'])
+        self.assertContains(response, 'aria-label="TV" data-tip="TV" aria-current="true"')
+
+    def test_movies_are_their_own_section_but_not_on_the_home_page(self):
+        response = self.client.get('/viendo/', {'tipo': 'peliculas'})
+
+        nav = response.context['site_nav']
+        self.assertEqual(nav['title'], 'Películas')
+        current = [s['key'] for s in nav['sections'] if s['current']]
+        self.assertEqual(current, ['peliculas'])
+        self.assertContains(response, 'aria-label="Películas" data-tip="Películas" aria-current="page"')
+
+        # En la portada TV cubre series y películas: siguen siendo cuatro.
+        self.assertNotContains(self.client.get('/'), 'Películas')
+
+    def test_about_remembers_movies_as_the_origin(self):
+        response = self.client.get('/about/', HTTP_REFERER='http://testserver/viendo/?tipo=peliculas')
+        self.assertEqual(response.context['site_nav']['back']['label'], 'Volver a Películas')
+
+    def test_every_section_front_page_has_the_info_button(self):
+        for path in ('/bookshelf/', '/viendo/', '/spotify/'):
+            with self.subTest(path=path):
+                self.assertContains(self.client.get(path), 'href="/about/" aria-label="Información"')
+
+    def test_about_goes_back_to_where_it_was_opened_from(self):
+        response = self.client.get('/about/', HTTP_REFERER='http://testserver/viendo/')
+        self.assertEqual(response.context['site_nav']['back']['url'], '/viendo/')
+
+        # Al recargar ya no hay Referer útil: se recuerda el origen.
+        response = self.client.get('/about/', HTTP_REFERER='http://testserver/about/')
+        self.assertEqual(response.context['site_nav']['back']['url'], '/viendo/')
+
+        # Desde la portada no hay sección a la que volver: basta la casa.
+        response = self.client.get('/about/', HTTP_REFERER='http://testserver/')
+        self.assertIsNone(response.context['site_nav']['back'])
+
+    def test_404_does_not_claim_to_be_a_section(self):
+        response = views.custom_404_view(self.client.get('/').wsgi_request, None)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn(b'<h1>Libros</h1>', response.content)
+        self.assertIn('Rincón de Johan'.encode(), response.content)

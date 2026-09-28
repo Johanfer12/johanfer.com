@@ -24,9 +24,11 @@
     gap: 12px;
 }
 
+/* Título y botones reparten el sobrante a partes iguales para que la fila de
+ * secciones quede centrada en la cabecera, no en el hueco que les dejen. */
 .header-title {
     min-width: 0;
-    flex: 1 1 auto;
+    flex: 1 1 0;
 }
 
 .header-title h1 {
@@ -60,9 +62,78 @@
 .header-nav {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 10px;
-    flex: 0 1 auto;
+    flex: 1 1 0;
     min-width: 0;
+}
+
+/* Saltar de una sección a otra sin pasar por la portada, con los mismos
+ * iconos que la portada. Van sin caja, a diferencia de los botones de la
+ * derecha: aquellos son acciones de la página, estos son sitios. */
+.header-sections {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+.header-sections a {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    color: rgba(242, 245, 251, 0.6);
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+/* Los iconos son contornos rellenos pensados para verse a 80 px en la
+ * portada: a 24 el trazo se queda en poco más de un píxel y sale flaco y
+ * dentado. El `stroke` del mismo color lo engorda por fuera sin redibujarlo,
+ * y el color va en `currentColor` y no en `opacity`, que obligaba a
+ * componer el icono en una capa aparte y lo pixelaba más. */
+.header-sections svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-width: 0.7;
+    stroke-linejoin: round;
+    paint-order: stroke;
+    shape-rendering: geometricPrecision;
+    overflow: visible;
+    filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+}
+
+.header-sections a:hover {
+    color: #f2f5fb;
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.header-sections a:focus-visible {
+    color: #f2f5fb;
+    outline: 2px solid #b7d4ff;
+    outline-offset: 2px;
+}
+
+/* La sección actual, entera y con una raya debajo en el azul del feed
+ * (`#8fb4e8`), el mismo de la insignia de visitas. */
+.header-sections a[aria-current] {
+    color: #f2f5fb;
+}
+
+.header-sections a[aria-current]::before {
+    content: "";
+    position: absolute;
+    left: 11px;
+    right: 11px;
+    bottom: 1px;
+    height: 2px;
+    border-radius: 2px;
+    background: #8fb4e8;
 }
 
 .header-nav :is(a, summary) {
@@ -111,7 +182,7 @@
     position: relative;
 }
 
-.header-nav [data-tip]::after {
+:is(.header-nav, .header-sections) [data-tip]::after {
     content: attr(data-tip);
     position: absolute;
     top: calc(100% + 8px);
@@ -136,31 +207,31 @@
 
 /* El último botón pega con el borde derecho: su etiqueta se alinea a la
  * derecha para no salirse de la pantalla. */
-.header-nav [data-tip]:last-child::after {
+.header-nav > [data-tip]:last-child::after {
     left: auto;
     right: 0;
     transform: translateY(-4px);
 }
 
 @media (hover: hover) and (pointer: fine) {
-    .header-nav [data-tip]:hover::after {
+    :is(.header-nav, .header-sections) [data-tip]:hover::after {
         opacity: 1;
         visibility: visible;
         transform: translate(-50%, 0);
     }
 
-    .header-nav [data-tip]:last-child:hover::after {
+    .header-nav > [data-tip]:last-child:hover::after {
         transform: none;
     }
 }
 
-.header-nav [data-tip]:focus-visible::after {
+:is(.header-nav, .header-sections) [data-tip]:focus-visible::after {
     opacity: 1;
     visibility: visible;
     transform: translate(-50%, 0);
 }
 
-.header-nav [data-tip]:last-child:focus-visible::after {
+.header-nav > [data-tip]:last-child:focus-visible::after {
     transform: none;
 }
 
@@ -212,6 +283,98 @@
     }
 }
 
+/* En el móvil no caben en la cabecera junto al título y los botones, y en una
+ * segunda fila la hacían crecer un 60% y quedaban sueltos. Bajan a una barra
+ * fija abajo, como en una app, que es donde está el pulgar.
+ *
+ * `--tabbar-height` es lo que la barra ocupa; se reserva en el cuerpo para que
+ * el pie no quede debajo. `--tabbar-inset` es lo que ocupa AHORA: vale lo
+ * mismo con la barra a la vista y 0 cuando se esconde al bajar
+ * (js/tabbar.js). Los botones flotantes de news.css y styles.css lo suman a
+ * su `bottom`, así que bajan y suben con ella. Se registra con @property para
+ * que la transición lo anime: una variable sin tipo saltaría de golpe.
+ * Solo existen si la página tiene la barra; la portada no la tiene. */
+@property --tabbar-inset {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 0px;
+}
+
+@media (max-width: 720px) {
+    :root:has(.header-sections) {
+        --tabbar-height: calc(50px + env(safe-area-inset-bottom, 0px));
+        --tabbar-inset: var(--tabbar-height);
+        transition: --tabbar-inset 0.25s ease;
+    }
+
+    :root:has(.header-sections.is-hidden) {
+        --tabbar-inset: 0px;
+    }
+
+    body:has(.header-sections) {
+        padding-bottom: var(--tabbar-height);
+    }
+
+    /* El pie va en absoluto al fondo del cuerpo (footer.html), con 130 px de
+     * reserva: se suma la barra y el pie se sube lo mismo. */
+    body:has(.header-sections):has(.site-footer:not(.site-footer--fixed)) {
+        padding-bottom: calc(130px + var(--tabbar-height));
+    }
+
+    body:has(.header-sections) .site-footer:not(.site-footer--fixed) {
+        bottom: var(--tabbar-height);
+    }
+
+    .header-sections {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 900;
+        justify-content: space-around;
+        gap: 0;
+        height: 50px;
+        padding: 0 8px env(safe-area-inset-bottom, 0px);
+        box-sizing: content-box;
+        /* El mismo fondo que la cabecera en móvil, para que se lean como
+         * pareja: arriba y abajo, la misma pieza. */
+        background: rgba(11, 20, 44, 0.92);
+        border-top: 1px solid rgba(207, 220, 241, 0.18);
+        box-shadow: 0 -6px 18px rgba(2, 8, 18, 0.35);
+        transition: transform 0.25s ease;
+    }
+
+    /* Los 24 px de más son la sombra, que si no asoma por el borde. */
+    .header-sections.is-hidden {
+        transform: translateY(calc(100% + 24px));
+    }
+
+    .header-sections a {
+        width: 56px;
+        height: 42px;
+    }
+
+    .header-sections a:hover {
+        background: transparent;
+    }
+
+    .header-sections svg {
+        width: 24px;
+        height: 24px;
+    }
+
+    .header-sections a[aria-current]::before {
+        left: 16px;
+        right: 16px;
+        bottom: 2px;
+    }
+
+    /* La etiqueta sale por debajo del botón: aquí caería fuera de la pantalla. */
+    .header-sections [data-tip]::after {
+        display: none;
+    }
+}
+
 @media (max-width: 720px) {
     .header {
         max-width: 96%;
@@ -219,7 +382,7 @@
     }
 
     .header-container {
-        align-items: flex-start;
+        align-items: center;
         gap: 10px;
     }
 
@@ -241,23 +404,26 @@
         font-size: 12.5px;
     }
 
+    /* Los botones ocupan el alto del título y el subtítulo juntos (38 px), el
+     * mismo de la barra de secciones de abajo. Antes bajaban a 28 px y se
+     * quedaban chicos al lado de ella. Caben en una fila hasta con los cinco
+     * del feed privado (visitas, herramientas, guardadas, información e
+     * inicio): 5 × 38 + 4 × 6 = 214 px de 324. */
     .header-nav {
-        flex: 1 1 auto;
+        flex: 0 0 auto;
         justify-content: flex-end;
-        flex-wrap: wrap;
         gap: 6px;
-        max-width: 56%;
     }
 
     .header-nav :is(a, summary) {
-        width: 32px;
-        height: 32px;
-        border-radius: 9px;
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
     }
 
     .header-nav :is(a, summary) svg {
-        width: 16px;
-        height: 16px;
+        width: 19px;
+        height: 19px;
     }
 }
 
@@ -272,31 +438,6 @@
 
     .header-title h1 {
         font-size: 16px;
-    }
-
-    .header-nav {
-        gap: 5px;
-        max-width: 60%;
-    }
-
-    .header-nav :is(a, summary) {
-        width: 28px;
-        height: 28px;
-        border-radius: 8px;
-    }
-
-    .header-nav :is(a, summary) svg {
-        width: 14px;
-        height: 14px;
-    }
-
-    .visits-badge {
-        top: -5px;
-        right: -5px;
-        min-width: 14px;
-        height: 14px;
-        padding: 0 3px;
-        line-height: 12px;
     }
 }
 
@@ -390,4 +531,5 @@
 
 @media (prefers-reduced-motion: reduce) {
     .header-tools[open] .header-tools-panel { animation: none; }
+    :root, .header-sections { transition: none !important; }
 }

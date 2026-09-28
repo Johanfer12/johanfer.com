@@ -652,11 +652,15 @@ class WatchingViewTests(TestCase):
         self.assertEqual(response.context['cards'][0]['plays'], 2)
         self.assertContains(response, '2 veces')
 
-    def test_toggle_buttons_mark_active_tab(self):
+    def test_section_bar_marks_series_or_movies(self):
+        # Series y películas son dos secciones de la barra de navegación.
         response = self.client.get(reverse('watching:index'))
+        self.assertContains(response, 'aria-label="TV" data-tip="TV" aria-current="page"')
+        self.assertNotContains(response, 'data-tip="Películas" aria-current')
 
-        self.assertContains(response, 'watch-toggle-btn shows active')
-        self.assertNotContains(response, 'watch-toggle-btn movies active')
+        response = self.client.get(reverse('watching:index'), {'tipo': 'peliculas'})
+        self.assertContains(response, 'data-tip="Películas" aria-current="page"')
+        self.assertNotContains(response, 'data-tip="TV" aria-current')
 
     def test_page_renders_empty_state(self):
         response = self.client.get(reverse('watching:index'))

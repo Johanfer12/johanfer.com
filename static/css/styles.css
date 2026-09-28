@@ -172,48 +172,6 @@ a:hover {
 }
 
 /* --- Página "Viendo" (Trakt) --- */
-/* Botones flotantes para alternar entre series y películas */
-.watch-toggle-btn {
-    position: fixed;
-    right: 20px;
-    width: 48px;
-    height: 48px;
-    box-shadow: 0 8px 20px rgba(3, 10, 20, 0.45);
-    border-radius: 50%;
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.14), rgba(80, 100, 140, 0.55));
-    border: 1px solid var(--glass-border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    color: #f2f5fb;
-    z-index: 1000;
-    transition: transform 0.2s ease, background 0.2s ease;
-}
-
-.watch-toggle-btn.shows {
-    bottom: 188px;
-}
-
-.watch-toggle-btn.movies {
-    bottom: 132px;
-}
-
-.watch-toggle-btn:hover {
-    transform: scale(1.08);
-}
-
-.watch-toggle-btn.active {
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.3), rgba(143, 180, 232, 0.94));
-    pointer-events: none;
-}
-
-.watch-toggle-btn svg {
-    width: 20px;
-    height: 20px;
-    fill: currentColor;
-}
-
 /* Listón diagonal "Viendo" en la esquina de la portada */
 .watching-ribbon {
     position: absolute;
@@ -286,13 +244,13 @@ a:hover {
 
 .book-search-btn {
     position: fixed;
-    bottom: 76px;
+    bottom: calc(76px + var(--tabbar-inset, 0px));
     right: 20px;
     width: 48px;
     height: 48px;
     box-shadow: 0 8px 20px rgba(3, 10, 20, 0.45);
     border-radius: 50%;
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
+    background: var(--fab-bg);
     border: 1px solid var(--glass-border);
     display: flex;
     align-items: center;
@@ -305,13 +263,13 @@ a:hover {
 
 .book-scroll-top-btn {
     position: fixed;
-    bottom: 132px;
+    bottom: calc(132px + var(--tabbar-inset, 0px));
     right: 20px;
     width: 48px;
     height: 48px;
     box-shadow: 0 8px 20px rgba(3, 10, 20, 0.45);
     border-radius: 50%;
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
+    background: var(--fab-bg);
     border: 1px solid var(--glass-border);
     display: none;
     align-items: center;
@@ -324,7 +282,7 @@ a:hover {
 
 .book-scroll-top-btn:hover {
     transform: scale(1.08);
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.3), rgba(143, 180, 232, 0.94));
+    background: var(--fab-bg-hover);
 }
 
 .book-scroll-top-btn svg {
@@ -335,7 +293,7 @@ a:hover {
 
 .book-search-btn:hover {
     transform: scale(1.08);
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.3), rgba(143, 180, 232, 0.94));
+    background: var(--fab-bg-hover);
 }
 
 .book-search-btn svg {
@@ -345,28 +303,28 @@ a:hover {
 }
 
 .book-search-btn.is-clear {
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.24), rgba(214, 188, 143, 0.9));
+    background: var(--fab-bg-warm);
 }
 
 .book-search-btn.is-clear:hover {
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.32), rgba(214, 188, 143, 0.98));
+    background: var(--fab-bg-warm-hover);
 }
 
-/* En Mi TV el buscador va justo sobre ordenar (como en libros): ordenar (20) · buscar (76) · películas (132) · series (188) */
+/* En Mi TV el buscador va justo sobre ordenar (como en libros): ordenar (20) · buscar (76) */
 .book-search-btn.watch-search {
-    bottom: 76px;
+    bottom: calc(76px + var(--tabbar-inset, 0px));
 }
 
 /* Botón flotante de ordenar (Mis Libros y Mi TV): siempre el de más abajo */
 .book-sort-btn {
     position: fixed;
-    bottom: 20px;
+    bottom: calc(20px + var(--tabbar-inset, 0px));
     right: 20px;
     width: 48px;
     height: 48px;
     box-shadow: 0 8px 20px rgba(3, 10, 20, 0.45);
     border-radius: 50%;
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
+    background: var(--fab-bg);
     border: 1px solid var(--glass-border);
     display: flex;
     align-items: center;
@@ -379,7 +337,7 @@ a:hover {
 
 .book-sort-btn:hover {
     transform: scale(1.08);
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.3), rgba(143, 180, 232, 0.94));
+    background: var(--fab-bg-hover);
 }
 
 .book-sort-btn svg {
@@ -395,7 +353,7 @@ a:hover {
 .fab-stack {
     position: fixed;
     right: 20px;
-    bottom: 20px;
+    bottom: calc(20px + var(--tabbar-inset, 0px));
     z-index: 1000;
     display: flex;
     flex-direction: column;
@@ -405,8 +363,7 @@ a:hover {
 
 .fab-stack .book-search-btn,
 .fab-stack .book-scroll-top-btn,
-.fab-stack .book-sort-btn,
-.fab-stack .watch-toggle-btn {
+.fab-stack .book-sort-btn {
     position: static;
 }
 
@@ -437,7 +394,7 @@ a:hover {
     padding: 0;
     border-radius: 50%;
     border: 1px solid var(--glass-border);
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
+    background: var(--fab-bg);
     box-shadow: 0 8px 20px rgba(3, 10, 20, 0.45);
     color: #f2f5fb;
     display: flex;

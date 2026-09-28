@@ -27,4 +27,12 @@
     --accent: #c6d6f5;
     --accent-strong: #8fb4e8;
     --accent-warm: #d6bc8f;
+    /* Botones flotantes (Libros, TV, Noticias). Eran el azul de acento al 86%
+       sobre un blanco al 22%: encima de una portada clara se perdían, y el
+       icono blanco sobre azul claro apenas contrastaba. Opacos y un tono más
+       hondos, el icono queda a ~4,5:1. */
+    --fab-bg: linear-gradient(165deg, #7fa3dd, #4f74b3);
+    --fab-bg-hover: linear-gradient(165deg, #8fb0e6, #5c82c2);
+    --fab-bg-warm: linear-gradient(165deg, #dcc497, #a8894f);
+    --fab-bg-warm-hover: linear-gradient(165deg, #e4cea4, #b8995c);
 }

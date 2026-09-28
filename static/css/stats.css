@@ -117,12 +117,6 @@
         padding: 18px 10px;
     }
 
-    .stats-page .statistics-content h2 {
-        margin-top: 0;
-        margin-bottom: 1.2rem;
-        font-size: clamp(1.35rem, 5.8vw, 1.7rem);
-    }
-
     .stats-page .charts-row {
         width: 100%;
         gap: 1rem;

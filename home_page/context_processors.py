@@ -1,4 +1,10 @@
+from . import site_nav as _site_nav
 from .visit_stats import badge_count
+
+
+def site_nav(request):
+    """Título, sección actual y botón de retorno de la cabecera."""
+    return {'site_nav': _site_nav.build(request)}
 
 
 def visits_badge(request):

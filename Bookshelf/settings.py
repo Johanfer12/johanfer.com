@@ -129,6 +129,7 @@ TEMPLATES = [
                 'django.template.context_processors.media',
                 'Bookshelf.context_processors.site_branding',
                 'home_page.context_processors.visits_badge',
+                'home_page.context_processors.site_nav',
             ],
         },
     },

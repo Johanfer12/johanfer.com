@@ -943,9 +943,9 @@ body.comments-modal-open {
 /* Botón de actualización */
 .update-feed-btn {
     position: fixed;
-    bottom: 20px;
+    bottom: calc(20px + var(--tabbar-inset, 0px));
     right: 20px;
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
+    background: var(--fab-bg);
     color: #f2f5fb;
     border: 1px solid rgba(207, 220, 241, 0.3);
     border-radius: 50%;
@@ -962,7 +962,7 @@ body.comments-modal-open {
 
 .update-feed-btn:hover {
     transform: scale(1.1);
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.3), rgba(143, 180, 232, 0.94));
+    background: var(--fab-bg-hover);
 }
 
 .update-feed-btn:disabled {
@@ -990,9 +990,9 @@ body.comments-modal-open {
 /* Botón de deshacer (encima del de actualizar) */
 .undo-btn {
     position: fixed;
-    bottom: 76px;
+    bottom: calc(76px + var(--tabbar-inset, 0px));
     right: 20px;
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.2), rgba(214, 188, 143, 0.85));
+    background: var(--fab-bg-warm);
     color: #06101f;
     border: 1px solid rgba(207, 220, 241, 0.26);
     border-radius: 50%;
@@ -1007,16 +1007,16 @@ body.comments-modal-open {
     justify-content: center;
 }
 
-.undo-btn:hover { transform: scale(1.1); background: linear-gradient(165deg, rgba(255, 255, 255, 0.3), rgba(214, 188, 143, 0.95)); }
+.undo-btn:hover { transform: scale(1.1); background: var(--fab-bg-warm-hover); }
 .undo-btn:disabled { background: #666; color: #ccc; cursor: not-allowed; }
 .undo-btn svg { width: 20px; height: 20px; }
 
 /* Botón cambio de orden (encima del deshacer) */
 .order-btn {
     position: fixed;
-    bottom: 132px;
+    bottom: calc(132px + var(--tabbar-inset, 0px));
     right: 20px;
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.18), rgba(123, 139, 185, 0.9));
+    background: linear-gradient(165deg, #8d9bc9, #5a689b);
     color: #f2f5fb;
     border: 1px solid rgba(207, 220, 241, 0.26);
     border-radius: 50%;
@@ -1031,7 +1031,7 @@ body.comments-modal-open {
     justify-content: center;
 }
 
-.order-btn:hover { transform: scale(1.1); background: linear-gradient(165deg, rgba(255, 255, 255, 0.26), rgba(109, 128, 178, 0.95)); }
+.order-btn:hover { transform: scale(1.1); background: linear-gradient(165deg, #9aa7d2, #6674a8); }
 .order-btn:disabled { background: #666; cursor: not-allowed; }
 .order-btn svg { width: 20px; height: 20px; }
 
@@ -1325,7 +1325,7 @@ body.comments-modal-open {
 /* Botón de modo lectura (encima del order-btn) */
 .reader-btn {
     position: fixed;
-    bottom: 188px;
+    bottom: calc(188px + var(--tabbar-inset, 0px));
     right: 20px;
     background: #10ac84;
     color: #f2f5fb;
@@ -1368,7 +1368,7 @@ body.comments-modal-open {
 .news-actions-menu {
     position: fixed;
     right: 20px;
-    bottom: 20px;
+    bottom: calc(20px + var(--tabbar-inset, 0px));
     z-index: 1000;
     width: 48px;
     height: 48px;
@@ -1537,7 +1537,7 @@ body.reader-active {
     .reader-btn {
         width: 48px;
         height: 48px;
-        bottom: 188px; /* Encima del resto de botones, no centrado */
+        bottom: calc(188px + var(--tabbar-inset, 0px)); /* Encima del resto de botones, no centrado */
         right: 20px;
     }
 

@@ -1,0 +1,7 @@
+{% load static %}
+<nav class="header-sections" aria-label="Secciones">
+  {% for s in site_nav.sections %}
+    <a href="{{ s.url }}" aria-label="{{ s.label }}" data-tip="{{ s.label }}"{% if s.aria_current %} aria-current="{{ s.aria_current }}"{% endif %}>{% include 'section_icon.html' with icon=s.key %}</a>
+  {% endfor %}
+</nav>
+<script src="{% static 'js/tabbar.js' %}" defer></script>

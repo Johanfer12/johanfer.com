@@ -21,7 +21,7 @@ from home_page.templatetags.sanitizers import rating_stars
 import hashlib
 import json
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 
 SESSION_VISITOR_KEY = 'visit_visitor_id'
 
@@ -150,15 +150,7 @@ def bookshelf(request):
         })
 
 def about(request):
-    # Guardar la página de origen para decidir el botón de retorno en About
-    referer = request.META.get('HTTP_REFERER', '')
-    if 'bookshelf' in referer:
-        request.session['about_source'] = 'bookshelf'
-    elif 'spotify' in referer:
-        request.session['about_source'] = 'spotify'
-    elif 'noticias' in referer:
-        request.session['about_source'] = 'news'
-    
+    # El botón de retorno lo decide home_page.site_nav a partir del Referer.
     return render(request, 'about.html')
 
 def stats(request):
@@ -413,20 +405,6 @@ def _delete_visits(request, filtered_qs):
 
 @visits_access_required
 def visits(request):
-    # Guardar la página de origen para decidir el botón de retorno (igual que en About)
-    referer_path = urlparse(request.META.get('HTTP_REFERER', '')).path
-    if referer_path and referer_path != request.path:
-        if referer_path.startswith('/bookshelf'):
-            request.session['visits_source'] = 'bookshelf'
-        elif referer_path.startswith('/viendo'):
-            request.session['visits_source'] = 'viendo'
-        elif referer_path.startswith('/spotify'):
-            request.session['visits_source'] = 'spotify'
-        elif referer_path.startswith('/noticias'):
-            request.session['visits_source'] = 'news'
-        elif referer_path == '/':
-            request.session['visits_source'] = 'home'
-
     filters = _get_visits_filters(request)
     filtered_qs = _apply_visits_filters(filters)
 
