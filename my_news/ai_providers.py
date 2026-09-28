@@ -394,6 +394,16 @@ class BaseProvider:
         return clave
 
 
+# Tiempo máximo de una llamada a Gemini antes de pasar al respaldo. Lo normal
+# son 1,2-2,3 s, pero el 28/09/2026 el modelo estaba saturado: entre 503 de
+# «high demand», las llamadas que sí respondían tardaban 47 y 87 s, y como no
+# había límite la pasada esperaba en vez de saltar a Groq (264 s en total).
+# Con el pensamiento en HIGH una respuesta sana ronda los 19 s, así que ahí
+# se da más margen.
+GEMINI_TIMEOUT_S = 20
+GEMINI_THINKING_TIMEOUT_S = 60
+
+
 class GeminiProvider(BaseProvider):
     """Google AI Studio. Cliente compartido con los embeddings.
 
@@ -422,12 +432,16 @@ class GeminiProvider(BaseProvider):
     def complete(self, prompt):
         from google.genai import types
 
+        nivel = (getattr(self.setting, 'thinking_level', '') or '').strip()
         opciones = dict(
             response_mime_type='application/json',
             response_schema=GEMINI_RESPONSE_SCHEMA,
             temperature=0.3,
+            # En ms. El SDK lo manda también al servidor como plazo (mínimo 10 s).
+            http_options=types.HttpOptions(
+                timeout=(GEMINI_THINKING_TIMEOUT_S if nivel else GEMINI_TIMEOUT_S) * 1000
+            ),
         )
-        nivel = (getattr(self.setting, 'thinking_level', '') or '').strip()
         if nivel:
             opciones['thinking_config'] = types.ThinkingConfig(thinking_level=nivel)
 
@@ -573,6 +587,12 @@ def _traducir_error_gemini(error):
         )
     if '503' in texto or 'UNAVAILABLE' in texto:
         return AIProviderError('error', 'Gemini no está disponible ahora mismo.', texto)
+    # Vencido el plazo llega de dos formas: el cliente corta (httpx.ReadTimeout)
+    # o el servidor responde 504 DEADLINE_EXCEEDED. Va antes del 400, y los dos
+    # justifican probar en el respaldo.
+    if ('DEADLINE_EXCEEDED' in texto or 'Timeout' in type(error).__name__
+            or 'timed out' in texto):
+        return AIProviderError('error', 'Gemini tardó demasiado en responder.', texto)
     if '400' in texto or 'INVALID_ARGUMENT' in texto:
         # La peticion va mal construida: en Groq fallaria igual.
         return AIProviderError('error', 'Gemini rechazó la petición.', texto,

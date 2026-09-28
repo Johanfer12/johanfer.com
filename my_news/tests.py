@@ -17,10 +17,13 @@ from .models import AIModelSetting, FeedSource, FilterWord, News
 from .ai_providers import (
     AIProviderError,
     AIRateLimiter,
+    GEMINI_THINKING_TIMEOUT_S,
+    GEMINI_TIMEOUT_S,
     GeminiProvider,
     GroqProvider,
     _espera_por_cabeceras,
     _segundos_de_retry,
+    _traducir_error_gemini,
     cadena_de_proveedores,
     razonamiento_de,
 )
@@ -1142,6 +1145,28 @@ class GeminiThinkingTests(SimpleTestCase):
     def test_the_chosen_level_reaches_the_request(self):
         config = self._config_enviada(AIModelSetting(thinking_level='HIGH'))
         self.assertEqual(config.thinking_config.thinking_level, 'HIGH')
+
+    def test_every_call_carries_a_timeout(self):
+        """Sin plazo, un Gemini saturado dejaba la pasada esperando 47-87 s."""
+        config = self._config_enviada(AIModelSetting())
+        self.assertEqual(config.http_options.timeout, GEMINI_TIMEOUT_S * 1000)
+
+    def test_thinking_gets_a_longer_timeout(self):
+        config = self._config_enviada(AIModelSetting(thinking_level='HIGH'))
+        self.assertEqual(config.http_options.timeout, GEMINI_THINKING_TIMEOUT_S * 1000)
+
+    def test_a_timeout_falls_back_to_the_other_provider(self):
+        """Las dos formas en que llega el plazo vencido, medidas en la Pi."""
+        class ReadTimeout(Exception):
+            pass
+
+        for error in (
+            ReadTimeout('The read operation timed out'),
+            Exception("504 DEADLINE_EXCEEDED. {'error': {'code': 504}}"),
+        ):
+            traducido = _traducir_error_gemini(error)
+            self.assertEqual(traducido.reason, 'Gemini tardó demasiado en responder.')
+            self.assertTrue(traducido.puede_reintentar_otro)
 
     def test_groq_ignores_the_thinking_level(self):
         """thinking_level es de Gemini; el razonamiento de Groq va aparte."""
