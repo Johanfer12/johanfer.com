@@ -17,6 +17,9 @@ class WatchedItem(models.Model):
     SOURCES = (
         ('trakt', 'Trakt'),
         ('simkl', 'Simkl'),
+        # Episodios vistos que nunca llegaron a la fuente. El sync no los toca ni los
+        # borra al reconciliar, igual que a los de Trakt.
+        ('manual', 'Manual'),
     )
 
     # Clave de deduplicación: 'movie:<tmdb>' o 'show:<tmdb>:s01e05'. Es texto porque

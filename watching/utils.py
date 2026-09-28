@@ -49,11 +49,24 @@ TMDB_METADATA_OVERRIDES = {
 # sinopsis. La serie ya está aquí desde Trakt bajo tmdb 65942. La salida automática
 # tampoco existe: su imdb (tt36501927) resuelve en TMDB a un *episodio*, no a una serie,
 # así que `find` deja `tv_results` vacío.
+#
+# 41213 ("Devil May Cry", el anime de 2007): los episodios que hay aquí son de la serie
+# de Netflix de 2025 (tmdb 235930). Nuvio la reprodujo desde su ficha de Kitsu
+# (kitsu:48010), pero Simkl no cataloga esa serie como anime sino como serie normal
+# (tv/2266327) y no conoce ese id de Kitsu, así que Nuvio acabó en el único anime con
+# el mismo nombre. Va también en SIMKL_MISMATCHED_ENTRIES.
 SIMKL_WORK_OVERRIDES = {
     1300367: 329809,  # Mantener la identidad histórica cuando Simkl corrige TMDB.
     2671730: 329809,
     2743422: 65942,
+    41213: 235930,
 }
+
+# Fichas de Simkl que recibieron episodios de OTRA obra. Al contrario que un cour, su
+# nombre, su carátula, los títulos de sus episodios y sus contadores son los de la obra
+# equivocada, así que de ellas solo se toman la numeración y la fecha. La ficha real
+# aporta el resto cuando lleguen episodios suyos.
+SIMKL_MISMATCHED_ENTRIES = {41213}
 
 # Cada entrada: clave en la respuesta de Simkl, tipo de medio del modelo, si es anime.
 SIMKL_GROUPS = (
@@ -426,6 +439,8 @@ def _prepare_sync_items(payload):
                 if media_type == 'episode' else {}
             )
             rows = _work_rows(item, media_type, episode_index)
+            if ids.get('simkl') in SIMKL_MISMATCHED_ENTRIES:
+                rows = [(season, episode, watched_at, '') for season, episode, watched_at, _ in rows]
             metadata = (_get_tmdb_metadata(tmdb_cache, tmdb_type, tmdb_id,
                         (media.get('title') or '').strip()) if rows else {})
             prepared.append((group_key, media_type, item_is_anime, item, media, ids,
@@ -479,6 +494,7 @@ def _apply_sync_items(prepared, skipped, state, stamp, full, date_from):
         if not rows:
             continue
 
+        mismatched = ids.get('simkl') in SIMKL_MISMATCHED_ENTRIES
         # Se acumula: varias entradas de Simkl pueden mapear a una sola obra nuestra
         # (el anime viene partido por temporada). Si se sobrescribiera, los
         # contadores de una secuela pasarían por los de la serie entera.
@@ -486,17 +502,18 @@ def _apply_sync_items(prepared, skipped, state, stamp, full, date_from):
             'user_rating': None, 'watched_episodes_count': 0, 'available_episodes': 0,
             'entries': {},
         })
-        work['user_rating'] = work['user_rating'] or item.get('user_rating')
-        entry = work['entries'].setdefault(ids.get('simkl') or (group_key, str(ids)), [0, 0])
-        entry[0] = max(entry[0], item.get('watched_episodes_count') or 0)
-        entry[1] = max(entry[1], _available_episodes(item, metadata) or 0)
-        work['watched_episodes_count'] = sum(e[0] for e in work['entries'].values())
-        work['available_episodes'] = sum(e[1] for e in work['entries'].values())
+        if not mismatched:
+            work['user_rating'] = work['user_rating'] or item.get('user_rating')
+            entry = work['entries'].setdefault(ids.get('simkl') or (group_key, str(ids)), [0, 0])
+            entry[0] = max(entry[0], item.get('watched_episodes_count') or 0)
+            entry[1] = max(entry[1], _available_episodes(item, metadata) or 0)
+            work['watched_episodes_count'] = sum(e[0] for e in work['entries'].values())
+            work['available_episodes'] = sum(e[1] for e in work['entries'].values())
 
         known_title, known_year = known_works.get(tmdb_id, (None, None))
         # El arco solo tiene sentido en anime: una serie normal es una sola ficha en
         # Simkl, y su carátula de Simkl no debe reemplazar a la de TMDB.
-        part = ((media.get('title') or '').strip(), media.get('poster') or '') if item_is_anime else ('', '')
+        part = ((media.get('title') or '').strip(), media.get('poster') or '') if item_is_anime and not mismatched else ('', '')
 
         for season, episode, watched_at, episode_title in rows:
             dedup_key = WatchedItem.build_dedup_key(media_type, tmdb_id, season, episode)

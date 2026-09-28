@@ -417,6 +417,31 @@ class RefreshFromSimklTests(TestCase):
         old = WatchedItem.objects.get(dedup_key='show:45790:s05e01')
         self.assertEqual(old.part_title, 'JoJo no Kimyou na Bouken: Stone Ocean')
 
+    def test_a_mismatched_entry_only_lends_its_numbering_and_dates(self, _episodes, _detail):
+        """Devil May Cry 2025 marcado en la ficha del anime de 2007: nada de esa ficha vale."""
+        WatchedItem.objects.create(
+            dedup_key='show:235930:s01e01', source='manual', media_type='episode',
+            title='Devil May Cry', year=2025, season=1, episode=1, episode_title='Inferno',
+            watched_at=timezone.now() - timedelta(days=20), tmdb_id=235930, available_episodes=16,
+        )
+        _episodes.return_value = [
+            {'episode': 2, 'type': 'episode', 'title': 'Not Love', 'tvdb': {'season': 1, 'episode': 2}},
+        ]
+        self._sync({'anime': [{
+            'last_watched_at': '2026-09-12T02:44:56Z', 'total_episodes_count': 12,
+            'show': {'title': 'Devil May Cry', 'year': 2007, 'poster': '68/6871',
+                     'ids': {'simkl': 41213, 'tmdb': '12577'}},
+            'seasons': [{'number': 1, 'episodes': [{'number': 2, 'watched_at': '2026-09-12T02:44:56Z'}]}],
+        }]}, full=True)
+
+        self.assertFalse(WatchedItem.objects.filter(tmdb_id=12577).exists())
+        row = WatchedItem.objects.get(dedup_key='show:235930:s01e02')
+        self.assertEqual((row.year, row.episode_title, row.part_poster), (2025, '', ''))
+        # Los 12 episodios del anime de 2007 no pisan los 16 de la serie real, y la
+        # reconciliación no se lleva la fila manual.
+        manual = WatchedItem.objects.get(dedup_key='show:235930:s01e01')
+        self.assertEqual(manual.available_episodes, 16)
+
     def test_regular_shows_have_no_arc(self, _episodes, _detail):
         """Una serie normal es una sola ficha: su carátula de Simkl no pisa la de TMDB."""
         show = dict(SIMKL_SHOW, show=dict(SIMKL_SHOW['show'], poster='11/1111'))
