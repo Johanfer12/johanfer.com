@@ -1,3 +1,6 @@
+import os
+import shutil
+import tempfile
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
@@ -8,6 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import SimklSyncState, WatchedItem
+from .views import _arc_label
 from .utils import (
     fetch_tmdb_id_by_imdb,
     fetch_tmdb_media_details,
@@ -384,6 +388,43 @@ class RefreshFromSimklTests(TestCase):
         # El año también: la secuela es de 2026, pero la obra es de 2017.
         self.assertEqual(WatchedItem.objects.get(dedup_key='show:69346:s02e04').year, 2017)
 
+    def test_anime_rows_remember_their_simkl_arc(self, _episodes, _detail):
+        """El arco lo da la ficha de Simkl, aunque la tarjeta conserve el nombre de la obra."""
+        WatchedItem.objects.create(
+            dedup_key='show:45790:s05e01', source='simkl', media_type='episode',
+            title="JoJo's Bizarre Adventure", season=5, episode=1,
+            watched_at=timezone.now() - timedelta(days=300), tmdb_id=45790,
+        )
+        catalogs = {
+            2754038: {'season': 6, 'episode': 1},  # Steel Ball Run
+            1599907: {'season': 5, 'episode': 1},  # Stone Ocean
+        }
+        _episodes.side_effect = lambda sid, is_anime=False: [
+            {'episode': 1, 'type': 'episode', 'title': '', 'tvdb': catalogs[sid]},
+        ]
+        self._sync({'anime': [{
+            'last_watched_at': '2026-09-28T01:40:39Z',
+            'show': {'title': 'Steel Ball Run: JoJo no Kimyou na Bouken', 'poster': '20/2077',
+                     'ids': {'simkl': 2754038, 'tmdb': '45790'}},
+            'seasons': [{'number': 1, 'episodes': [{'number': 1, 'watched_at': '2026-09-28T01:40:39Z'}]}],
+        }, SIMKL_ANIME]})
+
+        row = WatchedItem.objects.get(dedup_key='show:45790:s06e01')
+        self.assertEqual(row.title, "JoJo's Bizarre Adventure")
+        self.assertEqual(row.part_title, 'Steel Ball Run: JoJo no Kimyou na Bouken')
+        self.assertEqual(row.part_poster_name, 'show_45790_202077.webp')
+        # Lo guardado antes de existir el campo se rellena en la siguiente pasada.
+        old = WatchedItem.objects.get(dedup_key='show:45790:s05e01')
+        self.assertEqual(old.part_title, 'JoJo no Kimyou na Bouken: Stone Ocean')
+
+    def test_regular_shows_have_no_arc(self, _episodes, _detail):
+        """Una serie normal es una sola ficha: su carátula de Simkl no pisa la de TMDB."""
+        show = dict(SIMKL_SHOW, show=dict(SIMKL_SHOW['show'], poster='11/1111'))
+        self._sync({'shows': [show]})
+
+        row = WatchedItem.objects.filter(tmdb_id=67386).first()
+        self.assertEqual((row.part_title, row.part_poster), ('', ''))
+
     def test_skips_items_without_any_resolvable_id(self, _episodes, _detail):
         created, _ = self._sync({'shows': [{
             'last_watched_at': '2026-07-02T03:00:00Z',
@@ -621,3 +662,71 @@ class WatchingViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         # Dos episodios de la misma serie cuentan como una sola serie en el año
         self.assertContains(response, '[1]')
+
+
+class WatchingArcTests(TestCase):
+    """Anime que Simkl parte en arcos y TMDB junta en una sola serie (JoJo)."""
+
+    def setUp(self):
+        self.media = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.media, ignore_errors=True)
+        os.makedirs(os.path.join(self.media, 'Posters'))
+
+    def _row(self, season, episode, days_ago, part_title='', part_poster='', source='simkl'):
+        return WatchedItem.objects.create(
+            dedup_key=f'show:45790:s{season:02d}e{episode:02d}', source=source, media_type='episode',
+            title="JoJo's Bizarre Adventure", season=season, episode=episode,
+            watched_at=timezone.now() - timedelta(days=days_ago), tmdb_id=45790,
+            part_title=part_title, part_poster=part_poster,
+        )
+
+    def _card(self):
+        with override_settings(MEDIA_ROOT=self.media):
+            response = self.client.get(reverse('watching:index'))
+        return response, response.context['cards'][0]
+
+    def test_names_the_latest_arc_and_shows_its_poster(self):
+        self._row(5, 1, 300, 'JoJo no Kimyou na Bouken: Stone Ocean', '11/1115')
+        latest = self._row(6, 1, 1, 'Steel Ball Run: JoJo no Kimyou na Bouken', '20/2077')
+        open(os.path.join(self.media, 'Posters', latest.part_poster_name), 'wb').close()
+
+        response, card = self._card()
+
+        self.assertEqual(card['arc'], 'Steel Ball Run')
+        self.assertEqual(card['poster_name'], 'show_45790_202077.webp')
+        self.assertContains(response, 'Arco')
+
+    def test_keeps_the_tmdb_poster_until_the_arc_poster_is_on_disk(self):
+        self._row(5, 1, 300, 'JoJo no Kimyou na Bouken: Stone Ocean', '11/1115')
+        self._row(6, 1, 1, 'Steel Ball Run: JoJo no Kimyou na Bouken', '20/2077')
+
+        _, card = self._card()
+
+        self.assertEqual(card['poster_name'], 'show_45790.webp')
+
+    def test_a_single_arc_is_not_named(self):
+        latest = self._row(6, 1, 1, 'Steel Ball Run: JoJo no Kimyou na Bouken', '20/2077')
+        open(os.path.join(self.media, 'Posters', latest.part_poster_name), 'wb').close()
+
+        response, card = self._card()
+
+        self.assertEqual(card['arc'], '')
+        self.assertEqual(card['poster_name'], 'show_45790.webp')  # una sola parte: nada que distinguir
+        self.assertNotContains(response, 'Arco')
+
+    def test_a_new_cour_after_trakt_history_changes_the_poster_but_not_the_name(self):
+        self._row(2, 1, 400, source='trakt')
+        latest = self._row(3, 1, 1, 'Re:Zero kara Hajimeru Isekai Seikatsu', '20/2032')
+        open(os.path.join(self.media, 'Posters', latest.part_poster_name), 'wb').close()
+
+        _, card = self._card()
+
+        self.assertEqual(card['arc'], '')
+        self.assertEqual(card['poster_name'], 'show_45790_202032.webp')
+
+    def test_arc_label_drops_what_the_parts_share(self):
+        titles = {'Bleach: Sennen Kessen Hen', 'Bleach: Sennen Kessen Hen - Kashin Tan'}
+        self.assertEqual(
+            _arc_label('Bleach: Sennen Kessen Hen - Kashin Tan', titles, 'Bleach'),
+            'Sennen Kessen Hen - Kashin Tan',
+        )

@@ -193,6 +193,14 @@ def metadata_for_work(cache, media_type, tmdb_id, title=''):
 
 # --- Pósters -------------------------------------------------------------------
 
+SIMKL_POSTER_BASE = 'https://simkl.in/posters/'
+
+
+def simkl_poster_url(poster_path):
+    """'20/2077…' -> URL de la carátula. `_m` mide 340x510, lo mismo que la w342 de TMDB."""
+    return f"{SIMKL_POSTER_BASE}{poster_path}_m.webp" if poster_path else None
+
+
 def download_poster(poster_url, file_name, force=False):
     folder = os.path.join(settings.MEDIA_ROOT, 'Posters')
     os.makedirs(folder, exist_ok=True)
@@ -432,7 +440,8 @@ def _apply_sync_items(prepared, skipped, state, stamp, full, date_from):
     existing = {
         item.dedup_key: item
         for item in WatchedItem.objects.only(
-            'id', 'dedup_key', 'watched_at', 'source', 'user_rating', 'episode_title'
+            'id', 'dedup_key', 'watched_at', 'source', 'user_rating', 'episode_title',
+            'tmdb_id', 'simkl_id', 'part_title', 'part_poster',
         )
     }
     # Título ya establecido para cada obra. Simkl nombra distinto que Trakt (sobre todo
@@ -485,6 +494,9 @@ def _apply_sync_items(prepared, skipped, state, stamp, full, date_from):
         work['available_episodes'] = sum(e[1] for e in work['entries'].values())
 
         known_title, known_year = known_works.get(tmdb_id, (None, None))
+        # El arco solo tiene sentido en anime: una serie normal es una sola ficha en
+        # Simkl, y su carátula de Simkl no debe reemplazar a la de TMDB.
+        part = ((media.get('title') or '').strip(), media.get('poster') or '') if item_is_anime else ('', '')
 
         for season, episode, watched_at, episode_title in rows:
             dedup_key = WatchedItem.build_dedup_key(media_type, tmdb_id, season, episode)
@@ -492,12 +504,23 @@ def _apply_sync_items(prepared, skipped, state, stamp, full, date_from):
             known = existing.get(dedup_key)
 
             if known is not None:
-                # Solo se corrige la fecha de lo que vino de Simkl: los registros
-                # de Trakt conservan la suya, que es la real.
-                if known.source == 'simkl' and known.watched_at != watched_at:
+                # Solo se corrige lo que vino de Simkl: los registros de Trakt
+                # conservan su fecha, que es la real, y no pertenecen a ningún arco.
+                if known.source != 'simkl':
+                    continue
+                fields = []
+                if known.watched_at != watched_at:
                     known.watched_at = watched_at
-                    known.save(update_fields=['watched_at'])
+                    fields.append('watched_at')
                     updated += 1
+                # Rellena el arco de lo guardado antes de que existiera el campo, y lo
+                # sigue si Simkl cambia la carátula.
+                if (known.part_title, known.part_poster) != part:
+                    known.part_title, known.part_poster = part
+                    fields += ['part_title', 'part_poster']
+                if fields:
+                    known.save(update_fields=fields)
+                _queue_part_poster(known)
                 continue
 
             watched = WatchedItem.objects.create(
@@ -516,6 +539,8 @@ def _apply_sync_items(prepared, skipped, state, stamp, full, date_from):
                 imdb_id=ids.get('imdb') or '',
                 simkl_id=ids.get('simkl'),
                 detail_url=_detail_url(media_type, ids, item_is_anime),
+                part_title=part[0],
+                part_poster=part[1],
             )
             existing[dedup_key] = watched
             created += 1
@@ -523,6 +548,7 @@ def _apply_sync_items(prepared, skipped, state, stamp, full, date_from):
             poster_path = os.path.join(settings.MEDIA_ROOT, 'Posters', watched.poster_name)
             if not os.path.exists(poster_path) and metadata.get('poster_url'):
                 transaction.on_commit(lambda url=metadata['poster_url'], name=watched.poster_name: download_poster(url, name))
+            _queue_part_poster(watched)
 
     _update_work_aggregates(touched_works)
     deleted = _reconcile(seen_keys) if full and not skipped else 0
@@ -543,6 +569,14 @@ def _apply_sync_items(prepared, skipped, state, stamp, full, date_from):
         created, updated, deleted, skipped,
     )
     return created
+
+
+def _queue_part_poster(row):
+    """Baja la carátula del arco al confirmar la transacción, si aún no está en disco."""
+    name = row.part_poster_name
+    if not name or os.path.exists(os.path.join(settings.MEDIA_ROOT, 'Posters', name)):
+        return
+    transaction.on_commit(lambda: download_poster(simkl_poster_url(row.part_poster), name))
 
 
 def _available_episodes(item, metadata):

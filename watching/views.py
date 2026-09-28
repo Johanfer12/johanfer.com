@@ -1,4 +1,5 @@
 import json
+import os
 from collections import Counter, defaultdict
 from datetime import timedelta
 
@@ -44,7 +45,10 @@ def _group_by_media(items):
                     'episode_count': 1,
                     'episode_total': item.total_episodes or 1,
                     'watched_years': {watched_year},
+                    'part_titles': set(),
+                    'has_legacy_rows': False,
                 }
+                entry = shows[item.tmdb_id]
             else:
                 entry['plays'] += 1
                 entry['episode_keys'].add(episode_key)
@@ -54,6 +58,10 @@ def _group_by_media(items):
                     item.total_episodes or entry['episode_count'],
                 )
                 entry['watched_years'].add(watched_year)
+            if item.part_title:
+                entry['part_titles'].add(item.part_title)
+            else:
+                entry['has_legacy_rows'] = True
             continue
 
         bucket = movies
@@ -64,6 +72,43 @@ def _group_by_media(items):
             entry['plays'] += 1
             entry['watched_years'].add(watched_year)
     return list(shows.values()), list(movies.values())
+
+
+def _arc_label(part_title, part_titles, work_title):
+    """Lo que distingue a un arco de los demás de la misma obra.
+
+    Las fichas de Simkl repiten el nombre de la franquicia en cualquier posición
+    ("JoJo no Kimyou na Bouken: Stone Ocean", "Steel Ball Run: JoJo no Kimyou na
+    Bouken"), así que se parte por ': ' y se descarta lo que comparten.
+    """
+    split = lambda title: [s.strip() for s in title.split(': ') if s.strip()]
+    counts = Counter(s.casefold() for title in part_titles for s in set(split(title)))
+    shared = {s for s, n in counts.items() if n > 1} | {work_title.casefold()}
+    return ': '.join(s for s in split(part_title) if s.casefold() not in shared)
+
+
+def _apply_arcs(show_cards):
+    """Arco y carátula de la parte más reciente, en el anime que Simkl parte en varias.
+
+    El arco solo se nombra si hay al menos dos fichas con nombre distinto. La carátula
+    cambia también cuando la otra parte es el historial de Trakt (Re:Zero): basta con
+    que la obra tenga más de una. Si la del arco aún no está en disco, se queda la de
+    TMDB en vez de pintar el hueco.
+    """
+    posters_dir = os.path.join(settings.MEDIA_ROOT, 'Posters')
+    for card in show_cards:
+        latest = card['latest']
+        card['poster_name'] = latest.poster_name
+        card['arc'] = ''
+        if not latest.part_title:
+            continue
+        titles = card['part_titles']
+        if len(titles) > 1:
+            card['arc'] = _arc_label(latest.part_title, titles, latest.title)
+        parts = len(titles) + (1 if card['has_legacy_rows'] else 0)
+        name = latest.part_poster_name
+        if parts > 1 and name and os.path.exists(os.path.join(posters_dir, name)):
+            card['poster_name'] = name
 
 
 def _sort_cards(cards, orden):
@@ -92,6 +137,9 @@ def watching(request):
     # misma fecha) gana el episodio más alto, para que "Último" sea el finale real.
     items = list(WatchedItem.objects.order_by('-watched_at', '-season', '-episode'))
     show_cards, movie_cards = _group_by_media(items)
+    _apply_arcs(show_cards)
+    for card in movie_cards:
+        card['poster_name'] = card['latest'].poster_name
 
     # "Viendo" = le quedan episodios por delante del último que vi (los calcula el sync
     # con el catálogo de Simkl) y lo vi hace poco. Hacen falta las dos condiciones: sin
@@ -138,7 +186,8 @@ def watching(request):
                 'id': latest.id,
                 'title': latest.title,
                 'media_type': latest.media_type,
-                'poster_url': f"{settings.MEDIA_URL}Posters/{latest.poster_name}",
+                'poster_url': f"{settings.MEDIA_URL}Posters/{card['poster_name']}",
+                'arc': card.get('arc', ''),
                 'detail_url': latest.detail_url or '#',
                 'year': latest.year,
                 'episode_total': card.get('episode_total'),

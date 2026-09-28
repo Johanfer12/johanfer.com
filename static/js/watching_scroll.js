@@ -29,6 +29,9 @@ const createWatchItem = (card) => {
     item.className = 'book-item';
 
     let infoRows = '';
+    if (card.arc) {
+        infoRows += `<p><strong>Arco</strong><br>${escapeHtml(card.arc)}</p>`;
+    }
     if (card.media_type === 'episode') {
         infoRows += `<p><strong>Episodios vistos</strong><br>${escapeHtml(String(card.episode_total || ''))}</p>`;
         infoRows += `<p><strong>Último</strong><br>${escapeHtml(card.display_label)}</p>`;
@@ -78,6 +81,9 @@ const createWatchModal = (card) => {
     modal.tabIndex = -1;
 
     let metaLeft = '';
+    if (card.arc) {
+        metaLeft += `<p><strong>Arco:</strong> ${escapeHtml(card.arc)}</p>`;
+    }
     if (card.media_type === 'episode') {
         metaLeft += `<p><strong>Episodios vistos:</strong> ${escapeHtml(String(card.episode_total || ''))}</p>`;
         metaLeft += `<p><strong>Último:</strong> ${escapeHtml(card.display_label)}${card.episode_title ? ' - ' + escapeHtml(card.episode_title) : ''}</p>`;

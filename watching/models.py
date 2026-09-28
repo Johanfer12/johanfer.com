@@ -40,6 +40,12 @@ class WatchedItem(models.Model):
     imdb_id = models.CharField(max_length=20, blank=True, default='', db_index=True, verbose_name="ID IMDB")
     simkl_id = models.PositiveIntegerField(null=True, blank=True, verbose_name="ID Simkl")
     detail_url = models.URLField(blank=True, default='', verbose_name="Ficha")
+    # Solo en anime: nombre y carátula de la ficha de Simkl de la que viene el episodio.
+    # Simkl parte el anime por arco o cour ("Steel Ball Run", "Stone Ocean") mientras
+    # que TMDB lo junta en una sola serie, que es lo que agrupa las tarjetas; esto
+    # permite decir en qué arco va la obra y enseñar su carátula.
+    part_title = models.CharField(max_length=300, blank=True, default='', verbose_name="Arco (Simkl)")
+    part_poster = models.CharField(max_length=100, blank=True, default='', verbose_name="Carátula del arco (Simkl)")
     # Solo en los registros heredados de Trakt.
     trakt_id = models.PositiveIntegerField(null=True, blank=True, verbose_name="ID Trakt")
     trakt_history_id = models.BigIntegerField(null=True, blank=True, unique=True, verbose_name="ID historial Trakt")
@@ -69,6 +75,14 @@ class WatchedItem(models.Model):
         # Un póster por obra: los episodios comparten el póster de la serie.
         kind = 'show' if self.media_type == 'episode' else 'movie'
         return f"{kind}_{self.tmdb_id}.webp"
+
+    @property
+    def part_poster_name(self):
+        """Carátula propia del arco. El nombre lleva el hash de Simkl y no su id: si
+        Simkl cambia la carátula sale otro fichero, y no hay caché de /media/ que purgar."""
+        if not self.part_poster:
+            return ''
+        return f"show_{self.tmdb_id}_{self.part_poster.replace('/', '')}.webp"
 
     @property
     def display_label(self):
