@@ -39,32 +39,6 @@
                     </div>
                     {% endif %}
                 </div>
-
-                <div class="book-info">
-                    <a href="{{ card.latest.detail_url|default:'#' }}"
-                       class="book-title"
-                       target="_blank"
-                       rel="noopener noreferrer">
-                       {{ card.latest.title }}
-                    </a>
-                    {% if card.latest.media_type == 'episode' %}
-                        {% if card.arc %}<p><strong>Arco</strong><br>{{ card.arc }}</p>{% endif %}
-                        <p><strong>Episodios vistos</strong><br>{{ card.episode_total }}</p>
-                        <p><strong>Último</strong><br>{{ card.latest.display_label }}</p>
-                    {% elif card.plays > 1 %}
-                        <p><strong>Vista</strong><br>{{ card.plays }} veces</p>
-                    {% endif %}
-                    {% if card.latest.year %}
-                        <p><strong>Año</strong><br>{{ card.latest.year }}</p>
-                    {% endif %}
-                    {% if card.latest.user_rating %}
-                        <p><strong>Mi calificación</strong><br>{{ card.latest.user_rating|rating_stars }}</p>
-                    {% endif %}
-                    {% if card.latest.public_rating %}
-                        <p><strong>Calificación general</strong><br>{{ card.latest.public_rating|rating_stars }}</p>
-                    {% endif %}
-                    <p><strong>Lo vi el...</strong><br>{{ card.latest.watched_at|date:"d/m/Y" }}</p>
-                </div>
             </div>
         </div>
 

@@ -15,25 +15,12 @@ const createBookItem = (book) => {
     const readingRibbon = book.is_reading
         ? '<div class="watching-ribbon"><span>Leyendo</span></div>'
         : '';
-    const ratingRow = book.is_reading
-        ? ''
-        : `<p><strong>Mi calificación</strong><br>${book.my_rating_html || ''}</p>`;
-    const dateRow = book.is_reading
-        ? ''
-        : `<p><strong>Lo leí el...</strong><br>${escapeHtml(formatDate(book.date_read))}</p>`;
 
     item.innerHTML = `
         <div class="book-info-container">
             <div class="book-cover" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-${book.id}" aria-label="Ver detalles de ${escapeHtml(book.title)}" onclick="openModal('${book.id}')">
                 <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(book.title)}">
                 ${readingRibbon}
-            </div>
-            <div class="book-info">
-            <a href="${escapeHtml(book.book_link)}" class="book-title" target="_blank">${escapeHtml(book.title)}</a>
-                <p><strong>Autor</strong><br>${escapeHtml(book.author)}</p>
-                ${ratingRow}
-                <p><strong>Calificación general</strong><br>${book.public_rating_html || ''}</p>
-                ${dateRow}
             </div>
         </div>
     `;

@@ -25,23 +25,6 @@
                     <div class="watching-ribbon"><span>Leyendo</span></div>
                     {% endif %}
                 </div>
-
-                <!-- Info del libro que se ve al girar la carátula -->
-                <div class="book-info">
-                    <a href="{{ book.goodreads_url }}"
-                       class="book-title"
-                       target="_blank">
-                       {{ book.title }}
-                    </a>
-                    <p><strong>Autor</strong><br>{{ book.author }}</p>
-                    {% if not book.is_reading %}
-                    <p><strong>Mi calificación</strong><br>{{ book.my_rating|rating_stars:5 }}</p>
-                    {% endif %}
-                    <p><strong>Calificación general</strong><br>{{ book.public_rating|rating_stars:5 }}</p>
-                    {% if not book.is_reading %}
-                    <p><strong>Lo leí el...</strong><br>{{ book.date_read|date:"d/m/Y" }}</p>
-                    {% endif %}
-                </div>
             </div>
         </div>
         

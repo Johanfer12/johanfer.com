@@ -97,32 +97,16 @@ a:hover {
     height: 100%;
     position: relative;
     text-align: center;
-    transform-style: preserve-3d;
-}
-
-.book-cover,
-.book-info {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    backface-visibility: hidden;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    transition: transform 0.6s;
-    border-radius: var(--radius-sm);
-}
-
-.book-info p {
-    margin: 5px 0;
-    font-size: 0.9em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .book-cover {
-    transform: rotateY(0deg);
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--card-border);
     box-shadow: var(--shadow-md);
     /* Placeholder mientras carga la portada (la Pi no es instantánea) */
@@ -142,27 +126,6 @@ a:hover {
     object-fit: cover;
     width: 100%;
     height: 100%;
-}
-
-.book-info {
-    background: var(--surface);
-    border: 1px solid var(--surface-border);
-    color: var(--text-primary);
-    transform: rotateY(180deg);
-    flex-direction: column;
-    padding: 15px;
-    overflow: hidden;
-}
-
-.book-info a.book-title {
-    font-size: 1.1em;
-    margin-bottom: 10px;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .book-cover:hover {
@@ -640,54 +603,11 @@ a:hover {
     }
 }
 
-@media (min-width: 1200px) {
-    .book-info a.book-title {
-        font-size: 1.2em;
-    }
-
-    .book-info p {
-        font-size: 1em;
-    }
-}
-
-@media (max-width: 1199px) and (min-width: 992px) {
-    .book-info a.book-title {
-        font-size: 1.1em;
-    }
-
-    .book-info p {
-        font-size: 0.9em;
-    }
-}
-
-@media (max-width: 991px) and (min-width: 768px) {
-    .book-info a.book-title {
-        font-size: 1em;
-    }
-
-    .book-info p {
-        font-size: 0.85em;
-    }
-}
-
 @media (max-width: 767px) {
     .book-container {
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
         gap: 15px;
         padding: 0 15px;
-    }
-
-    .book-info {
-        padding: 10px;
-    }
-
-    .book-info a.book-title {
-        font-size: 0.9em;
-    }
-
-    .book-info p {
-        font-size: 0.8em;
-        margin: 3px 0;
     }
 }
 
@@ -695,19 +615,6 @@ a:hover {
     .book-container {
         padding: 0 10px;
         gap: 10px;
-    }
-
-    .book-info {
-        padding: 8px;
-    }
-
-    .book-info a.book-title {
-        font-size: 0.8em;
-    }
-
-    .book-info p {
-        font-size: 0.7em;
-        margin: 2px 0;
     }
 }
 
@@ -1222,7 +1129,6 @@ a:hover {
     }
 
     .book-cover,
-    .book-info,
     .modal-content,
     .book-search-btn,
     .book-scroll-top-btn,

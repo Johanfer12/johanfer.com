@@ -28,42 +28,12 @@ const createWatchItem = (card) => {
     const item = document.createElement('div');
     item.className = 'book-item';
 
-    let infoRows = '';
-    if (card.arc) {
-        infoRows += `<p><strong>Arco</strong><br>${escapeHtml(card.arc)}</p>`;
-    }
-    if (card.media_type === 'episode') {
-        infoRows += `<p><strong>Episodios vistos</strong><br>${escapeHtml(String(card.episode_total || ''))}</p>`;
-        infoRows += `<p><strong>Último</strong><br>${escapeHtml(card.display_label)}</p>`;
-    } else if (card.plays > 1) {
-        infoRows += `<p><strong>Vista</strong><br>${escapeHtml(String(card.plays))} veces</p>`;
-    }
-    if (card.year) {
-        infoRows += `<p><strong>Año</strong><br>${escapeHtml(String(card.year))}</p>`;
-    }
-    if (card.user_rating_html) {
-        infoRows += `<p><strong>Mi calificación</strong><br>${card.user_rating_html}</p>`;
-    }
-    if (card.public_rating_html) {
-        infoRows += `<p><strong>Calificación general</strong><br>${card.public_rating_html}</p>`;
-    }
-    infoRows += `<p><strong>Lo vi el...</strong><br>${escapeHtml(card.watched_at)}</p>`;
-
     item.innerHTML = `
         <div class="book-info-container">
             <div class="book-cover" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-watch-${card.id}" aria-label="Ver detalles de ${escapeHtml(card.title)}" onclick="openModal('watch-${card.id}')">
                 ${posterImg(card)}
                 ${card.is_watching ? '<div class="watching-ribbon"><span>Viendo</span></div>' : ''}
                 ${card.needs_rating ? ratingAlert : ''}
-            </div>
-            <div class="book-info">
-                <a href="${escapeHtml(card.detail_url)}"
-                   class="book-title"
-                   target="_blank"
-                   rel="noopener noreferrer">
-                   ${escapeHtml(card.title)}
-                </a>
-                ${infoRows}
             </div>
         </div>
     `;
