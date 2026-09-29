@@ -89,16 +89,39 @@ html.instagram-webview .news-card-container {
     z-index: 2;
 }
 
-/* Tarjeta de noticia */
+/* Tarjeta de noticia
+ *
+ * En reposo la tarjeta es PLANA y solo pasa a 3D mientras gira o está
+ * girada. Con el 3D siempre puesto, cada tarjeta eran tres capas de GPU (la
+ * sombra, el frente y el reverso) y cada una su propio render pass por
+ * fotograma. Medido en un Helio G99 con 19 tarjetas: 159 capas y 5,9 render
+ * passes por fotograma, con la GPU ocupada la mitad del tiempo de scroll. En
+ * plano bajan a 9 capas, 1 pass y un 38% menos de GPU.
+ *
+ * Al entrar en `.is-flipped` el 3D se activa en el acto; al salir, las
+ * transiciones de 0 s con retardo lo quitan cuando termina el giro de vuelta
+ * (0.56 s, el mismo que el giro). `transform-style` y `backface-visibility`
+ * son discretas, de ahí el `allow-discrete`. Si se cambia la duración del
+ * giro, hay que cambiar también esos retardos. */
 .news-card {
+    --flip-duration: 0.56s;
     position: relative;
     width: 100%;
     height: 100%;
-    transition: transform 0.56s cubic-bezier(0.22, 0.61, 0.36, 1);
-    -webkit-transform-style: preserve-3d;
-    transform-style: preserve-3d;
+    transition:
+        transform var(--flip-duration) cubic-bezier(0.22, 0.61, 0.36, 1),
+        transform-style 0s var(--flip-duration) allow-discrete;
+    transform-style: flat;
     transform: none;
     -webkit-font-smoothing: subpixel-antialiased;
+}
+
+.news-card.is-flipped {
+    -webkit-transform-style: preserve-3d;
+    transform-style: preserve-3d;
+    transition:
+        transform var(--flip-duration) cubic-bezier(0.22, 0.61, 0.36, 1),
+        transform-style 0s allow-discrete;
 }
 
 /* Preparar la capa al entrar en la tarjeta, antes de pasar de la imagen al
@@ -117,8 +140,13 @@ html.instagram-webview .news-card-container {
     inset: 0;
     border-radius: var(--news-card-radius);
     box-shadow: var(--news-card-shadow);
-    transform: translateZ(-1px);
+    transition: transform 0s var(--flip-duration);
     pointer-events: none;
+}
+
+.news-card.is-flipped::before {
+    transform: translateZ(-1px);
+    transition: none;
 }
 
 /* El giro se controla por JS para evitar que el borde del contenedor dispare el flip */
@@ -137,8 +165,6 @@ html.instagram-webview .news-card-container {
     inset: 0;
     width: 100%;
     height: 100%;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
     border-radius: var(--news-card-radius);
     overflow: hidden;
     /* El filo va como sombra interior y NO como `border`.
@@ -161,7 +187,36 @@ html.instagram-webview .news-card-container {
      * ahi fitTitleToSummary lo recorta. En movil la X de ocultar esta siempre
      * a la vista (10px + 36px), asi que alli el tope baja para no taparla. */
     padding-top: 12px;
+    transition:
+        transform 0s var(--flip-duration),
+        backface-visibility 0s var(--flip-duration) allow-discrete;
+}
+
+/* `backface-visibility: hidden` también crea capa aunque la tarjeta esté
+ * plana, así que en el frente solo va durante el giro. El reverso la conserva
+ * siempre: en reposo está oculto con `visibility` (que conserva su caja, así
+ * que se sigue midiendo y leyendo desde JS) y oculto no crea capa; quitársela
+ * lo dejaba ver en espejo durante el giro de vuelta. */
+.card-back {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.news-card.is-flipped > .card-front {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.news-card.is-flipped > :is(.card-front, .card-back) {
+    transition: none;
+}
+
+.news-card.is-flipped > .card-front {
     transform: rotateY(0deg);
+}
+
+.news-card.is-flipped > .card-back {
+    visibility: visible;
 }
 
 @media (max-width: 767px) {
@@ -215,6 +270,8 @@ html.instagram-webview .news-card-container {
 .card-back {
     background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
     transform: rotateY(180deg);
+    visibility: hidden;
+    transition: visibility 0s var(--flip-duration);
     padding: 15px;
     display: flex;
     flex-direction: column;
