@@ -1174,3 +1174,29 @@ class GeminiThinkingTests(SimpleTestCase):
             razonamiento_de('openai/gpt-oss-120b', AIModelSetting(thinking_level='HIGH')),
             ('low', 512),
         )
+
+
+class NewsImageSrcTests(SimpleTestCase):
+    """Las imágenes de noticias pasan por Cloudflare solo en producción."""
+
+    def test_en_produccion_va_por_cloudflare(self):
+        from django.test import override_settings
+        from .templatetags.news_images import CDN_OPTIONS, news_image_src
+        url = 'https://i.blogs.es/abc/foto/1024_2000.jpeg'
+        with override_settings(NEWS_IMAGE_CDN=True):
+            self.assertEqual(news_image_src(url), f'/cdn-cgi/image/{CDN_OPTIONS}/{url}')
+
+    def test_en_local_se_queda_la_original(self):
+        from django.test import override_settings
+        from .templatetags.news_images import news_image_src
+        url = 'https://i.blogs.es/abc/foto/1024_2000.jpeg'
+        with override_settings(NEWS_IMAGE_CDN=False):
+            self.assertEqual(news_image_src(url), url)
+
+    def test_no_toca_rutas_relativas_ni_vacios(self):
+        from django.test import override_settings
+        from .templatetags.news_images import news_image_src
+        with override_settings(NEWS_IMAGE_CDN=True):
+            self.assertEqual(news_image_src('/static/Img/News_Default.webp'), '/static/Img/News_Default.webp')
+            self.assertIsNone(news_image_src(None))
+            self.assertEqual(news_image_src(''), '')

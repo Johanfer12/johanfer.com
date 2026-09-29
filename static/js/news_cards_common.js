@@ -199,7 +199,15 @@
         delete card.dataset.flipLocked;
     };
 
+    // Dos escalones: si falla la versión de Cloudflare (news_images.py), se
+    // prueba el original del medio, y solo si ese también falla, la genérica.
     const useFallbackImage = (image) => {
+        const originalSrc = image?.dataset?.originalSrc;
+        if (originalSrc && image.dataset.originalTried !== 'true' && image.getAttribute('src') !== originalSrc) {
+            image.dataset.originalTried = 'true';
+            image.src = originalSrc;
+            return;
+        }
         const fallbackSrc = image?.dataset?.fallbackSrc;
         if (!image || !fallbackSrc || image.dataset.fallbackApplied === 'true') return;
         image.dataset.fallbackApplied = 'true';

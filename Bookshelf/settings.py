@@ -29,6 +29,9 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+# Imágenes de noticias por Cloudflare Images (my_news/templatetags/news_images.py).
+# Solo en producción: en local no hay /cdn-cgi/.
+NEWS_IMAGE_CDN = os.getenv('NEWS_IMAGE_CDN', str(not DEBUG)).lower() in ('true', '1', 'yes')
 VISITS_ALLOW_LOCAL_WITHOUT_LOGIN = os.getenv(
     'VISITS_ALLOW_LOCAL_WITHOUT_LOGIN',
     'False',

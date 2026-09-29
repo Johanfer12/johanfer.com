@@ -313,7 +313,9 @@
         const title = normalizeText(front?.querySelector('.news-title')?.textContent) || 'Sin titulo';
         const summary = normalizeText(back?.querySelector('.news-description')?.textContent) || 'Sin resumen disponible';
         const imageEl = front?.querySelector('.news-image');
-        const imageUrl = imageEl?.currentSrc || imageEl?.src || '';
+        // El original del medio y no la versión de Cloudflare: el proxy lo
+        // pide sin cabecera Accept y recibiría el mismo JPEG dando un rodeo.
+        const imageUrl = imageEl?.dataset.originalSrc || imageEl?.currentSrc || imageEl?.src || '';
         const link = container?.querySelector('.source-link')?.href || window.location.href;
         return { header, title, summary, imageUrl, link };
     };

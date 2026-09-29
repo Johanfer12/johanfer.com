@@ -1,10 +1,10 @@
-{% load static sanitizers news_comments %}
+{% load static sanitizers news_comments news_images %}
 <div class="news-card-container" id="{{ card_id_prefix|default:'news' }}-{{ article.id }}" data-news-id="{{ article.id }}" data-published-at="{{ article.published_date|date:'c' }}" data-created-at="{{ article.created_at|date:'c' }}">
     <div class="news-card">
         <div class="card-front">
             <div class="news-media-zone">
                 {% if article.image_url %}
-                <img src="{{ article.image_url }}" data-fallback-src="{% static 'Img/News_Default.webp' %}" alt="{{ article.title }}" class="news-image" loading="lazy" decoding="async">
+                <img src="{{ article.image_url|news_image_src }}" data-original-src="{{ article.image_url }}" data-fallback-src="{% static 'Img/News_Default.webp' %}" alt="{{ article.title }}" class="news-image" loading="lazy" decoding="async">
                 {% else %}
                 <img src="{% static 'Img/News_Default.webp' %}" data-fallback-src="{% static 'Img/News_Default.webp' %}" alt="Imagen no disponible" class="news-image" loading="lazy" decoding="async">
                 {% endif %}
