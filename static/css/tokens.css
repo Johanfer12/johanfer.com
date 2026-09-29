@@ -27,6 +27,12 @@
     --accent: #c6d6f5;
     --accent-strong: #8fb4e8;
     --accent-warm: #d6bc8f;
+    /* Superficie del contenido: tarjetas de estadísticas, Acerca de, 404.
+       Opaca a propósito. El vidrio (desenfoque + degradado translúcido) se
+       queda solo en la cabecera; puesto en todo, era el sello de plantilla. */
+    --surface: #111a37;
+    --surface-border: rgba(207, 220, 241, 0.12);
+    --surface-shadow: 0 10px 24px rgba(2, 8, 18, 0.35);
     /* Botones flotantes (Libros, TV, Noticias). Eran el azul de acento al 86%
        sobre un blanco al 22%: encima de una portada clara se perdían, y el
        icono blanco sobre azul claro apenas contrastaba. Opacos y un tono más

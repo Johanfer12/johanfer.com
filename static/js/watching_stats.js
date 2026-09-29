@@ -1,12 +1,4 @@
-const POLAR_COLORS = [
-    'rgba(108, 142, 255, 0.72)',  // azul
-    'rgba(164, 124, 255, 0.68)',  // morado
-    'rgba(222, 188, 122, 0.72)',  // dorado
-    'rgba(96, 196, 232, 0.68)',   // cian
-    'rgba(214, 132, 196, 0.66)',  // rosa-violeta
-    'rgba(126, 217, 173, 0.66)',  // verde menta
-    'rgba(240, 156, 130, 0.68)',  // coral
-];
+// Gráficas de TV. La base (paleta, ejes, etiquetas) está en charts_common.js.
 
 // Series y películas por año (barras agrupadas)
 new Chart(document.getElementById('perYearChart'), {
@@ -17,40 +9,29 @@ new Chart(document.getElementById('perYearChart'), {
             {
                 label: 'Series',
                 data: showsPerYear,
-                backgroundColor: PALETTE.blue.bg,
-                borderColor: PALETTE.blue.border,
-                borderWidth: 1
+                ...barStyle(PALETTE.blue),
             },
             {
                 label: 'Películas',
                 data: moviesPerYear,
-                backgroundColor: PALETTE.purple.bg,
-                borderColor: PALETTE.purple.border,
-                borderWidth: 1
+                ...barStyle(PALETTE.purple),
             }
         ]
     },
     options: {
         ...commonOptions,
         scales: {
-            ...commonOptions.scales,
-            y: {
-                ...commonOptions.scales.y,
-                beginAtZero: true,
-                suggestedMax: paddedAxisMax([...showsPerYear, ...moviesPerYear]),
-                ticks: {
-                    color: 'white',
-                    precision: 0
-                }
-            }
+            x: categoryAxis(),
+            y: valueAxis([...showsPerYear, ...moviesPerYear]),
         },
         plugins: {
             legend: {
                 position: 'bottom',
                 labels: {
-                    color: 'white',
-                    boxWidth: isMobileChart ? 12 : 24,
-                    padding: isMobileChart ? 10 : 12,
+                    color: TICK_COLOR,
+                    boxWidth: 12,
+                    boxHeight: 12,
+                    padding: isMobileChart ? 10 : 14,
                     font: {
                         size: isMobileChart ? 11 : 12
                     }
@@ -69,60 +50,40 @@ new Chart(document.getElementById('perYearChart'), {
     }
 });
 
-// Mis calificaciones (área polar: obras por cantidad de estrellas)
+// Mis calificaciones. Era un gráfico polar, que obliga a comparar áreas de
+// cuñas; unas barras con las estrellas en el eje se leen de un vistazo y son
+// las mismas que las de Libros. Llegan de menor a mayor nota: se invierten
+// para que las cinco estrellas queden arriba.
 new Chart(document.getElementById('ratingsChart'), {
-    type: 'polarArea',
+    type: 'bar',
     data: {
-        labels: ratingsLabels,
+        labels: [...ratingsLabels].reverse(),
         datasets: [{
-            data: ratingsValues,
-            backgroundColor: POLAR_COLORS,
-            borderColor: 'rgba(10, 16, 32, 0.55)',
-            borderWidth: 2
+            label: 'Títulos',
+            data: [...ratingsValues].reverse(),
+            ...barStyle(PALETTE.gold, { horizontal: true }),
         }]
     },
     options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: {
-            padding: isMobileChart ? 10 : 4
-        },
+        ...commonOptions,
+        indexAxis: 'y',
         scales: {
-            r: {
-                ticks: {
-                    color: 'rgba(238, 243, 251, 0.7)',
-                    backdropColor: 'transparent',
-                    precision: 0
-                },
-                grid: { color: 'rgba(255, 255, 255, 0.12)' },
-                angleLines: { color: 'rgba(255, 255, 255, 0.12)' }
-            }
+            x: valueAxis(ratingsValues),
+            y: categoryAxis(),
         },
         plugins: {
-            legend: {
-                position: isMobileChart ? 'bottom' : 'right',
-                labels: {
-                    color: 'white',
-                    boxWidth: isMobileChart ? 14 : 20,
-                    padding: isMobileChart ? 8 : 10,
-                    font: {
-                        size: isMobileChart ? 11 : 12
-                    }
-                }
-            },
-            datalabels: {
-                display: !isMobileChart,
-                color: 'white',
-                font: {
-                    weight: 'bold'
-                },
-                formatter: (value) => formatNumber(value)
-            }
+            legend: { display: false },
+            datalabels: valueLabels({
+                clamp: true,
+                offset: 4,
+                size: isMobileChart ? 10 : 12,
+            })
         },
         animation: {
-            animateRotate: true,
-            animateScale: true,
-            duration: 2000
+            x: {
+                duration: 2000,
+                from: 0
+            }
         }
     }
 });
@@ -135,33 +96,15 @@ new Chart(document.getElementById('decadesChart'), {
         datasets: [{
             label: 'Títulos',
             data: decadesValues,
-            backgroundColor: PALETTE.gold.bg,
-            borderColor: PALETTE.gold.border,
-            borderWidth: 1
+            ...barStyle(PALETTE.blue, { horizontal: true }),
         }]
     },
     options: {
         ...commonOptions,
         indexAxis: 'y',
         scales: {
-            x: {
-                beginAtZero: true,
-                suggestedMax: paddedAxisMax(decadesValues),
-                ticks: {
-                    color: 'white',
-                    precision: 0
-                },
-                grid: { color: GRID_COLOR }
-            },
-            y: {
-                ticks: {
-                    color: 'white',
-                    font: {
-                        size: isMobileChart ? 11 : 12
-                    }
-                },
-                grid: { color: GRID_COLOR }
-            }
+            x: valueAxis(decadesValues),
+            y: categoryAxis(),
         },
         plugins: {
             legend: { display: false },

@@ -41,7 +41,7 @@ SITE_NAME = 'Rincón de Johan'
 # completo no cabe: Android corta alrededor de los 12 caracteres y iOS aún
 # antes, así que sin esto el icono se vería como "Rincón de Jo...".
 SITE_SHORT_NAME = 'Rincón'
-SITE_TAGLINE = 'Un poco de mi mundo...'
+SITE_TAGLINE = 'Un poco de mis intereses...'
 SITE_META_DESCRIPTION = 'Mis libros, música, series y noticias en un solo lugar.'
 
 

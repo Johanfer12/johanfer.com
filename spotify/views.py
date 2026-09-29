@@ -4,6 +4,13 @@ from django.db.models import Count
 from django.db.models.functions import TruncMonth
 import json
 
+# Meses a mano y no con strftime('%B'): ese depende del locale del sistema, que
+# en la Pi y en local es inglés, y la gráfica salía con «February 2017».
+MONTH_NAMES = (
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+)
+
 TOP_PLAYLIST_ID = '1sZ3u7s7hpzjTc9I5BgwEb'
 TOP_PLAYLIST_URL = f'https://open.spotify.com/playlist/{TOP_PLAYLIST_ID}'
 TOP_PLAYLIST_EMBED_URL = f'https://open.spotify.com/embed/playlist/{TOP_PLAYLIST_ID}?utm_source=generator&theme=0'
@@ -46,7 +53,7 @@ def spotify_stats(request):
         total=Count('id')
     ).order_by('month')
 
-    months_labels = [entry['month'].strftime('%B %Y') for entry in songs_by_month]
+    months_labels = [f"{MONTH_NAMES[entry['month'].month - 1]} {entry['month'].year}" for entry in songs_by_month]
     months_values = [entry['total'] for entry in songs_by_month]
 
     context = {
