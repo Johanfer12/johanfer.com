@@ -114,9 +114,11 @@ window.createInfiniteScroll = function ({container, endpoint, params, render, on
     return {applySearch};
 };
 
-// Escapado por el DOM, que es el que sabe de verdad qué hay que escapar.
+// Escapado por el DOM para el texto, más las comillas a mano: `innerHTML` no
+// las escapa, y el resultado también va dentro de atributos (aria-label, href,
+// alt), donde un título con comillas cerraría el atributo.
 window.escapeHtml = function (value) {
     const div = document.createElement('div');
     div.textContent = value || '';
-    return div.innerHTML;
+    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 };

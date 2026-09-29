@@ -641,6 +641,33 @@ class WatchingViewTests(TestCase):
 
         self.assertTrue(response.json()['cards'][0]['needs_rating'])
 
+    def test_the_alert_links_to_the_simkl_page(self):
+        item = self._create_episode(500, 1, 1, timezone.now())
+        item.detail_url = 'https://simkl.com/tv/642632/the-oa/'
+        item.save(update_fields=['detail_url'])
+        self._login_owner()
+
+        response = self.client.get(reverse('watching:index'))
+
+        self.assertContains(response, 'href="https://simkl.com/tv/642632/the-oa/"')
+
+    def test_trakt_history_links_through_the_simkl_redirect(self):
+        # Lo heredado de Trakt solo tiene la ficha de Trakt: se llega a Simkl por TMDB.
+        item = self._create_movie(42, timezone.now())
+        item.source = 'trakt'
+        item.detail_url = 'https://trakt.tv/movies/algo-2025'
+        item.save(update_fields=['source', 'detail_url'])
+        self._login_owner()
+
+        response = self.client.get(
+            reverse('watching:index'), {'tipo': 'peliculas'}, HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+
+        self.assertEqual(
+            response.json()['cards'][0]['simkl_url'],
+            'https://api.simkl.com/redirect?to=Simkl&tmdb=42&type=movie',
+        )
+
     def test_rewatched_movie_groups_and_shows_play_count(self):
         now = timezone.now()
         for i in range(2):

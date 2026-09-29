@@ -6,16 +6,20 @@ let currentTipo = 'series';
 let currentOrden = '';
 
 // Aviso de "sin calificar": el mismo marcado que pinta la plantilla, que solo
-// lo manda cuando la sesión es la del dueño del historial.
-const ratingAlert = `
-    <div class="rating-alert" title="Sin calificar" role="img" aria-label="Sin calificar">
+// lo manda cuando la sesión es la del dueño del historial. Con ficha de Simkl
+// es un enlace a ella, que es donde se califica.
+const ratingAlert = (card) => {
+    const icon = `
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
             <path class="rating-alert-shape" d="M10.28 3.3 1.57 18.6a2 2 0 0 0 1.74 2.99h17.38a2 2 0 0 0 1.74-2.99L13.72 3.3a2 2 0 0 0-3.44 0z"/>
             <rect class="rating-alert-mark" x="11" y="8.9" width="2" height="5.9" rx="1"/>
             <rect class="rating-alert-mark" x="11" y="16.4" width="2" height="2.2" rx="1"/>
-        </svg>
-    </div>
-`;
+        </svg>`;
+    if (!card.simkl_url) {
+        return `<div class="rating-alert" title="Sin calificar" role="img" aria-label="Sin calificar">${icon}</div>`;
+    }
+    return `<a class="rating-alert" href="${escapeHtml(card.simkl_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Calificar ${escapeHtml(card.title)} en Simkl" title="Sin calificar: abrir en Simkl">${icon}</a>`;
+};
 
 const posterImg = (card) => `
     <img src="${escapeHtml(card.poster_url)}"
@@ -33,7 +37,7 @@ const createWatchItem = (card) => {
             <div class="book-cover"${card.cover_color ? ` style="--cover-color: ${escapeHtml(card.cover_color)}"` : ''} role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-watch-${card.id}" aria-label="Ver detalles de ${escapeHtml(card.title)}" onclick="openModal('watch-${card.id}')">
                 ${posterImg(card)}
                 ${card.is_watching ? '<div class="watching-ribbon"><span>Viendo</span></div>' : ''}
-                ${card.needs_rating ? ratingAlert : ''}
+                ${card.needs_rating ? ratingAlert(card) : ''}
             </div>
         </div>
     `;

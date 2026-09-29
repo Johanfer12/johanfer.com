@@ -70,7 +70,9 @@ window.addEventListener('click', function(event) {
 
 // Delegación para incluir las portadas añadidas por el scroll infinito.
 document.addEventListener('keydown', function(event) {
-    const cover = event.target.closest('.book-cover[role="button"]');
+    // Un enlace dentro de la portada (el aviso de "sin calificar") se activa
+    // solo; si no, Enter abriría el enlace y además el modal.
+    const cover = event.target.closest('a') ? null : event.target.closest('.book-cover[role="button"]');
     if (cover && (event.key === 'Enter' || event.key === ' ')) {
         event.preventDefault();
         cover.click();

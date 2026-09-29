@@ -88,6 +88,23 @@ class WatchedItem(models.Model):
         return f"show_{self.tmdb_id}_{self.part_poster.replace('/', '')}.webp"
 
     @property
+    def simkl_url(self):
+        """Ficha en Simkl, que es donde se califica.
+
+        Lo sincronizado ya trae la suya en `detail_url`. Lo heredado de Trakt solo
+        tiene la de Trakt, así que se usa la redirección de Simkl por id de TMDB,
+        que no pide credenciales y lleva a la ficha exacta.
+        """
+        if self.detail_url.startswith('https://simkl.com/'):
+            return self.detail_url
+        kind = 'show' if self.media_type == 'episode' else 'movie'
+        if self.tmdb_id:
+            return f"https://api.simkl.com/redirect?to=Simkl&tmdb={self.tmdb_id}&type={kind}"
+        if self.imdb_id:
+            return f"https://api.simkl.com/redirect?to=Simkl&imdb={self.imdb_id}"
+        return ''
+
+    @property
     def display_label(self):
         if self.media_type == 'episode':
             if self.season is not None and self.episode is not None:

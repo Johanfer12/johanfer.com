@@ -196,6 +196,19 @@ a:hover {
     z-index: 2;
 }
 
+/* Es un enlace a la ficha de Simkl: la zona de toque se amplía a 44 × 44 sin
+ * agrandar el icono. Va en ::before porque ::after es el tooltip (base.css). */
+a.rating-alert::before {
+    content: '';
+    position: absolute;
+    inset: -7px;
+}
+
+a.rating-alert:focus-visible {
+    outline: 2px solid #b7d4ff;
+    outline-offset: 2px;
+}
+
 .rating-alert svg {
     display: block;
     width: 18px;

@@ -202,6 +202,7 @@ def watching(request):
                 'overview': sanitize_html(latest.overview) if latest.overview else '',
                 'is_watching': card.get('is_watching', False),
                 'needs_rating': card.get('needs_rating', False),
+                'simkl_url': latest.simkl_url if card.get('needs_rating') else '',
             })
         return JsonResponse({
             'cards': card_data,
