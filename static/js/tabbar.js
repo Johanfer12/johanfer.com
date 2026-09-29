@@ -16,7 +16,11 @@
     let lastY = window.scrollY;
     let ticking = false;
 
-    const setHidden = hidden => bar.classList.toggle('is-hidden', hidden);
+    // La clase en <html> es la que baja los botones flotantes (header.css).
+    const setHidden = (hidden) => {
+        bar.classList.toggle('is-hidden', hidden);
+        document.documentElement.classList.toggle('tabbar-hidden', hidden);
+    };
 
     const update = () => {
         ticking = false;
