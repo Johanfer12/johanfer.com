@@ -16,15 +16,16 @@
             min-height: 100vh;
             color: #f2f5fb;
         }
+        /* Sólida, como el resto de tarjetas: el vidrio se queda en la cabecera. */
         .login-container {
-            background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
-            border: 1px solid rgba(207, 220, 241, 0.27);
-            backdrop-filter: blur(16px) saturate(120%);
-            -webkit-backdrop-filter: blur(16px) saturate(120%);
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
             padding: 30px 40px;
             border-radius: var(--radius-md);
-            box-shadow: 0 20px 36px rgba(2, 8, 18, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            box-shadow: var(--shadow-md);
             text-align: center;
+            width: min(360px, calc(100vw - 32px));
+            box-sizing: border-box;
         }
         .login-container h2 {
             margin-bottom: 25px;
@@ -43,6 +44,7 @@
         .login-container input[type="text"],
         .login-container input[type="password"] {
             width: 100%;
+            min-height: 44px;
             padding: 10px;
             border: 1px solid rgba(207, 220, 241, 0.27);
             background-color: rgba(20, 31, 48, 0.72);
@@ -50,19 +52,21 @@
             border-radius: var(--radius-sm);
             box-sizing: border-box; /* Para incluir padding en el width */
         }
+        /* El morado de los botones del sitio (--fab-bg) y 44 px de alto. */
         .login-container button {
-            padding: 10px 25px;
-            background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
-            color: #06101f;
-            border: 1px solid rgba(207, 220, 241, 0.3);
+            min-height: 44px;
+            padding: 10px 28px;
+            background: var(--fab-bg);
+            color: #f2f5fb;
+            border: 1px solid var(--glass-border);
             border-radius: var(--radius-sm);
             cursor: pointer;
-            font-size: 1em;
-            transition: background-color 0.3s ease;
+            font: inherit;
+            font-weight: 600;
             margin-top: 10px;
         }
         .login-container button:hover {
-            background: linear-gradient(165deg, rgba(255, 255, 255, 0.3), rgba(143, 180, 232, 0.94));
+            background: var(--fab-bg-hover);
         }
         .errorlist {
             color: #ff4d4d;
@@ -90,7 +94,7 @@
         <h2>Iniciar sesión</h2>
 
         {% if form.errors %}
-            <p style="color: #ff4d4d;">Tu usuario y contraseña no coinciden. Inténtalo de nuevo.</p>
+            <p class="errorlist">Tu usuario y contraseña no coinciden. Inténtalo de nuevo.</p>
         {% endif %}
 
         <form method="post" action="{% url 'my_news:news_login' %}">

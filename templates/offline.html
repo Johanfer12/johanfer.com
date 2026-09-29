@@ -10,6 +10,21 @@
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     <!-- Los estilos van embebidos: esta página tiene que pintarse sin red. -->
     <style>
+        /* Nunito, como el resto del sitio. Los dos ficheros están en la caché
+         * del service worker (PWA_PRECACHE_STATIC), así que cargan sin red; si
+         * faltaran, cae a la del sistema. */
+        @font-face {
+            font-family: 'Nunito Sans';
+            src: url('{% static 'fonts/nunito-sans-300.woff2' %}') format('woff2');
+            font-weight: normal;
+            font-display: optional;
+        }
+        @font-face {
+            font-family: 'Nunito Sans';
+            src: url('{% static 'fonts/nunito-sans-600.woff2' %}') format('woff2');
+            font-weight: 600 800;
+            font-display: optional;
+        }
         html, body {
             height: 100%;
             margin: 0;
@@ -22,7 +37,7 @@
         body {
             background: #070715;
             color: #e6e8f0;
-            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+            font-family: 'Nunito Sans', system-ui, -apple-system, "Segoe UI", sans-serif;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -45,17 +60,21 @@
             color: #a8adc0;
             line-height: 1.5;
         }
+        /* Los mismos valores que --fab-bg y --radius-sm de tokens.css, escritos
+         * a mano porque esta página no carga los tokens. */
         button {
-            background: #2b3350;
-            color: #e6e8f0;
-            border: 1px solid #3c456a;
-            border-radius: 999px;
-            padding: 10px 24px;
-            font-size: 1rem;
+            background: linear-gradient(165deg, #5e44ad, #34216f);
+            color: #f2f5fb;
+            border: 1px solid rgba(207, 220, 241, 0.27);
+            border-radius: 10px;
+            min-height: 44px;
+            padding: 10px 28px;
+            font: inherit;
+            font-weight: 600;
             cursor: pointer;
         }
         button:hover {
-            background: #374063;
+            background: linear-gradient(165deg, #6d52c0, #3f2a82);
         }
     </style>
 </head>
