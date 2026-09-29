@@ -109,12 +109,6 @@ a:hover {
     border-radius: var(--radius-sm);
     border: 1px solid var(--card-border);
     box-shadow: var(--shadow-md);
-    /* Hueco mientras carga la portada (la Pi no es instantánea): el color
-     * medio de la propia imagen (home_page/cover_colors.py), rebajado hacia el
-     * fondo para que una portada blanca no destelle en la rejilla oscura. Sin
-     * color anotado, el degradado de siempre. */
-    background: linear-gradient(165deg, rgba(30, 42, 72, 0.85), rgba(13, 20, 38, 0.92));
-    background: color-mix(in srgb, var(--cover-color, #1a2440) 72%, #0b142c);
 }
 
 .book-cover:focus-visible,
@@ -123,6 +117,16 @@ a:hover {
     outline-offset: 3px;
 }
 
+/* Hueco mientras carga la portada (la Pi no es instantánea): el color medio
+ * de la propia imagen (home_page/cover_colors.py), rebajado hacia el fondo para
+ * que una portada blanca no destelle en la rejilla oscura. Sin color anotado,
+ * el degradado de siempre.
+ *
+ * Va en la <img> y NO en .book-cover. Debajo de la imagen, el fondo redondeado
+ * de la caja se seguía rasterizando con la portada ya cargada, y era la mitad
+ * del raster del scroll: medido en un Helio G99 en Películas, 750 ms frente a
+ * 480 y el doble de fotogramas tarde. En la propia imagen, Chrome se salta el
+ * fondo en cuanto hay una imagen opaca que lo tapa entero. */
 .book-cover img {
     max-width: 100%;
     max-height: 100%;
@@ -130,6 +134,8 @@ a:hover {
     object-fit: cover;
     width: 100%;
     height: 100%;
+    background: linear-gradient(165deg, rgba(30, 42, 72, 0.85), rgba(13, 20, 38, 0.92));
+    background: color-mix(in srgb, var(--cover-color, #1a2440) 72%, #0b142c);
 }
 
 .book-cover:hover {
