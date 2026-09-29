@@ -27,18 +27,33 @@
     --accent: #c6d6f5;
     --accent-strong: #8fb4e8;
     --accent-warm: #d6bc8f;
+    /* Radios. Había diecinueve valores distintos (5, 6, 7, 8, 9, 10, 11, 12,
+       14, 15, 16, 18, 20, 22, 28...) repartidos sin criterio, y cada pieza se
+       veía de una familia distinta. Cinco escalones:
+         xs    etiquetas, tooltips, chips
+         sm    botones, campos, portadas y tarjetas de noticia
+         md    tarjetas de contenido y modales
+         lg    contenedores grandes (la portada, paneles)
+         pill  píldoras
+       Los de 1-3 px (rayas finas) y los 50% (círculos) se quedan tal cual. */
+    --radius-xs: 6px;
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
+    --radius-pill: 999px;
     /* Superficie del contenido: tarjetas de estadísticas, Acerca de, 404.
        Opaca a propósito. El vidrio (desenfoque + degradado translúcido) se
        queda solo en la cabecera; puesto en todo, era el sello de plantilla. */
     --surface: #111a37;
     --surface-border: rgba(207, 220, 241, 0.12);
     --surface-shadow: 0 10px 24px rgba(2, 8, 18, 0.35);
-    /* Botones flotantes (Libros, TV, Noticias). Eran el azul de acento al 86%
-       sobre un blanco al 22%: encima de una portada clara se perdían, y el
-       icono blanco sobre azul claro apenas contrastaba. Opacos y un tono más
-       hondos, el icono queda a ~4,5:1. */
-    --fab-bg: linear-gradient(165deg, #7fa3dd, #4f74b3);
-    --fab-bg-hover: linear-gradient(165deg, #8fb0e6, #5c82c2);
+    /* Botones flotantes (Libros, TV, Noticias). Morado oscuro y opaco: sobre
+       una portada clara el azul translúcido de antes se perdía, y el icono
+       blanco queda por encima de 7:1. Son cuadrados con el radio de los
+       botones de la cabecera (--radius-sm), para que se lean como la misma
+       familia. */
+    --fab-bg: linear-gradient(165deg, #5e44ad, #34216f);
+    --fab-bg-hover: linear-gradient(165deg, #6d52c0, #3f2a82);
     --fab-bg-warm: linear-gradient(165deg, #dcc497, #a8894f);
     --fab-bg-warm-hover: linear-gradient(165deg, #e4cea4, #b8995c);
 }

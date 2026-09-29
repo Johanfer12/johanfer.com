@@ -78,6 +78,12 @@
         {% endif %}
     </div>
 
+    <button type="button" class="book-scroll-top-btn news-scroll-top" id="bookScrollTopBtn" title="Volver arriba" aria-label="Volver arriba">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" aria-hidden="true">
+                <path d="M214.6 41.4c-12.5-12.5-32.8-12.5-45.3 0l-160 160c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L160 141.3V480c0 17.7 14.3 32 32 32s32-14.3 32-32V141.3L329.4 246.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3l-160-160z"/>
+            </svg>
+        </button>
+
     <div class="news-actions-menu" id="newsActionsMenu">
         <div class="news-actions-list" id="newsActionsList" aria-label="Acciones de noticias">
             <button class="reader-btn" id="readerBtn" title="Modo lectura con voz" aria-label="Modo lectura con voz">
@@ -165,6 +171,7 @@
     <script src="{% static 'js/news_cards_common.js' %}"></script>
     <script src="{% static 'js/news_comments.js' %}"></script>
     <script src="{% static 'js/news_script.js' %}"></script>
+    <script src="{% static 'js/books_scroll_top.js' %}"></script>
     <script src="{% static 'js/reader_mode.js' %}"></script>
     <script src="{% static 'js/background_motion.js' %}"></script>
 </body>

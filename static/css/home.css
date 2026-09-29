@@ -74,7 +74,7 @@ body::after {
     backdrop-filter: blur(30px) saturate(190%) brightness(0.86);
     -webkit-backdrop-filter: blur(30px) saturate(190%) brightness(0.86);
     padding: 46px;
-    border-radius: 28px;
+    border-radius: var(--radius-lg);
     /* Dos capas: una corta y oscura que hace de contacto y otra ancha y difusa
      * que hace de ambiente. Una sola sombra difusa se lee como niebla, no como
      * relieve; el borde duro de la primera es lo que da el volumen. */
@@ -161,7 +161,7 @@ body::after {
     position: relative;
     isolation: isolate;
     text-align: center;
-    border-radius: 20px;
+    border-radius: var(--radius-lg);
     transition: transform 0.2s ease;
 }
 
@@ -224,7 +224,7 @@ body::after {
 .main-icon a:focus-visible {
     outline: 2px solid var(--accent-warm);
     outline-offset: 3px;
-    border-radius: 14px;
+    border-radius: var(--radius-md);
 }
 
 @media (max-width: 1080px) {
@@ -273,7 +273,7 @@ body::after {
         max-height: calc(100dvh - 1.5rem);
         min-height: 0;
         padding: clamp(18px, min(9vw, 5.4dvh), 40px) clamp(12px, 4vw, 22px);
-        border-radius: 20px;
+        border-radius: var(--radius-lg);
     }
 
     .main-icons-container {
@@ -337,11 +337,11 @@ body::after {
     /* Pantalla baja: los tamanos ya bajan solos por el termino dvh, asi que
      * aqui solo quedan las esquinas, que no escalan con nada. */
     .content-container {
-        border-radius: 18px;
+        border-radius: var(--radius-md);
     }
 
     .main-icon {
-        border-radius: 16px;
+        border-radius: var(--radius-md);
     }
 }
 

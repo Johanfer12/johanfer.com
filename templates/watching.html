@@ -147,6 +147,11 @@
     </div>
 
     <div class="fab-stack" id="fabStack">
+        <button type="button" class="book-scroll-top-btn" id="bookScrollTopBtn" title="Volver arriba" aria-label="Volver arriba">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" aria-hidden="true">
+                <path d="M214.6 41.4c-12.5-12.5-32.8-12.5-45.3 0l-160 160c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L160 141.3V480c0 17.7 14.3 32 32 32s32-14.3 32-32V141.3L329.4 246.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3l-160-160z"/>
+            </svg>
+        </button>
         <div class="fab-menu" id="fabMenu">
             <button class="book-search-btn watch-search" id="watchSearchBtn" title="Buscar" aria-label="Buscar">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true">
@@ -166,6 +171,7 @@
     </div>
 
     {% include 'footer.html' %}
+    <script src="{% static 'js/books_scroll_top.js' %}"></script>
     <script src="{% static 'js/modal.js' %}"></script>
     <script src="{% static 'js/infinite_scroll_core.js' %}"></script>
     <script src="{% static 'js/watching_scroll.js' %}"></script>

@@ -23,7 +23,7 @@
     height: 350px;
     position: relative;
     padding: 16px 12px 20px;
-    border-radius: 14px;
+    border-radius: var(--radius-md);
     border: 1px solid var(--surface-border);
     background: var(--surface);
     box-shadow: var(--surface-shadow);

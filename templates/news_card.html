@@ -4,9 +4,9 @@
         <div class="card-front">
             <div class="news-media-zone">
                 {% if article.image_url %}
-                <img src="{{ article.image_url }}" data-fallback-src="{% static 'Img/News_Default.png' %}" alt="{{ article.title }}" class="news-image" loading="lazy" decoding="async">
+                <img src="{{ article.image_url }}" data-fallback-src="{% static 'Img/News_Default.webp' %}" alt="{{ article.title }}" class="news-image" loading="lazy" decoding="async">
                 {% else %}
-                <img src="{% static 'Img/News_Default.png' %}" data-fallback-src="{% static 'Img/News_Default.png' %}" alt="Imagen no disponible" class="news-image" loading="lazy" decoding="async">
+                <img src="{% static 'Img/News_Default.webp' %}" data-fallback-src="{% static 'Img/News_Default.webp' %}" alt="Imagen no disponible" class="news-image" loading="lazy" decoding="async">
                 {% endif %}
             </div>
             <div class="news-front-text">

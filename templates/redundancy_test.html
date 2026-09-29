@@ -14,7 +14,7 @@
             margin: 30px auto;
             padding: 20px;
             background: rgba(0, 0, 0, 0.8);
-            border-radius: 10px;
+            border-radius: var(--radius-sm);
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         }
         
@@ -32,7 +32,7 @@
             color: #fff;
             padding: 15px;
             background: rgba(20, 20, 20, 0.5);
-            border-radius: 8px;
+            border-radius: var(--radius-sm);
         }
 
         /* Estilos para las pestañas */
@@ -86,7 +86,7 @@
             background: rgba(255, 255, 255, 0.2);
             color: white;
             padding: 2px 6px;
-            border-radius: 10px;
+            border-radius: var(--radius-sm);
             font-size: 0.75em;
             margin-left: 6px;
             font-weight: normal;
@@ -133,14 +133,14 @@
             flex: 1;
             padding: 15px;
             background: rgba(30, 30, 30, 0.5);
-            border-radius: 8px;
+            border-radius: var(--radius-sm);
             margin: 0 10px;
         }
 
         .single-news-item {
             padding: 15px;
             background: rgba(30, 30, 30, 0.5);
-            border-radius: 8px;
+            border-radius: var(--radius-sm);
             margin-bottom: 20px;
         }
         
@@ -152,7 +152,7 @@
             background: #ff4444;
             color: white;
             padding: 5px 15px;
-            border-radius: 20px;
+            border-radius: var(--radius-lg);
             font-weight: bold;
             box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
         }
@@ -213,7 +213,7 @@
             .redundancy-container {
                 margin: 15px;
                 padding: 15px;
-                border-radius: 8px;
+                border-radius: var(--radius-sm);
             }
 
             .redundancy-header {
@@ -364,7 +364,7 @@
             width: 80%;
             margin: 20px auto;
             background-color: rgba(255, 255, 255, 0.1);
-            border-radius: 5px;
+            border-radius: var(--radius-xs);
             overflow: hidden;
             height: 30px;
             display: flex;
@@ -426,7 +426,7 @@
         .redundancy-container {
             background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
             border: 1px solid rgba(207, 220, 241, 0.27);
-            border-radius: 18px;
+            border-radius: var(--radius-md);
             box-shadow: 0 20px 40px rgba(2, 8, 18, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
             backdrop-filter: blur(16px) saturate(120%);
             -webkit-backdrop-filter: blur(16px) saturate(120%);
@@ -482,7 +482,7 @@
         .load-more-button {
             padding: 9px 18px;
             border: 1px solid rgba(198, 214, 242, 0.24);
-            border-radius: 10px;
+            border-radius: var(--radius-sm);
             color: #eef3fb;
             background: rgba(255, 255, 255, 0.055);
             font: inherit;
@@ -520,8 +520,8 @@
                 <div style="margin-bottom: 15px;">
                     <label for="date-picker" style="color: #00a8ff; margin-right: 10px;">Seleccionar fecha:</label>
                     <input type="date" id="date-picker" value="{{ current_date|date:'Y-m-d' }}"
-                           style="padding: 5px; border-radius: 5px; border: 1px solid #ccc; background: #333; color: #fff;">
-                    <button id="load-date" style="margin-left: 10px; padding: 5px 15px; background: #00a8ff; color: white; border: none; border-radius: 5px; cursor: pointer;">Cargar</button>
+                           style="padding: 5px; border-radius: var(--radius-xs); border: 1px solid #ccc; background: #333; color: #fff;">
+                    <button id="load-date" style="margin-left: 10px; padding: 5px 15px; background: #00a8ff; color: white; border: none; border-radius: var(--radius-xs); cursor: pointer;">Cargar</button>
                 </div>
                 <strong>Estadísticas del {{ current_date|date:"d/m/Y" }}: Total {{ total_today }}</strong>
 
@@ -610,10 +610,10 @@
                         <div style="margin-bottom: 20px;">
                             <h3 style="color: #00a8ff; margin-bottom: 15px;">Redundancia por Fuente ({{ current_date|date:"d/m/Y" }})</h3>
                             {% for stat in source_stats %}
-                            <div class="source-stat-item" style="background: rgba(30, 30, 30, 0.5); padding: 15px; margin-bottom: 15px; border-radius: 8px; border-left: 4px solid {% if stat.redundancy_percentage > 50 %}#ff4444{% elif stat.redundancy_percentage > 25 %}#ffbb33{% else %}#00a8ff{% endif %};">
+                            <div class="source-stat-item" style="background: rgba(30, 30, 30, 0.5); padding: 15px; margin-bottom: 15px; border-radius: var(--radius-sm); border-left: 4px solid {% if stat.redundancy_percentage > 50 %}#ff4444{% elif stat.redundancy_percentage > 25 %}#ffbb33{% else %}#00a8ff{% endif %};">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                                     <h4 style="margin: 0; color: #fff; font-size: 1.1em;">{{ stat.name }}</h4>
-                                    <span style="background: {% if stat.redundancy_percentage > 50 %}#ff4444{% elif stat.redundancy_percentage > 25 %}#ffbb33{% else %}#00a8ff{% endif %}; color: white; padding: 4px 12px; border-radius: 15px; font-weight: bold;">
+                                    <span style="background: {% if stat.redundancy_percentage > 50 %}#ff4444{% elif stat.redundancy_percentage > 25 %}#ffbb33{% else %}#00a8ff{% endif %}; color: white; padding: 4px 12px; border-radius: var(--radius-md); font-weight: bold;">
                                         {{ stat.redundancy_percentage|floatformat:1 }}%
                                     </span>
                                 </div>
@@ -623,7 +623,7 @@
                                     <span>No redundantes: <strong style="color: #00a8ff;">{{ stat.non_redundant_today }}</strong></span>
                                 </div>
                                 <!-- Barra de progreso -->
-                                <div style="width: 100%; background: rgba(255, 255, 255, 0.1); border-radius: 5px; overflow: hidden; height: 8px; margin-top: 10px;">
+                                <div style="width: 100%; background: rgba(255, 255, 255, 0.1); border-radius: var(--radius-xs); overflow: hidden; height: 8px; margin-top: 10px;">
                                     <div style="height: 100%; background: {% if stat.redundancy_percentage > 50 %}#ff4444{% elif stat.redundancy_percentage > 25 %}#ffbb33{% else %}#00a8ff{% endif %}; width: {{ stat.redundancy_percentage }}%; transition: width 0.5s ease;"></div>
                                 </div>
                             </div>

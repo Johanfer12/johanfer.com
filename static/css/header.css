@@ -5,7 +5,7 @@
     height: 80px;
     display: flex;
     align-items: center;
-    border-radius: 16px;
+    border-radius: var(--radius-md);
     box-shadow: 0 14px 30px rgba(2, 8, 18, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.22);
     padding: 0 30px;
     max-width: 85%;
@@ -85,7 +85,7 @@
     justify-content: center;
     width: 40px;
     height: 40px;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     color: rgba(242, 245, 251, 0.6);
     transition: color 0.2s ease, background-color 0.2s ease;
 }
@@ -143,7 +143,7 @@
     margin-left: 0;
     width: 38px;
     height: 38px;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -175,34 +175,23 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 
-/* Nombre del botón al pasar el ratón o llegar con el teclado. Antes era el
- * `title` nativo, que tarda un segundo en salir y no se ve con el teclado.
- * Solo con puntero fino: en táctil el primer toque navegaría igualmente. */
-.header-nav [data-tip] {
-    position: relative;
+/* Tooltips de la cabecera: el estilo es el común (base.css); aquí solo se
+ * bajan, porque encima de la cabecera no hay sitio. */
+:is(.header-nav, .header-sections) [data-tip]::after {
+    bottom: auto;
+    top: calc(100% + 8px);
+    transform: translate(-50%, -4px);
+    z-index: 20;
 }
 
-:is(.header-nav, .header-sections) [data-tip]::after {
-    content: attr(data-tip);
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 50%;
-    transform: translate(-50%, -4px);
-    padding: 5px 9px;
-    border-radius: 7px;
-    background: rgba(11, 20, 44, 0.94);
-    border: 1px solid rgba(198, 214, 242, 0.2);
-    box-shadow: 0 6px 14px rgba(2, 8, 18, 0.45);
-    color: #f2f5fb;
-    font-size: 12.5px;
-    font-weight: 500;
-    line-height: 1.2;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
-    z-index: 20;
+@media (hover: hover) and (pointer: fine) {
+    :is(.header-nav, .header-sections) [data-tip]:hover::after {
+        transform: translate(-50%, 0);
+    }
+}
+
+:is(.header-nav, .header-sections) [data-tip]:focus-visible::after {
+    transform: translate(-50%, 0);
 }
 
 /* El último botón pega con el borde derecho: su etiqueta se alinea a la
@@ -214,21 +203,9 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-    :is(.header-nav, .header-sections) [data-tip]:hover::after {
-        opacity: 1;
-        visibility: visible;
-        transform: translate(-50%, 0);
-    }
-
     .header-nav > [data-tip]:last-child:hover::after {
         transform: none;
     }
-}
-
-:is(.header-nav, .header-sections) [data-tip]:focus-visible::after {
-    opacity: 1;
-    visibility: visible;
-    transform: translate(-50%, 0);
 }
 
 .header-nav > [data-tip]:last-child:focus-visible::after {
@@ -262,7 +239,7 @@
         height: auto;
         padding: 12px 14px;
         margin-bottom: 18px;
-        border-radius: 14px;
+        border-radius: var(--radius-md);
     }
 
     .header-title h1 {
@@ -418,7 +395,7 @@
     .header-nav :is(a, summary) {
         width: 38px;
         height: 38px;
-        border-radius: 10px;
+        border-radius: var(--radius-sm);
     }
 
     .header-nav :is(a, summary) svg {
@@ -477,7 +454,7 @@
     display: flex; flex-direction: column;
     width: max-content; min-width: 140px; max-width: calc(100vw - 40px); padding: 6px;
     border: 1px solid rgba(207, 220, 241, 0.27);
-    border-radius: 16px;
+    border-radius: var(--radius-md);
     /* El degradado de `.header`, pero algo mas cerrado: el panel se abre sobre
        las tarjetas y con la transparencia de la cabecera el texto se perdia
        contra lo que hubiera detras. Sigue dejando pasar el morado del fondo,
@@ -503,7 +480,7 @@
 .header-nav .header-tools-panel a {
     width: auto; height: auto; min-height: 30px; padding: 6px 10px;
     justify-content: center; text-align: center; font-size: 13.5px; font-weight: 700;
-    border: 1px solid transparent; border-radius: 9px;
+    border: 1px solid transparent; border-radius: var(--radius-sm);
     background: transparent; box-shadow: none; transform: none;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }

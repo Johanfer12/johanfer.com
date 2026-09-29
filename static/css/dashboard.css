@@ -2,7 +2,7 @@
     background: var(--surface);
     border: 1px solid var(--surface-border);
     padding: 20px 30px;
-    border-radius: 18px;
+    border-radius: var(--radius-md);
     box-shadow: var(--surface-shadow);
     width: 90%;
     max-width: 1400px;
@@ -30,7 +30,7 @@ h1, h3 {
 .message {
     padding: 1rem;
     margin-bottom: 1rem;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     background-color: rgba(19, 32, 52, 0.7);
     color: #f2f5fb;
     border: 1px solid rgba(198, 214, 242, 0.16);
@@ -59,15 +59,18 @@ h1, h3 {
     width: 100%;
     height: clamp(520px, calc(100svh - 213px), 860px);
     border: 0;
-    border-radius: 12px;
-    background: #121212;
-    box-shadow: 0 18px 38px rgba(2, 8, 18, 0.5);
+    /* El interior lo pinta Spotify y no se puede tocar; lo que sí es nuestro
+     * es el borde, que va como el de las tarjetas (radio, filo y sombra). El
+     * fondo es el que se ve hasta que carga: antes su gris #121212. */
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    box-shadow: 0 0 0 1px var(--surface-border), var(--surface-shadow);
 }
 
 .music-section {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
     border: 1px solid rgba(198, 214, 242, 0.16);
-    border-radius: 14px;
+    border-radius: var(--radius-md);
     padding: 1rem;
     width: 95%;
     margin: 0 auto;
@@ -87,7 +90,7 @@ h1, h3 {
     padding: 0.8rem;
     background-color: rgba(19, 32, 52, 0.56);
     border: 1px solid rgba(198, 214, 242, 0.14);
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     transition: transform 0.2s ease, border-color 0.2s ease;
     position: relative;
 }
@@ -101,7 +104,7 @@ h1, h3 {
     width: 60px;
     height: 60px;
     object-fit: cover;
-    border-radius: 6px;
+    border-radius: var(--radius-xs);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
 }
 

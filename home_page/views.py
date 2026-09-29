@@ -50,6 +50,7 @@ PWA_PRECACHE_STATIC = (
     'fonts/nunito-sans-600.woff2',
     'css/tokens.css',
     'css/base.css',
+    'js/tooltips.js',
     # La portada, que es la pantalla de arranque de la app.
     'css/home.css',
     'js/pwa.js',

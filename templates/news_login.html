@@ -22,7 +22,7 @@
             backdrop-filter: blur(16px) saturate(120%);
             -webkit-backdrop-filter: blur(16px) saturate(120%);
             padding: 30px 40px;
-            border-radius: 14px;
+            border-radius: var(--radius-md);
             box-shadow: 0 20px 36px rgba(2, 8, 18, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
             text-align: center;
         }
@@ -47,7 +47,7 @@
             border: 1px solid rgba(207, 220, 241, 0.27);
             background-color: rgba(20, 31, 48, 0.72);
             color: #f2f5fb;
-            border-radius: 8px;
+            border-radius: var(--radius-sm);
             box-sizing: border-box; /* Para incluir padding en el width */
         }
         .login-container button {
@@ -55,7 +55,7 @@
             background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
             color: #06101f;
             border: 1px solid rgba(207, 220, 241, 0.3);
-            border-radius: 8px;
+            border-radius: var(--radius-sm);
             cursor: pointer;
             font-size: 1em;
             transition: background-color 0.3s ease;
