@@ -10,7 +10,7 @@
     border: 1px solid rgba(207, 220, 241, 0.27);
     border-radius: var(--radius-sm);
     background: rgba(9, 16, 28, 0.62);
-    box-shadow: 0 12px 24px rgba(2, 8, 18, 0.3);
+    box-shadow: var(--shadow-md);
 }
 
 .filter-grid {
@@ -128,7 +128,7 @@
     border: 1px solid rgba(207, 220, 241, 0.27);
     border-radius: var(--radius-sm);
     background: rgba(9, 16, 28, 0.62);
-    box-shadow: 0 10px 22px rgba(2, 8, 18, 0.34);
+    box-shadow: var(--shadow-md);
 }
 
 .country-card {
@@ -263,7 +263,7 @@
     border: 1px solid rgba(151, 181, 228, 0.38);
     border-radius: var(--radius-md);
     background: #101b2d;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+    box-shadow: var(--shadow-lg);
     color: #eaf2ff;
 }
 
@@ -535,7 +535,7 @@ body.modal-open {
     border: 1px solid rgba(223, 109, 124, 0.42);
     border-radius: var(--radius-md);
     background: #101b2d;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-lg);
     color: #eaf2ff;
     padding: 22px;
 }

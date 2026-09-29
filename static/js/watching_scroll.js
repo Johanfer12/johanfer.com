@@ -42,10 +42,10 @@ const createWatchItem = (card) => {
         infoRows += `<p><strong>Año</strong><br>${escapeHtml(String(card.year))}</p>`;
     }
     if (card.user_rating_html) {
-        infoRows += `<p><strong>Mi Calificación</strong><br>${card.user_rating_html}</p>`;
+        infoRows += `<p><strong>Mi calificación</strong><br>${card.user_rating_html}</p>`;
     }
     if (card.public_rating_html) {
-        infoRows += `<p><strong>Calificación General</strong><br>${card.public_rating_html}</p>`;
+        infoRows += `<p><strong>Calificación general</strong><br>${card.public_rating_html}</p>`;
     }
     infoRows += `<p><strong>Lo vi el...</strong><br>${escapeHtml(card.watched_at)}</p>`;
 
@@ -93,10 +93,10 @@ const createWatchModal = (card) => {
         metaLeft += '<p><strong>Tipo:</strong> Película</p>';
     }
     if (card.user_rating_html) {
-        metaLeft += `<p><strong>Mi Calificación:</strong> ${card.user_rating_html}</p>`;
+        metaLeft += `<p><strong>Mi calificación:</strong> ${card.user_rating_html}</p>`;
     }
     if (card.public_rating_html) {
-        metaLeft += `<p><strong>Calificación General:</strong> ${card.public_rating_html}</p>`;
+        metaLeft += `<p><strong>Calificación general:</strong> ${card.public_rating_html}</p>`;
     }
 
     let metaRight = '';

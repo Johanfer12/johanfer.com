@@ -58,10 +58,10 @@
                         <p><strong>Año</strong><br>{{ card.latest.year }}</p>
                     {% endif %}
                     {% if card.latest.user_rating %}
-                        <p><strong>Mi Calificación</strong><br>{{ card.latest.user_rating|rating_stars }}</p>
+                        <p><strong>Mi calificación</strong><br>{{ card.latest.user_rating|rating_stars }}</p>
                     {% endif %}
                     {% if card.latest.public_rating %}
-                        <p><strong>Calificación General</strong><br>{{ card.latest.public_rating|rating_stars }}</p>
+                        <p><strong>Calificación general</strong><br>{{ card.latest.public_rating|rating_stars }}</p>
                     {% endif %}
                     <p><strong>Lo vi el...</strong><br>{{ card.latest.watched_at|date:"d/m/Y" }}</p>
                 </div>
@@ -92,10 +92,10 @@
                                     <p><strong>Tipo:</strong> Película</p>
                                 {% endif %}
                                 {% if card.latest.user_rating %}
-                                    <p><strong>Mi Calificación:</strong> {{ card.latest.user_rating|rating_stars }}</p>
+                                    <p><strong>Mi calificación:</strong> {{ card.latest.user_rating|rating_stars }}</p>
                                 {% endif %}
                                 {% if card.latest.public_rating %}
-                                    <p><strong>Calificación General:</strong> {{ card.latest.public_rating|rating_stars }}</p>
+                                    <p><strong>Calificación general:</strong> {{ card.latest.public_rating|rating_stars }}</p>
                                 {% endif %}
                             </div>
                             <div>

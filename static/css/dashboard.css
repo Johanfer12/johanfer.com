@@ -105,7 +105,7 @@ h1, h3 {
     height: 60px;
     object-fit: cover;
     border-radius: var(--radius-xs);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+    box-shadow: var(--shadow-sm);
 }
 
 .song-details {
@@ -217,7 +217,7 @@ h1, h3 {
     .album-link .album-cover {
         width: 45px;
         height: 45px;
-        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5);
+        box-shadow: var(--shadow-sm);
     }
 }
 

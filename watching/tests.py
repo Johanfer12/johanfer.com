@@ -676,8 +676,8 @@ class WatchingViewTests(TestCase):
 
         response = self.client.get(reverse('watching:index'))
 
-        self.assertContains(response, 'Mi Calificación')
-        self.assertContains(response, 'Calificación General')
+        self.assertContains(response, 'Mi calificación')
+        self.assertContains(response, 'Calificación general')
         self.assertContains(response, '4.5 de 5')
 
     def test_stats_page_groups_by_tmdb_id(self):

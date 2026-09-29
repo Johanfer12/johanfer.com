@@ -41,12 +41,24 @@
     --radius-md: 14px;
     --radius-lg: 20px;
     --radius-pill: 999px;
+    /* Sombras de elevación: cuánto «flota» una pieza. Había una por regla
+       (0 6px 14px, 0 8px 20px, 0 10px 22px, 0 10px 24px...) con opacidades de
+       0,26 a 0,64. Tres niveles:
+         sm  controles pequeños, tooltips, chips
+         md  botones flotantes, tarjetas, paneles
+         lg  modales
+       Fuera de la escala, a propósito: brillos de color, anillos de foco,
+       sombras interiores, el relieve en capas de la cabecera, la de la barra
+       inferior (proyecta hacia arriba) y las aplanadas de móvil. */
+    --shadow-sm: 0 4px 12px rgba(2, 8, 18, 0.35);
+    --shadow-md: 0 10px 24px rgba(2, 8, 18, 0.42);
+    --shadow-lg: 0 30px 64px rgba(2, 8, 18, 0.6);
     /* Superficie del contenido: tarjetas de estadísticas, Acerca de, 404.
        Opaca a propósito. El vidrio (desenfoque + degradado translúcido) se
        queda solo en la cabecera; puesto en todo, era el sello de plantilla. */
     --surface: #111a37;
     --surface-border: rgba(207, 220, 241, 0.12);
-    --surface-shadow: 0 10px 24px rgba(2, 8, 18, 0.35);
+    --surface-shadow: var(--shadow-md);
     /* Botones flotantes (Libros, TV, Noticias). Morado oscuro y opaco: sobre
        una portada clara el azul translúcido de antes se perdía, y el icono
        blanco queda por encima de 7:1. Son cuadrados con el radio de los

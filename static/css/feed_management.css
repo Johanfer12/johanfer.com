@@ -518,7 +518,7 @@
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
     background: transparent;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.64);
+    box-shadow: var(--shadow-lg);
 }
 
 .management-modal::backdrop {

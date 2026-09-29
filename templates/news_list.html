@@ -131,8 +131,12 @@
         </div>
 
         <button class="news-actions-toggle" id="newsActionsToggle" type="button" title="Mostrar acciones" aria-label="Mostrar acciones" aria-expanded="false" aria-controls="newsActionsList">
-            <svg class="news-actions-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18 15l-6-6l-6 6"></path>
+            {# El mismo ⋮ / ✕ que el menú de Libros y TV. Era una flecha hacia arriba y, con «Volver arriba» justo encima, quedaban dos flechas iguales apiladas. #}
+            <svg class="news-actions-icon-open" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M6 3a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm0 5a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm0 5a2 2 0 1 1 4 0 2 2 0 0 1-4 0z"/>
+            </svg>
+            <svg class="news-actions-icon-close" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M3.3 3.3a1 1 0 0 1 1.4 0L8 6.6l3.3-3.3a1 1 0 1 1 1.4 1.4L9.4 8l3.3 3.3a1 1 0 0 1-1.4 1.4L8 9.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L6.6 8 3.3 4.7a1 1 0 0 1 0-1.4z"/>
             </svg>
         </button>
     </div>
