@@ -16,7 +16,7 @@
 
     <div id="watch-container" class="book-container"
          data-has-next="{% if cards.has_next %}true{% else %}false{% endif %}"
-         data-fallback-poster="{% static 'Img/News_Default.png' %}"
+         data-fallback-poster="{% static 'Img/Poster_Default.svg' %}"
          data-watch-noun="{{ watch_noun }}">
         {% for card in cards %}
         <div class="book-item">
@@ -25,7 +25,7 @@
                     <img src="{{ MEDIA_URL }}Posters/{{ card.poster_name }}"
                          alt="{{ card.latest.title }}"
                          loading="lazy"
-                         onerror="this.onerror=null;this.src='{% static 'Img/News_Default.png' %}';">
+                         onerror="this.onerror=null;this.src='{% static 'Img/Poster_Default.svg' %}';">
                     {% if card.is_watching %}
                     <div class="watching-ribbon"><span>Viendo</span></div>
                     {% endif %}
@@ -76,7 +76,7 @@
                         <img src="{{ MEDIA_URL }}Posters/{{ card.poster_name }}"
                              alt="{{ card.latest.title }}"
                              loading="lazy"
-                             onerror="this.onerror=null;this.src='{% static 'Img/News_Default.png' %}';">
+                             onerror="this.onerror=null;this.src='{% static 'Img/Poster_Default.svg' %}';">
                     </div>
                     <div class="book-modal-info">
                         <h2 id="title-watch-{{ card.latest.id }}">{{ card.latest.title }}</h2>

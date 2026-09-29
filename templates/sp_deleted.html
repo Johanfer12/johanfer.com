@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Canciones Eliminadas</title>
-    {% include 'head_meta.html' with meta_title='Canciones Eliminadas' meta_description='Historial de canciones eliminadas de favoritos en Spotify.' meta_image='Img/spotify-icon.svg' %}
+    <title>Canciones eliminadas</title>
+    {% include 'head_meta.html' with meta_title='Canciones eliminadas' meta_description='Historial de canciones eliminadas de favoritos en Spotify.' meta_image='Img/spotify-icon.svg' %}
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
@@ -19,7 +19,7 @@
         <div class="music-grid">
             <!-- Canciones eliminadas -->
             <div class="music-section full-width">
-                <h3>Canciones Eliminadas de Favoritos ({{ total_deleted }})</h3>
+                <h3>Canciones eliminadas de Favoritos ({{ total_deleted }})</h3>
                 <div class="song-list deleted-song-list">
                     {% for song in deleted_songs %}
                         <div class="song-item">

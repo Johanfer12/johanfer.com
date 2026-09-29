@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estadísticas de Lectura</title>
-    {% include 'head_meta.html' with meta_title='Estadísticas de Lectura' meta_description='Libros por año, calificaciones y páginas leídas.' meta_image='Img/library-icon.svg' meta_page_description='Estadísticas de lectura: libros por año, calificaciones y páginas leídas.' %}
+    <title>Estadísticas de lectura</title>
+    {% include 'head_meta.html' with meta_title='Estadísticas de lectura' meta_description='Libros por año, calificaciones y páginas leídas.' meta_image='Img/library-icon.svg' meta_page_description='Estadísticas de lectura: libros por año, calificaciones y páginas leídas.' %}
     {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/stats.css' %}">
@@ -19,19 +19,19 @@
         <div class="statistics-content">
             <div class="charts-row">
                 <div class="chart-container">
-                    <h3>Libros Leídos por Año</h3>
+                    <h3>Libros leídos por año</h3>
                     <div class="chart-canvas-frame">
                         <canvas id="booksPerYearChart"></canvas>
                     </div>
                 </div>
                 <div class="chart-container chart-container--side">
-                    <h3>Cantidad de Estrellas</h3>
+                    <h3>Libros por estrellas</h3>
                     <div class="chart-canvas-frame">
                         <canvas id="starsChart"></canvas>
                     </div>
                 </div>
                 <div class="chart-container">
-                    <h3>Páginas Leídas por Año</h3>
+                    <h3>Páginas leídas por año</h3>
                     <div class="chart-canvas-frame">
                         <canvas id="pagesPerYearChart"></canvas>
                     </div>

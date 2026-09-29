@@ -216,7 +216,7 @@ def sync_currently_reading(rss_url, folder_path):
                     book = Book(my_rating=0, date_read=None)
 
                 book.title = title
-                book.author = (entry.get("author_name") or "").strip() or "Unknown Author"
+                book.author = (entry.get("author_name") or "").strip() or "Autor desconocido"
                 book.cover_link = (entry.get("book_large_image_url") or entry.get("book_medium_image_url") or entry.get("book_image_url") or "").strip()
                 book.public_rating = (entry.get("average_rating") or "0.0").strip()
                 book.book_link = book_link
@@ -270,7 +270,7 @@ def refresh_books_data():
         title = (entry.get("title") or "").strip()
         try:
             book_link = normalize_goodreads_book_link(entry)
-            author = (entry.get("author_name") or "").strip() or "Unknown Author"
+            author = (entry.get("author_name") or "").strip() or "Autor desconocido"
             date_read = parse_rss_date(entry.get("user_read_at"))
 
             if not title or not date_read:

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estadísticas del Sistema</title>
+    <title>Estadísticas del sistema</title>
     {% include 'head_base.html' %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/news.css' %}">
@@ -169,7 +169,7 @@
 
     <div class="stats-container">
         <div class="stats-topbar">
-            <h1 class="stats-header">📊 Estadísticas del Sistema</h1>
+            <h1 class="stats-header">📊 Estadísticas del sistema</h1>
         </div>
 
         {% if error_message %}
@@ -181,7 +181,7 @@
         <!-- Información general del sistema -->
         <div class="stats-grid">
             <div class="stats-info">
-                <div class="stats-label">🖥️ Sistema Operativo</div>
+                <div class="stats-label">🖥️ Sistema operativo</div>
                 <div class="stats-value">{{ stats.system }}</div>
             </div>
 
@@ -204,7 +204,7 @@
 
             {% if stats.load_average != "N/A" %}
             <div class="stats-info">
-                <div class="stats-label">📈 Carga del Sistema (1m, 5m, 15m)</div>
+                <div class="stats-label">📈 Carga del sistema (1m, 5m, 15m)</div>
                 <div class="stats-value">{{ stats.load_average }}</div>
             </div>
             {% endif %}
@@ -214,7 +214,7 @@
         <div class="section-divider"></div>
 
         <!-- Estadísticas específicas de Raspberry Pi -->
-        <h2 class="raspberry-heading">🥧 Estadísticas Raspberry Pi</h2>
+        <h2 class="raspberry-heading">🥧 Estadísticas de la Raspberry Pi</h2>
 
         <div class="stats-grid">
             {% if stats.temperature %}
@@ -226,7 +226,7 @@
 
             {% if stats.voltage %}
             <div class="stats-info">
-                <div class="stats-label">⚡ Voltaje del Núcleo</div>
+                <div class="stats-label">⚡ Voltaje del núcleo</div>
                 <div class="stats-value">{{ stats.voltage }}</div>
             </div>
             {% endif %}
@@ -254,7 +254,7 @@
 
             {% if stats.throttled %}
             <div class="stats-info">
-                <div class="stats-label">⚠️ Estado de Limitaciones (Throttling)</div>
+                <div class="stats-label">⚠️ Estado de limitaciones (Throttling)</div>
                 <div class="stats-value">
                     {% if "No hay limitaciones" in stats.throttled %}
                         <span class="success-badge">✓ {{ stats.throttled }}</span>

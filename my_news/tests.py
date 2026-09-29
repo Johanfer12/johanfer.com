@@ -840,7 +840,7 @@ class NewsFeedOrderingTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'news_public.html')
         self.assertTrue(response.context['public_news_mode'])
-        self.assertContains(response, 'Noticias de Hoy')
+        self.assertContains(response, 'Noticias de hoy')
         self.assertContains(response, 'public latest')
         self.assertNotContains(response, 'public previous')
         self.assertContains(response, f'id="public-news-{latest_public_news.id}"')
