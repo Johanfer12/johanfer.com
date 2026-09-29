@@ -109,8 +109,12 @@ a:hover {
     border-radius: var(--radius-sm);
     border: 1px solid var(--card-border);
     box-shadow: var(--shadow-md);
-    /* Placeholder mientras carga la portada (la Pi no es instantánea) */
+    /* Hueco mientras carga la portada (la Pi no es instantánea): el color
+     * medio de la propia imagen (home_page/cover_colors.py), rebajado hacia el
+     * fondo para que una portada blanca no destelle en la rejilla oscura. Sin
+     * color anotado, el degradado de siempre. */
     background: linear-gradient(165deg, rgba(30, 42, 72, 0.85), rgba(13, 20, 38, 0.92));
+    background: color-mix(in srgb, var(--cover-color, #1a2440) 72%, #0b142c);
 }
 
 .book-cover:focus-visible,

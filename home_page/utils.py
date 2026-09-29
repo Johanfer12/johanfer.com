@@ -13,6 +13,7 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from Bookshelf.html_sanitizer import sanitize_html
+from . import cover_colors
 from .models import Book
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,8 @@ def download_as_webp(url, file_path, *, error_label):
         with open(temp_path, "wb") as f:
             f.write(response.content)
         convert_to_webp(temp_path, file_path)
+        # El color medio pinta el hueco de la tarjeta mientras carga la imagen.
+        cover_colors.remember(file_path)
     except Exception:
         logger.exception("Error descargando %s", error_label)
     finally:

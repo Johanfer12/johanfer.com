@@ -675,7 +675,8 @@ class DownloadAsWebpTests(TestCase):
             with Image.open(destino) as imagen:
                 self.assertEqual(imagen.format, 'WEBP')
                 self.assertEqual(imagen.size, (300, 450))
-            self.assertEqual(os.listdir(carpeta), ['portada.webp'])
+            # El webp y el índice de colores (home_page/cover_colors.py); ningún temporal.
+            self.assertEqual(sorted(os.listdir(carpeta)), ['.colors.json', 'portada.webp'])
 
     def test_a_failed_download_leaves_nothing_behind(self):
         with tempfile.TemporaryDirectory() as carpeta:
@@ -854,3 +855,55 @@ class SiteNavTests(TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertNotIn(b'<h1>Libros</h1>', response.content)
         self.assertIn('Rincón de Johan'.encode(), response.content)
+
+
+class CoverColorTests(TestCase):
+    """Color medio de las portadas para pintar el hueco mientras cargan."""
+
+    def setUp(self):
+        self.media = tempfile.mkdtemp()
+        self.covers = os.path.join(self.media, 'Covers')
+        os.makedirs(self.covers)
+        self.override = override_settings(MEDIA_ROOT=self.media)
+        self.override.enable()
+
+    def tearDown(self):
+        self.override.disable()
+        import shutil
+        shutil.rmtree(self.media, ignore_errors=True)
+
+    def _image(self, name, color):
+        # PNG y no WebP: WebP comprime con pérdida y movería el color un punto.
+        # El índice guarda lo que diga el nombre, así que la extensión da igual.
+        path = os.path.join(self.covers, name)
+        Image.new('RGB', (20, 30), color).save(path, 'PNG')
+        return path
+
+    def test_remember_writes_the_average_color_to_the_index(self):
+        from . import cover_colors
+
+        path = self._image('7.webp', (200, 40, 10))
+
+        self.assertEqual(cover_colors.remember(path), '#c8280a')
+        self.assertEqual(cover_colors.color_for('Covers', '7.webp'), '#c8280a')
+
+    def test_tag_paints_the_color_and_nothing_when_unknown(self):
+        from django.template import Context, Template
+        from . import cover_colors
+
+        cover_colors.remember(self._image('7.webp', (0, 128, 255)))
+        tpl = Template('{% load covers %}<i{% cover_style "Covers" id ".webp" %}>')
+
+        self.assertEqual(tpl.render(Context({'id': 7})), '<i style="--cover-color: #0080ff">')
+        self.assertEqual(tpl.render(Context({'id': 8})), '<i>')
+
+    def test_command_backfills_and_drops_colors_of_deleted_images(self):
+        from django.core.management import call_command
+        from . import cover_colors
+
+        self._image('1.webp', (10, 10, 10))
+        cover_colors.save_index(self.covers, {'borrada.webp': '#ffffff'})
+
+        call_command('cover_colors', stdout=io.StringIO())
+
+        self.assertEqual(cover_colors.load_index(self.covers), {'1.webp': '#0a0a0a'})

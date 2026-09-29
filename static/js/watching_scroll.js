@@ -30,7 +30,7 @@ const createWatchItem = (card) => {
 
     item.innerHTML = `
         <div class="book-info-container">
-            <div class="book-cover" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-watch-${card.id}" aria-label="Ver detalles de ${escapeHtml(card.title)}" onclick="openModal('watch-${card.id}')">
+            <div class="book-cover"${card.cover_color ? ` style="--cover-color: ${escapeHtml(card.cover_color)}"` : ''} role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-watch-${card.id}" aria-label="Ver detalles de ${escapeHtml(card.title)}" onclick="openModal('watch-${card.id}')">
                 ${posterImg(card)}
                 ${card.is_watching ? '<div class="watching-ribbon"><span>Viendo</span></div>' : ''}
                 ${card.needs_rating ? ratingAlert : ''}

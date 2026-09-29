@@ -9,6 +9,7 @@ from .models import VisitLog
 from .models import OwnerSignature
 from .middleware import get_client_ip
 from .visit_stats import badge_count, invalidate_badge, mark_seen
+from .cover_colors import color_for
 from django.db.models import Count, Sum
 from django.db.models import F, Q
 from django.urls import reverse
@@ -130,6 +131,7 @@ def bookshelf(request):
                 'is_reading': book.is_reading,
                 'book_link': book.goodreads_url,
                 'cover_image': f"{settings.MEDIA_URL}Covers/{book.id}.webp",
+                'cover_color': color_for('Covers', f"{book.id}.webp"),
                 'id': book.id,
                 'description': sanitize_html(book.description),
                 'genres': book.genres or '',

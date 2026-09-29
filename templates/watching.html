@@ -1,4 +1,4 @@
-{% load static sanitizers %}
+{% load static sanitizers covers %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -21,7 +21,7 @@
         {% for card in cards %}
         <div class="book-item">
             <div class="book-info-container">
-                <div class="book-cover" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-watch-{{ card.latest.id }}" aria-label="Ver detalles de {{ card.latest.title }}" onclick="openModal('watch-{{ card.latest.id }}')">
+                <div class="book-cover"{% cover_style "Posters" card.poster_name %} role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-watch-{{ card.latest.id }}" aria-label="Ver detalles de {{ card.latest.title }}" onclick="openModal('watch-{{ card.latest.id }}')">
                     <img src="{{ MEDIA_URL }}Posters/{{ card.poster_name }}"
                          alt="{{ card.latest.title }}"
                          loading="lazy"

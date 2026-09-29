@@ -1,4 +1,4 @@
-{% load static sanitizers %}
+{% load static sanitizers covers %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -19,7 +19,7 @@
         <div class="book-item">
             <div class="book-info-container">
                 <!-- Carátula con cursor "manito" y evento de apertura -->
-                <div class="book-cover" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-{{ book.id }}" aria-label="Ver detalles de {{ book.title }}" onclick="openModal('{{ book.id }}')">
+                <div class="book-cover"{% cover_style "Covers" book.id ".webp" %} role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-{{ book.id }}" aria-label="Ver detalles de {{ book.title }}" onclick="openModal('{{ book.id }}')">
                     <img src="{{ MEDIA_URL }}Covers/{{ book.id }}.webp" alt="{{ book.title }}">
                     {% if book.is_reading %}
                     <div class="watching-ribbon"><span>Leyendo</span></div>

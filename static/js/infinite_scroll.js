@@ -18,7 +18,7 @@ const createBookItem = (book) => {
 
     item.innerHTML = `
         <div class="book-info-container">
-            <div class="book-cover" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-${book.id}" aria-label="Ver detalles de ${escapeHtml(book.title)}" onclick="openModal('${book.id}')">
+            <div class="book-cover"${book.cover_color ? ` style="--cover-color: ${escapeHtml(book.cover_color)}"` : ''} role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-${book.id}" aria-label="Ver detalles de ${escapeHtml(book.title)}" onclick="openModal('${book.id}')">
                 <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(book.title)}">
                 ${readingRibbon}
             </div>

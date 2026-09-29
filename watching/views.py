@@ -10,6 +10,7 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from Bookshelf.html_sanitizer import sanitize_html
+from home_page.cover_colors import color_for
 from home_page.templatetags.sanitizers import rating_stars
 
 from .models import SimklSyncState, WatchedItem
@@ -187,6 +188,7 @@ def watching(request):
                 'title': latest.title,
                 'media_type': latest.media_type,
                 'poster_url': f"{settings.MEDIA_URL}Posters/{card['poster_name']}",
+                'cover_color': color_for('Posters', card['poster_name']),
                 'arc': card.get('arc', ''),
                 'detail_url': latest.detail_url or '#',
                 'year': latest.year,
