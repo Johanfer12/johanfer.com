@@ -270,3 +270,20 @@ html.background-motion-paused body::after {
 :is(.update-feed-btn, .undo-btn, .order-btn, .reader-btn, .book-scroll-top-btn)[data-tip]:focus-visible::after {
     transform: translate(0, -50%);
 }
+
+
+/* Mínimos de tamaño de letra (ver --text-* en tokens.css). `<small>` sin regla
+ * propia hereda `smaller` de su padre y en las fichas de Música bajaba a 10,7 px. */
+small {
+    font-size: max(var(--text-xs, 0.75rem), 0.8em);
+}
+
+/* En móvil, los campos a 16 px como mínimo: con menos, iOS amplía la página al
+ * enfocarlos y hay que deshacer el zoom a mano. Las casillas no llevan texto. */
+@media (max-width: 767px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select,
+    textarea {
+        font-size: max(var(--text-base, 1rem), 1em);
+    }
+}

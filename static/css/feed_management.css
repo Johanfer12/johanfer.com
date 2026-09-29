@@ -195,7 +195,7 @@
 .management-grid-words .status-pill,
 .management-grid-words .management-count {
     padding: 4px 7px;
-    font-size: 0.67rem;
+    font-size: var(--text-xs);
 }
 
 .management-grid-words .management-count {
@@ -241,7 +241,7 @@
     align-items: center;
     padding: 5px 9px;
     border-radius: var(--radius-pill);
-    font-size: 0.72rem;
+    font-size: var(--text-xs);
     white-space: nowrap;
 }
 
@@ -306,7 +306,7 @@
 
 .management-details dt {
     color: var(--text-secondary);
-    font-size: 0.7rem;
+    font-size: var(--text-xs);
     text-transform: uppercase;
     letter-spacing: 0.06em;
 }

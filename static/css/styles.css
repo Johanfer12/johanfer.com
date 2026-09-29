@@ -556,7 +556,8 @@ a:hover {
     .book-modal-content p {
         margin: 5px 0;
         padding: 0 13px;
-        font-size: clamp(0.82rem, 3.7vw, 0.92rem);
+        /* Metadatos de la ficha: texto secundario, no por debajo de 14 px. */
+        font-size: clamp(var(--text-sm), 3.9vw, 0.9375rem);
         line-height: 1.24;
     }
 
@@ -570,7 +571,8 @@ a:hover {
     .book-modal-content .book-description {
         margin-top: 10px;
         padding: 11px 13px;
-        font-size: clamp(0.84rem, 3.8vw, 0.94rem);
+        /* La sinopsis es lo que se lee: cuerpo de 16 px. */
+        font-size: var(--text-base);
         line-height: 1.42;
         text-align: left;
         overflow-wrap: anywhere;

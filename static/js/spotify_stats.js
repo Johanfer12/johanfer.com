@@ -99,7 +99,7 @@ new Chart(document.getElementById('artistsChart'), {
                 align: 'start',
                 clamp: true,
                 font: {
-                    size: isMobileChart ? 10 : 12
+                    size: isMobileChart ? 11 : 12
                 }
             }
         },
@@ -199,7 +199,7 @@ new Chart(document.getElementById('monthlyChart'), {
                     maxRotation: isMobileChart ? 45 : 0,
                     minRotation: isMobileChart ? 45 : 0,
                     font: {
-                        size: isMobileChart ? 10 : 12
+                        size: isMobileChart ? 11 : 12
                     }
                 },
                 grid: { display: false }

@@ -104,7 +104,7 @@ const categoryAxis = (extra = {}) => ({
     border: { display: false },
     ticks: {
         color: TICK_COLOR,
-        font: { size: isMobileChart ? 11 : 12 },
+        font: { size: 12 },
     },
     ...extra,
 });
@@ -172,7 +172,8 @@ const commonOptions = {
 const valueLabels = ({
     clamp = false,
     offset = 0,
-    size = isMobileChart ? 9 : 11,
+    // 11 px en móvil como mínimo: a 9 las cifras de las barras no se leían.
+    size = isMobileChart ? 11 : 12,
     formatter = formatNumber,
 } = {}) => ({
     // El máximo de cada serie en blanco y algo más grande; el resto, atenuado.

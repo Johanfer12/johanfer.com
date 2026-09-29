@@ -262,13 +262,13 @@
                 container?.classList.contains('inserting') ||
                 container?.classList.contains('collapsing')) return;
 
-            description.classList.remove('is-description-compact', 'is-description-tight');
+            description.classList.remove('is-description-compact');
             if (isMobile() || description.scrollHeight <= description.clientHeight + 1) return;
 
+            // Un solo escalón, de 15 a 14 px: es el mínimo del texto secundario
+            // (ver --text-sm). Había otro a 13; si a 14 no cabe, el cuadro ya
+            // tiene su propio scroll.
             description.classList.add('is-description-compact');
-            if (description.scrollHeight <= description.clientHeight + 1) return;
-
-            description.classList.add('is-description-tight');
         });
     };
 

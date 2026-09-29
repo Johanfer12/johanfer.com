@@ -35,7 +35,7 @@
     background: rgba(10, 20, 37, 0.72);
     color: #eaf2ff;
     padding: 8px 10px;
-    font-size: 0.84rem;
+    font-size: var(--text-sm);
 }
 
 .filter-input:focus {

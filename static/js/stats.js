@@ -53,7 +53,7 @@ new Chart(document.getElementById('starsChart'), {
             datalabels: valueLabels({
                 clamp: true,
                 offset: 4,
-                size: isMobileChart ? 10 : 12,
+                size: isMobileChart ? 11 : 12,
             })
         },
         animation: {

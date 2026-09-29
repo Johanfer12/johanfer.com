@@ -41,6 +41,24 @@
     --radius-md: 14px;
     --radius-lg: 20px;
     --radius-pill: 999px;
+    /* Tipografía. Los mínimos siguen lo habitual en la industria (Material y
+       WCAG toman 16 px como cuerpo de lectura; iOS, 17 pt, y amplía la página
+       al enfocar un campo de menos de 16 px):
+         xs    12  mínimo absoluto: pies, fechas, contadores, etiquetas
+         sm    14  texto secundario, metadatos
+         base  16  texto que se lee (párrafos, descripciones) y campos
+         md    18  subtítulos
+         lg    20  títulos de tarjeta y de modal
+         xl    24  títulos de sección
+         2xl   32  título de página grande
+       Nada que se lea por debajo de xs. */
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-base: 1rem;
+    --text-md: 1.125rem;
+    --text-lg: 1.25rem;
+    --text-xl: 1.5rem;
+    --text-2xl: 2rem;
     /* Sombras de elevación: cuánto «flota» una pieza. Había una por regla
        (0 6px 14px, 0 8px 20px, 0 10px 22px, 0 10px 24px...) con opacidades de
        0,26 a 0,64. Tres niveles:

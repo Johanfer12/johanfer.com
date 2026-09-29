@@ -89,7 +89,7 @@
 
     .about-content {
         max-width: 90%;
-        font-size: 14px;
+        font-size: var(--text-base);
         padding: 20px;
     }
 
@@ -128,7 +128,7 @@
         max-width: calc(100dvw - 16px);
         padding: 18px 14px;
         border-radius: var(--radius-md);
-        font-size: clamp(0.9rem, 3.9vw, 1rem);
+        font-size: var(--text-base);
         line-height: 1.45;
         text-align: left;
     }
@@ -164,6 +164,6 @@
 @media (max-width: 380px) {
     .about-content {
         padding: 16px 12px;
-        font-size: clamp(0.86rem, 3.8vw, 0.94rem);
+        font-size: var(--text-base);
     }
 }

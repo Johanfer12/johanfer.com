@@ -1058,11 +1058,6 @@ body.comments-modal-open {
         font-size: 14px;
         line-height: 1.44;
     }
-
-    .news-description.is-description-tight {
-        font-size: 13px;
-        line-height: 1.42;
-    }
 }
 
 @media (max-width: 767px) {
