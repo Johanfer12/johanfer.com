@@ -1,0 +1,166 @@
+/* Página de Retos. Reutiliza las tarjetas de stats.css; aquí solo lo propio. */
+
+.retos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+    gap: 24px;
+    margin: 12px 20px 0;
+}
+
+/* `.stats-page .chart-container` (stats.css, móvil) fija el alto y pesa más
+   que una sola clase: hay que igualar la especificidad. */
+.stats-page .retos-card {
+    height: auto;
+    min-height: 420px;
+    margin: 0;
+    max-width: none;
+    text-align: left;
+}
+
+.retos-card h3 { text-align: left; }
+
+.retos-lead {
+    margin: 0 0 12px;
+    font-size: var(--text-sm);
+    line-height: 1.4;
+    color: rgba(238, 243, 251, 0.82);
+}
+.retos-lead strong { color: #fff; }
+
+.retos-source {
+    margin: 10px 0 0;
+    font-size: var(--text-xs);
+    color: rgba(238, 243, 251, 0.6);
+}
+.retos-source a { color: inherit; text-decoration: underline; }
+
+.retos-boundaries {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.retos-donut { flex: 0 0 200px; height: 200px; }
+
+.retos-donut-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    line-height: 1;
+}
+.retos-donut-center strong { font-size: var(--text-2xl); }
+.retos-donut-center span { font-size: var(--text-xs); margin-top: 4px; color: rgba(238, 243, 251, 0.7); }
+
+.retos-legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 7px;
+    font-size: var(--text-sm);
+}
+.retos-legend em { font-style: normal; font-size: var(--text-xs); color: #e2bc72; }
+.retos-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 8px;
+    border-radius: 50%;
+}
+.retos-legend .is-crossed .retos-dot { background: #e0745c; }
+.retos-legend .is-safe .retos-dot { background: #5ec4e8; }
+.retos-legend .is-safe { color: rgba(238, 243, 251, 0.7); }
+
+.retos-line { flex: 1 1 auto; min-height: 260px; }
+
+.retos-soon {
+    margin: 40px 20px;
+    padding: 40px 20px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--surface-border);
+    background: var(--surface);
+    color: rgba(238, 243, 251, 0.7);
+}
+
+.retos-tema-btn { text-decoration: none; }
+.retos-tema-btn.is-active { background: var(--fab-bg-hover); outline: 2px solid #8fb4e8; }
+
+@media (max-width: 720px) {
+    .retos-grid { margin-left: 0; margin-right: 0; }
+    .retos-boundaries { flex-direction: column; align-items: stretch; }
+    .retos-donut { flex-basis: auto; width: 180px; height: 180px; align-self: center; }
+    .stats-page .retos-card { min-height: 0; }
+}
+
+/* Títulos y fuentes centrados. */
+.stats-page .retos-card h3,
+.retos-source { text-align: center; }
+
+/* Cada límite: nombre, «?» y, si se abre, su descripción a todo el ancho. */
+.retos-legend li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.retos-name { flex: 0 1 auto; }
+
+.retos-help {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    margin-left: 8px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(207, 220, 241, 0.4);
+    background: transparent;
+    color: #f2f5fb;
+    font: inherit;
+    font-size: var(--text-xs);
+    line-height: 1;
+    cursor: pointer;
+}
+.retos-help:hover,
+.retos-help[aria-expanded="true"] { background: rgba(207, 220, 241, 0.2); }
+
+
+/* «i» arriba a la derecha de cada gráfica: por qué importa. */
+.retos-card h3 { padding: 0 34px; }
+
+.retos-info {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(207, 220, 241, 0.4);
+    background: transparent;
+    color: #f2f5fb;
+    font: italic 700 var(--text-sm)/1 Georgia, serif;
+    cursor: pointer;
+}
+.retos-info:hover,
+.retos-info[aria-expanded="true"] { background: rgba(207, 220, 241, 0.2); }
+
+
+/* Columnas fijas: punto · nombre · «?». Así el «?» no salta de línea con los
+   nombres largos y todos quedan alineados a la derecha. */
+.retos-legend li {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    column-gap: 0;
+}
+.retos-legend .retos-dot { margin-right: 8px; }
+
+/* La info va en un modal, no en línea: así no se desbarata la tarjeta. */
+.retos-modal-content { width: min(540px, 92vw); overflow-y: auto; }
+.retos-modal-content h2 { padding-right: 36px; font-size: var(--text-lg); }
+.retos-modal-content p { font-size: var(--text-base); line-height: 1.55; white-space: pre-line; }

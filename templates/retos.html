@@ -1,0 +1,142 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retos: {{ tema_nombre }}</title>
+    {% include 'head_meta.html' with meta_title='Retos' meta_description='Los grandes retos de hoy en datos: cambio climático, economía e inteligencia artificial.' meta_image='Img/pwa-icon-512.png' %}
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    {% include 'head_base.html' %}
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+    <link rel="stylesheet" href="{% static 'css/stats.css' %}">
+    <link rel="stylesheet" href="{% static 'css/retos.css' %}">
+    {% if tema == 'clima' %}{% include 'head_charts.html' %}{% endif %}
+    {% include 'pwa_head.html' %}
+</head>
+<body class="has-header stats-page retos-page">
+    {% include 'header.html' %}
+    <div class="statistics-container">
+        <div class="statistics-content">
+            {% if tema == 'clima' %}
+            <div class="retos-grid">
+                <div class="chart-container retos-card">
+                    <h3>Límites planetarios superados</h3>
+                    <button type="button" class="retos-info" data-title="Límites planetarios superados" data-text="{{ info.limites }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead"><strong>{{ limites_superados }} de {{ limites_total }}</strong> fuera del margen seguro para la humanidad.</p>
+                    <div class="retos-boundaries">
+                        <div class="chart-canvas-frame retos-donut">
+                            <canvas id="boundariesChart"></canvas>
+                            <div class="retos-donut-center" aria-hidden="true"><strong>{{ limites_superados }}</strong><span>de {{ limites_total }}</span></div>
+                        </div>
+                        <ul class="retos-legend">
+                            {% for l in limites %}
+                            <li class="{% if l.superado %}is-crossed{% else %}is-safe{% endif %}">
+                                <span class="retos-dot" aria-hidden="true"></span><span class="retos-name">{{ l.nombre }}{% if l.nuevo %} <em>nuevo en 2025</em>{% endif %}</span>
+                                <button type="button" class="retos-help" data-title="{{ l.nombre }}" data-text="{{ l.descripcion }}" aria-haspopup="dialog" aria-label="Qué significa: {{ l.nombre }}">?</button>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://www.pik-potsdam.de/en/news/latest-news/seven-of-nine-planetary-boundaries-now-breached-2013-ocean-acidification-joins-the-danger-zone" target="_blank" rel="noopener">Planetary Health Check 2025</a>, Instituto de Potsdam (PIK).</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>El Niño 2026 frente a los dos anteriores</h3>
+                    <button type="button" class="retos-info" data-title="El Niño 2026 frente a los dos anteriores" data-text="{{ info.nino }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">Temperatura de una zona del Pacífico (Niño 3.4) sobre lo normal. En la semana del 23 de septiembre iba en <strong>+{{ nino34_comparacion.semanal }} °C</strong>, un récord.</p>
+                    <p class="retos-lead">Frente a los dos más fuertes antes de él, 1997 y 2015: en agosto iba <strong>{{ nino34_comparacion.diferencia }} °C por encima</strong> de ambos en el mismo mes (+{{ nino34_comparacion.ahora }} contra +{{ nino34_comparacion.mismo_mes.1997 }} y +{{ nino34_comparacion.mismo_mes.2015 }}), y los picos mensuales de aquellos fueron +{{ nino34_comparacion.pico.1997 }} y +{{ nino34_comparacion.pico.2015 }}.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="ninoChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://www.cpc.ncep.noaa.gov/data/indices/sstoi.indices" target="_blank" rel="noopener">NOAA CPC</a>, medias mensuales hasta agosto de 2026. Referencia 1991-2020.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Temperatura del mar</h3>
+                    <button type="button" class="retos-info" data-title="Temperatura del mar" data-text="{{ info.mar }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">En agosto de 2026 los océanos estaban <strong>+{{ resumen.mar_ahora }} °C</strong> sobre el promedio del siglo XX{% if resumen.mar_es_record %}: el mes más cálido de toda la serie desde 1850 (el récord anterior, +{{ resumen.mar_record_previo }} °C, fue en enero y febrero de 2024){% endif %}.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="marChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/global/time-series/globe/ocean/1/8/1850-2026" target="_blank" rel="noopener">NOAA NCEI</a>, océano global, anomalía mensual sobre 1901-2000.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>CO₂ en la atmósfera</h3>
+                    <button type="button" class="retos-info" data-title="CO₂ en la atmósfera" data-text="{{ info.co2 }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">La media de {{ resumen.co2_anio }} fue de <strong>{{ resumen.co2_anual }} ppm</strong> (partes por millón), {{ resumen.co2_sobre_limite }} por encima del límite seguro de 350; el máximo de mayo de 2026 llegó a {{ resumen.co2_maximo }}. Antes de la industria eran unos 280.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="co2Chart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://gml.noaa.gov/ccgg/trends/" target="_blank" rel="noopener">NOAA GML</a>, observatorio de Mauna Loa, media anual.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Temperatura del aire</h3>
+                    <button type="button" class="retos-info" data-title="Temperatura del aire" data-text="{{ info.aire }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead"><strong>{{ resumen.aire_anio_record }}</strong> fue el año más cálido medido: <strong>+{{ resumen.aire_valor_record }} °C</strong> sobre 1850-1900. De enero a agosto de 2026 va en <strong>+{{ resumen.aire_2026 }} °C</strong>{% if resumen.aire_2026_segundo %}, el segundo arranque más cálido de la serie (2024 y 2025 llevaban +{{ resumen.aire_2024_ene_ago }} y +{{ resumen.aire_2025_ene_ago }} en las mismas fechas){% endif %}.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="airChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/global/time-series/globe/land_ocean" target="_blank" rel="noopener">NOAA NCEI</a>, superficie global, sobre 1850-1900 (calculado con la propia serie).</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Nivel del mar</h3>
+                    <button type="button" class="retos-info" data-title="Nivel del mar" data-text="{{ info.nivel }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">En {{ resumen.nivel_anio }} el mar estaba unos <strong>{{ resumen.nivel_cm }} cm</strong> más alto que en 1993. El ritmo pasó de {{ resumen.nivel_ritmo_inicio }} mm al año en la primera década a {{ resumen.nivel_ritmo_actual }} en la última. La línea punteada prolonga esa tendencia: unos <strong>{{ resumen.nivel_2030 }} cm</strong> hacia 2030.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="nivelChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://sealevel.colorado.edu/" target="_blank" rel="noopener">CU Sea Level Research Group</a>, satélites. Media anual global; la punteada es una tendencia, no un pronóstico oficial.</p>
+                </div>
+            </div>
+            {% else %}
+            <div class="retos-soon">Este tema llega pronto.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="fab-stack" id="fabStack">
+        <div class="fab-menu" id="fabMenu">
+            <a class="book-sort-btn retos-tema-btn{% if tema == 'clima' %} is-active{% endif %}" href="?tema=clima" title="Cambio climático" aria-label="Cambio climático"{% if tema == 'clima' %} aria-current="true"{% endif %}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v9.2a5 5 0 1 0 6 0V5a3 3 0 0 0-3-3zm0 2a1 1 0 0 1 1 1v10.4l.5.3a3 3 0 1 1-3 0l.5-.3V5a1 1 0 0 1 1-1z"/></svg>
+            </a>
+            <a class="book-sort-btn retos-tema-btn{% if tema == 'economia' %} is-active{% endif %}" href="?tema=economia" title="Economía" aria-label="Economía"{% if tema == 'economia' %} aria-current="true"{% endif %}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20V4h2v14h16v2H3zm4-4v-5h3v5H7zm5 0V7h3v9h-3zm5 0v-7h3v7h-3z"/></svg>
+            </a>
+            <a class="book-sort-btn retos-tema-btn{% if tema == 'ia' %} is-active{% endif %}" href="?tema=ia" title="Inteligencia artificial" aria-label="Inteligencia artificial"{% if tema == 'ia' %} aria-current="true"{% endif %}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2h2v3h2V2h2v3h1a2 2 0 0 1 2 2v1h3v2h-3v2h3v2h-3v2h3v2h-3v1a2 2 0 0 1-2 2h-1v3h-2v-3h-2v3H9v-3H8a2 2 0 0 1-2-2v-1H3v-2h3v-2H3v-2h3V10H3V8h3V7a2 2 0 0 1 2-2h1V2zm-1 5v10h8V7H8z"/></svg>
+            </a>
+        </div>
+        <button type="button" class="fab-toggle" id="fabToggle" aria-expanded="false" aria-controls="fabMenu" title="Elegir tema" aria-label="Elegir tema">
+            <svg class="fab-icon-open" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M6 3a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm0 5a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm0 5a2 2 0 1 1 4 0 2 2 0 0 1-4 0z"/>
+            </svg>
+            <svg class="fab-icon-close" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M3.3 3.3a1 1 0 0 1 1.4 0L8 6.6l3.3-3.3a1 1 0 1 1 1.4 1.4L9.4 8l3.3 3.3a1 1 0 0 1-1.4 1.4L8 9.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L6.6 8 3.3 4.7a1 1 0 0 1 0-1.4z"/>
+            </svg>
+        </button>
+    </div>
+
+    <div id="modal-retos" class="modal" role="dialog" aria-modal="true" aria-labelledby="retos-modal-title" tabindex="-1">
+        <div class="modal-content retos-modal-content">
+            <button type="button" class="close" aria-label="Cerrar" onclick="closeModal('retos')">&times;</button>
+            <h2 id="retos-modal-title"></h2>
+            <p id="retos-modal-text"></p>
+        </div>
+    </div>
+
+    {% include 'footer.html' %}
+    {% if tema == 'clima' %}
+    {{ limites|json_script:"retos-limites" }}
+    {{ nino34|json_script:"retos-nino34" }}
+    {{ temp_mar|json_script:"retos-mar" }}
+    {{ co2|json_script:"retos-co2" }}
+    {{ aire|json_script:"retos-aire" }}
+    {{ nivel_mar|json_script:"retos-nivel" }}
+    <script src="{% static 'js/modal.js' %}"></script>
+    <script src="{% static 'js/charts_common.js' %}"></script>
+    <script src="{% static 'js/retos_stats.js' %}"></script>
+    {% endif %}
+    <script src="{% static 'js/fab_stack.js' %}"></script>
+    <script src="{% static 'js/background_motion.js' %}"></script>
+</body>
+</html>

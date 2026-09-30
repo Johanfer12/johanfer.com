@@ -7,6 +7,8 @@ vez, y la plantilla solo pinta.
 """
 from urllib.parse import parse_qs, urlparse
 
+from . import retos
+
 # Películas no tiene ruta propia: es /viendo/ con ?tipo=peliculas, la misma
 # vista que las series. Para la navegación es una sección aparte (en la
 # portada no: allí TV cubre las dos). Ver section_for.
@@ -92,6 +94,11 @@ def build(request):
         if origin:
             back = _back_to(origin)
         is_subpage = True
+    elif path == '/retos/':
+        # El tema que se está viendo (el flotante cambia ?tema=) va de subtítulo.
+        title = 'Retos futuros'
+        temas = dict(retos.TEMAS)
+        subtitle = temas.get(request.GET.get('tema'), temas[retos.TEMA_POR_DEFECTO])
     elif section:
         title = _SECTION_BY_KEY[section][0]
 
