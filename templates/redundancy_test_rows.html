@@ -13,12 +13,17 @@ entero eran 365 KB.
         <div class="similarity-score">{{ news.similarity_score|floatformat:4 }}</div>
 
         <div class="news-item original">
+            {% if news.similar_to %}
             <h3 class="news-title">{{ news.similar_to.title }}</h3>
             <div class="news-description">{{ news.similar_to.description|sanitize }}</div>
             <div class="news-meta">
                 <span class="news-source">{{ news.similar_to.source.name }}</span> -
                 {{ news.similar_to.published_date|date:"d/m/Y H:i" }}
             </div>
+            {% else %}
+            <h3 class="news-title">{{ news.similar_ref }}</h3>
+            <div class="news-meta">Noticia original ya purgada</div>
+            {% endif %}
         </div>
 
         <div class="news-item redundant-item">

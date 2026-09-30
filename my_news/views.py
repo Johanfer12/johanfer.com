@@ -1070,8 +1070,11 @@ def _redundancy_tab_queryset(tab, start_dt, end_dt):
         return day_qs.filter(
             is_ai_filtered=True, is_redundant=False
         ).select_related('source').order_by('-created_at', '-id')
+    # Un duplicado cuyo original ya se purgó no tiene `similar_to`, pero conserva
+    # su titular en `similar_ref`: sigue siendo un par que se puede revisar.
     return day_qs.filter(
-        is_redundant=True, similar_to__isnull=False
+        Q(similar_to__isnull=False) | ~Q(similar_ref=''),
+        is_redundant=True,
     ).select_related('similar_to', 'source', 'similar_to__source').order_by('-created_at', '-id')
 
 

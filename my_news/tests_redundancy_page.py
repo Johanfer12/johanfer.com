@@ -71,12 +71,22 @@ class RedundancyPageTests(TestCase):
         self.assertIn('La original', html)
         self.assertIn('0.9100', html)
 
-    def test_redundant_without_its_pair_is_left_out(self):
-        # Sin `similar_to` no hay nada con lo que comparar, y la fila saldría
-        # a medias.
+    def test_redundant_without_any_reference_is_left_out(self):
+        # Sin `similar_to` ni `similar_ref` no hay nada con lo que comparar, y
+        # la fila saldría a medias.
         self.make_news(is_redundant=True)
 
         self.assertEqual(self.rows(tab='redundant').json()['matched'], 0)
+
+    def test_redundant_with_purged_original_shows_its_title(self):
+        self.make_news(is_redundant=True, similar_ref='Titular del original purgado',
+                       similarity_score=0.95)
+
+        data = self.rows(tab='redundant').json()
+
+        self.assertEqual(data['matched'], 1)
+        self.assertIn('Titular del original purgado', data['html'])
+        self.assertIn('0.9500', data['html'])
 
     def test_rows_are_limited_to_the_requested_day(self):
         self.make_news(filtered_by=self.word, is_filtered=True)

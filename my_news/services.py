@@ -1442,9 +1442,11 @@ class FeedService:
                         source=source,
                         image_url=image_url,
                         is_ai_processed=ai_was_processed,
-                        # Conservar la referencia a la más parecida aunque no supere el umbral
+                        # Conservar la referencia a la más parecida aunque no supere el umbral.
+                        # La puntuación se guarda también si el vecino ya se purgó (su
+                        # vector dura un año, su fila 15 días); 0.0 es "sin comparación".
                         similar_to=similar_news,
-                        similarity_score=similarity_score if similar_news else None,
+                        similarity_score=similarity_score or None,
                     )
                     new_articles_count += 1
                 except Exception:
