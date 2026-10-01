@@ -190,6 +190,22 @@ El swap es **zram** (`zramswap.service`, `/etc/default/zramswap`: `ALGO=lz4`,
 gestionaba `dphys-swapfile`; ya no está instalado y su `/var/swap` se borró en
 octubre de 2026.
 
+El `config.txt` de fábrica es el de un equipo con pantalla. El de
+[`deploy/boot/config.txt`](boot/config.txt) apaga audio, cámara, detección de
+pantallas y el driver KMS, y deja la GPU en 16 MB. Requiere reiniciar:
+
+```bash
+sudo cp /boot/firmware/config.txt /boot/firmware/config.txt.bak
+sudo cp deploy/boot/config.txt /boot/firmware/config.txt
+ls /boot/firmware/start_cd.elf /boot/firmware/fixup_cd.dat   # gpu_mem=16 los necesita
+sudo cp deploy/modprobe-headless.conf /etc/modprobe.d/headless.conf
+sudo update-initramfs -u
+```
+
+El `modprobe-headless.conf` hace falta porque el árbol de dispositivos sigue
+anunciando cámara, códec y audio aunque el firmware recortado ya no los ofrezca:
+sin la lista negra, esos módulos se cargan igual y fallan en cada arranque.
+
 ### 2.10 El script de despliegue
 
 ```bash
