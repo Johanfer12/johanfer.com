@@ -202,6 +202,15 @@ sudo cp deploy/modprobe-headless.conf /etc/modprobe.d/headless.conf
 sudo update-initramfs -u
 ```
 
+En cada arranque journald avisa `system.journal corrupted or uncleanly shut
+down, renaming and replacing`, y no es ni lo uno ni lo otro. La placa no tiene
+reloj de hardware: `fake-hwclock` guarda la hora al apagar y journald sigue
+escribiendo un segundo más, así que al arrancar el reloj vuelve a un instante
+anterior a la última entrada y journald aparta el fichero por tener entradas
+«del futuro». Los apartados (`*.journal~`) están cerrados (`State: OFFLINE`),
+pasan `journalctl --verify` y se siguen leyendo; el límite de tamaño los cuenta
+y los purga como a los demás.
+
 El `modprobe-headless.conf` hace falta porque el árbol de dispositivos sigue
 anunciando cámara, códec y audio aunque el firmware recortado ya no los ofrezca:
 sin la lista negra, esos módulos se cargan igual y fallan en cada arranque.
