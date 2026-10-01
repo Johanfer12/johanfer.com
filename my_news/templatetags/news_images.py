@@ -19,14 +19,66 @@ register = template.Library()
 CDN_OPTIONS = 'width=1280,fit=scale-down,format=webp,onerror=redirect'
 
 
+def cdn_path(url):
+    """Ruta /cdn-cgi/... de una imagen, o None si no pasa por Cloudflare."""
+    if not url or not settings.NEWS_IMAGE_CDN:
+        return None
+    if not url.startswith(('http://', 'https://')):
+        return None
+    return f'/cdn-cgi/image/{CDN_OPTIONS}/{url}'
+
+
 @register.filter
 def news_image_src(url):
     """URL de la imagen de una noticia, pasada por Cloudflare en producción.
 
     En local no existe /cdn-cgi/, así que se devuelve la original.
     """
-    if not url or not settings.NEWS_IMAGE_CDN:
-        return url
-    if not url.startswith(('http://', 'https://')):
-        return url
-    return f'/cdn-cgi/image/{CDN_OPTIONS}/{url}'
+    return cdn_path(url) or url
+
+
+# Primera petición de cada imagen: Cloudflare tiene que bajarla del medio,
+# convertirla y guardarla antes de responder (medido: 0,6-1,8 s, frente a ~0,25
+# ya cacheada). Si esa primera petición la hace el lector, la paga él; por eso
+# la ingesta la hace antes, solo con las noticias que de verdad se van a ver.
+WARM_BASE_URL = 'https://johanfer.com'
+WARM_WORKERS = 4
+WARM_TIMEOUT = 20
+
+
+def warm_news_images(urls):
+    """Pide a Cloudflare las imágenes para que ya estén cacheadas. Devuelve cuántas.
+
+    Nunca lanza: calentar es una mejora, no puede romper la ingesta.
+    Se lleva la cabecera Accept de un navegador porque sin ella Cloudflare
+    devuelve el JPEG original sin transformar ni cachear la variante WebP.
+    """
+    import logging
+    from concurrent.futures import ThreadPoolExecutor
+    import requests
+
+    paths = [p for p in dict.fromkeys(cdn_path(u) for u in urls) if p]
+    if not paths:
+        return 0
+
+    def pedir(path):
+        try:
+            # Se descarga el cuerpo entero: cortar la conexión a medias
+            # podría hacer que Cloudflare no llegue a guardar la variante.
+            r = requests.get(
+                WARM_BASE_URL + path,
+                headers={'Accept': 'image/webp,*/*'},
+                timeout=WARM_TIMEOUT,
+            )
+            return r.status_code < 400
+        except Exception:
+            return False
+
+    try:
+        with ThreadPoolExecutor(max_workers=WARM_WORKERS) as pool:
+            ok = sum(pool.map(pedir, paths))
+    except Exception:
+        logging.getLogger(__name__).exception('No se pudo calentar la caché de imágenes')
+        return 0
+    logging.getLogger(__name__).info('Imágenes calentadas en Cloudflare: %s de %s', ok, len(paths))
+    return ok

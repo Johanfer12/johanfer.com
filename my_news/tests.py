@@ -1200,3 +1200,38 @@ class NewsImageSrcTests(SimpleTestCase):
             self.assertEqual(news_image_src('/static/Img/News_Default.webp'), '/static/Img/News_Default.webp')
             self.assertIsNone(news_image_src(None))
             self.assertEqual(news_image_src(''), '')
+
+
+class WarmNewsImagesTests(TestCase):
+    """El calentado pide solo URLs que pasan por Cloudflare, sin repetir."""
+
+    def test_pide_la_variante_transformada_una_vez(self):
+        from unittest import mock
+        from django.test import override_settings
+        from .templatetags.news_images import cdn_path, warm_news_images
+        url = 'https://i.blogs.es/abc/foto/1024_2000.jpeg'
+        with override_settings(NEWS_IMAGE_CDN=True), \
+                mock.patch('requests.get') as get:
+            get.return_value.status_code = 200
+            n = warm_news_images([url, url, None, '/static/x.webp'])
+            esperada = cdn_path(url)
+        self.assertEqual(n, 1)
+        get.assert_called_once()
+        self.assertTrue(get.call_args[0][0].endswith(esperada))
+
+    def test_en_local_no_pide_nada(self):
+        from unittest import mock
+        from django.test import override_settings
+        from .templatetags.news_images import warm_news_images
+        with override_settings(NEWS_IMAGE_CDN=False), \
+                mock.patch('requests.get') as get:
+            self.assertEqual(warm_news_images(['https://a.com/x.jpg']), 0)
+        get.assert_not_called()
+
+    def test_un_fallo_de_red_no_rompe(self):
+        from unittest import mock
+        from django.test import override_settings
+        from .templatetags.news_images import warm_news_images
+        with override_settings(NEWS_IMAGE_CDN=True), \
+                mock.patch('requests.get', side_effect=OSError):
+            self.assertEqual(warm_news_images(['https://a.com/x.jpg']), 0)

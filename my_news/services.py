@@ -1151,6 +1151,8 @@ class FeedService:
         sources = list(FeedSource.objects.filter(active=True))
         logger.info(f"Procesando {len(sources)} fuentes activas con {ai_model_name}")
         new_articles_count = 0
+        # Imágenes de las noticias que sí llegan al feed, para calentar la caché.
+        imagenes_visibles = []
         
         # Calcular la fecha límite (15 días atrás)
         fifteen_days_ago = timezone.now() - timedelta(days=15)
@@ -1449,6 +1451,7 @@ class FeedService:
                         similarity_score=similarity_score or None,
                     )
                     new_articles_count += 1
+                    imagenes_visibles.append(image_url)
                 except Exception:
                     logger.exception(
                         "Error al guardar noticia normal. GUID=%s título=%s link=%s",
@@ -1499,6 +1502,12 @@ class FeedService:
                     FeedService.save_pending_embedding(news_item, texto_embedding, None)
 
         
+        # Solo las que pasaron todos los filtros (palabra, IA, duplicadas): las
+        # demás no se muestran, y pedirlas gastaría cuota de transformaciones.
+        if imagenes_visibles:
+            from .templatetags.news_images import warm_news_images
+            warm_news_images(imagenes_visibles)
+
         # Actualizar la fecha de última obtención para todas las fuentes con una sola escritura
         fetched_at = timezone.now()
         for source in sources:
