@@ -1,0 +1,11 @@
+[Unit]
+Description=Ejecutar backup de johanfer.com cada seis horas
+
+[Timer]
+OnCalendar=*-*-* 00,06,12,18:15:00
+RandomizedDelaySec=10m
+Persistent=true
+Unit=johanfer-db-backup.service
+
+[Install]
+WantedBy=timers.target

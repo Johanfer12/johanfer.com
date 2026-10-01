@@ -1,0 +1,8 @@
+# Instalar en /etc/fail2ban/fail2ban.local. Prevalece sobre fail2ban.conf, que
+# es del paquete y se queda como viene.
+#
+# fail2ban.conf estaba en DEBUG: anotaba cada evento de inotify de los logs que
+# vigila, unas 33.000 líneas y ~8 MB por semana sobre la SD, sin nada que leer.
+# INFO deja los baneos, desbaneos y aciertos de los filtros.
+[Definition]
+loglevel = INFO

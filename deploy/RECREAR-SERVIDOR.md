@@ -125,6 +125,9 @@ sudo chmod 0755 /usr/local/sbin/fail2ban-nginx-map
 
 sudo cp deploy/fail2ban/filter.d/*.conf /etc/fail2ban/filter.d/
 sudo cp deploy/fail2ban/action.d/*.conf /etc/fail2ban/action.d/
+# Nivel de log en INFO: el fail2ban.conf del paquete se dejó una vez en DEBUG y
+# escribía ~8 MB por semana en la SD.
+sudo cp deploy/fail2ban/fail2ban.local /etc/fail2ban/
 
 # Los jail.d/*.local NO vienen en el clon (están gitignorados). Cópialos desde
 # OneDrive antes de este paso; ver deploy/fail2ban/jail.d/README.md.
@@ -182,7 +185,10 @@ sudo cp deploy/journald-size-limit.conf /etc/systemd/journald.conf.d/size-limit.
 sudo systemctl restart systemd-journald
 ```
 
-El swap lo gestiona `dphys-swapfile`, no fstab (~453 MB sobre la SD).
+El swap es **zram** (`zramswap.service`, `/etc/default/zramswap`: `ALGO=lz4`,
+`PERCENT=50`, `PRIORITY=100`), en RAM comprimida y no sobre la SD. Antes lo
+gestionaba `dphys-swapfile`; ya no está instalado y su `/var/swap` se borró en
+octubre de 2026.
 
 ### 2.10 El script de despliegue
 
@@ -240,12 +246,15 @@ porque lo que cuesta recuperar no es lo mismo:
 
 Los scripts y units de Qdrant están versionados en
 [`deploy/bin/johanfer-qdrant-backup`](bin/johanfer-qdrant-backup) y
-[`deploy/systemd/`](systemd/). Los de la base viven solo en la Pi.
+[`deploy/systemd/`](systemd/), y los de la base también desde octubre de 2026
+(`deploy/bin/johanfer-db-backup` y `deploy/systemd/johanfer-db-backup.*`). Las
+dos unidades reintentan tres veces, cada 15 min, si falla la subida a OneDrive.
+El de mantenimiento sigue viviendo solo en la Pi.
 
 ```bash
-sudo install -m 700 -o root -g root deploy/bin/johanfer-qdrant-backup /usr/local/sbin/
-sudo install -m 644 -o root -g root deploy/systemd/johanfer-qdrant-backup.* /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now johanfer-qdrant-backup.timer
+sudo install -m 700 -o root -g root deploy/bin/johanfer-qdrant-backup deploy/bin/johanfer-db-backup /usr/local/sbin/
+sudo install -m 644 -o root -g root deploy/systemd/johanfer-qdrant-backup.* deploy/systemd/johanfer-db-backup.* /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now johanfer-qdrant-backup.timer johanfer-db-backup.timer
 ```
 
 Hace falta además añadir la retención del tag nuevo a

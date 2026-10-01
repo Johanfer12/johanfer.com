@@ -1,0 +1,43 @@
+#!/bin/bash
+# Copia cifrada de la base SQLite. Instalar en /usr/local/sbin/johanfer-db-backup.
+set -Eeuo pipefail
+umask 077
+
+SOURCE_DB=/home/johan/My_Bookshelf/database.db
+WORK_DIR=/var/lib/johanfer-backup
+CACHE_DIR=/var/cache/johanfer-restic
+SNAPSHOT_DB="$WORK_DIR/database.db"
+HASH_FILE="$WORK_DIR/database.db.sha256"
+export RCLONE_CONFIG=/root/.config/rclone/rclone.conf
+export RESTIC_REPOSITORY=rclone:johanfer-onedrive:Backups/Johanfer-Raspberry/restic
+export RESTIC_PASSWORD_FILE=/root/.config/restic/johanfer-password
+export RESTIC_CACHE_DIR="$CACHE_DIR"
+
+install -d -m 700 "$WORK_DIR" "$CACHE_DIR"
+temporary_db=$(mktemp "$WORK_DIR/database.db.XXXXXX")
+trap 'rm -f "$temporary_db"' EXIT
+
+# sqlite3.backup() y no cp: con la base en WAL, cp daría una copia inconsistente.
+/usr/bin/python3 - "$SOURCE_DB" "$temporary_db" <<'PY'
+import sqlite3
+import sys
+
+source_path, destination_path = sys.argv[1:]
+source = sqlite3.connect(f"file:{source_path}?mode=ro", uri=True, timeout=60)
+destination = sqlite3.connect(destination_path)
+try:
+    source.backup(destination, pages=256, sleep=0.05)
+    result = destination.execute("PRAGMA integrity_check").fetchone()
+    if result != ("ok",):
+        raise RuntimeError(f"SQLite integrity_check failed: {result!r}")
+finally:
+    destination.close()
+    source.close()
+PY
+
+mv -f "$temporary_db" "$SNAPSHOT_DB"
+trap - EXIT
+sha256sum "$SNAPSHOT_DB" > "$HASH_FILE"
+/usr/bin/restic backup "$SNAPSHOT_DB" "$HASH_FILE" --host raspberrypi --tag johanfer-database
+# Sin `restic check` aquí: costaba ~3 min por pasada, cuatro veces al día, y el
+# mantenimiento de los domingos ya hace `check --read-data`, que es más completo.
