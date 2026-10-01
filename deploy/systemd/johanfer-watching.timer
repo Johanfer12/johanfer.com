@@ -1,0 +1,12 @@
+# Mismo horario que tenía el cron. Instalar junto con johanfer-watching.service.
+[Unit]
+Description=Sincronización con Simkl: a las 00:30, después de los libros
+
+[Timer]
+OnCalendar=*-*-* 00:30:00
+# Si la Pi estaba apagada a la hora prevista, la pasada corre al arrancar.
+Persistent=true
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

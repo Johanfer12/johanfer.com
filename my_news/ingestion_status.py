@@ -19,8 +19,9 @@ from .models import IngestionStatus
 
 logger = logging.getLogger(__name__)
 
-# Franja en la que el cron de noticias debería estar corriendo (ver CRONJOBS en
-# settings: cada 30 minutos de 08 a 21, más una última pasada a las 22).
+# Franja en la que la ingesta de noticias debería estar corriendo (ver
+# deploy/systemd/johanfer-news.timer: cada 30 minutos de 08 a 21, más una
+# última pasada a las 22).
 CRON_ACTIVE_HOURS = (8, 22)
 
 # El cron corre cada 30 minutos. Con margen para una pasada lenta, pasada esta

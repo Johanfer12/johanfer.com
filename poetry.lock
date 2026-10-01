@@ -600,20 +600,6 @@ django = ">=4.2"
 ipware = ["django-ipware (>=3)"]
 
 [[package]]
-name = "django-crontab"
-version = "0.7.1"
-description = "dead simple crontab powered job scheduling for django"
-optional = false
-python-versions = "*"
-groups = ["main"]
-files = [
-    {file = "django-crontab-0.7.1.tar.gz", hash = "sha256:1201810a212460aaaa48eb6a766738740daf42c1a4f6aafecfb1525036929236"},
-]
-
-[package.dependencies]
-Django = ">=1.8"
-
-[[package]]
 name = "django-import-export"
 version = "4.4.1"
 description = "Django application and library for importing and exporting data with included admin integration."
@@ -1919,4 +1905,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "c0132f8dcf0c98959296012659754d2a6d8a414dae93efc6100ab36b77a89df8"
+content-hash = "21098c449fd00e5e22be28ddde9bcf2137994247ec71d0f2e3e406aff2782faa"

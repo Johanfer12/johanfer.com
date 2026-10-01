@@ -227,6 +227,10 @@ def news_update_running():
 
 
 def update_news_cron():
+    """Devuelve si la pasada terminó bien, para que el comando lo traduzca a su código de salida.
+
+    Encontrar el cerrojo tomado cuenta como bien: la otra pasada hará el trabajo.
+    """
     lock_path = _update_lock_path()
     try:
         with portalocker.Lock(lock_path, timeout=0):
@@ -248,9 +252,11 @@ def update_news_cron():
             # pasada del día: recorrer la colección entera 29 veces al día son
             # escrituras y lecturas en la SD a cambio de nada.
             purge_old_news(15, mantenimiento=timezone.localtime().hour >= 22)
+        return True
     except portalocker.exceptions.LockException:
         # No es una avería: la pasada anterior sigue en marcha y terminará ella.
         logger.warning("Actualización de noticias omitida: ya hay otra ejecución en curso.")
+        return True
     except Exception as e:
         logger.exception("Error actualizando noticias")
         # Que el fallo se vea en el feed y no solo aquí.
@@ -258,6 +264,7 @@ def update_news_cron():
             'La actualización de noticias falló por completo.',
             detail=str(e),
         )
+        return False
 
 
 def purge_old_news(days: int = 15, mantenimiento: bool = False):

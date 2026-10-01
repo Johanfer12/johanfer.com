@@ -206,14 +206,12 @@ poetry run python manage.py shell -c "from home_page.utils import refresh_books_
 5. Para actualizar el feed de noticias manualmente:
 
 ```
-poetry run python manage.py shell -c "from my_news.tasks import update_news_cron; update_news_cron()"
+poetry run python manage.py update_news
 ```
 
-6. Instala los cronjobs en el servidor (necesario solo en producción):
-
-```
-python manage.py crontab add
-```
+6. En el servidor, las tareas programadas son temporizadores de systemd
+   (`deploy/systemd/johanfer-{news,books,watching}.*`); la instalación está en
+   [`deploy/RECREAR-SERVIDOR.md`](deploy/RECREAR-SERVIDOR.md), §2.8.
 
 ## Variables de entorno recomendadas
 
@@ -251,48 +249,24 @@ python manage.py simkl_auth
 
 ## Uso
 
-### Tareas Automatizadas con django-crontab
+### Tareas programadas
 
-El proyecto utiliza `django-crontab` para gestionar tareas programadas que actualizan automáticamente los datos. Estas tareas están definidas en los archivos `tasks.py` de cada aplicación y configuradas en `settings.py`:
+En producción las lanzan temporizadores de systemd, uno por tarea, versionados
+en `deploy/systemd/`. Cada uno ejecuta un comando de gestión que también se
+puede correr a mano:
 
-```python
-CRONJOBS = [
-    # Libros: una vez al día a medianoche (RSS de Goodreads)
-    ('0 0 * * *', 'home_page.tasks.update_books_cron'),
-
-    # Series y películas: una vez al día a las 00:30 (API de Simkl)
-    ('30 0 * * *', 'watching.tasks.update_watching_cron'),
-
-    # Noticias: cada 30 minutos entre las 08:00 y las 21:30
-    ('*/30 8-21 * * *', 'my_news.tasks.update_news_cron'),
-
-    # Noticias: última pasada del día a las 22:00
-    ('0 22 * * *', 'my_news.tasks.update_news_cron'),
-]
+```
+python manage.py update_books      # Goodreads (RSS)
+python manage.py update_watching   # Simkl y TMDB
+python manage.py update_news       # Feeds RSS, IA y detección de duplicados
 ```
 
-#### Gestión de Tareas Programadas
+Si una tarea falla, el comando termina con código 1, así que la unidad
+aparece en `systemctl --failed`. Para ver cuándo toca la siguiente pasada:
 
-- **Ver tareas programadas activas**:
-  ```
-  python manage.py crontab show
-  ```
-
-- **Añadir todas las tareas**:
-  ```
-  python manage.py crontab add
-  ```
-
-- **Eliminar todas las tareas**:
-  ```
-  python manage.py crontab remove
-  ```
-
-- **Reiniciar todas las tareas** (útil después de modificar la configuración):
-  ```
-  python manage.py crontab remove
-  python manage.py crontab add
-  ```
+```
+systemctl list-timers 'johanfer-*'
+```
 
 Las tareas se ejecutan automáticamente en segundo plano según su programación:
 
@@ -300,13 +274,13 @@ Las tareas se ejecutan automáticamente en segundo plano según su programación
 - **Series y películas**: Se actualizan una vez al día (00:30) desde la API de Simkl.
 - **Noticias**: Se actualizan cada 30 minutos dentro de la franja `08:00`–`22:00` (hora del servidor), para no trabajar de madrugada.
 
-En ambientes de desarrollo local, puede ser más conveniente ejecutar estos comandos manualmente en lugar de configurar los cronjobs.
+En desarrollo local basta con ejecutar los comandos a mano.
 
 ### Aplicación de Libros
 
 1. Asegúrate de tener un entorno virtual activado y las dependencias instaladas.
-2. La sincronización corre automáticamente por cron, o puedes lanzarla manualmente:
-   `python manage.py shell -c "from home_page.utils import refresh_books_data; refresh_books_data()"`
+2. La sincronización corre automáticamente cada medianoche, o puedes lanzarla manualmente:
+   `python manage.py update_books`
 3. Los datos se leen del feed RSS de Goodreads y se almacenan en la base de datos.
 4. Las portadas de los libros se guardarán en la carpeta `media/Covers`.
 5. En `/bookshelf/stats/` están los gráficos de lectura (libros por año, estrellas y páginas).
@@ -314,8 +288,8 @@ En ambientes de desarrollo local, puede ser más conveniente ejecutar estos coma
 ### Aplicación de Series y Películas
 
 1. Crea una app en Simkl, obtén el token con `python manage.py simkl_auth` y configura las variables de entorno (ver arriba).
-2. La sincronización corre automáticamente por cron, o puedes lanzarla manualmente:
-   `python manage.py shell -c "from watching.tasks import update_watching_cron; update_watching_cron()"`
+2. La sincronización corre automáticamente cada día a las 00:30, o puedes lanzarla manualmente:
+   `python manage.py update_watching`
 3. Accede a la ruta `/viendo/` para ver la sección "Mi TV"; los botones flotantes alternan entre series y películas.
 4. Los pósters se guardan en la carpeta `media/Posters`.
 5. En `/viendo/stats/` están los gráficos de series y películas (por año, calificaciones y décadas).

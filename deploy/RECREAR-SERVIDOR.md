@@ -158,21 +158,31 @@ sudo ufw enable && sudo ufw status numbered
 Si Cloudflare añade rangos y el sitio deja de responder por dominio pero sí por
 LAN, volver a lanzar ese bucle.
 
-### 2.8 Cron y logs
+### 2.8 Tareas programadas y logs
+
+Las tres tareas de la aplicación son temporizadores de systemd, no líneas del
+crontab: noticias (cada 30 min de 08:00 a 21:30, y a las 22:00), libros (00:00)
+y Simkl (00:30).
 
 ```bash
-cd /home/johan/My_Bookshelf && source env/bin/activate
-python manage.py crontab add
-crontab -l
+sudo install -m 644 -o root -g root deploy/systemd/johanfer-{news,books,watching}.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now johanfer-news.timer johanfer-books.timer johanfer-watching.timer
+systemctl list-timers 'johanfer-*'
 
 sudo cp deploy/logrotate-bookshelf-cron /etc/logrotate.d/bookshelf-cron
 sudo /usr/sbin/logrotate --debug /etc/logrotate.d/bookshelf-cron
 ```
 
-`crontab add` genera las cuatro líneas de Django con el marcador
-`# django-cronjobs for Bookshelf` y la redirección a
-`/home/johan/log_cron_bookshelf.txt`. Las líneas ajenas (LED ACT, Cloudflare,
-wifi_watchdog, PowerSave-USB) hay que reponerlas a mano; ver §3.
+Cada servicio ejecuta un comando de gestión (`update_news`, `update_books`,
+`update_watching`) y escribe en `/home/johan/log_cron_bookshelf.txt`. Si la
+tarea falla, el comando termina con código 1 y la unidad aparece en
+`systemctl --failed`. Para lanzar una pasada a mano:
+`sudo systemctl start johanfer-news.service`.
+
+Hasta octubre de 2026 esto lo hacía django-crontab con cuatro líneas en el
+crontab de johan. Las líneas ajenas del crontab (LED ACT, Cloudflare,
+wifi_watchdog, PowerSave-USB) siguen ahí y hay que reponerlas a mano; ver §3.
 
 ### 2.9 Ajustes de la máquina
 
@@ -248,7 +258,7 @@ Convendría respaldar esos tres scripts junto con el `.env`.
 systemctl is-active qdrant my_bookshelf nginx fail2ban
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/noticias/   # 200
 curl -s -o /dev/null -w '%{http_code}\n' https://johanfer.com/noticias/    # 200
-crontab -l | grep -c 'django-cronjobs'                                      # 4
+systemctl list-timers 'johanfer-*' --no-legend | wc -l                     # 6 (3 tareas + 3 backups)
 python manage.py shell -c "from my_news.models import News; print(News.objects.count())"
 ```
 

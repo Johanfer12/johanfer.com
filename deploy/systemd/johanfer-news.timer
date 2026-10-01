@@ -1,0 +1,16 @@
+# Mismos horarios que tenía el cron. Si cambian, revisar CRON_ACTIVE_HOURS en
+# my_news/ingestion_status.py: el aviso de «ingesta parada» depende de ellos.
+[Unit]
+Description=Ingesta de noticias: cada 30 min de 08:00 a 21:30, y a las 22:00
+
+[Timer]
+OnCalendar=*-*-* 08..21:00,30:00
+OnCalendar=*-*-* 22:00:00
+# Si la Pi estaba apagada a la hora prevista, la pasada corre al arrancar.
+Persistent=true
+# Por defecto systemd agrupa los disparos con un minuto de holgura; el cron
+# corría en el minuto exacto y el aviso de ingesta parada cuenta con ello.
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

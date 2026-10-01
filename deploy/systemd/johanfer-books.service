@@ -1,0 +1,22 @@
+# Instalar en /etc/systemd/system/ junto con johanfer-books.timer (ver
+# deploy/RECREAR-SERVIDOR.md, §2.8). Sustituye a la línea de django-crontab.
+
+[Unit]
+Description=Sincronización de libros (Goodreads) de johanfer.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=johan
+Group=johan
+WorkingDirectory=/home/johan/My_Bookshelf
+ExecStart=/home/johan/My_Bookshelf/env/bin/python manage.py update_books
+# El mismo log que tenía el cron (rotado por /etc/logrotate.d/bookshelf-cron) y
+# que también usa el botón de actualizar del feed: así sigue todo en un sitio.
+StandardOutput=append:/home/johan/log_cron_bookshelf.txt
+StandardError=append:/home/johan/log_cron_bookshelf.txt
+Environment=PYTHONUNBUFFERED=1 LANG=C.UTF-8
+# Por debajo de gunicorn, que es quien atiende a las visitas.
+Nice=10
+TimeoutStartSec=15min

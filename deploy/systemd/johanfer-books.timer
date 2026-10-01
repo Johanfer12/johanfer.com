@@ -1,0 +1,12 @@
+# Mismo horario que tenía el cron. Instalar junto con johanfer-books.service.
+[Unit]
+Description=Sincronización de libros: a medianoche
+
+[Timer]
+OnCalendar=*-*-* 00:00:00
+# Si la Pi estaba apagada a la hora prevista, la pasada corre al arrancar.
+Persistent=true
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

@@ -21,6 +21,7 @@ NETWORK_RETRY_DELAYS = (120, 600)  # 2 y 10 minutos
 
 
 def update_watching_cron():
+    """Devuelve si la pasada terminó bien, para que el comando lo traduzca a su código de salida."""
     attempts = len(NETWORK_RETRY_DELAYS) + 1
     for attempt in range(attempts):
         try:
@@ -35,7 +36,7 @@ def update_watching_cron():
                     "Sin conexión para sincronizar Simkl tras %s intentos; queda para mañana: %s",
                     attempts, exc,
                 )
-                return
+                return False
             delay = NETWORK_RETRY_DELAYS[attempt]
             logger.warning(
                 "Sin conexión para sincronizar Simkl (%s); se reintenta en %s min.",
@@ -47,6 +48,6 @@ def update_watching_cron():
             # Un error de Simkl, de TMDB o del propio código no se arregla repitiendo:
             # fallaría igual y solo gastaría cuota.
             logger.exception("Error actualizando historial de Simkl")
-            return
+            return False
         logger.info("Historial de Simkl actualizado correctamente (%s eventos nuevos)", created)
-        return
+        return True

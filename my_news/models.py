@@ -301,7 +301,7 @@ class IngestionStatus(models.Model):
     """Resultado de la última pasada de ingesta, para poder verlo desde el feed.
 
     Existe porque el cron corre en otro proceso: el caché por defecto es LocMem
-    y no cruza de django-crontab a gunicorn, así que la única forma de que la
+    y no cruza del proceso de la tarea a gunicorn, así que la única forma de que la
     web sepa qué pasó en la última pasada es dejarlo escrito en la base.
 
     Hasta ahora un fallo de la IA solo se notaba porque el feed dejaba de traer

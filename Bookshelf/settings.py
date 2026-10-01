@@ -61,7 +61,6 @@ INSTALLED_APPS = [
     'import_export',
     'home_page',
     'spotify',
-    'django_crontab',
     'my_news',
     'watching',
 ]
@@ -96,29 +95,16 @@ AXES_ONLY_ADMIN_SITE = True
 # Cloudflare; gunicorn solo escucha en 127.0.0.1, así que nadie más la fija.
 AXES_CLIENT_IP_CALLABLE = 'home_page.middleware.get_client_ip'
 
-# Estas cuatro entradas son la única fuente de verdad del cron: se regeneran con
-# `python manage.py crontab remove && python manage.py crontab add`. El prefijo
-# reproduce el `cd <proyecto> &&` que antes se escribía a mano, para que el job
-# corra con el directorio del proyecto como cwd.
-CRONTAB_COMMAND_PREFIX = f'cd {BASE_DIR} &&'
-# Sin este sufijo la salida del cron se pierde: django-crontab no redirige nada y
-# la Pi no tiene MTA, así que ni siquiera llega al buzón local. Los avisos que
-# emiten las tareas (fallos de embedding, resúmenes pendientes, errores de Simkl)
-# eran invisibles. Fuera de BASE_DIR a propósito, porque deploy.sh hace
-# `git checkout .` sobre el repo. Rotación: /etc/logrotate.d/bookshelf-cron.
+# Las tareas programadas (noticias, libros y Simkl) las lanzan temporizadores
+# de systemd: deploy/systemd/johanfer-{news,books,watching}.{service,timer}.
+# Los horarios viven ahí, no aquí. Sustituyeron a django-crontab, sin
+# mantenimiento desde 2016, en octubre de 2026.
+#
+# Log de las tareas. Las unidades escriben en él (StandardOutput=append:) y
+# también el botón de actualizar del feed. Fuera de BASE_DIR a propósito,
+# porque deploy.sh hace `git checkout .` sobre el repo. Rotación:
+# /etc/logrotate.d/bookshelf-cron.
 CRON_LOG_PATH = os.getenv('CRON_LOG_PATH', str(BASE_DIR.parent / 'log_cron_bookshelf.txt'))
-CRONTAB_COMMAND_SUFFIX = f'>> {CRON_LOG_PATH} 2>&1'
-# Se probó a añadir `--skip-checks` como sufijo y NO sirve de nada aquí: los
-# system checks cuestan 24 s porque cargan todos los modelos y el admin, lo que
-# arrastra el stack pesado (google-genai, bs4, feedparser, numpy), y
-# `crontab run` tiene que importar esa misma pila para ejecutar la tarea. Medido:
-# la pasada tarda lo mismo con flag (55,0 s) que sin él (55,4 s).
-CRONJOBS = [
-    ('0 0 * * *', 'home_page.tasks.update_books_cron'),       # Libros: medianoche
-    ('30 0 * * *', 'watching.tasks.update_watching_cron'),    # Series/pelis (Simkl): 00:30, para no chocar con los libros
-    ('*/30 8-21 * * *', 'my_news.tasks.update_news_cron'),    # Noticias: cada 30 min mientras hay actividad
-    ('0 22 * * *', 'my_news.tasks.update_news_cron'),         # Noticias: última pasada del día
-]
 
 ROOT_URLCONF = 'Bookshelf.urls'
 

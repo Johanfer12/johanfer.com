@@ -13,6 +13,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone as dj_timezone
 
 from django.core.cache import cache
+from django.core.management import call_command
 from django.urls import reverse
 
 from . import views
@@ -928,3 +929,27 @@ class AxesClientIpTests(TestCase):
             list(AccessAttempt.objects.values_list('ip_address', flat=True)),
             ['203.0.113.77'],
         )
+
+
+class ScheduledCommandsExitCodeTests(TestCase):
+    """Los temporizadores de systemd solo ven el código de salida del comando."""
+
+    COMANDOS = (
+        ('update_books', 'home_page.management.commands.update_books.update_books_cron'),
+        ('update_watching', 'watching.management.commands.update_watching.update_watching_cron'),
+        ('update_news', 'my_news.management.commands.update_news.update_news_cron'),
+    )
+
+    def test_a_failed_task_makes_the_command_fail(self):
+        from django.core.management.base import CommandError
+
+        for comando, tarea in self.COMANDOS:
+            with self.subTest(comando=comando), patch(tarea, return_value=False):
+                with self.assertRaises(CommandError):
+                    call_command(comando)
+
+    def test_a_task_that_works_exits_cleanly(self):
+        for comando, tarea in self.COMANDOS:
+            with self.subTest(comando=comando), patch(tarea, return_value=True) as mock:
+                call_command(comando)
+                mock.assert_called_once_with()

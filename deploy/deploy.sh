@@ -9,9 +9,9 @@
 #   cp /home/johan/My_Bookshelf/deploy/deploy.sh /home/johan/deploy.sh
 #   chmod +x /home/johan/deploy.sh
 #
-# OJO: no toca el crontab. Si se cambian CRONJOBS o CRONTAB_COMMAND_SUFFIX en
-# settings.py hay que hacer además:
-#   python manage.py crontab remove && python manage.py crontab add
+# OJO: no toca los temporizadores de systemd de las tareas programadas. Si se
+# cambia algo en deploy/systemd/johanfer-{news,books,watching}.*, hay que
+# copiarlo a /etc/systemd/system/ y hacer `sudo systemctl daemon-reload`.
 
 set -Eeuo pipefail
 
