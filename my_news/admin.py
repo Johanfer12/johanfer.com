@@ -51,7 +51,7 @@ class FeedSourceAdminForm(forms.ModelForm):
 
 @admin.register(FeedSource)
 class FeedSourceAdmin(ImportExportModelAdmin):
-    resource_class = FeedSourceResource  # Asociar el resource personalizado
+    resource_classes = [FeedSourceResource]
     form = FeedSourceAdminForm
     list_display = ('name', 'url', 'active', 'last_fetch', 'deep_search', 'similarity_threshold')
     list_filter = ('active', 'deep_search')
@@ -78,14 +78,14 @@ class NewsAdmin(admin.ModelAdmin):
 
 @admin.register(FilterWord)
 class FilterWordAdmin(ImportExportModelAdmin):
-    resource_class = FilterWordResource  # Asociar el resource personalizado
+    resource_classes = [FilterWordResource]
     list_display = ('word', 'active', 'title_only', 'created_at')
     list_filter = ('active', 'title_only')
     search_fields = ('word',)
 
 @admin.register(AIFilterInstruction)
 class AIFilterInstructionAdmin(ImportExportModelAdmin):
-    resource_class = AIFilterInstructionResource
+    resource_classes = [AIFilterInstructionResource]
     list_display = ('instruction', 'active', 'created_at')
     list_filter = ('active',)
     search_fields = ('instruction',)
