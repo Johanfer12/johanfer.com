@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.templatetags.static import static
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -55,7 +56,8 @@ class FeedManagementTests(TestCase):
         self.assertContains(response, 'aria-controls="word-filters" aria-selected="true"')
         self.assertContains(response, 'aria-controls="sources" aria-selected="false"')
         self.assertContains(response, 'aria-label="Eliminar horóscopo"')
-        self.assertContains(response, 'js/feed_management.js')
+        # static() y no el nombre a pelo: en producción lleva el hash del manifest.
+        self.assertContains(response, static('js/feed_management.js'))
         self.assertNotContains(response, '/j_admin/')
 
         news_response = self.client.get(reverse('my_news:news_list'))

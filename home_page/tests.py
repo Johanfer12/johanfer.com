@@ -8,6 +8,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from django.contrib.auth import get_user_model
+from django.templatetags.static import static
 from django.test import TestCase, override_settings
 from django.utils import timezone as dj_timezone
 
@@ -785,7 +786,8 @@ class VisitsBadgeLiveUpdateTests(TestCase):
         response = self.client.get('/bookshelf/')
 
         self.assertContains(response, 'data-badge-url="/visitas/insignia/"')
-        self.assertContains(response, 'js/visits_badge.js')
+        # static() y no el nombre a pelo: en producción lleva el hash del manifest.
+        self.assertContains(response, static('js/visits_badge.js'))
 
     def test_the_visits_page_itself_does_not_poll(self):
         # Allí no hay insignia que refrescar: el botón ni siquiera se pinta.
@@ -793,7 +795,7 @@ class VisitsBadgeLiveUpdateTests(TestCase):
 
         response = self.client.get('/visitas/')
 
-        self.assertNotContains(response, 'js/visits_badge.js')
+        self.assertNotContains(response, static('js/visits_badge.js'))
 
 
 class SiteNavTests(TestCase):
