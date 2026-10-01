@@ -89,6 +89,12 @@ AXES_COOLOFF_TIME = 1  # horas
 AXES_RESET_ON_SUCCESS = True
 AXES_LOCKOUT_PARAMETERS = ['ip_address', 'username']
 AXES_ONLY_ADMIN_SITE = True
+# Detrás de nginx, REMOTE_ADDR es siempre 127.0.0.1, y sin django-ipware axes
+# lo tomaba como la IP del visitante: todos los intentos contaban como una
+# sola IP, así que cinco fallos de cualquiera bloqueaban el admin para todos.
+# La IP real llega en X-Real-IP, que nginx rellena tras resolver la de
+# Cloudflare; gunicorn solo escucha en 127.0.0.1, así que nadie más la fija.
+AXES_CLIENT_IP_CALLABLE = 'home_page.middleware.get_client_ip'
 
 # Estas cuatro entradas son la única fuente de verdad del cron: se regeneran con
 # `python manage.py crontab remove && python manage.py crontab add`. El prefijo

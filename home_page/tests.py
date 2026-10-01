@@ -907,3 +907,22 @@ class CoverColorTests(TestCase):
         call_command('cover_colors', stdout=io.StringIO())
 
         self.assertEqual(cover_colors.load_index(self.covers), {'1.webp': '#0a0a0a'})
+
+
+class AxesClientIpTests(TestCase):
+    """axes tiene que ver la IP del visitante, no la de nginx."""
+
+    def test_failed_admin_login_is_recorded_with_the_real_ip(self):
+        from axes.models import AccessAttempt
+
+        self.client.post(
+            '/j_admin/login/?next=/j_admin/',
+            {'username': 'nadie', 'password': 'mal'},
+            REMOTE_ADDR='127.0.0.1',
+            HTTP_X_REAL_IP='203.0.113.77',
+        )
+
+        self.assertEqual(
+            list(AccessAttempt.objects.values_list('ip_address', flat=True)),
+            ['203.0.113.77'],
+        )
