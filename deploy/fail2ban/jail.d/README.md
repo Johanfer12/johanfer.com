@@ -5,9 +5,9 @@ los valores afinados (cuántos fallos, en cuánto tiempo, cuánto dura el baneo)
 dirían a un escáner a qué ritmo puede sondear sin que lo bloqueen, y este
 repositorio es público.
 
-Siguen respaldados porque el proyecto vive dentro de OneDrive: el fichero está
-en disco y sincronizado, y `.gitignore` solo impide que suba a GitHub. Si clonas
-el repo en una máquina nueva **no estarán**; hay que traerlos de OneDrive.
+Siguen respaldados en la copia privada del proyecto, fuera de GitHub; `.gitignore`
+solo impide que suban aquí. Si clonas el repo en una máquina nueva **no
+estarán**; hay que traerlos de esa copia.
 
 Igual que el `.env`, que también está aquí al lado y también ignorado.
 

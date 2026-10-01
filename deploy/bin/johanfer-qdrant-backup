@@ -31,9 +31,9 @@ SNAPSHOT_DIR=/var/lib/qdrant/snapshots
 WORK_DIR=/var/lib/johanfer-backup
 CACHE_DIR=/var/cache/johanfer-restic
 
-export RCLONE_CONFIG=/root/.config/rclone/rclone.conf
-export RESTIC_REPOSITORY=rclone:johanfer-onedrive:Backups/Johanfer-Raspberry/restic
-export RESTIC_PASSWORD_FILE=/root/.config/restic/johanfer-password
+# Destino y credenciales de restic: fuera del repo, en un fichero solo de root
+# (plantilla en deploy/backup.env.example).
+set -a; . /etc/johanfer-backup.env; set +a
 export RESTIC_CACHE_DIR="$CACHE_DIR"
 
 install -d -m 700 "$WORK_DIR" "$CACHE_DIR"

@@ -24,15 +24,15 @@ maestra, y en la Pi hay que instalarlos a mano porque `deploy.sh` no los toca.
 > versionan: los valores concretos de baneo le dirían a un escáner a qué ritmo
 > puede sondear sin que lo bloqueen.
 >
-> Pero sí están respaldados, porque el proyecto vive dentro de OneDrive. Los
-> ficheros están en disco y sincronizados, y `.gitignore` solo impide que suban
-> a GitHub:
+> Pero sí están respaldados en la copia privada del proyecto, fuera de GitHub;
+> `.gitignore` solo impide que suban aquí:
 >
 > - `.env` — claves y tokens
 > - `deploy/fail2ban/jail.d/*.local` — umbrales de baneo y la IP de casa
+> - `/etc/johanfer-backup.env` — destino y credenciales de restic
 >
 > Al clonar el repo en una máquina nueva **no aparecerán**: hay que traerlos de
-> OneDrive. En el repo queda la estructura y el procedimiento, que es lo que de
+> esa copia. En el repo queda la estructura y el procedimiento, que es lo que de
 > verdad cuesta reconstruir de memoria.
 
 La base de datos es lo único verdaderamente irrecuperable: dentro están las
@@ -130,7 +130,7 @@ sudo cp deploy/fail2ban/action.d/*.conf /etc/fail2ban/action.d/
 sudo cp deploy/fail2ban/fail2ban.local /etc/fail2ban/
 
 # Los jail.d/*.local NO vienen en el clon (están gitignorados). Cópialos desde
-# OneDrive antes de este paso; ver deploy/fail2ban/jail.d/README.md.
+# la copia privada antes de este paso; ver deploy/fail2ban/jail.d/README.md.
 # Entre ellos va home-ip-ignore.local con la IP de casa: sin ese, te autobaneas
 # navegando por tu propio sitio.
 sudo cp deploy/fail2ban/jail.d/*.local /etc/fail2ban/jail.d/
@@ -234,8 +234,7 @@ gunicorn con `--preload` en una Pi 3. No es un fallo.
 
 ## Copias de seguridad
 
-Restic cifrado sobre rclone a OneDrive
-(`Backups/Johanfer-Raspberry/restic`), en dos piezas con ritmos distintos
+Restic cifrado sobre un remoto de rclone, en dos piezas con ritmos distintos
 porque lo que cuesta recuperar no es lo mismo:
 
 | qué | script | timer | retención |
@@ -248,10 +247,15 @@ Los scripts y units de Qdrant están versionados en
 [`deploy/bin/johanfer-qdrant-backup`](bin/johanfer-qdrant-backup) y
 [`deploy/systemd/`](systemd/), y los de la base también desde octubre de 2026
 (`deploy/bin/johanfer-db-backup` y `deploy/systemd/johanfer-db-backup.*`). Las
-dos unidades reintentan tres veces, cada 15 min, si falla la subida a OneDrive.
+dos unidades reintentan tres veces, cada 15 min, si falla la subida.
 El de mantenimiento sigue viviendo solo en la Pi.
 
+El destino del repositorio y las rutas de credenciales no van en los scripts:
+los leen de `/etc/johanfer-backup.env`, que no se versiona (plantilla en
+[`deploy/backup.env.example`](backup.env.example)).
+
 ```bash
+sudo install -m 600 -o root -g root /ruta/a/la/copia/johanfer-backup.env /etc/johanfer-backup.env
 sudo install -m 700 -o root -g root deploy/bin/johanfer-qdrant-backup deploy/bin/johanfer-db-backup /usr/local/sbin/
 sudo install -m 644 -o root -g root deploy/systemd/johanfer-qdrant-backup.* deploy/systemd/johanfer-db-backup.* /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now johanfer-qdrant-backup.timer johanfer-db-backup.timer

@@ -188,3 +188,4 @@ cython_debug/
 # Valores afinados de fail2ban: revelan a que ritmo puede sondear un escaner
 # sin que lo baneen, y el repositorio es publico. Van en la copia cifrada.
 deploy/fail2ban/jail.d/*.local
+deploy/johanfer-backup.env

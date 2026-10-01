@@ -5,9 +5,9 @@ Description=Backup cifrado de la base vectorial (Qdrant) de johanfer.com
 After=network-online.target qdrant.service
 Wants=network-online.target
 # Reintentos. Entre el 28/09 y el 01/10 de 2026 falló 2 de 4 noches porque
-# rclone no obtuvo respuesta de OneDrive a tiempo ("context deadline exceeded"),
+# el remoto de rclone no respondió a tiempo ("context deadline exceeded"),
 # y como corre una vez al día, cada fallo pasajero era un día sin copia.
-# El intento inicial más tres reintentos espaciados 15 min; si OneDrive sigue
+# El intento inicial más tres reintentos espaciados 15 min; si el remoto sigue
 # caído, se rinde (start-limit-hit) y lo vuelve a probar el timer siguiente.
 StartLimitIntervalSec=2h
 StartLimitBurst=4
