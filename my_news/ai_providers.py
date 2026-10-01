@@ -441,6 +441,11 @@ class GeminiProvider(BaseProvider):
             http_options=types.HttpOptions(
                 timeout=(GEMINI_THINKING_TIMEOUT_S if nivel else GEMINI_TIMEOUT_S) * 1000
             ),
+            # No se declaran herramientas, así que no hay funciones que llamar.
+            # Sin desactivarlo, el SDK 2.x entra en la rama de llamadas
+            # automáticas y escribe un aviso en cada proceso: uno por pasada
+            # del cron.
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
         if nivel:
             opciones['thinking_config'] = types.ThinkingConfig(thinking_level=nivel)
