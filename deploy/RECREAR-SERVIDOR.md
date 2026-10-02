@@ -195,6 +195,21 @@ sudo cp deploy/journald-size-limit.conf /etc/systemd/journald.conf.d/size-limit.
 sudo systemctl restart systemd-journald
 ```
 
+Lo que trae la imagen de Raspberry Pi OS y aquí no hace nada (octubre de 2026).
+Paquetes: ImageMagick y lo que arrastraba `neofetch` (el sitio procesa las
+imágenes con Pillow), las cabeceras de Postgres y de GPIO, NFS. Unidades:
+`man-db` regenera a diario el índice de manuales, `e2scrub` solo sirve con
+LVM, la Pi 3 no tiene EEPROM que actualizar y no hay pantalla.
+
+```bash
+sudo apt-get purge --autoremove neofetch imagemagick imagemagick-6.q16   libpq-dev libpigpio-dev libpigpiod-if-dev nfs-common rpcbind pastebinit
+sudo systemctl disable --now man-db.timer e2scrub_all.timer e2scrub_reap.service   rpi-eeprom-update.service rpi-display-backlight.service
+```
+
+Se quedan `avahi-daemon` (Windows encuentra la Pi como `raspberrypi` por mDNS)
+y el paquete `rpi-eeprom` (si se quita, se lleva `raspi-utils` y con él
+`vcgencmd`).
+
 El swap es **zram** (`zramswap.service`, `/etc/default/zramswap`: `ALGO=lz4`,
 `PERCENT=50`, `PRIORITY=100`), en RAM comprimida y no sobre la SD. Antes lo
 gestionaba `dphys-swapfile`; ya no está instalado y su `/var/swap` se borró en
