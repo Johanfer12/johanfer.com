@@ -1,0 +1,12 @@
+# El sábado y no el domingo: el mantenimiento del domingo (03:30) toma un
+# cerrojo exclusivo del repositorio y esta copia fallaría si coincidieran.
+[Unit]
+Description=Copia semanal de la configuración de johanfer.com
+
+[Timer]
+OnCalendar=Sat *-*-* 03:15:00
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

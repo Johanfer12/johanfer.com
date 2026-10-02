@@ -1,0 +1,68 @@
+#!/bin/bash
+# Copia semanal de lo que no está en el repo ni en los otros dos backups.
+# Instalar en /usr/local/sbin/johanfer-config-backup (ver deploy/systemd/).
+#
+# Está pensada para reinstalar en limpio, no para clonar la tarjeta: el código
+# y la configuración versionada salen del repo, la base y Qdrant de sus propios
+# backups, y esto aporta el resto (secretos, ajustes de la máquina y portadas).
+# Con un volcado de los paquetes y del crontab, para no olvidar nada al montar
+# la máquina nueva.
+set -Eeuo pipefail
+umask 077
+
+WORK_DIR=/var/lib/johanfer-backup/config
+CACHE_DIR=/var/cache/johanfer-restic
+# Destino y credenciales de restic: fuera del repo, en un fichero solo de root
+# (plantilla en deploy/backup.env.example).
+set -a; . /etc/johanfer-backup.env; set +a
+export RESTIC_CACHE_DIR="$CACHE_DIR"
+
+RUTAS=(
+  /home/johan/My_Bookshelf/.env
+  /home/johan/My_Bookshelf/media
+  /home/johan/ssl
+  /home/johan/.ssh/authorized_keys
+  /home/johan/.cloudflare_api_key
+  /home/johan/actualizar_cloudflare.sh
+  /home/johan/wifi_watchdog.sh
+  /home/johan/deploy.sh
+  /etc/johanfer-backup.env
+  /etc/nginx
+  /etc/fail2ban
+  /etc/ufw
+  /etc/letsencrypt
+  /etc/systemd/system
+  /etc/systemd/journald.conf.d
+  /etc/logrotate.d
+  /etc/sysctl.d
+  /etc/modprobe.d
+  /etc/default/zramswap
+  /etc/sudoers.d
+  /etc/NetworkManager/system-connections
+  /etc/hostname
+  /etc/hosts
+  /etc/fstab
+  /usr/local/sbin
+  /boot/firmware/config.txt
+  /boot/firmware/cmdline.txt
+)
+
+# Volcados de estado que no son ficheros: sirven de lista de comprobación.
+rm -rf "$WORK_DIR"; install -d -m 700 "$WORK_DIR" "$CACHE_DIR"
+crontab -l -u johan > "$WORK_DIR/crontab-johan.txt" 2>/dev/null || true
+apt-mark showmanual > "$WORK_DIR/paquetes-manuales.txt"
+dpkg --get-selections > "$WORK_DIR/dpkg-selections.txt"
+systemctl list-unit-files --state=enabled --no-legend --no-pager > "$WORK_DIR/unidades-habilitadas.txt"
+ufw status numbered > "$WORK_DIR/ufw-status.txt" 2>&1 || true
+/home/johan/My_Bookshelf/env/bin/pip freeze > "$WORK_DIR/pip-freeze.txt" 2>/dev/null || true
+cp /etc/os-release "$WORK_DIR/os-release"
+uname -a > "$WORK_DIR/uname.txt"
+
+# Solo las rutas que existen: restic marca la copia como incompleta (código 3)
+# si falta alguna, y una ruta que ya no existe no es un fallo.
+existentes=()
+for ruta in "${RUTAS[@]}"; do
+  [ -e "$ruta" ] && existentes+=("$ruta") || echo "No existe, se omite: $ruta"
+done
+
+/usr/bin/restic backup "${existentes[@]}" "$WORK_DIR" --host raspberrypi --tag johanfer-config

@@ -189,3 +189,4 @@ cython_debug/
 # sin que lo baneen, y el repositorio es publico. Van en la copia cifrada.
 deploy/fail2ban/jail.d/*.local
 deploy/johanfer-backup.env
+deploy/secretos/

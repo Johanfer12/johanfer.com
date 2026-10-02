@@ -1,0 +1,18 @@
+# Copia semanal de configuración y secretos. Instalar en /etc/systemd/system/.
+# El script va en /usr/local/sbin/johanfer-config-backup (ver deploy/bin/).
+[Unit]
+Description=Backup cifrado de la configuración de la máquina de johanfer.com
+After=network-online.target
+Wants=network-online.target
+# Reintentos: ver johanfer-qdrant-backup.service.
+StartLimitIntervalSec=2h
+StartLimitBurst=4
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/johanfer-config-backup
+UMask=0077
+Nice=15
+IOSchedulingClass=idle
+Restart=on-failure
+RestartSec=15min
