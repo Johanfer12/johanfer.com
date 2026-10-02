@@ -157,6 +157,31 @@ def _extract_listview(html: str, template: str) -> dict[str, Any]:
     raise CommentExtractionError("No se encontró la información de comentarios.")
 
 
+def _extract_assigned_array(html: str, name: str) -> list[Any] | None:
+    """Lee el array JSON de ``<name> = [...]``; ``None`` si la página no lo asigna.
+
+    Se busca la asignación y no la declaración: la página hace antes
+    ``var <name>;`` sin valor.
+    """
+    match = re.search(rf"(?<![\w$]){re.escape(name)}\s*=\s*\[", html)
+    if match is None:
+        return None
+    try:
+        value, _ = json.JSONDecoder().raw_decode(html[match.end() - 1:])
+    except json.JSONDecodeError as exc:
+        raise CommentExtractionError("La información de comentarios no es válida.") from exc
+    if not isinstance(value, list):
+        raise CommentExtractionError("La información de comentarios tiene un formato inesperado.")
+    return value
+
+
+def _rating(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 # Citas anidadas: el cuerpo no puede contener otra apertura, así que cada
 # pasada resuelve las de dentro y la siguiente las de fuera.
 _BBCODE_QUOTE_RE = re.compile(
@@ -627,6 +652,60 @@ class WowheadCommentExtractor(CommentExtractor):
         except ValueError:
             return fallback
 
+    def _raw_comments(self, html: str) -> list[Any]:
+        """Los comentarios de la página, en cualquiera de sus dos formatos.
+
+        Desde octubre de 2026 la página asigna ``lv_newsComments = [...]`` y el
+        Listview es un literal de JavaScript (claves sin comillas) que solo lo
+        referencia: ``new Listview({data: lv_newsComments, ...})``. Antes los
+        datos iban como JSON dentro del propio Listview. Se aceptan los dos para
+        no depender de que el cambio sea definitivo.
+        """
+        comments = _extract_assigned_array(html, "lv_newsComments")
+        if comments is not None:
+            return comments
+        return _extract_listview(html, self.listview_template).get("data") or []
+
+    def _top_level(self, item: dict[str, Any], comments: list[dict[str, Any]]) -> dict[str, Any] | None:
+        # Sin padre explícito, la jerarquía se reconstruye de la cita inicial:
+        # Wowhead sirve los comentarios del más antiguo al más nuevo, así que el
+        # padre de una respuesta ya está leído cuando llega.
+        quote = _split_leading_quote(item.get("body"))
+        parent = _parent_for_quote(comments, quote[0], quote[1]) if quote else None
+        # Colgada de su padre, la cita sobra; se conserva si era lo único
+        # que decía el comentario, que si no se quedaría vacío.
+        raw_body = quote[2] if parent is not None and quote[2] else item.get("body")
+        return self._normalized(
+            raw_body,
+            comment_id=str(item.get("id") or ""),
+            user=item.get("user"),
+            date=item.get("date"),
+            rating=item.get("rating"),
+            parent=parent,
+        )
+
+    def _normalized(self, raw_body, *, comment_id, user, date, rating, parent) -> dict[str, Any] | None:
+        body = _plain_text(_bbcode_to_text(raw_body))
+        if not body:
+            return None
+        return {
+            # Las citas que quedan (al artículo, o a alguien de otra página)
+            # viajan como bloque aparte para que no se lean como texto propio.
+            "blocks": _bbcode_blocks(raw_body),
+            "id": comment_id,
+            "user": user or "Anónimo",
+            "comment": body,
+            "date": str(date) if date else None,
+            "parent_id": parent["id"] if parent else None,
+            "depth": parent["depth"] + 1 if parent else 0,
+            # La puntuación neta de Wowhead; el formato antiguo no la traía, y
+            # None evita pintar un cero que mentiría.
+            "votes": _rating(rating),
+            "upvotes": None,
+            "downvotes": None,
+            "media": [],
+        }
+
     def extract(
         self,
         url: str,
@@ -635,46 +714,40 @@ class WowheadCommentExtractor(CommentExtractor):
         title: str | None = None,
     ) -> dict[str, Any]:
         article_html = _request_html(url, headers=WOWHEAD_REQUEST_HEADERS)
-        listview = _extract_listview(article_html, self.listview_template)
 
-        raw_comments = listview.get("data") or []
-        comments = []
-        for item in raw_comments[:MAX_COMMENTS]:
-            if not isinstance(item, dict):
+        comments: list[dict[str, Any]] = []
+        for item in self._raw_comments(article_html):
+            if len(comments) >= MAX_COMMENTS:
+                break
+            if not isinstance(item, dict) or item.get("deleted"):
                 continue
-
-            # La jerarquía se reconstruye de la cita inicial: Wowhead sirve los
-            # comentarios en plano y del más antiguo al más nuevo, así que el
-            # padre de una respuesta ya está leído cuando llega.
-            quote = _split_leading_quote(item.get("body"))
-            parent = _parent_for_quote(comments, quote[0], quote[1]) if quote else None
-            # Colgada de su padre, la cita sobra; se conserva si era lo único
-            # que decía el comentario, que si no se quedaría vacío.
-            raw_body = quote[2] if parent is not None and quote[2] else item.get("body")
-
-            body = _plain_text(_bbcode_to_text(raw_body))
-            if not body:
+            comment = self._top_level(item, comments)
+            if comment is None:
                 continue
-            comments.append({
-                # Las citas que quedan (al artículo, o a alguien de otra página)
-                # viajan como bloque aparte para que no se lean como texto propio.
-                "blocks": _bbcode_blocks(raw_body),
-                "id": str(item.get("id") or ""),
-                "user": item.get("user") or "Anónimo",
-                "comment": body,
-                "date": str(item["date"]) if item.get("date") else None,
-                "parent_id": parent["id"] if parent else None,
-                "depth": parent["depth"] + 1 if parent else 0,
-                # Tampoco publica votos; None evita pintar un cero que mentiría.
-                "votes": None,
-                "upvotes": None,
-                "downvotes": None,
-                "media": [],
-            })
+            comments.append(comment)
+
+            # El formato nuevo trae las respuestas dentro de su comentario, con
+            # otros nombres de campo. Tienen su propia numeración, así que el
+            # prefijo evita que un id choque con el de un comentario.
+            for reply in item.get("replies") or []:
+                if len(comments) >= MAX_COMMENTS:
+                    break
+                if not isinstance(reply, dict):
+                    continue
+                normalized = self._normalized(
+                    reply.get("body"),
+                    comment_id=f"r-{reply.get('id')}",
+                    user=reply.get("username"),
+                    date=reply.get("creationdate"),
+                    rating=reply.get("rating"),
+                    parent=comment,
+                )
+                if normalized is not None:
+                    comments.append(normalized)
 
         return {
             "source": self.source_name,
-            "total": self._total_from_page(article_html, len(comments)),
+            "total": max(self._total_from_page(article_html, len(comments)), len(comments)),
             "comments": _as_thread_order(comments),
         }
 

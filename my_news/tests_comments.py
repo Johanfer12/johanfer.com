@@ -640,3 +640,92 @@ class WowheadBBCodeTests(SimpleTestCase):
             result = WowheadCommentExtractor().extract('https://www.wowhead.com/news=1/x')
 
         self.assertEqual([c['id'] for c in result['comments']], ['2'])
+
+
+def wowhead_page_v2(comments, *, label=None):
+    """La página desde octubre de 2026: los datos en lv_newsComments y un
+    Listview que es un literal de JavaScript, no JSON."""
+    toggle = ''
+    if label is not None:
+        toggle = f'<div data-show-label="{label}" id="comments-button-toggle-group"></div>'
+    return (
+        f'{toggle}<script>var lv_newsComments;\nvar _ = g_users;\n'
+        f'lv_newsComments = {json.dumps(comments)};\n</script>'
+        "<script>if (lv_newsComments.length) {\n"
+        "new Listview({data: lv_newsComments, id: 'news-comments', "
+        "sourceTreeLabels: false, template: 'news-comment'});\n}</script>"
+    )
+
+
+class WowheadNewFormatTests(SimpleTestCase):
+    ARTICLE_URL = 'https://www.wowhead.com/news=383224/enchanting-flips'
+
+    def comment(self, id, user, body, *, replies=(), deleted=0, rating=2):
+        return {
+            'commentv2': 1, 'id': id, 'user': user, 'body': body,
+            'date': '2026-10-01T19:34:55-05:00', 'nreplies': len(replies),
+            'indent': 0, 'deleted': deleted, 'rating': rating, 'replies': list(replies),
+        }
+
+    def reply(self, id, parent, username, body, rating=0):
+        return {
+            'id': id, 'commentid': parent, 'username': username, 'body': body,
+            'creationdate': '2026-10-01T19:39:42-05:00', 'rating': rating,
+        }
+
+    @patch('my_news.comment_extractors.requests.get')
+    def test_reads_comments_and_their_nested_replies(self, get_mock):
+        get_mock.return_value = response_with_text(wowhead_page_v2(
+            [
+                self.comment(6439556, 'takasinners', 'Based.' + CRNL + CRNL + 'Play fair.',
+                             replies=[self.reply(1861234, 6439556, 'Zhandd', 'Unintended? Flipping is old.', -3)]),
+                self.comment(6439560, 'Otro', 'Segundo hilo'),
+            ],
+            label='Show 2 Comments',
+        ))
+
+        result = WowheadCommentExtractor().extract(self.ARTICLE_URL)
+
+        self.assertEqual(
+            [(c['id'], c['user'], c['parent_id'], c['depth']) for c in result['comments']],
+            [
+                ('6439556', 'takasinners', None, 0),
+                ('r-1861234', 'Zhandd', '6439556', 1),
+                ('6439560', 'Otro', None, 0),
+            ],
+        )
+        respuesta = result['comments'][1]
+        self.assertEqual(respuesta['comment'], 'Unintended? Flipping is old.')
+        self.assertEqual(respuesta['date'], '2026-10-01T19:39:42-05:00')
+        self.assertEqual(respuesta['votes'], -3)
+        self.assertEqual(result['comments'][0]['votes'], 2)
+        # El botón cuenta hilos; con las respuestas hay más entradas que eso.
+        self.assertEqual(result['total'], 3)
+
+    @patch('my_news.comment_extractors.requests.get')
+    def test_skips_deleted_comments(self, get_mock):
+        get_mock.return_value = response_with_text(wowhead_page_v2([
+            self.comment(1, 'Ada', 'Borrado', deleted=1),
+            self.comment(2, 'Linus', 'Visible'),
+        ]))
+
+        result = WowheadCommentExtractor().extract(self.ARTICLE_URL)
+
+        self.assertEqual([c['comment'] for c in result['comments']], ['Visible'])
+
+    @patch('my_news.comment_extractors.requests.get')
+    def test_a_page_without_comments_is_empty_not_an_error(self, get_mock):
+        get_mock.return_value = response_with_text(wowhead_page_v2([], label='Show 0 Comments'))
+
+        result = WowheadCommentExtractor().extract(self.ARTICLE_URL)
+
+        self.assertEqual(result['comments'], [])
+        self.assertEqual(result['total'], 0)
+
+    @patch('my_news.comment_extractors.requests.get')
+    def test_the_declaration_without_value_is_not_mistaken_for_the_data(self, get_mock):
+        # Solo `var lv_newsComments;`, sin asignación ni Listview antiguo.
+        get_mock.return_value = response_with_text('<script>var lv_newsComments;</script>')
+
+        with self.assertRaises(CommentExtractionError):
+            WowheadCommentExtractor().extract(self.ARTICLE_URL)
