@@ -43,6 +43,9 @@ PAGE_SIZE = 25
 # Palabras filtro por tanda en la configuración. Con 150 reglas, pintarlas
 # todas de golpe eran 354 KB de HTML; la búsqueda hace el resto.
 WORD_FILTERS_PAGE_SIZE = 40
+# Ventana del orden «Más filtradas»: la misma que vive una noticia antes de
+# que `purge_old_news` la borre.
+WORD_FILTERS_RECENT_DAYS = 15
 # Filas por tanda en la página de redundancia. Cada una lleva el texto
 # completo de la noticia (dos, en los pares redundantes), así que pintar el
 # día entero eran 365 KB de HTML.
@@ -389,7 +392,8 @@ def feed_management(request):
     # de recorrer la lista, que ya no está entera aquí.
     search = (request.GET.get('q') or '').strip()
     state = _word_filter_state(request.GET.get('estado'))
-    word_filters, matched_word_filters, _, has_more_word_filters = _word_filter_page(search, state, 0)
+    order = _word_filter_order(request.GET.get('orden'))
+    word_filters, matched_word_filters, _, has_more_word_filters = _word_filter_page(search, state, order, 0)
     word_filter_totals = FilterWord.objects.aggregate(
         total=Count('pk'),
         active=Count('pk', filter=Q(active=True)),
@@ -401,6 +405,8 @@ def feed_management(request):
         'ai_filters': ai_filters,
         'word_filter_search': search,
         'word_filter_state': state,
+        'word_filter_order': order,
+        'word_filters_recent_days': WORD_FILTERS_RECENT_DAYS,
         'matched_word_filters': matched_word_filters,
         'has_more_word_filters': has_more_word_filters,
         'next_word_filter_offset': len(word_filters),
@@ -443,17 +449,36 @@ def _word_filter_state(value):
     return value if value in ('active', 'paused') else 'all'
 
 
-def _word_filter_page(search, state, offset):
-    """Una tanda de palabras más el total que casa con la búsqueda."""
+def _word_filter_order(value):
+    return value if value == 'filtradas' else 'alfabetico'
+
+
+def _word_filter_page(search, state, order, offset):
+    """Una tanda de palabras más el total que casa con la búsqueda.
+
+    El recuento es de los últimos `WORD_FILTERS_RECENT_DAYS` días, también
+    cuando se ordena alfabéticamente, para que la cifra de la tarjeta sea la
+    misma con los dos órdenes.
+    """
     # El total se cuenta sobre el queryset SIN anotar: con el `annotate` el
     # COUNT se envuelve en una subconsulta agrupada que no hace falta para
     # contar filas.
     matched = _word_filter_base(search, state).count()
+    since = timezone.now() - timedelta(days=WORD_FILTERS_RECENT_DAYS)
     rows_qs = (
         _word_filter_base(search, state)
-        .annotate(news_count=Count('filtered_news'))
-        .order_by('word', 'pk')
+        .annotate(news_count=Count(
+            'filtered_news',
+            filter=Q(filtered_news__created_at__gte=since),
+        ))
     )
+    # El desempate por palabra y pk hace falta para paginar: con el mismo
+    # recuento en varias filas, sin un orden total una tanda podría repetir o
+    # saltarse palabras de la anterior.
+    if order == 'filtradas':
+        rows_qs = rows_qs.order_by('-news_count', 'word', 'pk')
+    else:
+        rows_qs = rows_qs.order_by('word', 'pk')
     # Devuelve el desplazamiento ya acotado: quien lo llama lo necesita para
     # decir por dónde sigue, y con uno negativo la cuenta saldría mal.
     offset = max(0, offset)
@@ -467,12 +492,13 @@ def word_filter_rows(request):
     """Tanda de palabras filtro en JSON, para buscar sin recargar la página."""
     search = (request.GET.get('q') or '').strip()
     state = _word_filter_state(request.GET.get('estado'))
+    order = _word_filter_order(request.GET.get('orden'))
     try:
         offset = int(request.GET.get('offset') or 0)
     except (TypeError, ValueError):
         offset = 0
 
-    rows, matched, offset, has_more = _word_filter_page(search, state, offset)
+    rows, matched, offset, has_more = _word_filter_page(search, state, order, offset)
     html = ''.join(
         render_to_string('feed_management_word_card.html', {'filter': word_filter}, request=request)
         for word_filter in rows

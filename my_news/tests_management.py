@@ -337,3 +337,39 @@ class WordFilterSearchTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn('word-filters', response.url)
+
+    def _filtered_news(self, word, count, *, days_ago=0):
+        source, _ = FeedSource.objects.get_or_create(
+            name='Fuente', defaults={'url': 'https://example.com/feed.xml'}
+        )
+        created = timezone.now() - timezone.timedelta(days=days_ago)
+        for index in range(count):
+            news = News.objects.create(
+                title=f'{word.word} {days_ago} {index}', description='Texto',
+                link=f'https://example.com/{word.pk}/{days_ago}/{index}',
+                published_date=created, source=source,
+                guid=f'orden-{word.pk}-{days_ago}-{index}',
+                filtered_by=word, is_filtered=True,
+            )
+            # `auto_now_add` ignora el valor que se le pase al crear.
+            News.objects.filter(pk=news.pk).update(created_at=created)
+
+    def test_order_by_most_filtered_in_the_recent_window(self):
+        tail = FilterWord.objects.get(word='palabra-094')
+        self._filtered_news(tail, 3)
+        self._filtered_news(self.vox, 2)
+        # Las viejas no cuentan: si contaran, Vox pasaría por delante.
+        self._filtered_news(self.vox, 5, days_ago=20)
+
+        payload = self.rows(orden='filtradas').json()
+
+        html = payload['html']
+        self.assertLess(html.index('palabra-094'), html.index('>Vox<'))
+        self.assertLess(html.index('>Vox<'), html.index('palabra-000'))
+        self.assertIn('2 filtradas', html)
+
+    def test_alphabetical_order_is_the_default(self):
+        self._filtered_news(self.vox, 3)
+
+        self.assertIn('palabra-000', self.rows().json()['html'])
+        self.assertIn('palabra-000', self.rows(orden='inventado').json()['html'])

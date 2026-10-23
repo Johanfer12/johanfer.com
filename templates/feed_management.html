@@ -103,6 +103,10 @@
                     <option value="active" {% if word_filter_state == 'active' %}selected{% endif %}>Activos</option>
                     <option value="paused" {% if word_filter_state == 'paused' %}selected{% endif %}>Pausados</option>
                 </select>
+                <select name="orden" aria-label="Orden de los filtros" data-word-filter-orden>
+                    <option value="alfabetico" {% if word_filter_order == 'alfabetico' %}selected{% endif %}>A-Z</option>
+                    <option value="filtradas" {% if word_filter_order == 'filtradas' %}selected{% endif %}>Más filtradas ({{ word_filters_recent_days }} días)</option>
+                </select>
                 <button class="management-secondary" type="submit">Buscar</button>
             </form>
             <p class="management-search-summary" data-word-filter-summary aria-live="polite"></p>

@@ -13,7 +13,7 @@ no perder la búsqueda que hubiera escrita.
     <div class="management-word-row management-word-main">
         <span class="status-pill {% if filter.active %}is-active{% endif %}">{% if filter.active %}Activo{% else %}Pausado{% endif %}</span>
         <h3 title="{{ filter.word }}">{{ filter.word }}</h3>
-        <span class="management-count">{{ filter.news_count }} filtradas</span>
+        <span class="management-count" title="En los últimos 15 días">{{ filter.news_count }} filtradas</span>
     </div>
     <div class="management-word-row management-word-secondary">
         <p>{% if filter.title_only %}Solo en el título{% else %}Título y descripción{% endif %}</p>

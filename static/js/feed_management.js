@@ -98,6 +98,7 @@
 
     const input = form.querySelector('input[name="q"]');
     const estado = form.querySelector('[data-word-filter-estado]');
+    const orden = form.querySelector('[data-word-filter-orden]');
     const clearButton = form.querySelector('[data-word-filter-clear]');
     const moreButton = document.querySelector('[data-word-filter-more]');
     const summary = document.querySelector('[data-word-filter-summary]');
@@ -146,6 +147,7 @@
         const query = (input?.value || '').trim();
         if (query) params.set('q', query);
         if (estado?.value && estado.value !== 'all') params.set('estado', estado.value);
+        if (orden?.value && orden.value !== 'alfabetico') params.set('orden', orden.value);
         params.set('offset', append ? grid.dataset.nextOffset || '0' : '0');
 
         const id = ++requestId;
@@ -191,10 +193,12 @@
     });
 
     input?.addEventListener('input', scheduleSearch);
-    estado?.addEventListener('change', () => {
-        clearTimeout(timer);
-        loadRows({ append: false });
-    });
+    for (const select of [estado, orden]) {
+        select?.addEventListener('change', () => {
+            clearTimeout(timer);
+            loadRows({ append: false });
+        });
+    }
     clearButton?.addEventListener('click', () => {
         if (!input) return;
         input.value = '';
