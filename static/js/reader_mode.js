@@ -26,7 +26,12 @@
         grid: $('.news-grid'),
         remaining: $('.reader-remaining'),
         headerCounter: $('.header-counter'),
+        continuousBtn: $('.reader-continuous-btn'),
     };
+
+    const CONTINUOUS_KEY = 'reader:continuous';
+    // Pausa entre una noticia y la siguiente en lectura continua
+    const CONTINUOUS_GAP_MS = 900;
 
     const STATE = {
         active: false,
@@ -40,6 +45,8 @@
         touchEndY: 0,
         minSwipeDistance: 50,
         processingGesture: false,
+        continuous: false,
+        advanceTimer: null,
     };
 
     /* ---------------------------------------------------------------------
@@ -108,6 +115,8 @@
 
     /** Detener lectura actual */
     const stopSpeaking = () => {
+        clearTimeout(STATE.advanceTimer);
+        STATE.advanceTimer = null;
         if (speechSynthesis.speaking || speechSynthesis.pending) {
             speechSynthesis.cancel();
         }
@@ -158,16 +167,15 @@
 
         utterance.onend = () => {
             console.log('[reader] Lectura finalizada');
-            if (onEnd) onEnd();
+            if (onEnd && STATE.utterance === utterance) onEnd();
         };
 
         utterance.onerror = (e) => {
-            // Solo reportar errores que no sean "interrupted" (causados por stopSpeaking)
-            if (e.error !== 'interrupted') {
-                console.error('[reader] Error en TTS:', e);
-            }
-            // Continuar con la siguiente noticia si hay un callback
-            if (onEnd) onEnd();
+            // "interrupted"/"canceled" los provoca stopSpeaking: quien cortó la
+            // lectura ya decidió qué viene después, así que no se encadena nada.
+            if (e.error === 'interrupted' || e.error === 'canceled') return;
+            console.error('[reader] Error en TTS:', e);
+            if (onEnd && STATE.utterance === utterance) onEnd();
         };
 
         STATE.utterance = utterance;
@@ -179,6 +187,43 @@
 
         speechSynthesis.speak(utterance);
     };
+
+    /* ---------------------------------------------------------------------
+     *  Lectura continua
+     * ------------------------------------------------------------------ */
+
+    /** Al acabar de leer: en modo continuo, pasar a la siguiente noticia */
+    const onSpeechEnd = () => {
+        if (!STATE.active || !STATE.continuous) return;
+        clearTimeout(STATE.advanceTimer);
+        STATE.advanceTimer = setTimeout(() => {
+            STATE.advanceTimer = null;
+            if (!STATE.active || !STATE.continuous) return;
+            // Se detiene en la última en vez de volver a empezar por la primera
+            if (STATE.currentIndex + 1 >= getNewsCards().length) {
+                DOM.text.textContent = 'No quedan más noticias';
+                speak('No quedan más noticias');
+                return;
+            }
+            nextNews();
+        }, CONTINUOUS_GAP_MS);
+    };
+
+    const setContinuous = (on) => {
+        STATE.continuous = on;
+        DOM.continuousBtn?.setAttribute('aria-pressed', String(on));
+        try { localStorage.setItem(CONTINUOUS_KEY, on ? '1' : '0'); } catch (e) { /* sin almacenamiento */ }
+        // Si se activa con la lectura ya terminada, arrancar ahora
+        if (on && STATE.active && !speechSynthesis.speaking && !speechSynthesis.pending) {
+            onSpeechEnd();
+        } else if (!on) {
+            clearTimeout(STATE.advanceTimer);
+            STATE.advanceTimer = null;
+        }
+    };
+
+    try { STATE.continuous = localStorage.getItem(CONTINUOUS_KEY) === '1'; } catch (e) { /* sin almacenamiento */ }
+    DOM.continuousBtn?.setAttribute('aria-pressed', String(STATE.continuous));
 
     /* ---------------------------------------------------------------------
      *  Navegación de noticias
@@ -210,7 +255,7 @@
 
         // Leer título y resumen corto
         const textToRead = `${data.title}. ${data.shortAnswer || ''}`;
-        speak(textToRead);
+        speak(textToRead, onSpeechEnd);
 
         console.log(`[reader] Noticia ${index + 1} de ${STATE.newsCards.length}`);
     };
@@ -230,10 +275,10 @@
 
         if (data.description && data.description.trim().length > 0) {
             DOM.text.textContent = data.description;
-            speak(data.description);
+            speak(data.description, onSpeechEnd);
         } else {
             DOM.text.textContent = 'Sin descripción adicional';
-            speak('Sin descripción adicional');
+            speak('Sin descripción adicional', onSpeechEnd);
         }
     };
 
@@ -430,6 +475,11 @@
 
     DOM.btn.addEventListener('click', toggleReaderMode);
 
+    DOM.continuousBtn?.addEventListener('click', () => setContinuous(!STATE.continuous));
+    // El toque en el botón no debe contar como gesto del lector
+    DOM.continuousBtn?.addEventListener('touchstart', (e) => e.stopPropagation());
+    DOM.continuousBtn?.addEventListener('touchend', (e) => e.stopPropagation());
+
     // Manejar teclas (para testing en desktop)
     document.addEventListener('keydown', (e) => {
         if (!STATE.active) return;
@@ -454,6 +504,11 @@
             case 'Escape':
                 e.preventDefault();
                 exitReaderMode();
+                break;
+            case 'c':
+            case 'C':
+                e.preventDefault();
+                setContinuous(!STATE.continuous);
                 break;
         }
     });

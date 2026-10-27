@@ -1581,26 +1581,50 @@ body.reader-active {
     user-select: none;
 }
 
+/* El fondo sigue en negro puro (en AMOLED es lo que ahorra: casi toda la
+   pantalla apagada). El texto ocupa poco, así que aclararlo cuesta muy poco;
+   el #333 de antes no se leía. */
 .reader-title {
     font-size: 1.8em;
     font-weight: bold;
     margin-bottom: 30px;
     line-height: 1.4;
-    color: #333333; /* Gris tenue como la descripción para AMOLED */
+    color: #c9d1de;
 }
 
 .reader-text {
     font-size: 1.2em;
     line-height: 1.6;
     margin-bottom: 50px;
-    color: #333333; /* Gris muy tenue para ahorrar batería AMOLED */
+    color: #9aa4b5;
 }
 
 .reader-remaining {
     font-size: 1em;
     margin-bottom: 35px;
-    color: #333333; /* Igual que el texto principal */
-    opacity: 0.8;
+    color: #6b7485;
+}
+
+/* Lectura continua: al terminar una noticia pasa sola a la siguiente */
+.reader-continuous-btn {
+    position: absolute;
+    top: calc(16px + env(safe-area-inset-top, 0px));
+    right: 16px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px 14px;
+    font: inherit;
+    font-size: var(--text-sm);
+    color: #6b7485;
+    background: transparent;
+    border: 1px solid #2a2f38;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+}
+
+.reader-continuous-btn[aria-pressed="true"] {
+    color: #8fb4e8;
+    border-color: #8fb4e8;
 }
 
 .reader-gestures-hint {
@@ -1638,26 +1662,15 @@ body.reader-active {
 
     .reader-title {
         font-size: 1.5em;
-        color: #2a2a2a; /* Aún más tenue en móvil */
     }
 
     .reader-text {
         font-size: 1.1em;
-        color: #2a2a2a; /* Aún más tenue en móvil */
-    }
-
-    .reader-remaining {
-        color: #2a2a2a;
     }
 
     .reader-gestures-hint {
         font-size: 0.75em;
         gap: 10px;
-        color: #06101f; /* Hints muy oscuros para AMOLED */
-    }
-
-    .reader-gestures-hint > div {
-        background: rgba(255, 255, 255, 0.05); /* Fondo casi imperceptible */
     }
 }
 
