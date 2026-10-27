@@ -1889,6 +1889,27 @@
         setOrderIcon();
     });
 
+    /** Cambiar de página sin recargar. La usa la lectura continua del lector,
+     *  que no puede seguir por un enlace: la recarga cortaría la voz. Devuelve
+     *  false si esa página no existe. */
+    const goToPage = async (page) => {
+        const q = new URLSearchParams(location.search).get('q') || '';
+        const data = await serverGetPage({page, order: STATE.order, q});
+        if (data.status !== 'success' || page > (data.total_pages || 0) || !(data.cards || []).length) {
+            return false;
+        }
+        const params = new URLSearchParams(location.search);
+        params.set('page', String(page));
+        // Antes de pintar: la paginación lee la página actual de la URL
+        history.replaceState(null, '', `?${params.toString()}`);
+        STATE.currentPage = page;
+        renderPageFromServerData(data);
+        window.scrollTo(0, 0);
+        return true;
+    };
+
+    window.NewsFeed = {goToPage};
+
     /* ---------------------------------------------------------------------
      *  Arranque
      * ------------------------------------------------------------------ */

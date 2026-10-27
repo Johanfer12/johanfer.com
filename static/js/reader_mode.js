@@ -47,6 +47,8 @@
         processingGesture: false,
         continuous: false,
         advanceTimer: null,
+        speechId: 0,
+        loadingPage: false,
     };
 
     /* ---------------------------------------------------------------------
@@ -117,6 +119,7 @@
     const stopSpeaking = () => {
         clearTimeout(STATE.advanceTimer);
         STATE.advanceTimer = null;
+        STATE.speechId += 1;
         if (speechSynthesis.speaking || speechSynthesis.pending) {
             speechSynthesis.cancel();
         }
@@ -139,73 +142,123 @@
         return null;
     };
 
+    /** Partir el texto en frases de hasta ~220 caracteres. Chrome corta en
+     *  silencio las locuciones largas (~15 s) y no avisa con onend, así que el
+     *  reverso entero en una sola pieza dejaba la lectura continua colgada. */
+    const splitChunks = (text, max = 220) => {
+        const sentences = text.match(/[^.!?…]+[.!?…]+["»”)]*\s*|[^.!?…]+$/g) || [text];
+        const chunks = [];
+        let current = '';
+        sentences.forEach((sentence) => {
+            if (current && (current + sentence).length > max) {
+                chunks.push(current.trim());
+                current = '';
+            }
+            current += sentence;
+        });
+        if (current.trim()) chunks.push(current.trim());
+        return chunks;
+    };
+
     /** Leer texto usando TTS */
     const speak = (text, onEnd = null) => {
         if (!text || text.trim().length === 0) {
             console.warn('[reader] No hay texto para leer');
+            if (onEnd) onEnd();
             return;
         }
 
         // Cancelar cualquier lectura pendiente
         stopSpeaking();
-
-        const utterance = new SpeechSynthesisUtterance(cleanText(text));
-
-        // Usar la voz en español del sistema si está disponible
+        const id = STATE.speechId;
+        const chunks = splitChunks(cleanText(text));
         const voice = getSpanishVoice();
-        if (voice) {
-            utterance.voice = voice;
-            utterance.lang = voice.lang;
-        } else {
-            // Fallback: especificar idioma español
-            utterance.lang = 'es-US';
-        }
 
-        utterance.rate = 0.95;  // Velocidad ligeramente más lenta (más natural)
-        utterance.pitch = 1.0;  // Tono de voz
-        utterance.volume = 1.0; // Volumen máximo
+        const speakChunk = (i) => {
+            if (id !== STATE.speechId) return;
+            if (i >= chunks.length) {
+                STATE.utterance = null;
+                console.log('[reader] Lectura finalizada');
+                if (onEnd) onEnd();
+                return;
+            }
 
-        utterance.onend = () => {
-            console.log('[reader] Lectura finalizada');
-            if (onEnd && STATE.utterance === utterance) onEnd();
+            const utterance = new SpeechSynthesisUtterance(chunks[i]);
+            if (voice) {
+                utterance.voice = voice;
+                utterance.lang = voice.lang;
+            } else {
+                // Fallback: especificar idioma español
+                utterance.lang = 'es-US';
+            }
+            utterance.rate = 0.95;  // Velocidad ligeramente más lenta (más natural)
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+
+            utterance.onend = () => speakChunk(i + 1);
+            utterance.onerror = (e) => {
+                // "interrupted"/"canceled" los provoca stopSpeaking: quien cortó la
+                // lectura ya decidió qué viene después, así que no se encadena nada.
+                if (e.error === 'interrupted' || e.error === 'canceled') return;
+                console.error('[reader] Error en TTS:', e);
+                speakChunk(i + 1);
+            };
+
+            STATE.utterance = utterance;
+            if (speechSynthesis.paused) {
+                speechSynthesis.resume();
+            }
+            speechSynthesis.speak(utterance);
         };
 
-        utterance.onerror = (e) => {
-            // "interrupted"/"canceled" los provoca stopSpeaking: quien cortó la
-            // lectura ya decidió qué viene después, así que no se encadena nada.
-            if (e.error === 'interrupted' || e.error === 'canceled') return;
-            console.error('[reader] Error en TTS:', e);
-            if (onEnd && STATE.utterance === utterance) onEnd();
-        };
-
-        STATE.utterance = utterance;
-
-        // Asegurar que speechSynthesis esté listo
-        if (speechSynthesis.paused) {
-            speechSynthesis.resume();
-        }
-
-        speechSynthesis.speak(utterance);
+        speakChunk(0);
     };
 
     /* ---------------------------------------------------------------------
      *  Lectura continua
      * ------------------------------------------------------------------ */
 
-    /** Al acabar de leer: en modo continuo, pasar a la siguiente noticia */
+    /** Pasar a la primera noticia de la página siguiente del feed */
+    const goToNextPage = async () => {
+        if (!window.NewsFeed?.goToPage || STATE.loadingPage) return false;
+        STATE.loadingPage = true;
+        DOM.text.textContent = 'Cargando la página siguiente…';
+        try {
+            const page = parseInt(new URLSearchParams(location.search).get('page') || '1', 10) || 1;
+            return await window.NewsFeed.goToPage(page + 1);
+        } catch (e) {
+            console.error('[reader] No se pudo cargar la página siguiente:', e);
+            return false;
+        } finally {
+            STATE.loadingPage = false;
+        }
+    };
+
+    /** Al acabar de leer, en modo continuo: del anverso al reverso, y del
+     *  reverso a la noticia siguiente (o a la página siguiente) */
     const onSpeechEnd = () => {
         if (!STATE.active || !STATE.continuous) return;
         clearTimeout(STATE.advanceTimer);
-        STATE.advanceTimer = setTimeout(() => {
+        STATE.advanceTimer = setTimeout(async () => {
             STATE.advanceTimer = null;
             if (!STATE.active || !STATE.continuous) return;
-            // Se detiene en la última en vez de volver a empezar por la primera
-            if (STATE.currentIndex + 1 >= getNewsCards().length) {
-                DOM.text.textContent = 'No quedan más noticias';
-                speak('No quedan más noticias');
+
+            if (!STATE.readingBack) {
+                readBack();
                 return;
             }
-            nextNews();
+            if (STATE.currentIndex + 1 < getNewsCards().length) {
+                nextNews();
+                return;
+            }
+            const loaded = await goToNextPage();
+            if (!STATE.active || !STATE.continuous) return;
+            if (loaded) {
+                loadNews(0);
+            } else {
+                DOM.text.textContent = 'No quedan más noticias';
+                speak('No quedan más noticias');
+            }
         }, CONTINUOUS_GAP_MS);
     };
 
@@ -214,7 +267,7 @@
         DOM.continuousBtn?.setAttribute('aria-pressed', String(on));
         try { localStorage.setItem(CONTINUOUS_KEY, on ? '1' : '0'); } catch (e) { /* sin almacenamiento */ }
         // Si se activa con la lectura ya terminada, arrancar ahora
-        if (on && STATE.active && !speechSynthesis.speaking && !speechSynthesis.pending) {
+        if (on && STATE.active && !STATE.utterance && !speechSynthesis.speaking && !speechSynthesis.pending) {
             onSpeechEnd();
         } else if (!on) {
             clearTimeout(STATE.advanceTimer);
