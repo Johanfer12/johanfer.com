@@ -137,6 +137,29 @@ class FeedManagementTests(TestCase):
             ).exists()
         )
 
+    def test_word_filter_quick_create_from_feed_answers_json(self):
+        self.login()
+        url = reverse('my_news:word_filter_create')
+        ajax = {'HTTP_X_REQUESTED_WITH': 'XMLHttpRequest'}
+
+        created = self.client.post(url, {'word': '  oferta flash ', 'active': 'on'}, **ajax)
+        self.assertEqual(created.status_code, 200)
+        self.assertEqual(created.json()['status'], 'success')
+        word_filter = FilterWord.objects.get(word='oferta flash')
+        self.assertTrue(word_filter.active)
+        # Sin la casilla marcada, el formulario manda False.
+        self.assertFalse(word_filter.title_only)
+
+        # El duplicado se detecta sin distinguir mayúsculas y se explica.
+        duplicate = self.client.post(url, {'word': 'HORÓSCOPO', 'active': 'on'}, **ajax)
+        self.assertEqual(duplicate.status_code, 400)
+        self.assertIn('horóscopo', duplicate.json()['message'])
+        self.assertEqual(FilterWord.objects.filter(word__iexact='horóscopo').count(), 1)
+
+        news_response = self.client.get(reverse('my_news:news_list'))
+        self.assertContains(news_response, 'id="filterWordBtn"')
+        self.assertContains(news_response, 'id="news-filter-modal"')
+
     def test_word_filter_can_be_edited_toggled_and_deleted(self):
         self.login()
         edit_url = reverse('my_news:word_filter_edit', args=[self.word_filter.pk])

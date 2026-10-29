@@ -546,6 +546,13 @@ def source_edit(request, pk):
 @superuser_required
 def word_filter_create(request):
     form = FilterWordForm(request.POST or None)
+    if request.method == 'POST' and _is_ajax(request):
+        # El modal del feed: crea sin salir de la página que se está leyendo.
+        if not form.is_valid():
+            errors = [error for field_errors in form.errors.values() for error in field_errors]
+            return JsonResponse({'status': 'error', 'message': ' '.join(errors)}, status=400)
+        word_filter = form.save()
+        return JsonResponse({'status': 'success', 'message': f"Filtro «{word_filter.word}» creado."})
     if request.method == 'POST' and form.is_valid():
         word_filter = form.save()
         messages.success(request, f"Filtro «{word_filter.word}» creado.")

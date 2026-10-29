@@ -49,6 +49,19 @@ class FilterWordForm(forms.ModelForm):
             ),
         }
 
+    def clean_word(self):
+        word = self.cleaned_data["word"].strip()
+        if not word:
+            raise forms.ValidationError("Escribe una palabra o frase.")
+        # En Python y no con `iexact`: SQLite solo pliega mayúsculas en ASCII,
+        # así que «HORÓSCOPO» y «horóscopo» le parecerían distintas.
+        folded = word.casefold()
+        others = FilterWord.objects.exclude(pk=self.instance.pk).values_list("word", flat=True)
+        duplicate = next((other for other in others if other.casefold() == folded), None)
+        if duplicate:
+            raise forms.ValidationError(f"Ya existe el filtro «{duplicate}».")
+        return word
+
 
 class AIFilterInstructionForm(forms.ModelForm):
     class Meta:

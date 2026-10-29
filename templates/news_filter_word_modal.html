@@ -1,0 +1,28 @@
+<div class="news-comments-modal news-filter-modal" id="news-filter-modal" hidden role="dialog" aria-modal="true" aria-labelledby="news-filter-title">
+    <button type="button" class="news-comments-backdrop" data-filter-close aria-label="Cerrar" tabindex="-1"></button>
+    <section class="news-comments-panel news-filter-panel">
+        <header class="news-comments-header">
+            <div>
+                <p class="news-comments-eyebrow">Filtros por palabra</p>
+                <h2 id="news-filter-title">Nueva palabra filtro</h2>
+                <p class="news-comments-summary">Se aplica a las noticias que lleguen a partir de ahora.</p>
+            </div>
+            <button type="button" class="news-comments-close" data-filter-close aria-label="Cerrar">&times;</button>
+        </header>
+        <form class="news-filter-form" id="news-filter-form" method="post" action="{% url 'my_news:word_filter_create' %}" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="active" value="on">
+            <label class="news-filter-label" for="news-filter-word">Palabra o frase</label>
+            <input class="news-filter-input" id="news-filter-word" name="word" type="text" maxlength="100" autocomplete="off" placeholder="Ej. horóscopo" required>
+            <label class="news-filter-check">
+                <input type="checkbox" name="title_only" checked>
+                Buscar solo en el título
+            </label>
+            <p class="news-filter-status" id="news-filter-status" role="status" aria-live="polite"></p>
+            <div class="news-filter-actions">
+                <a class="news-filter-link" href="{% url 'my_news:feed_management' %}#word-filters">Ver todos</a>
+                <button type="submit" class="news-filter-submit">Crear filtro</button>
+            </div>
+        </form>
+    </section>
+</div>

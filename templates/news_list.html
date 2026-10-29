@@ -116,6 +116,14 @@
                 {% endif %}
             </button>
 
+            {% if user.is_superuser %}
+            <button class="filter-word-btn" id="filterWordBtn" type="button" title="Añadir palabra filtro" aria-label="Añadir palabra filtro" aria-haspopup="dialog" aria-controls="news-filter-modal">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 4h18l-7 8.5V19l-4 2v-8.5L3 4z"></path>
+                </svg>
+            </button>
+            {% endif %}
+
             <button class="undo-btn" id="undoBtn" title="Deshacer (hasta 5)" aria-label="Deshacer">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 14l-5-5 5-5"></path>
@@ -153,6 +161,7 @@
     </div>
 
     {% include 'news_comments_modal.html' %}
+    {% if user.is_superuser %}{% include 'news_filter_word_modal.html' %}{% endif %}
 
     <!-- Overlay de modo lectura -->
     <div id="reader-overlay" class="reader-overlay">
@@ -176,6 +185,7 @@
 
     <script src="{% static 'js/news_cards_common.js' %}"></script>
     <script src="{% static 'js/news_comments.js' %}"></script>
+    {% if user.is_superuser %}<script src="{% static 'js/news_filter_word.js' %}"></script>{% endif %}
     <script src="{% static 'js/news_script.js' %}"></script>
     <script src="{% static 'js/books_scroll_top.js' %}"></script>
     <script src="{% static 'js/reader_mode.js' %}"></script>
