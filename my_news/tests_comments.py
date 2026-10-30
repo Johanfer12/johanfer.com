@@ -165,6 +165,43 @@ class ElChapuzasDisqusCommentExtractorTests(SimpleTestCase):
         self.assertEqual(get_mock.call_args_list[1].args[0], 'https://disqus.com/embed/comments/')
 
     @patch('my_news.comment_extractors.requests.get')
+    def test_giphy_mp4_is_marked_as_video(self, get_mock):
+        # Forma real de un GIF de Giphy en Disqus: la miniatura es el mismo
+        # .mp4 pasado por el proxy, así que no sirve como imagen.
+        video_url = 'https://media0.giphy.com/media/v1.abc/NKmXVFgwd8HKw/giphy-downsized-small.mp4'
+        thread_data = {
+            'cursor': {'total': 1},
+            'response': {
+                'posts': [{
+                    'id': '58',
+                    'raw_message': f'Va de lujo. {video_url}',
+                    'author': {'name': 'Ada'},
+                    'media': [{
+                        'providerName': 'Giphy',
+                        'resolvedUrl': video_url,
+                        'thumbnailUrl': '//a.disquscdn.com/get?url=https%3A%2F%2Fmedia0.giphy.com%2Fx.mp4&key=k',
+                        'location': '',
+                    }],
+                }],
+            },
+        }
+        get_mock.side_effect = [
+            response_with_text(
+                '<script type="text/json" id="disqus-threadData">'
+                f'{json.dumps(thread_data)}</script>'
+            ),
+        ]
+
+        result = ElChapuzasDisqusCommentExtractor().extract(
+            'https://elchapuzasinformatico.com/noticia/',
+            guid='https://elchapuzasinformatico.com/?p=58',
+        )
+
+        comment = result['comments'][0]
+        self.assertEqual(comment['comment'], 'Va de lujo.')
+        self.assertEqual(comment['media'], [{'url': video_url, 'thumbnail_url': None, 'type': 'video'}])
+
+    @patch('my_news.comment_extractors.requests.get')
     def test_uses_article_guid_to_query_disqus_directly(self, get_mock):
         article_url = (
             'https://elchapuzasinformatico.com/2026/07/'

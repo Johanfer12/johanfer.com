@@ -243,6 +243,27 @@
                 const gallery = document.createElement('div');
                 gallery.className = 'news-comment-media';
                 mediaItems.forEach((media) => {
+                    // GIF servido como vídeo (Giphy en Disqus): se pinta como
+                    // un GIF, en bucle y sin sonido.
+                    if (media.type === 'video') {
+                        try {
+                            const videoUrl = new URL(media.url);
+                            if (videoUrl.protocol !== 'https:') return;
+                            const video = document.createElement('video');
+                            video.className = 'news-comment-media-video';
+                            video.src = videoUrl.href;
+                            video.autoplay = true;
+                            video.loop = true;
+                            video.muted = true;
+                            video.playsInline = true;
+                            video.preload = 'auto';
+                            video.setAttribute('aria-label', 'GIF adjunto al comentario');
+                            gallery.appendChild(video);
+                        } catch (_) {
+                            // Ignorar adjuntos con URL inválida.
+                        }
+                        return;
+                    }
                     try {
                         const mediaUrl = new URL(media.url);
                         const thumbnailUrl = new URL(media.thumbnail_url || media.url);

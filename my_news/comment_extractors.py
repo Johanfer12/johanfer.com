@@ -87,6 +87,10 @@ def _safe_media_url(value: Any) -> str | None:
     return url
 
 
+def _is_video_url(url: str) -> bool:
+    return urlparse(url).path.lower().endswith((".mp4", ".webm"))
+
+
 def _html_media_urls(value: Any) -> list[str]:
     if not value or "<" not in str(value):
         return []
@@ -597,7 +601,17 @@ class ElChapuzasDisqusCommentExtractor(CommentExtractor):
                     if (safe_url := _safe_media_url(candidate))
                 ), media_url)
                 if media_url and not any(existing["url"] == media_url for existing in media):
-                    media.append({"url": media_url, "thumbnail_url": thumbnail_url or media_url})
+                    # Los GIF de Giphy llegan como .mp4, y la miniatura es el
+                    # mismo vídeo pasado por el proxy de Disqus: un <img> no
+                    # pinta ninguno de los dos.
+                    if _is_video_url(media_url):
+                        media.append({"url": media_url, "thumbnail_url": None, "type": "video"})
+                    else:
+                        media.append({
+                            "url": media_url,
+                            "thumbnail_url": thumbnail_url or media_url,
+                            "type": "image",
+                        })
                 for candidate in (
                     media_item.get("resolvedUrl"),
                     media_item.get("url"),
