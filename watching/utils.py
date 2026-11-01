@@ -55,11 +55,16 @@ TMDB_METADATA_OVERRIDES = {
 # (kitsu:48010), pero Simkl no cataloga esa serie como anime sino como serie normal
 # (tv/2266327) y no conoce ese id de Kitsu, así que Nuvio acabó en el único anime con
 # el mismo nombre. Va también en SIMKL_MISMATCHED_ENTRIES.
+#
+# 2829490 ("Black Clover 2nd Season", 2026): declara tmdb 336735, que TMDB no conoce
+# (/tv/336735 responde 404). TMDB la modela como la temporada 2 de tv/73223, desde el
+# 03/10/2026, y Simkl ya da esa misma numeración por TVDB (S02E01...), así que encaja sola.
 SIMKL_WORK_OVERRIDES = {
     1300367: 329809,  # Mantener la identidad histórica cuando Simkl corrige TMDB.
     2671730: 329809,
     2743422: 65942,
     41213: 235930,
+    2829490: 73223,
 }
 
 # Fichas de Simkl que recibieron episodios de OTRA obra. Al contrario que un cour, su
