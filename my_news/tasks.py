@@ -355,16 +355,20 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
             created_at__gte=cutoff,
             is_deleted=False,     # no reintentar si el usuario la eliminó
             is_ai_processed=False # solo las no procesadas por IA
-        ).order_by('created_at', 'id')[:limit]
+        ).select_related('source').order_by('created_at', 'id')[:limit]
 
         processed = 0
         for news in qs:
-            processed_description, short_answer, ai_filter_reason = FeedService.process_news_content(
+            traducir = bool(news.source and news.source.translate_titles)
+            processed_description, short_answer, ai_filter_reason, title_es = FeedService.process_news_content(
                 news.title,
                 news.description or '',
                 filter_instructions_text,
                 ai_model_setting=ai_model_setting,
+                translate_title=traducir,
             )
+            if title_es:
+                news.title_es = title_es
 
             ai_filter_reason = FeedService.resolve_ai_filter(
                 ai_filter_reason, active_instructions
@@ -384,7 +388,11 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
             new_description = processed_description if processed_description else news.description
             new_short_answer = short_answer if short_answer is not None else news.short_answer
 
-            if (new_description != news.description) or (new_short_answer != news.short_answer):
+            if (
+                new_description != news.description
+                or new_short_answer != news.short_answer
+                or title_es
+            ):
                 news.description = new_description
                 news.short_answer = new_short_answer
                 news.is_ai_processed = True

@@ -4,13 +4,13 @@
         <div class="card-front">
             <div class="news-media-zone">
                 {% if article.image_url %}
-                <img src="{{ article.image_url|news_image_src }}" data-original-src="{{ article.image_url }}" data-fallback-src="{% static 'Img/News_Default.webp' %}" alt="{{ article.title }}" class="news-image" loading="lazy" decoding="async">
+                <img src="{{ article.image_url|news_image_src }}" data-original-src="{{ article.image_url }}" data-fallback-src="{% static 'Img/News_Default.webp' %}" alt="{{ article.display_title }}" class="news-image" loading="lazy" decoding="async">
                 {% else %}
                 <img src="{% static 'Img/News_Default.webp' %}" data-fallback-src="{% static 'Img/News_Default.webp' %}" alt="Imagen no disponible" class="news-image" loading="lazy" decoding="async">
                 {% endif %}
             </div>
             <div class="news-front-text">
-                <h3 class="news-title">{{ article.title }}</h3>
+                <h3 class="news-title">{{ article.display_title }}</h3>
                 {% if article.short_answer %}
                 <div class="short-answer">{{ article.short_answer }}</div>
                 {% endif %}

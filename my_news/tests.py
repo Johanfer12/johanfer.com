@@ -322,8 +322,9 @@ class ProveedorFalso:
         self.error = error
         self.llamadas = []
 
-    def complete(self, prompt):
+    def complete(self, prompt, traducir_titulo=False):
         self.llamadas.append(prompt)
+        self.traducir_titulo = traducir_titulo
         if self.error is not None:
             raise self.error
         return self.respuesta
@@ -351,7 +352,7 @@ class NewsContentProcessingTests(SimpleTestCase):
             '{"summary": "Resumen **con negrita**.", '
             '"short_answer": "El dato oculto.", "ai_filter": "futbol"}'
         ))
-        resumen, short, filtro = _procesar([proveedor])
+        resumen, short, filtro, _ = _procesar([proveedor])
 
         self.assertIn('<strong>con negrita</strong>', resumen)
         self.assertEqual(short, 'El dato oculto.')
@@ -361,14 +362,14 @@ class NewsContentProcessingTests(SimpleTestCase):
     def test_a_provider_failure_returns_nothing_instead_of_original_content(self):
         """Nunca guardar el texto original como si fuera un resumen."""
         proveedor = ProveedorFalso(error=AIProviderError('rate_limit', 'sin ritmo'))
-        self.assertEqual(_procesar([proveedor]), (None, None, None))
+        self.assertEqual(_procesar([proveedor]), (None, None, None, None))
 
     def test_the_fallback_provider_takes_over_when_the_first_runs_out_of_quota(self):
         """El caso que motivo todo esto: sin cuota, seguir en vez de pausar."""
         primero = ProveedorFalso('gemini', error=AIProviderError('quota', 'sin cuota'))
         segundo = ProveedorFalso('groq', respuesta=RESPUESTA_OK)
 
-        resumen, _, _ = _procesar([primero, segundo])
+        resumen, _, _, _ = _procesar([primero, segundo])
 
         self.assertEqual(resumen, 'Resumen procesado.')
         self.assertEqual(len(segundo.llamadas), 1)
@@ -380,7 +381,7 @@ class NewsContentProcessingTests(SimpleTestCase):
             'error', 'peticion invalida', puede_reintentar_otro=False))
         segundo = ProveedorFalso('groq', respuesta=RESPUESTA_OK)
 
-        self.assertEqual(_procesar([primero, segundo]), (None, None, None))
+        self.assertEqual(_procesar([primero, segundo]), (None, None, None, None))
         self.assertEqual(segundo.llamadas, [])
 
     def test_the_reported_failure_is_the_last_one(self):
@@ -396,27 +397,27 @@ class NewsContentProcessingTests(SimpleTestCase):
         primero = ProveedorFalso('gemini', error=RuntimeError('algo raro'))
         segundo = ProveedorFalso('groq', respuesta=RESPUESTA_OK)
 
-        resumen, _, _ = _procesar([primero, segundo])
+        resumen, _, _, _ = _procesar([primero, segundo])
         self.assertEqual(resumen, 'Resumen procesado.')
 
     def test_an_empty_response_is_not_saved_as_summary(self):
-        self.assertEqual(_procesar([ProveedorFalso(respuesta='   ')]), (None, None, None))
+        self.assertEqual(_procesar([ProveedorFalso(respuesta='   ')]), (None, None, None, None))
 
     def test_a_non_json_response_is_not_saved_as_summary(self):
         proveedor = ProveedorFalso(respuesta='Lo siento, no puedo ayudarte con eso.')
-        self.assertEqual(_procesar([proveedor]), (None, None, None))
+        self.assertEqual(_procesar([proveedor]), (None, None, None, None))
 
     def test_json_wrapped_in_reasoning_text_is_extracted(self):
         """Algunos modelos anteponen su razonamiento al JSON."""
         proveedor = ProveedorFalso(
             respuesta='Vale, primero analizo el titular y luego respondo.\n' + RESPUESTA_OK)
-        resumen, _, _ = _procesar([proveedor])
+        resumen, _, _, _ = _procesar([proveedor])
         self.assertEqual(resumen, 'Resumen procesado.')
 
     def test_a_missing_summary_falls_back_to_the_original_text(self):
         proveedor = ProveedorFalso(
             respuesta='{"summary": null, "short_answer": null, "ai_filter": null}')
-        resumen, _, _ = _procesar([proveedor], contenido='Texto original de la noticia.')
+        resumen, _, _, _ = _procesar([proveedor], contenido='Texto original de la noticia.')
         self.assertIn('Texto original', resumen)
 
 
@@ -542,7 +543,7 @@ class FeedIngestionBudgetTests(TestCase):
                 published_parsed=(now - timedelta(minutes=1)).utctimetuple(),
             ),
         ]
-        mock_process.return_value = ('Resumen IA', None, None)
+        mock_process.return_value = ('Resumen IA', None, None, None)
 
         created_count = FeedService.fetch_and_save_news(max_ai_items=1)
 

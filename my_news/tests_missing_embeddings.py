@@ -285,7 +285,7 @@ class IngestaAnotaPendientesTests(TestCase):
              ), \
              patch(
                  "my_news.services.FeedService.process_news_content",
-                 return_value=("Resumen IA", None, None),
+                 return_value=("Resumen IA", None, None, None),
              ):
             parse.return_value.entries = [entrada]
             FeedService.fetch_and_save_news(max_ai_items=5)

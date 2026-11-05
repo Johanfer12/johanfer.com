@@ -40,12 +40,27 @@ class FeedSource(models.Model):
             "0.90 no afina la detección: amplía el tema que se considera repetido."
         )
     )
-    
+    translate_titles = models.BooleanField(
+        default=False,
+        verbose_name="Traducir titulares",
+        help_text=(
+            "Pide a la IA el titular en español junto con el resumen. Solo para "
+            "fuentes que publican en otro idioma: en las demás no se añade nada al "
+            "prompt, así que no gastan tokens de más."
+        ),
+    )
+
     def __str__(self):
         return self.name
 
 class News(models.Model):
     title = models.CharField(max_length=500)
+    # El titular traducido va aparte y `title` conserva el original, porque
+    # este último es el que entra en el embedding, el que miran las palabras
+    # filtro y el que se le vuelve a pasar a la IA en los reintentos.
+    title_es = models.CharField(
+        max_length=500, blank=True, default='', verbose_name="Titular traducido"
+    )
     description = models.TextField()
     link = models.URLField()
     published_date = models.DateTimeField()
@@ -97,6 +112,11 @@ class News(models.Model):
     
     def __str__(self):
         return self.title
+
+    @property
+    def display_title(self):
+        """El titular que se enseña: el traducido si lo hay, si no el original."""
+        return self.title_es or self.title
 
 class PendingEmbedding(models.Model):
     """Noticia visible que se quedó sin vector en Qdrant durante la ingesta.

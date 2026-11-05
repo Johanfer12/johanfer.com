@@ -407,6 +407,26 @@ class FeedService:
 
         IMPORTANTE: Responde únicamente con el objeto JSON válido, sin texto adicional antes o después.
         """)
+    # Cuarto campo, solo para las fuentes con «Traducir titulares». Se monta
+    # encima de la plantilla de arriba en vez de ponerle un hueco, para que el
+    # prompt de las fuentes en español siga siendo exactamente el medido.
+    # Medido en noviembre de 2026 (24 noticias, 2 repeticiones): no cambia el
+    # short_answer más de lo que cambia de una repetición a otra, cuesta ~140
+    # tokens de entrada y ~20 de salida, y en español devolvió null 24 de 24.
+    # El ejemplo de 'WoW: Forever' está porque sin él lo traducía a «Para
+    # Siempre» o lo partía («Notas de desarrollo de Forever»).
+    _PROMPT_TITLE_FIELD = textwrap.dedent("""\
+        4.  **title_es**: Si el titular NO está en español, tradúcelo al español de forma fiel y natural, conservando su tono y su estructura: si es una pregunta o promete una revelación, la traducción también debe serlo (no reveles aquí la respuesta ni lo conviertas en un resumen). Deja sin traducir, y enteros, los nombres propios y los títulos de juegos, productos, expansiones, clases, mazmorras y objetos, aunque contengan palabras comunes en inglés (ej: 'WoW: Forever' se queda 'WoW: Forever', nunca 'WoW: Para siempre'), y también los términos de juego habituales en inglés (ej: 'Mythic+', 'PTR', 'hotfixes', 'addon'). Si el titular ya está en español, el valor debe ser null (JSON null).
+        """)
+    _PROMPT_TEMPLATE_CON_TITULO = _PROMPT_TEMPLATE.replace(
+        "\nREGLAS CLAVE PARA RESUMEN Y SHORT_ANSWER:",
+        "\n" + _PROMPT_TITLE_FIELD + "\nREGLAS CLAVE PARA RESUMEN Y SHORT_ANSWER:",
+        1,
+    ).replace(
+        '"ai_filter": null}}',
+        '"ai_filter": null, "title_es": null}}',
+        1,
+    )
     _DEFAULT_FILTER_INSTRUCTIONS = "(No hay instrucciones de filtro IA activas)"
     _NEWS_ANALYSIS_RESPONSE_FORMAT = {
         "type": "json_schema",
@@ -760,25 +780,31 @@ class FeedService:
         filter_instructions_text,
         content_limit=DEFAULT_AI_CONTENT_LIMIT,
         ai_model_setting=None,
+        translate_title=False,
     ):
-        """Genera resumen, respuesta corta y motivo de filtro para una noticia.
+        """Genera resumen, respuesta corta, motivo de filtro y titular traducido.
 
         Prueba los proveedores en orden (primario y respaldo) y solo salta al
         siguiente cuando el fallo lo justifica: quedarse sin cuota si, una
         peticion mal construida no, porque fallaria igual en el otro.
 
-        Devuelve ``(resumen_html, short_answer, ai_filter)`` o ``(None, None,
-        None)`` si ninguno pudo, dejando el motivo en ``_LAST_AI_FAILURE`` para
-        que el feed lo explique.
+        Devuelve ``(resumen_html, short_answer, ai_filter, title_es)`` o cuatro
+        ``None`` si ninguno pudo, dejando el motivo en ``_LAST_AI_FAILURE`` para
+        que el feed lo explique. ``title_es`` solo se pide con
+        ``translate_title`` y es None cuando el titular ya estaba en español.
         """
         instructions_section = filter_instructions_text or FeedService._DEFAULT_FILTER_INSTRUCTIONS
         base_content = FeedService.prepare_content_for_ai(
             title, original_content, content_limit=content_limit
         )
+        plantilla = (
+            FeedService._PROMPT_TEMPLATE_CON_TITULO if translate_title
+            else FeedService._PROMPT_TEMPLATE
+        )
 
         # Las llaves se escapan porque el prompt se arma con str.format y un
         # titular con '{' reventaria la plantilla.
-        prompt = FeedService._PROMPT_TEMPLATE.format(
+        prompt = plantilla.format(
             title=(title or '').replace('{', '{{').replace('}', '}}'),
             content=base_content.replace('{', '{{').replace('}', '}}'),
             instructions=instructions_section.replace('{', '{{').replace('}', '}}'),
@@ -787,7 +813,7 @@ class FeedService:
         ultimo_fallo = None
         for proveedor in cadena_de_proveedores(ai_model_setting):
             try:
-                respuesta = proveedor.complete(prompt)
+                respuesta = proveedor.complete(prompt, traducir_titulo=translate_title)
             except AIProviderError as e:
                 ultimo_fallo = e
                 logger.warning('%s: %s', proveedor.nombre, e.reason)
@@ -801,7 +827,10 @@ class FeedService:
                 logger.exception('Fallo inesperado en %s', proveedor.nombre)
                 continue
 
-            resultado = FeedService._interpretar_respuesta(respuesta, base_content, proveedor)
+            resultado = FeedService._interpretar_respuesta(
+                respuesta, base_content, proveedor,
+                titulo_original=title if translate_title else None,
+            )
             if resultado is not None:
                 FeedService._clear_ai_failure()
                 return resultado
@@ -814,11 +843,32 @@ class FeedService:
                 ultimo_fallo.kind, ultimo_fallo.reason,
                 ultimo_fallo.detail, ultimo_fallo.retry_seconds,
             )
-        return None, None, None
+        return None, None, None, None
 
     @staticmethod
-    def _interpretar_respuesta(respuesta, base_content, proveedor):
-        """Convierte el texto del modelo en la terna final, o None si no vale."""
+    def _limpiar_titulo_traducido(valor, titulo_original):
+        """Descarta la traducción que no sirve: vacía o igual al original.
+
+        Medido: a veces devuelve el titular en inglés tal cual en vez de null.
+        Guardarlo no rompería nada, pero haría creer que la noticia está
+        traducida.
+        """
+        traducido = FeedService._clean_optional_text(valor)
+        if not traducido:
+            return None
+        traducido = re.sub(r'\s+', ' ', traducido)[:500]
+        original = re.sub(r'\s+', ' ', titulo_original or '').strip()
+        if traducido.casefold() == original.casefold():
+            return None
+        return traducido
+
+    @staticmethod
+    def _interpretar_respuesta(respuesta, base_content, proveedor, titulo_original=None):
+        """Convierte el texto del modelo en los cuatro campos, o None si no vale.
+
+        ``titulo_original`` solo llega cuando se pidió traducir: sin él se
+        ignora cualquier title_es que el modelo haya colado.
+        """
         if not (respuesta or '').strip():
             logger.warning('%s devolvió contenido vacío.', proveedor.nombre)
             return None
@@ -840,7 +890,13 @@ class FeedService:
             logger.warning('%s no devolvió summary ni short_answer.', proveedor.nombre)
             return None
 
-        return FeedService._formatear_resumen(summary), short_answer, ai_filter
+        title_es = None
+        if titulo_original is not None:
+            title_es = FeedService._limpiar_titulo_traducido(
+                datos.get('title_es'), titulo_original
+            )
+
+        return FeedService._formatear_resumen(summary), short_answer, ai_filter, title_es
 
     @staticmethod
     def extract_image_from_description(description):
@@ -1373,12 +1429,13 @@ class FeedService:
                 ai_attempts += 1
 
                 # Si no se filtró por palabra clave ni es redundante, procesar con IA
-                processed_description, short_answer, ai_filter_reason = FeedService.process_news_content(
+                processed_description, short_answer, ai_filter_reason, title_es = FeedService.process_news_content(
                     entry.title,
                     original_description,
                     filter_instructions_text,
                     content_limit=ai_content_limit,
                     ai_model_setting=ai_model_setting,
+                    translate_title=source.translate_titles,
                 )
                 if processed_description:
                     ai_was_processed = True
@@ -1407,6 +1464,7 @@ class FeedService:
                         News.objects.create(
                             guid=guid,
                             title=entry.title,
+                            title_es=title_es or '',
                             short_answer=short_answer,
                             description=processed_description,
                             link=entry.link,
@@ -1437,6 +1495,7 @@ class FeedService:
                     news_item = News.objects.create(
                         guid=guid,
                         title=entry.title,
+                        title_es=title_es or '',
                         short_answer=short_answer,
                         description=processed_description,
                         link=entry.link,

@@ -30,6 +30,7 @@ Descartados y por que, para no volver a probarlos:
     esta en `git show <commit>:my_news/services.py` si alguna vez se recompra.
 """
 
+import copy
 import json
 import logging
 import os
@@ -369,6 +370,20 @@ GEMINI_RESPONSE_SCHEMA = {
     "required": list(_CAMPOS),
 }
 
+# Variantes con el titular traducido, para las fuentes con «Traducir titulares».
+# Son esquemas aparte y no un campo opcional en los de arriba: con el esquema
+# estricto el modelo tiene que rellenar todo lo que se declare, y pedirle
+# title_es a una fuente en español sería gastar tokens en un null.
+OPENAI_RESPONSE_FORMAT_CON_TITULO = copy.deepcopy(OPENAI_RESPONSE_FORMAT)
+OPENAI_RESPONSE_FORMAT_CON_TITULO['json_schema']['schema']['properties']['title_es'] = {
+    "type": ["string", "null"]
+}
+OPENAI_RESPONSE_FORMAT_CON_TITULO['json_schema']['schema']['required'].append('title_es')
+
+GEMINI_RESPONSE_SCHEMA_CON_TITULO = copy.deepcopy(GEMINI_RESPONSE_SCHEMA)
+GEMINI_RESPONSE_SCHEMA_CON_TITULO['properties']['title_es'] = {"type": "string", "nullable": True}
+GEMINI_RESPONSE_SCHEMA_CON_TITULO['required'].append('title_es')
+
 
 class BaseProvider:
     """Interfaz comun: recibe un prompt y devuelve el texto JSON del modelo."""
@@ -379,7 +394,8 @@ class BaseProvider:
         self.model_name = model_name or DEFAULT_MODELS[self.nombre]
         self.setting = setting
 
-    def complete(self, prompt):
+    def complete(self, prompt, traducir_titulo=False):
+        """Devuelve el texto JSON. Con ``traducir_titulo`` el esquema exige title_es."""
         raise NotImplementedError
 
     @staticmethod
@@ -429,13 +445,16 @@ class GeminiProvider(BaseProvider):
             cls._CLIENTE = genai.Client(api_key=clave)
         return cls._CLIENTE
 
-    def complete(self, prompt):
+    def complete(self, prompt, traducir_titulo=False):
         from google.genai import types
 
         nivel = (getattr(self.setting, 'thinking_level', '') or '').strip()
         opciones = dict(
             response_mime_type='application/json',
-            response_schema=GEMINI_RESPONSE_SCHEMA,
+            response_schema=(
+                GEMINI_RESPONSE_SCHEMA_CON_TITULO if traducir_titulo
+                else GEMINI_RESPONSE_SCHEMA
+            ),
             temperature=0.3,
             # En ms. El SDK lo manda también al servidor como plazo (mínimo 10 s).
             http_options=types.HttpOptions(
@@ -480,7 +499,7 @@ class GroqProvider(BaseProvider):
             cls._LIMITER = AIRateLimiter()
         return cls._LIMITER
 
-    def complete(self, prompt):
+    def complete(self, prompt, traducir_titulo=False):
         esfuerzo, max_tokens = razonamiento_de(self.model_name, self.setting)
         limiter = self.limiter()
         try:
@@ -498,7 +517,10 @@ class GroqProvider(BaseProvider):
             ],
             'temperature': 0.3,
             'max_completion_tokens': max_tokens,
-            'response_format': OPENAI_RESPONSE_FORMAT,
+            'response_format': (
+                OPENAI_RESPONSE_FORMAT_CON_TITULO if traducir_titulo
+                else OPENAI_RESPONSE_FORMAT
+            ),
         }
         if esfuerzo:
             cuerpo['reasoning_effort'] = esfuerzo

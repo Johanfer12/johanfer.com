@@ -122,7 +122,11 @@ def _apply_feed_filters(qs, *, saved_only=False, search_query=None, order=None):
     """Filtros comunes del feed: guardadas, búsqueda y orden keyset."""
     qs = qs.filter(is_saved=saved_only)
     if search_query:
-        qs = qs.filter(Q(title__icontains=search_query) | Q(description__icontains=search_query))
+        qs = qs.filter(
+            Q(title__icontains=search_query)
+            | Q(title_es__icontains=search_query)
+            | Q(description__icontains=search_query)
+        )
     if order == 'asc':
         qs = qs.order_by('published_date', 'id')
     elif order is not None:
@@ -242,7 +246,7 @@ def news_comments(request, pk):
 
     payload = {
         'status': 'success',
-        'title': article.title,
+        'title': article.display_title,
         'article_url': article.link,
         **result,
     }
@@ -1036,7 +1040,9 @@ def latest_deleted_news(request):
         )
         if search_query:
             deleted_qs = deleted_qs.filter(
-                Q(title__icontains=search_query) | Q(description__icontains=search_query)
+                Q(title__icontains=search_query)
+                | Q(title_es__icontains=search_query)
+                | Q(description__icontains=search_query)
             )
 
         latest = deleted_qs.order_by('-deleted_at', '-id').first()

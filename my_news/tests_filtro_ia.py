@@ -102,7 +102,7 @@ class FiltroIAEnLaIngestaTests(TestCase):
              ), \
              patch(
                  "my_news.services.FeedService.process_news_content",
-                 return_value=("Resumen IA", None, ai_filter),
+                 return_value=("Resumen IA", None, ai_filter, None),
              ):
             parse.return_value.entries = [entrada]
             FeedService.fetch_and_save_news(max_ai_items=5)
@@ -135,7 +135,7 @@ class FiltroIAEnElReintentoTests(TestCase):
     def retry(self, ai_filter):
         with patch(
             "my_news.tasks.FeedService.process_news_content",
-            return_value=("Resumen IA", None, ai_filter),
+            return_value=("Resumen IA", None, ai_filter, None),
         ):
             retry_summarize_pending(limit=5)
         self.news.refresh_from_db()

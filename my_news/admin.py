@@ -53,16 +53,16 @@ class FeedSourceAdminForm(forms.ModelForm):
 class FeedSourceAdmin(ImportExportModelAdmin):
     resource_classes = [FeedSourceResource]
     form = FeedSourceAdminForm
-    list_display = ('name', 'url', 'active', 'last_fetch', 'deep_search', 'similarity_threshold')
-    list_filter = ('active', 'deep_search')
+    list_display = ('name', 'url', 'active', 'last_fetch', 'deep_search', 'translate_titles', 'similarity_threshold')
+    list_filter = ('active', 'deep_search', 'translate_titles')
     search_fields = ('name', 'url')
-    list_editable = ('active', 'deep_search')
+    list_editable = ('active', 'deep_search', 'translate_titles')
 
 @admin.register(News)
 class NewsAdmin(admin.ModelAdmin):
     list_display = ('title', 'source', 'published_date', 'created_at', 'is_deleted', 'deleted_at', 'is_filtered', 'is_ai_filtered', 'is_redundant', 'filtered_by', 'similarity_score', 'ai_filter_reason')
     list_filter = ('source', 'published_date', 'is_deleted', 'is_filtered', 'is_ai_filtered', 'is_redundant', 'filtered_by')
-    search_fields = ('title', 'description')
+    search_fields = ('title', 'title_es', 'description')
     date_hierarchy = 'published_date'
     readonly_fields = ('similar_to', 'similar_ref', 'similarity_score', 'is_redundant', 'filtered_by', 'ai_filter_reason', 'is_ai_filtered')
     actions = ['mark_as_deleted_by_user', 'restore_news']
