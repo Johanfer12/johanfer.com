@@ -409,149 +409,140 @@
         CardUi.fitCardText?.(scope);
     };
 
-    const drawCenteredParagraph = (ctx, text, boxX, boxY, boxWidth, boxHeight, { font, color, lineHeight, maxLines, verticalAlign = 'center' }) => {
+    // Recorta a la caja: con `cover` la imagen sobresale por arriba y por abajo,
+    // y lo que asomara bajo el fundido se veria como una franja suelta.
+    const drawImageCover = (ctx, img, x, y, w, h) => {
+        const scale = Math.max(w / img.width, h / img.height);
+        const drawW = img.width * scale;
+        const drawH = img.height * scale;
         ctx.save();
-        ctx.font = font;
-        ctx.fillStyle = color;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        const lines = wrapText(ctx, text, boxWidth - 24, maxLines);
-        const totalHeight = lines.length * lineHeight;
-        const freeSpace = Math.max(0, boxHeight - totalHeight);
-        let y = boxY;
-        if (verticalAlign === 'center') {
-            y = boxY + (freeSpace / 2);
-        } else if (verticalAlign === 'adaptive') {
-            // Centrado, pero sin bajar demasiado el bloque para evitar hueco inutil.
-            y = boxY + Math.min(freeSpace / 2, 52);
-        }
-        const x = boxX + (boxWidth / 2);
-        lines.forEach((line) => {
-            ctx.fillText(line, x, y);
-            y += lineHeight;
-        });
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+        ctx.clip();
+        ctx.drawImage(img, x + (w - drawW) / 2, y + (h - drawH) / 2, drawW, drawH);
         ctx.restore();
     };
 
+    // La tarjeta a compartir copia el frente del feed: la imagen arriba a todo
+    // el ancho, fundida con el fondo, y el titular encima de su parte baja. La
+    // altura sale del texto; con un minimo fijo, un resumen corto dejaba media
+    // tarjeta en negro.
+    const SHARE_CARD = {
+        width: 844,
+        padding: 54,
+        radius: 28,
+        imageH: 560,
+        // Imagen limpia que queda siempre por encima del titular, aunque sea largo.
+        minImageVisible: 260,
+        fadeH: 200,
+        background: 'rgb(8, 13, 24)',
+        header: {font: '600 22px Arial, sans-serif', lineHeight: 30, gap: 12, color: '#93c5fd'},
+        title: {font: 'bold 48px Arial, sans-serif', lineHeight: 58, maxLines: 5, color: '#f2f5fb'},
+        summary: {font: '400 34px Arial, sans-serif', lineHeight: 48, gap: 28, maxLines: 12, color: 'rgba(227, 233, 245, 0.86)'},
+        bottomGap: 30,
+        footer: {height: 70, font: '600 22px Arial, sans-serif', text: 'johanfer.com/noticias'},
+    };
+
     const createShareCardBlob = async ({ header, title, summary, imageUrl }) => {
-        const width = 844;
-        const minHeight = 1424;
-        const padding = 54;
+        const S = SHARE_CARD;
+        const width = S.width;
+        const pad = S.padding;
+        const textW = width - (pad * 2);
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = 1;
         let ctx = canvas.getContext('2d');
 
-        const cardX = 0;
-        const cardY = 0;
-        const cardW = width;
-        const imageAreaX = cardX + 20;
-        const imageAreaY = cardY + 20;
-        const imageAreaW = cardW - 40;
-        const imageAreaH = 430;
-        const headerLineHeight = 30;
-        const titleLineHeight = 58;
-        const summaryLineHeight = 50;
+        ctx.font = S.header.font;
+        const headerLines = wrapText(ctx, header, textW);
+        ctx.font = S.title.font;
+        const titleLines = wrapText(ctx, title, textW, S.title.maxLines);
+        ctx.font = S.summary.font;
+        const summaryLines = wrapText(ctx, summary, textW, S.summary.maxLines);
 
-        ctx.font = '600 22px Arial, sans-serif';
-        const headerLines = wrapText(ctx, header, width - (padding * 2));
-        ctx.font = 'bold 48px Arial, sans-serif';
-        const titleLines = wrapText(ctx, title, width - (padding * 2));
-        ctx.font = '400 36px Arial, sans-serif';
-        const summaryLines = wrapText(ctx, summary, width - (padding * 2) - 24);
+        const titleBlockH = (headerLines.length * S.header.lineHeight)
+            + S.header.gap
+            + (titleLines.length * S.title.lineHeight);
+        const textTop = Math.max(S.minImageVisible, S.imageH - titleBlockH);
+        const summaryTop = textTop + titleBlockH + S.summary.gap;
+        const height = Math.ceil(summaryTop
+            + (summaryLines.length * S.summary.lineHeight)
+            + S.bottomGap
+            + S.footer.height);
+        const imageH = Math.min(S.imageH, height);
 
-        const textStartY = imageAreaY + imageAreaH + 56;
-        const summaryStartY = textStartY
-            + (headerLines.length * headerLineHeight)
-            + 16
-            + (titleLines.length * titleLineHeight)
-            + 18;
-        const contentHeight = summaryStartY + (summaryLines.length * summaryLineHeight) + 54;
-        const height = Math.max(minHeight, Math.ceil(contentHeight));
         canvas.height = height;
         ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, width, height); // PNG transparente fuera de la tarjeta
+        ctx.fillStyle = S.background;
+        ctx.fillRect(0, 0, width, height);
 
-        const cardH = height;
-        roundRect(ctx, cardX, cardY, cardW, cardH, 28);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.84)';
-        ctx.fill();
-
-        const darkOverlay = ctx.createLinearGradient(cardX, cardY, cardX, cardY + cardH);
-        darkOverlay.addColorStop(0, 'rgba(0, 0, 0, 0.08)');
-        darkOverlay.addColorStop(1, 'rgba(0, 0, 0, 0.22)');
-        roundRect(ctx, cardX, cardY, cardW, cardH, 28);
-        ctx.fillStyle = darkOverlay;
-        ctx.fill();
-
-        // Zona de imagen superior con clipping redondeado
-        roundRect(ctx, imageAreaX, imageAreaY, imageAreaW, imageAreaH, 28);
-        ctx.save();
-        ctx.clip();
-
-        let imageDrawn = false;
         try {
-            const safeImageUrl = imageUrl
+            const img = await loadImage(imageUrl
                 ? `/noticias/image-proxy/?url=${encodeURIComponent(imageUrl)}`
-                : '';
-            const img = await loadImage(safeImageUrl);
-            const scale = Math.max(imageAreaW / img.width, imageAreaH / img.height);
-            const drawW = img.width * scale;
-            const drawH = img.height * scale;
-            const drawX = imageAreaX + (imageAreaW - drawW) / 2;
-            const drawY = imageAreaY + (imageAreaH - drawH) / 2;
-            ctx.drawImage(img, drawX, drawY, drawW, drawH);
-            imageDrawn = true;
+                : '');
+            drawImageCover(ctx, img, 0, 0, width, imageH);
         } catch (_) {
-            imageDrawn = false;
-        }
-
-        if (!imageDrawn) {
-            const ph = ctx.createLinearGradient(imageAreaX, imageAreaY, imageAreaX, imageAreaY + imageAreaH);
+            const ph = ctx.createLinearGradient(0, 0, 0, imageH);
             ph.addColorStop(0, '#334155');
             ph.addColorStop(1, '#1e293b');
             ctx.fillStyle = ph;
-            ctx.fillRect(imageAreaX, imageAreaY, imageAreaW, imageAreaH);
-            ctx.fillStyle = '#cbd5e1';
-            ctx.font = '600 32px Arial, sans-serif';
-            ctx.fillText('Imagen no disponible', imageAreaX + 34, imageAreaY + imageAreaH / 2);
+            ctx.fillRect(0, 0, width, imageH);
         }
+
+        // El fundido del feed: transparente, 0,8 donde empieza el texto y
+        // opaco al pie de la imagen, que es donde arranca el resumen.
+        const fadeStart = Math.max(0, textTop - S.fadeH);
+        const fade = ctx.createLinearGradient(0, fadeStart, 0, imageH);
+        fade.addColorStop(0, 'rgba(8, 13, 24, 0)');
+        fade.addColorStop(Math.min(1, (textTop - fadeStart) / Math.max(1, imageH - fadeStart)), 'rgba(8, 13, 24, 0.8)');
+        fade.addColorStop(1, S.background);
+        ctx.fillStyle = fade;
+        ctx.fillRect(0, fadeStart, width, imageH - fadeStart + 1);
+
+        ctx.textBaseline = 'top';
+        ctx.textAlign = 'left';
+        let y = textTop;
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.75)';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetY = 1;
+        ctx.fillStyle = S.header.color;
+        ctx.font = S.header.font;
+        headerLines.forEach(line => {
+            ctx.fillText(line, pad, y);
+            y += S.header.lineHeight;
+        });
+        y += S.header.gap;
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+        ctx.shadowBlur = 14;
+        ctx.shadowOffsetY = 4;
+        ctx.fillStyle = S.title.color;
+        ctx.font = S.title.font;
+        titleLines.forEach(line => {
+            ctx.fillText(line, pad, y);
+            y += S.title.lineHeight;
+        });
         ctx.restore();
 
-        let y = imageAreaY + imageAreaH + 56;
-
-        ctx.fillStyle = '#93c5fd';
-        ctx.font = '600 22px Arial, sans-serif';
-        ctx.textBaseline = 'top';
-        headerLines.forEach(line => {
-            ctx.fillText(line, padding, y);
-            y += headerLineHeight;
+        y = summaryTop;
+        ctx.fillStyle = S.summary.color;
+        ctx.font = S.summary.font;
+        summaryLines.forEach(line => {
+            ctx.fillText(line, pad, y);
+            y += S.summary.lineHeight;
         });
 
-        y += 16;
-        ctx.fillStyle = '#f8fafc';
-        ctx.font = 'bold 48px Arial, sans-serif';
-        titleLines.forEach(line => {
-            ctx.fillText(line, padding, y);
-            y += titleLineHeight;
-        });
-
-        y += 18;
-        const summaryBoxX = padding;
-        const summaryBoxY = y;
-        const summaryBoxW = width - (padding * 2);
-        const summaryBoxH = (cardY + cardH - 36) - summaryBoxY;
-        drawCenteredParagraph(ctx, summary, summaryBoxX, summaryBoxY, summaryBoxW, summaryBoxH, {
-            font: '400 36px Arial, sans-serif',
-            color: '#d1d5db',
-            lineHeight: summaryLineHeight,
-            verticalAlign: 'adaptive',
-        });
+        const footerY = height - S.footer.height;
+        ctx.fillStyle = 'rgba(143, 180, 232, 0.18)';
+        ctx.fillRect(pad, footerY, textW, 2);
+        ctx.fillStyle = 'rgba(227, 233, 245, 0.5)';
+        ctx.font = S.footer.font;
+        ctx.fillText(S.footer.text, pad, footerY + 22);
 
         // Mascara final para exportar PNG con esquinas redondeadas reales
         ctx.save();
         ctx.globalCompositeOperation = 'destination-in';
-        roundRect(ctx, 0, 0, width, height, 28);
+        roundRect(ctx, 0, 0, width, height, S.radius);
         ctx.fillStyle = '#000';
         ctx.fill();
         ctx.restore();
