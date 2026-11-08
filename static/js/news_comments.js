@@ -196,12 +196,19 @@
                 && comment.downvotes !== null && comment.downvotes !== undefined;
             const upvotes = hasVoteBreakdown ? Math.max(Number(comment.upvotes) || 0, 0) : 0;
             const downvotes = hasVoteBreakdown ? Math.max(Number(comment.downvotes) || 0, 0) : 0;
+            // Webedia da el total de votos (en los dos sentidos) y aparte el
+            // saldo: el número no es una puntuación y el color sale del saldo.
+            const voteTrend = ['positive', 'negative', 'neutral'].includes(comment.vote_trend)
+                ? comment.vote_trend
+                : null;
+            const tone = voteTrend
+                || (votes > 0 ? 'positive' : votes < 0 ? 'negative' : 'neutral');
             voteIndicator.className = [
                 'news-comment-votes',
                 hasVoteBreakdown ? 'has-breakdown' : '',
                 upvotes > 0 ? 'has-upvotes' : '',
                 downvotes > 0 ? 'has-downvotes' : '',
-                votes > 0 ? 'is-positive' : votes < 0 ? 'is-negative' : 'is-neutral',
+                `is-${tone}`,
             ].filter(Boolean).join(' ');
 
             if (hasVoteBreakdown) {
@@ -223,7 +230,14 @@
                     </span>
                 `;
             } else {
-                voteIndicator.title = `Puntuación: ${votes} ${Math.abs(votes) === 1 ? 'voto' : 'votos'}`;
+                const trendLabel = {
+                    positive: 'más positivos que negativos',
+                    negative: 'más negativos que positivos',
+                    neutral: 'saldo parejo',
+                }[voteTrend];
+                voteIndicator.title = voteTrend
+                    ? `${votes} ${votes === 1 ? 'voto' : 'votos'} en total, ${trendLabel}`
+                    : `Puntuación: ${votes} ${Math.abs(votes) === 1 ? 'voto' : 'votos'}`;
                 voteIndicator.innerHTML = `
                     <svg class="news-comment-vote-arrow vote-up" viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 5L5 14H9V19H15V14H19L12 5Z"></path>

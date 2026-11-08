@@ -103,6 +103,21 @@ class WebediaCommentExtractorTests(SimpleTestCase):
         self.assertEqual(result['comments'][1]['parent_id'], '7')
         self.assertEqual(result['comments'][1]['depth'], 1)
 
+    def test_vote_trend_comes_from_karma_not_vote_count(self):
+        """`vote_count` cuenta los votos en los dos sentidos; el karma da el saldo."""
+        from .comment_extractors import _webedia_vote_trend
+
+        self.assertEqual(_webedia_vote_trend({'vote_count': 3, 'karma': 41.25}), 'positive')
+        self.assertEqual(_webedia_vote_trend({'vote_count': 4, 'karma': -16.25}), 'negative')
+        self.assertEqual(_webedia_vote_trend({'vote_count': 1, 'karma': 6.25}), 'negative')
+        self.assertEqual(_webedia_vote_trend({'vote_count': 2, 'karma': 10}), 'neutral')
+        self.assertIsNone(_webedia_vote_trend({'vote_count': 0, 'karma': 5}))
+        self.assertIsNone(_webedia_vote_trend({'vote_count': 2}))
+
+    def test_supports_other_webedia_sites(self):
+        for url in ('https://www.genbeta.com/a/b', 'https://www.xatakandroid.com/a/b'):
+            self.assertIsInstance(get_comment_extractor(url), WebediaCommentExtractor)
+
 
 class ElChapuzasDisqusCommentExtractorTests(SimpleTestCase):
     @patch('my_news.comment_extractors.requests.get')
