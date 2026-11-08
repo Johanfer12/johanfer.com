@@ -749,12 +749,12 @@ body.comments-modal-open {
 
 .news-comment-votes {
     flex: 0 0 auto;
-    height: 24px;
-    padding: 2px 5px;
+    height: 22px;
+    padding: 0 6px;
     display: inline-flex;
     align-items: center;
     justify-content: space-between;
-    gap: 3px;
+    gap: 2px;
     border: 1px solid rgba(198, 214, 242, 0.18);
     border-radius: var(--radius-pill);
     color: rgba(227, 233, 245, 0.72);
@@ -762,32 +762,36 @@ body.comments-modal-open {
     line-height: 1;
 }
 
+/* La flecha solo ocupa el centro de su caja de 24: el margen negativo se
+   come el aire de los lados para que la píldora quede estrecha. */
 .news-comment-vote-arrow {
-    width: 17px;
-    height: 17px;
+    width: 16px;
+    height: 16px;
+    margin-inline: -3px;
     flex: 0 0 auto;
     fill: rgba(198, 214, 242, 0.42);
 }
 
 .news-comment-vote-score {
-    min-width: 20px;
+    min-width: 0;
+    padding-inline: 2px;
     font-size: 0.76rem;
     font-weight: 700;
     text-align: center;
 }
 
 .news-comment-votes.has-breakdown {
-    gap: 5px;
+    gap: 6px;
 }
 
 .news-comment-vote-side {
     display: inline-flex;
     align-items: center;
-    gap: 1px;
+    gap: 2px;
 }
 
 .news-comment-vote-count {
-    min-width: 13px;
+    min-width: 0;
     color: rgba(227, 233, 245, 0.62);
     font-size: 0.76rem;
     font-weight: 700;
