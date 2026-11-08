@@ -126,12 +126,30 @@
         STATE.utterance = null;
     };
 
+    /** Puntuar una voz en español. Edge en PC mezcla dos tipos: las de Windows
+     *  (locales, robóticas, «Microsoft Sabina») y las suyas «Online (Natural)»,
+     *  que genera Microsoft en la nube y suenan mucho mejor. Las de Windows
+     *  vienen primero en la lista, así que quedarse con la primera en español
+     *  elegía casi siempre la peor. Pesa más el tipo de voz que el acento. */
+    const LATAM_LANGS = ['es-mx', 'es-us', 'es-419', 'es-ar', 'es-cl', 'es-pe', 'es-ve'];
+    const scoreVoice = (voice) => {
+        const lang = voice.lang.toLowerCase().replace('_', '-');
+        let score = 0;
+        if (/natural/i.test(voice.name)) score += 100;
+        else if (!voice.localService) score += 50;  // en línea: Google en Chrome
+        if (lang === 'es-co') score += 3;
+        else if (LATAM_LANGS.includes(lang)) score += 2;
+        else score += 1;
+        return score;
+    };
+
     /** Obtener la mejor voz en español disponible */
     const getSpanishVoice = () => {
         const voices = speechSynthesis.getVoices();
 
-        // Buscar voz en español (cualquier variante)
-        const spanishVoice = voices.find(voice => voice.lang.startsWith('es'));
+        const spanishVoice = voices
+            .filter(voice => voice.lang.toLowerCase().startsWith('es'))
+            .sort((a, b) => scoreVoice(b) - scoreVoice(a))[0];
 
         if (spanishVoice) {
             console.log(`[reader] Usando voz: ${spanishVoice.name} (${spanishVoice.lang})`);
