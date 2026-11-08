@@ -401,29 +401,15 @@ class CommentExtractor(ABC):
 
 
 # Webedia no publica cuántos votos son positivos y cuántos negativos:
-# `vote_count` es el TOTAL de votos, en los dos sentidos, y su propio widget
-# solo enseña «3 votos, karma: 41.25». El sentido lo delata el karma del
-# comentario. Medido sobre ~300 comentarios: sin votos parte de 0, 5, 8 o 10
-# (según quien escribe), un voto positivo lo sube a 20-35 y los negativos lo
-# hunden (hasta -78 con 10 votos). Cada voto pesa según el karma de quien vota,
-# así que no se puede despejar el reparto exacto; solo el saldo. Entre 8 y 10
-# no se sabe si es la base o un empate, y se deja neutro.
-WEBEDIA_KARMA_POSITIVE_ABOVE = 10
-WEBEDIA_KARMA_NEGATIVE_BELOW = 8
-
-
-def _webedia_vote_trend(item: dict[str, Any]) -> str | None:
-    if not int(item.get("vote_count") or 0):
-        return None
+# `vote_count` es el TOTAL de votos, en los dos sentidos. La puntuación que
+# enseña su widget («3 votos, karma: 41.25») es el karma del comentario, donde
+# cada voto pesa según el nivel de quien vota. Es la que se muestra, tal cual.
+def _webedia_karma(item: dict[str, Any]) -> float | None:
     try:
         karma = float(item.get("karma"))
     except (TypeError, ValueError):
         return None
-    if karma > WEBEDIA_KARMA_POSITIVE_ABOVE:
-        return "positive"
-    if karma < WEBEDIA_KARMA_NEGATIVE_BELOW:
-        return "negative"
-    return "neutral"
+    return int(karma) if karma.is_integer() else karma
 
 
 class WebediaCommentExtractor(CommentExtractor):
@@ -462,10 +448,10 @@ class WebediaCommentExtractor(CommentExtractor):
                 "date": _unix_date(item.get("date")),
                 "parent_id": str(item["parent"]) if item.get("parent") is not None else None,
                 "depth": int(item.get("tree_level") or 0),
-                "votes": int(item.get("vote_count") or 0),
+                "votes": _webedia_karma(item),
+                "vote_count": int(item.get("vote_count") or 0),
                 "upvotes": None,
                 "downvotes": None,
-                "vote_trend": _webedia_vote_trend(item),
                 "media": [{"url": media_url, "thumbnail_url": media_url} for media_url in media_urls],
             })
 

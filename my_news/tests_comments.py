@@ -74,6 +74,7 @@ class WebediaCommentExtractorTests(SimpleTestCase):
                     'parent': None,
                     'tree_level': 0,
                     'vote_count': 2,
+                    'karma': -31.5,
                 },
                 {
                     'id': 8,
@@ -97,22 +98,20 @@ class WebediaCommentExtractorTests(SimpleTestCase):
         self.assertEqual(result['total'], 2)
         self.assertEqual(result['comments'][0]['user'], 'Ada')
         self.assertEqual(result['comments'][0]['comment'], 'Primer\ncomentario\n.')
-        self.assertEqual(result['comments'][0]['votes'], 2)
+        self.assertEqual(result['comments'][0]['votes'], -31.5)
+        self.assertEqual(result['comments'][0]['vote_count'], 2)
         self.assertIsNone(result['comments'][0]['upvotes'])
         self.assertIsNone(result['comments'][0]['downvotes'])
         self.assertEqual(result['comments'][1]['parent_id'], '7')
         self.assertEqual(result['comments'][1]['depth'], 1)
 
-    def test_vote_trend_comes_from_karma_not_vote_count(self):
-        """`vote_count` cuenta los votos en los dos sentidos; el karma da el saldo."""
-        from .comment_extractors import _webedia_vote_trend
+    def test_score_is_webedia_karma_not_vote_count(self):
+        """`vote_count` cuenta votos en los dos sentidos; la puntuación es el karma."""
+        from .comment_extractors import _webedia_karma
 
-        self.assertEqual(_webedia_vote_trend({'vote_count': 3, 'karma': 41.25}), 'positive')
-        self.assertEqual(_webedia_vote_trend({'vote_count': 4, 'karma': -16.25}), 'negative')
-        self.assertEqual(_webedia_vote_trend({'vote_count': 1, 'karma': 6.25}), 'negative')
-        self.assertEqual(_webedia_vote_trend({'vote_count': 2, 'karma': 10}), 'neutral')
-        self.assertIsNone(_webedia_vote_trend({'vote_count': 0, 'karma': 5}))
-        self.assertIsNone(_webedia_vote_trend({'vote_count': 2}))
+        self.assertEqual(_webedia_karma({'vote_count': 3, 'karma': 41.25}), 41.25)
+        self.assertEqual(_webedia_karma({'vote_count': 4, 'karma': -31}), -31)
+        self.assertIsNone(_webedia_karma({'vote_count': 2}))
 
     def test_supports_other_webedia_sites(self):
         for url in ('https://www.genbeta.com/a/b', 'https://www.xatakandroid.com/a/b'):

@@ -196,19 +196,12 @@
                 && comment.downvotes !== null && comment.downvotes !== undefined;
             const upvotes = hasVoteBreakdown ? Math.max(Number(comment.upvotes) || 0, 0) : 0;
             const downvotes = hasVoteBreakdown ? Math.max(Number(comment.downvotes) || 0, 0) : 0;
-            // Webedia da el total de votos (en los dos sentidos) y aparte el
-            // saldo: el número no es una puntuación y el color sale del saldo.
-            const voteTrend = ['positive', 'negative', 'neutral'].includes(comment.vote_trend)
-                ? comment.vote_trend
-                : null;
-            const tone = voteTrend
-                || (votes > 0 ? 'positive' : votes < 0 ? 'negative' : 'neutral');
             voteIndicator.className = [
                 'news-comment-votes',
                 hasVoteBreakdown ? 'has-breakdown' : '',
                 upvotes > 0 ? 'has-upvotes' : '',
                 downvotes > 0 ? 'has-downvotes' : '',
-                `is-${tone}`,
+                votes > 0 ? 'is-positive' : votes < 0 ? 'is-negative' : 'is-neutral',
             ].filter(Boolean).join(' ');
 
             if (hasVoteBreakdown) {
@@ -230,13 +223,11 @@
                     </span>
                 `;
             } else {
-                const trendLabel = {
-                    positive: 'más positivos que negativos',
-                    negative: 'más negativos que positivos',
-                    neutral: 'saldo parejo',
-                }[voteTrend];
-                voteIndicator.title = voteTrend
-                    ? `${votes} ${votes === 1 ? 'voto' : 'votos'} en total, ${trendLabel}`
+                // Webedia: la puntuación es su karma (cada voto pesa según el
+                // nivel de quien vota) y aparte manda cuántos votos son.
+                const voteCount = Number(comment.vote_count);
+                voteIndicator.title = Number.isFinite(voteCount) && comment.vote_count !== undefined
+                    ? `Karma: ${new Intl.NumberFormat('es-CO').format(votes)} · ${voteCount} ${voteCount === 1 ? 'voto' : 'votos'}`
                     : `Puntuación: ${votes} ${Math.abs(votes) === 1 ? 'voto' : 'votos'}`;
                 voteIndicator.innerHTML = `
                     <svg class="news-comment-vote-arrow vote-up" viewBox="0 0 24 24" aria-hidden="true">
