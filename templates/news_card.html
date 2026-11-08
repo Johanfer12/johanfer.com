@@ -3,10 +3,11 @@
     <div class="news-card">
         <div class="card-front">
             <div class="news-media-zone">
+                {# La primera fila (hasta 6 a 300 px en pantalla ancha) se ve al abrir: sin diferir; el resto, lazy. #}
                 {% if article.image_url %}
-                <img src="{{ article.image_url|news_image_src }}" data-original-src="{{ article.image_url }}" data-fallback-src="{% static 'Img/News_Default.webp' %}" alt="{{ article.display_title }}" class="news-image" loading="lazy" decoding="async">
+                <img src="{{ article.image_url|news_image_src }}" data-original-src="{{ article.image_url }}" data-fallback-src="{% static 'Img/News_Default.webp' %}" alt="{{ article.display_title }}" class="news-image" {% if card_index and card_index <= 6 %}loading="eager"{% if card_index == 1 %} fetchpriority="high"{% endif %}{% else %}loading="lazy"{% endif %} decoding="async">
                 {% else %}
-                <img src="{% static 'Img/News_Default.webp' %}" data-fallback-src="{% static 'Img/News_Default.webp' %}" alt="Imagen no disponible" class="news-image" loading="lazy" decoding="async">
+                <img src="{% static 'Img/News_Default.webp' %}" data-fallback-src="{% static 'Img/News_Default.webp' %}" alt="Imagen no disponible" class="news-image" {% if card_index and card_index <= 6 %}loading="eager"{% if card_index == 1 %} fetchpriority="high"{% endif %}{% else %}loading="lazy"{% endif %} decoding="async">
                 {% endif %}
             </div>
             <div class="news-front-text">
