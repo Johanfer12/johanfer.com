@@ -16,15 +16,28 @@
     let opener = null;
     let activeRequestUrl = null;
 
-    const formatDate = (value) => {
-        if (!value) return '';
+    // En la cabecera va la fecha corta, para que quepa en la misma línea que
+    // el usuario y los votos; la larga queda en el tooltip.
+    const shortDateFormat = new Intl.DateTimeFormat('es-CO', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+    });
+    const longDateFormat = new Intl.DateTimeFormat('es-CO', {
+        dateStyle: 'full',
+        timeStyle: 'short',
+    });
+
+    const parseDate = (value) => {
+        if (!value) return null;
         const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return '';
-        return new Intl.DateTimeFormat('es-CO', {
-            dateStyle: 'medium',
-            timeStyle: 'short',
-        }).format(date);
+        return Number.isNaN(date.getTime()) ? null : date;
     };
+
+    const replyLabel = (count) => `${count} ${count === 1 ? 'respuesta' : 'respuestas'}`;
 
     // Mensaje de texto plano (vacío o error): quita la pastilla de carga, que
     // es lo único que mete nodos hijos en el status.
@@ -130,21 +143,17 @@
                 : String(comment.parent_id),
         }));
         const commentsById = new Map(normalizedComments.map((comment) => [comment.id, comment]));
-        const findThreadRoot = (comment) => {
-            let current = comment;
-            const visited = new Set();
-            while (current.parent_id && commentsById.has(current.parent_id) && !visited.has(current.id)) {
-                visited.add(current.id);
-                current = commentsById.get(current.parent_id);
-            }
-            return current.id;
-        };
-        const threadRoots = new Map();
+        // Cada comentario cuenta todas las respuestas que cuelgan de él, a
+        // cualquier profundidad: es lo que desaparece al plegarlo.
+        const descendantCount = new Map();
         normalizedComments.forEach((comment) => {
-            const rootId = findThreadRoot(comment);
-            comment.threadRootId = rootId;
-            if (comment.id !== rootId) {
-                threadRoots.set(rootId, (threadRoots.get(rootId) || 0) + 1);
+            let current = comment;
+            const visited = new Set([comment.id]);
+            while (current.parent_id && commentsById.has(current.parent_id)
+                   && !visited.has(current.parent_id)) {
+                visited.add(current.parent_id);
+                current = commentsById.get(current.parent_id);
+                descendantCount.set(current.id, (descendantCount.get(current.id) || 0) + 1);
             }
         });
 
@@ -153,23 +162,28 @@
             item.className = 'news-comment';
             item.style.setProperty('--comment-depth', String(Math.min(Number(comment.depth) || 0, 4)));
             item.dataset.commentId = comment.id;
-            item.dataset.threadRoot = comment.threadRootId;
+            if (comment.parent_id && commentsById.has(comment.parent_id)) {
+                item.dataset.parentId = comment.parent_id;
+            }
 
             const header = document.createElement('div');
             header.className = 'news-comment-header';
 
+            const userName = comment.user || 'Anónimo';
             const user = document.createElement('strong');
             user.className = 'news-comment-user';
-            user.textContent = comment.user || 'Anónimo';
+            // Sin title: el tooltip del sitio es un ::after y el recorte con
+            // puntos suspensivos (overflow: hidden) lo cortaría.
+            user.textContent = userName;
             header.appendChild(user);
 
-            const metadataParts = [];
-            const date = formatDate(comment.date);
-            if (date) metadataParts.push(date);
-            if (metadataParts.length) {
-                const metadata = document.createElement('span');
+            const date = parseDate(comment.date);
+            if (date) {
+                const metadata = document.createElement('time');
                 metadata.className = 'news-comment-meta';
-                metadata.textContent = metadataParts.join(' · ');
+                metadata.dateTime = date.toISOString();
+                metadata.textContent = shortDateFormat.format(date);
+                metadata.title = longDateFormat.format(date);
                 header.appendChild(metadata);
             }
 
@@ -223,15 +237,22 @@
             voteIndicator.setAttribute('aria-label', voteIndicator.title);
             if (hasVotes) header.appendChild(voteIndicator);
 
-            const replyCount = threadRoots.get(comment.id) || 0;
+            const replyCount = descendantCount.get(comment.id) || 0;
             if (replyCount) {
                 const toggle = document.createElement('button');
                 toggle.type = 'button';
                 toggle.className = 'news-comment-thread-toggle';
-                toggle.dataset.threadRoot = comment.id;
-                toggle.dataset.replyCount = String(replyCount);
+                toggle.dataset.commentId = comment.id;
                 toggle.setAttribute('aria-expanded', 'true');
-                toggle.textContent = `${replyCount} ${replyCount === 1 ? 'respuesta' : 'respuestas'}`;
+                toggle.title = `Ocultar ${replyLabel(replyCount)}`;
+                toggle.setAttribute('aria-label', toggle.title);
+                toggle.innerHTML = `
+                    <svg class="news-comment-thread-chevron" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 9l6 6 6-6"></path>
+                    </svg>
+                    <span class="news-comment-thread-count">${replyCount}</span>
+                `;
+                toggle.dataset.replyCount = String(replyCount);
                 header.appendChild(toggle);
             }
 
@@ -295,18 +316,33 @@
         });
     };
 
+    // Un comentario se ve si ninguno de sus antecesores está plegado. Se
+    // recalcula todo el árbol en cada clic para que desplegar un padre respete
+    // los hijos que se plegaron por separado.
     const toggleThread = (button) => {
-        const rootId = button.dataset.threadRoot;
         const willExpand = button.getAttribute('aria-expanded') !== 'true';
-        list.querySelectorAll('.news-comment').forEach((item) => {
-            if (item.dataset.threadRoot === rootId && item.dataset.commentId !== rootId) {
-                item.hidden = !willExpand;
-            }
-        });
         button.setAttribute('aria-expanded', String(willExpand));
-        const count = Number(button.dataset.replyCount) || 0;
-        const label = `${count} ${count === 1 ? 'respuesta' : 'respuestas'}`;
-        button.textContent = willExpand ? label : `Mostrar ${label}`;
+        button.closest('.news-comment')?.classList.toggle('is-collapsed', !willExpand);
+        const label = replyLabel(Number(button.dataset.replyCount) || 0);
+        button.title = willExpand ? `Ocultar ${label}` : `Mostrar ${label}`;
+        button.setAttribute('aria-label', button.title);
+
+        const items = [...list.querySelectorAll('.news-comment')];
+        const byId = new Map(items.map((item) => [item.dataset.commentId, item]));
+        items.forEach((item) => {
+            let parent = byId.get(item.dataset.parentId);
+            let hidden = false;
+            const visited = new Set();
+            while (parent && !visited.has(parent)) {
+                if (parent.classList.contains('is-collapsed')) {
+                    hidden = true;
+                    break;
+                }
+                visited.add(parent);
+                parent = byId.get(parent.dataset.parentId);
+            }
+            item.hidden = hidden;
+        });
     };
 
     const renderError = (message) => {

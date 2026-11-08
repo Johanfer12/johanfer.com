@@ -702,15 +702,16 @@ body.comments-modal-open {
 
 .news-comments-list {
     display: grid;
-    gap: 10px;
+    gap: 8px;
     margin: 0;
     padding: 8px 0 0;
     list-style: none;
 }
 
 .news-comment {
+    min-width: 0;
     margin-left: calc(var(--comment-depth, 0) * 18px);
-    padding: 13px 15px;
+    padding: 9px 12px 10px;
     border: 1px solid rgba(198, 214, 242, 0.12);
     border-left: 3px solid rgba(115, 199, 238, 0.5);
     border-radius: var(--radius-sm);
@@ -721,28 +722,34 @@ body.comments-modal-open {
     display: none;
 }
 
+/* Usuario, fecha, votos y plegado en UNA línea: el usuario es lo único que
+   cede, y se recorta con puntos suspensivos. */
 .news-comment-header {
     display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 12px;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
 }
 
 .news-comment-user {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
     color: #dbe9ff;
-    overflow-wrap: anywhere;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .news-comment-meta {
-    margin-left: auto;
+    flex: 0 0 auto;
     color: rgba(227, 233, 245, 0.5);
-    font-size: 0.76rem;
+    font-size: 0.74rem;
+    white-space: nowrap;
 }
 
 .news-comment-votes {
-    min-width: 76px;
-    height: 27px;
-    margin-left: auto;
+    flex: 0 0 auto;
+    height: 24px;
     padding: 2px 5px;
     display: inline-flex;
     align-items: center;
@@ -755,13 +762,9 @@ body.comments-modal-open {
     line-height: 1;
 }
 
-.news-comment-meta + .news-comment-votes {
-    margin-left: 0;
-}
-
 .news-comment-vote-arrow {
-    width: 19px;
-    height: 19px;
+    width: 17px;
+    height: 17px;
     flex: 0 0 auto;
     fill: rgba(198, 214, 242, 0.42);
 }
@@ -774,8 +777,7 @@ body.comments-modal-open {
 }
 
 .news-comment-votes.has-breakdown {
-    min-width: 90px;
-    gap: 7px;
+    gap: 5px;
 }
 
 .news-comment-vote-side {
@@ -824,15 +826,40 @@ body.comments-modal-open {
     color: #9cb3ff;
 }
 
+/* Plegar las respuestas: chevrón + cuántas cuelgan. Plegado, el chevrón
+   apunta a la derecha y la pastilla se rellena para que se vea que hay algo
+   escondido. */
 .news-comment-thread-toggle {
-    padding: 3px 8px;
+    flex: 0 0 auto;
+    height: 24px;
+    padding: 0 7px 0 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
     border: 1px solid rgba(115, 199, 238, 0.34);
     border-radius: var(--radius-pill);
     color: #8fd5f4;
     background: rgba(14, 42, 62, 0.72);
     font: inherit;
     font-size: 0.74rem;
+    font-weight: 700;
+    line-height: 1;
     cursor: pointer;
+}
+
+.news-comment-thread-chevron {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 0.15s ease;
+}
+
+.news-comment-thread-toggle[aria-expanded="false"] .news-comment-thread-chevron {
+    transform: rotate(-90deg);
 }
 
 .news-comment-thread-toggle:hover,
@@ -841,8 +868,39 @@ body.comments-modal-open {
     background: rgba(30, 75, 102, 0.8);
 }
 
+/* Los votos y el plegado van pegados al borde derecho: su tooltip se alinea a
+   la derecha en vez de centrarse, o se sale del panel y crea scroll lateral
+   (aunque esté oculto, ocupa sitio). */
+.news-comment-header [data-tip]::after {
+    left: auto;
+    right: 0;
+    transform: translate(0, 4px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .news-comment-header [data-tip]:hover::after {
+        transform: translate(0, 0);
+    }
+}
+
+.news-comment-header [data-tip]:focus-visible::after {
+    transform: translate(0, 0);
+}
+
+/* Zona de toque de 44 px en móvil sin agrandar la pastilla: el pseudo
+   ::before se extiende por fuera (el ::after es del tooltip). */
+.news-comment-thread-toggle {
+    position: relative;
+}
+
+.news-comment-thread-toggle::before {
+    content: '';
+    position: absolute;
+    inset: -10px -4px;
+}
+
 .news-comment-text {
-    margin: 7px 0 0;
+    margin: 5px 0 0;
     color: rgba(238, 243, 251, 0.88);
     line-height: 1.52;
     white-space: pre-wrap;
@@ -973,22 +1031,12 @@ body.comments-modal-open {
         margin-left: calc(var(--comment-depth, 0) * 10px);
     }
 
+    .news-comment {
+        padding: 8px 10px 9px;
+    }
+
     .news-comment-header {
-        gap: 6px 10px;
-    }
-
-    .news-comment-meta {
-        width: 100%;
-        margin: 3px 0 0;
-    }
-
-    .news-comment-votes,
-    .news-comment-meta + .news-comment-votes {
-        margin-left: 0;
-    }
-
-    .news-comment-thread-toggle {
-        margin-top: 2px;
+        gap: 6px;
     }
 
     .news-comments-footer {
