@@ -1077,10 +1077,22 @@ class NewsCardSingleSourceTests(TestCase):
         # El JSON viaja sin la sangria de la plantilla, asi que se compara
         # contra la pagina pasada por el mismo colapso: lo que se exige es que
         # el marcado sea el mismo, no que lleve los mismos espacios.
-        self.assertIn(
-            payload['cards'][0]['html'],
-            _collapse_html_whitespace(page.content.decode()),
-        )
+        #
+        # La unica diferencia admitida es la pista de carga de la imagen: la
+        # pagina trae las seis primeras sin diferir (y la primera con
+        # prioridad alta) porque se ven al abrir, mientras que las del JSON
+        # llegan con el scroll y van siempre diferidas. Se comprueba aparte y
+        # se iguala antes de comparar el resto.
+        card_html = payload['cards'][0]['html']
+        page_html = _collapse_html_whitespace(page.content.decode())
+        self.assertIn('loading="eager" fetchpriority="high"', page_html)
+        self.assertIn('loading="lazy"', card_html)
+        self.assertNotIn('loading="eager"', card_html)
+
+        page_html = page_html.replace(
+            'loading="eager" fetchpriority="high"', 'loading="lazy"',
+        ).replace('loading="eager"', 'loading="lazy"')
+        self.assertIn(card_html, page_html)
 
     def test_json_card_carries_html_and_the_stamps_the_frontend_reads(self):
         self.client.force_login(self.superuser)
