@@ -1,21 +1,15 @@
 import copy
-import io
 import json
-import tempfile
 from datetime import datetime, timezone
-from pathlib import Path
 from unittest.mock import patch
 
 import requests
-from django.core.management import call_command
-from django.core.management.base import CommandError
 from django.test import SimpleTestCase, TestCase, TransactionTestCase, override_settings
 from django.db import connection
 
 from . import simkl
 from .anime_mapping import UnresolvedEpisode, resolve_series_anime
 from .models import SimklSyncState, WatchedItem
-from .nuvio import read_watched, recovery_candidates
 from .tasks import NETWORK_RETRY_DELAYS, update_watching_cron
 from .tests import SIMKL_SHOW
 from .utils import _pending_after_last_watched, refresh_watching_from_simkl
@@ -38,34 +32,6 @@ class AnimeTranslationTests(SimpleTestCase):
     def test_unknown_season_is_not_extrapolated(self):
         with self.assertRaises(UnresolvedEpisode):
             resolve_series_anime('tt14986406', 3, 8, lambda *a, **kw: CATALOG)
-
-    def test_properties_decodes_java_escaping_and_selects_profile(self):
-        payload = {'items': [{'id': 'mal:41467', 'name': 'Bleach: final', 'entries': []}]}
-        encoded = json.dumps(payload).replace(':', '\\:').replace('=', '\\=')
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / 'watched.properties'
-            path.write_text('watched_2=' + encoded, encoding='utf-8')
-            self.assertEqual(read_watched(path, '2'), payload['items'])
-            with self.assertRaises(ValueError):
-                read_watched(path, '1')
-
-    def test_properties_uses_simkl_groups_in_desktop_snapshot(self):
-        groups = [{'id': 'mal:41467', 'entries': [{'season': 4, 'episode': 8}]}]
-        payload = {'items': [], 'providerPayloads': {'simkl': {'itemGroups': groups}}}
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / 'watched.properties'
-            path.write_text('watched_1=' + json.dumps(payload).replace(':', '\\:'), encoding='utf-8')
-            self.assertEqual(read_watched(path), groups)
-
-    def test_recovery_deduplicates_explicit_marks_and_keeps_first_date(self):
-        records = [{'id': 'mal:41467', 'entries': [
-            {'season': 4, 'episode': 8, 'markedAtEpochMs': 1789242855621},
-            {'season': 4, 'episode': 8, 'markedAtEpochMs': 1789242856621},
-        ]}]
-        candidates, errors = recovery_candidates(records, 'mal:41467', datetime(2026, 9, 12, tzinfo=timezone.utc), lambda *a, **kw: CATALOG)
-        self.assertEqual(len(candidates), 1)
-        self.assertEqual(errors, [])
-        self.assertEqual(candidates[0][1].timestamp(), 1789242855.621)
 
     def test_silo_future_season_does_not_keep_watching(self):
         item = {'seasons': [{'number': 3, 'episodes': [{'number': 10, 'watched_at': '2026-09-05T03:19:46Z'}]}]}
@@ -169,46 +135,6 @@ class SyncTransactionTests(TransactionTestCase):
         with patch('watching.utils.simkl.fetch_activities', return_value={'all': 'new'}), patch('watching.utils.simkl.fetch_all_items', return_value={'shows': [SIMKL_SHOW]}), patch('watching.utils.simkl.fetch_episodes', side_effect=catalog), patch('watching.utils._get_tmdb_metadata', side_effect=metadata):
             refresh_watching_from_simkl(full=True)
         self.assertEqual(WatchedItem.objects.count(), 2)
-
-
-class RecoveryCommandTests(SimpleTestCase):
-    @override_settings(SIMKL_CLIENT_ID='test', SIMKL_ACCESS_TOKEN='test')
-    @patch('watching.simkl.requests.post')
-    def test_write_uses_only_native_cour_and_episode(self, post):
-        post.return_value.json.return_value = {'added': {'episodes': 1}}
-        simkl.add_anime_history(2671730, 8, datetime(2026, 9, 12, tzinfo=timezone.utc))
-        body = post.call_args.kwargs['json']
-        self.assertEqual(body['shows'][0]['ids'], {'simkl': 2671730})
-        self.assertEqual(body['shows'][0]['episodes'][0]['number'], 8)
-        self.assertNotIn('seasons', body['shows'][0])
-
-    @override_settings(SIMKL_CLIENT_ID='test', SIMKL_ACCESS_TOKEN='test')
-    @patch('watching.simkl.requests.post')
-    def test_not_found_is_a_failure_even_with_http_200(self, post):
-        post.return_value.json.return_value = {'not_found': {'shows': [{'ids': {'simkl': 2671730}}]}}
-        with self.assertRaises(ValueError):
-            simkl.add_anime_history(2671730, 8, datetime.now(timezone.utc))
-
-    @patch('watching.management.commands.recover_nuvio_watched.read_watched')
-    @patch('watching.simkl.fetch_episodes', return_value=CATALOG)
-    @patch('watching.simkl.fetch_all_items', return_value={})
-    @patch('watching.simkl.add_anime_history')
-    def test_default_is_dry_run(self, write, library, catalog, read):
-        read.return_value = [{'id': 'mal:41467', 'entries': [{'season': 4, 'episode': 8, 'markedAtEpochMs': 1789242855621}]}]
-        out = io.StringIO()
-        call_command('recover_nuvio_watched', 'unused', content_id='mal:41467', since='2026-09-12T00:00:00-05:00', stdout=out)
-        write.assert_not_called()
-        self.assertEqual(json.loads(out.getvalue())['pending'][0]['episode'], 8)
-
-    @patch('watching.management.commands.recover_nuvio_watched.read_watched')
-    @patch('watching.simkl.fetch_episodes', return_value=CATALOG)
-    @patch('watching.simkl.fetch_all_items', return_value={})
-    @patch('watching.simkl.add_anime_history')
-    def test_unconfirmed_write_is_not_reported_as_success(self, write, library, catalog, read):
-        read.return_value = [{'id': 'mal:41467', 'entries': [{'season': 4, 'episode': 8, 'markedAtEpochMs': 1789242855621}]}]
-        with self.assertRaises(CommandError):
-            call_command('recover_nuvio_watched', 'unused', content_id='mal:41467', since='2026-09-12T00:00:00-05:00', apply=True, stdout=io.StringIO())
-        write.assert_called_once()
 
 
 @override_settings(SIMKL_CLIENT_ID='cid', SIMKL_ACCESS_TOKEN='tok')

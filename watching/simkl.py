@@ -37,8 +37,9 @@ PIN_VERIFICATION_URL = 'https://simkl.com/pin'
 # que falló. Reintentar la pasada entera volvería a pedir /sync/all-items, que es
 # justo la llamada que la documentación advierte no repetir en un timer.
 #
-# Los POST se quedan fuera: un exceso de escrituras no devuelve 429, dispara un
-# bloqueo temporal del client_id que los reintentos alargan.
+# Este módulo solo LEE de Simkl. Si algún día vuelve a escribir, los POST tienen
+# que quedarse fuera del reintento: un exceso de escrituras no devuelve 429,
+# dispara un bloqueo temporal del client_id que los reintentos alargan.
 RETRY_STATUSES = frozenset({429, 500, 502, 503})
 RETRY_ATTEMPTS = 5  # 1 + 4 reintentos, esperando 1, 2, 4 y 8 s
 RETRY_BASE_DELAY = 1.0
@@ -168,23 +169,6 @@ def fetch_all_items(date_from=None):
     if (not isinstance(result, dict) or set(result) - {'shows', 'anime', 'movies'}
             or any(not isinstance(v, list) for v in result.values())):
         raise ValueError('Biblioteca Simkl inválida; no se reconcilia el historial')
-    return result
-
-
-def add_anime_history(simkl_id, number, watched_at):
-    """Escritura por ID exacto del cour y episodio nativo, sin temporada ni rewatch."""
-    response = requests.post(
-        f'{API_BASE}/sync/history',
-        params={'client_id': _client_id(), 'app-name': APP_NAME, 'app-version': APP_VERSION},
-        headers={'Authorization': f'Bearer {_access_token()}', 'User-Agent': USER_AGENT},
-        json={'shows': [{'ids': {'simkl': simkl_id}, 'episodes': [
-            {'number': number, 'watched_at': watched_at.isoformat()},
-        ]}]}, timeout=90,
-    )
-    response.raise_for_status()
-    result = response.json()
-    if not isinstance(result, dict) or any((result.get('not_found') or {}).values()):
-        raise ValueError('Simkl no reconoció la marca; no se declara recuperada')
     return result
 
 

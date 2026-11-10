@@ -13,7 +13,6 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -58,7 +57,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'axes',
-    'import_export',
     'home_page',
     'spotify',
     'my_news',
@@ -132,44 +130,20 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'Bookshelf.wsgi.application'
 
-#Solo en servidor de producción mientras se usa sqlite3 independiente.
-try:
-    __import__('pysqlite3')
-    import sys
-    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-except ImportError:
-    pass
-
-
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-# Configuración de base de datos basada en variable de entorno
-# USE_LOCAL_DATABASE=true para SQLite local, false o no definida para PostgreSQL/Supabase
-USE_LOCAL_DATABASE = os.environ.get('USE_LOCAL_DATABASE', '').lower() in ('true', '1', 'yes')
-
-if USE_LOCAL_DATABASE:
-    # Configuración para base de datos local (SQLite)
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'database.db',
-            # Los PRAGMAs (WAL y compañía, para ahorrarle escrituras a la SD)
-            # se aplican por señal en Bookshelf/db_pragmas.py y NO aquí con
-            # OPTIONS['init_command']. Se hizo así cuando producción iba con
-            # Django 5.0, que no admite esa opción en SQLite; hoy va con la 5.2
-            # y valdría cualquiera de las dos, pero la señal ya está probada.
-        }
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'database.db',
+        # Los PRAGMAs (WAL y compañía, para ahorrarle escrituras a la SD)
+        # se aplican por señal en Bookshelf/db_pragmas.py y NO aquí con
+        # OPTIONS['init_command']. Se hizo así cuando producción iba con
+        # Django 5.0, que no admite esa opción en SQLite; hoy va con la 5.2
+        # y valdría cualquiera de las dos, pero la señal ya está probada.
     }
-else:
-    # Configuración para base de datos externa (Supabase/PostgreSQL)
-    DATABASES = {
-        "default": dj_database_url.config(
-            default=os.environ.get("DATABASE_URL"),
-            conn_max_age=600,  # pooling sencillo
-            conn_health_checks=True,
-        )
-    }
+}
 
 
 # Password validation
