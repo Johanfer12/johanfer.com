@@ -34,13 +34,8 @@ class VisitLogMiddleware:
         '/noticias/undo/',
         '/noticias/latest-deleted/',
         '/noticias/update-feed/',
-        '/noticias/cleanup-old/',
-        '/noticias/retry-summaries/',
         '/noticias/check-new-news/',
-        '/noticias/get-news-count/',
         '/noticias/get-page/',
-        '/noticias/generate-embeddings/',
-        '/noticias/check-redundancy/',
         '/noticias/image-proxy/',
     )
     SKIP_PATHS = (
@@ -90,7 +85,9 @@ class VisitLogMiddleware:
 
         visitor_id = self._get_or_create_visitor_id(request)
         if self._is_public_ip(ip):
-            country, country_code = self._resolve_country(ip)
+            country, country_code = self._resolve_country(
+                ip, self._cloudflare_country_code(request, ip),
+            )
         else:
             country, country_code = 'Local', ''
 
@@ -121,13 +118,90 @@ class VisitLogMiddleware:
         except ValueError:
             return False
 
-    @staticmethod
-    def _resolve_country(ip):
+    # Códigos que Cloudflare manda cuando NO sabe el país: XX es "desconocido"
+    # y T1 es la red Tor. Ninguno es un país, así que no se guardan.
+    CLOUDFLARE_NO_COUNTRY = frozenset({'XX', 'T1'})
+    COUNTRY_CACHE_TTL = 60 * 60 * 24 * 7
+
+    @classmethod
+    def _cloudflare_country_code(cls, request, ip):
+        """País que Cloudflare calculó para ESTA ip, o '' si no se puede fiar.
+
+        Cloudflare geolocaliza la IP que se conectó a su borde y manda el
+        resultado en CF-IPCountry, junto con esa misma IP en CF-Connecting-IP.
+        Solo se acepta el país si esa IP es la que se va a guardar en la
+        visita: así el país y la IP salen de la misma conexión, y no puede
+        colarse el de un salto intermedio ni el de una cabecera suelta.
+
+        Lo que queda fuera cae en la consulta a ipwho.is, como antes:
+        peticiones que no pasaron por Cloudflare (no traen las cabeceras), un
+        nginx que no esté resolviendo la IP real (no coincidirían) y los
+        códigos que no son un país.
+        """
+        code = (request.headers.get('CF-IPCountry') or '').strip().upper()
+        if len(code) != 2 or not code.isalpha() or code in cls.CLOUDFLARE_NO_COUNTRY:
+            return ''
+        try:
+            connecting = ipaddress.ip_address(
+                (request.headers.get('CF-Connecting-IP') or '').strip()
+            )
+            logged = ipaddress.ip_address(ip)
+        except ValueError:
+            return ''
+        # Se comparan como direcciones y no como texto: una IPv6 se puede
+        # escribir de varias formas.
+        return code if connecting == logged else ''
+
+    @classmethod
+    def _country_name(cls, country_code):
+        """Nombre con el que ya está guardado ese país, o '' si es nuevo.
+
+        Cloudflare solo da el código. El nombre se toma de las visitas
+        anteriores para que un mismo país no acabe con dos nombres distintos.
+        """
+        cache_key = f'visit-country-name:{country_code}'
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+        name = (
+            VisitLog.objects
+            .filter(country_code=country_code)
+            .exclude(country='')
+            .order_by('-id')
+            .values_list('country', flat=True)
+            .first()
+        ) or ''
+        if name:
+            cache.set(cache_key, name, cls.COUNTRY_CACHE_TTL)
+        return name
+
+    @classmethod
+    def _resolve_country(cls, ip, cloudflare_code=''):
         cache_key = f'visit-country:{ip}'
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
 
+        if cloudflare_code:
+            name = cls._country_name(cloudflare_code)
+            if name:
+                result = (name, cloudflare_code)
+                cache.set(cache_key, result, cls.COUNTRY_CACHE_TTL)
+                return result
+
+        country, country_code = cls._lookup_ipwho(ip)
+        if cloudflare_code and not country_code:
+            # ipwho.is no respondió: el código de Cloudflare vale igual; la
+            # página de visitas enseña el código hasta que haya un nombre.
+            country_code = cloudflare_code
+
+        result = (country, country_code)
+        cache.set(cache_key, result, cls.COUNTRY_CACHE_TTL)
+        return result
+
+    @staticmethod
+    def _lookup_ipwho(ip):
+        """Consulta externa: bloquea hasta 2 s, por eso es el último recurso."""
         country = ''
         country_code = ''
         try:
@@ -143,10 +217,7 @@ class VisitLogMiddleware:
         except Exception:
             country = ''
             country_code = ''
-
-        result = (country, country_code)
-        cache.set(cache_key, result, 60 * 60 * 24 * 7)
-        return result
+        return country, country_code
 
     def _get_or_create_visitor_id(self, request):
         visitor_id = request.session.get(self.SESSION_VISITOR_KEY, '').strip()

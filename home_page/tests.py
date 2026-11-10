@@ -127,6 +127,104 @@ class VisitLogMiddlewareTests(TestCase):
         self.assertFalse(VisitLog.objects.filter(path='/noticias/get-page/').exists())
 
 
+class VisitCountryFromCloudflareTests(TestCase):
+    """El país de Cloudflare solo vale si es el de la IP que se guarda."""
+
+    # IPs públicas de verdad: las de documentación (203.0.113.x) cuentan como
+    # privadas y la visita se guardaría como 'Local' sin mirar el país.
+    IP = '8.8.8.8'
+    IPWHO = 'home_page.middleware.VisitLogMiddleware._lookup_ipwho'
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        # Una visita anterior: de ella sale el nombre del país.
+        VisitLog.objects.create(
+            ip_address='1.1.1.1', visitor_id='x', country='Colombia',
+            country_code='CO', path='/',
+        )
+
+    def _visit(self, **headers):
+        self.client.get('/about/', HTTP_ACCEPT='text/html', **headers)
+        return VisitLog.objects.filter(path='/about/').latest('id')
+
+    def test_uses_cloudflare_country_when_it_is_for_the_logged_ip(self):
+        with patch(self.IPWHO) as ipwho:
+            visit = self._visit(
+                HTTP_X_REAL_IP=self.IP,
+                HTTP_CF_CONNECTING_IP=self.IP,
+                HTTP_CF_IPCOUNTRY='co',
+            )
+
+        ipwho.assert_not_called()
+        self.assertEqual(visit.ip_address, self.IP)
+        self.assertEqual((visit.country, visit.country_code), ('Colombia', 'CO'))
+
+    def test_ignores_cloudflare_country_of_another_ip(self):
+        with patch(self.IPWHO, return_value=('Germany', 'DE')) as ipwho:
+            visit = self._visit(
+                HTTP_X_REAL_IP=self.IP,
+                HTTP_CF_CONNECTING_IP='9.9.9.9',
+                HTTP_CF_IPCOUNTRY='CO',
+            )
+
+        ipwho.assert_called_once_with(self.IP)
+        self.assertEqual((visit.country, visit.country_code), ('Germany', 'DE'))
+
+    def test_ignores_country_header_without_connecting_ip(self):
+        with patch(self.IPWHO, return_value=('Germany', 'DE')) as ipwho:
+            visit = self._visit(HTTP_X_REAL_IP=self.IP, HTTP_CF_IPCOUNTRY='CO')
+
+        ipwho.assert_called_once_with(self.IP)
+        self.assertEqual(visit.country_code, 'DE')
+
+    def test_unknown_and_tor_codes_are_not_countries(self):
+        for code in ('XX', 'T1', '', 'COL'):
+            with self.subTest(code=code), patch(
+                self.IPWHO, return_value=('Germany', 'DE'),
+            ) as ipwho:
+                cache.clear()
+                visit = self._visit(
+                    HTTP_X_REAL_IP=self.IP,
+                    HTTP_CF_CONNECTING_IP=self.IP,
+                    HTTP_CF_IPCOUNTRY=code,
+                )
+                ipwho.assert_called_once_with(self.IP)
+                self.assertEqual(visit.country_code, 'DE')
+
+    def test_ipv6_is_compared_as_an_address_not_as_text(self):
+        with patch(self.IPWHO) as ipwho:
+            visit = self._visit(
+                HTTP_X_REAL_IP='2606:4700:4700::1111',
+                HTTP_CF_CONNECTING_IP='2606:4700:4700:0000:0000:0000:0000:1111',
+                HTTP_CF_IPCOUNTRY='CO',
+            )
+
+        ipwho.assert_not_called()
+        self.assertEqual(visit.country_code, 'CO')
+
+    def test_new_country_takes_its_name_from_ipwho(self):
+        with patch(self.IPWHO, return_value=('Japan', 'JP')) as ipwho:
+            visit = self._visit(
+                HTTP_X_REAL_IP=self.IP,
+                HTTP_CF_CONNECTING_IP=self.IP,
+                HTTP_CF_IPCOUNTRY='JP',
+            )
+
+        ipwho.assert_called_once_with(self.IP)
+        self.assertEqual((visit.country, visit.country_code), ('Japan', 'JP'))
+
+    def test_new_country_keeps_cloudflare_code_if_ipwho_fails(self):
+        with patch(self.IPWHO, return_value=('', '')):
+            visit = self._visit(
+                HTTP_X_REAL_IP=self.IP,
+                HTTP_CF_CONNECTING_IP=self.IP,
+                HTTP_CF_IPCOUNTRY='JP',
+            )
+
+        self.assertEqual((visit.country, visit.country_code), ('', 'JP'))
+
+
 class VisitsViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -953,3 +1051,24 @@ class ScheduledCommandsExitCodeTests(TestCase):
             with self.subTest(comando=comando), patch(tarea, return_value=True) as mock:
                 call_command(comando)
                 mock.assert_called_once_with()
+
+
+class ClearExpiredSessionsTests(TestCase):
+    def test_the_nightly_command_deletes_only_expired_sessions(self):
+        from django.contrib.sessions.models import Session
+
+        ahora = dj_timezone.now()
+        Session.objects.create(session_key='vieja', session_data='x', expire_date=ahora - timedelta(days=1))
+        Session.objects.create(session_key='viva', session_data='x', expire_date=ahora + timedelta(days=1))
+
+        with patch('home_page.management.commands.update_books.update_books_cron', return_value=True):
+            call_command('update_books')
+
+        self.assertEqual(list(Session.objects.values_list('session_key', flat=True)), ['viva'])
+
+    def test_a_cleanup_failure_does_not_fail_the_books_pass(self):
+        with patch('home_page.tasks.call_command', side_effect=RuntimeError('boom')),                 patch('home_page.management.commands.update_books.update_books_cron', return_value=True) as libros:
+            with self.assertLogs('home_page.tasks', level='ERROR'):
+                call_command('update_books')
+
+        libros.assert_called_once_with()
