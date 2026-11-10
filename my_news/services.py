@@ -1,7 +1,6 @@
 import feedparser
 from datetime import datetime, timedelta, timezone as dt_timezone
 from django.utils import timezone
-import pytz
 from .models import (
     News, FeedSource, FilterWord, AIFilterInstruction, AIModelSetting, PendingEmbedding,
 )
@@ -1266,7 +1265,7 @@ class FeedService:
                     # Crear fecha en UTC (los feeds generalmente usan UTC como estándar)
                     published_utc = datetime(*entry.published_parsed[:6])
                     if timezone.is_naive(published_utc):
-                        published_utc = timezone.make_aware(published_utc, timezone=pytz.UTC)
+                        published_utc = timezone.make_aware(published_utc, timezone=dt_timezone.utc)
                     
                     # Convertir a la zona horaria del proyecto
                     published = published_utc.astimezone(timezone.get_current_timezone())

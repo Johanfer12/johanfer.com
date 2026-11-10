@@ -156,8 +156,9 @@ if USE_LOCAL_DATABASE:
             'NAME': BASE_DIR / 'database.db',
             # Los PRAGMAs (WAL y compañía, para ahorrarle escrituras a la SD)
             # se aplican por señal en Bookshelf/db_pragmas.py y NO aquí con
-            # OPTIONS['init_command']: esa opción para SQLite existe desde
-            # Django 5.1 y producción va con la 5.0, donde tumba el arranque.
+            # OPTIONS['init_command']. Se hizo así cuando producción iba con
+            # Django 5.0, que no admite esa opción en SQLite; hoy va con la 5.2
+            # y valdría cualquiera de las dos, pero la señal ya está probada.
         }
     }
 else:
@@ -260,10 +261,6 @@ QDRANT_COLLECTION = os.getenv('QDRANT_COLLECTION', 'news_embeddings_gemini001_d7
 # `python manage.py simkl_auth` (dura ~5 años, no hay refresh).
 SIMKL_CLIENT_ID = os.getenv('SIMKL_CLIENT_ID')
 SIMKL_ACCESS_TOKEN = os.getenv('SIMKL_ACCESS_TOKEN')
-# Trakt (fuente anterior; su API devuelve 403 desde julio 2026 y se conserva solo
-# porque los registros históricos guardan su id y su URL).
-TRAKT_CLIENT_ID = os.getenv('TRAKT_CLIENT_ID')
-TRAKT_USERNAME = os.getenv('TRAKT_USERNAME')
 # TMDB (pósters; API key gratuita en https://www.themoviedb.org/settings/api)
 TMDB_API_KEY = os.getenv('TMDB_API_KEY')
 

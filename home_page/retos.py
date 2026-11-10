@@ -150,8 +150,7 @@ CO2_ANUAL = {
 }
 CO2_PREINDUSTRIAL = 280
 CO2_LIMITE_SEGURO = 350
-# Mauna Loa, media mensual de agosto de 2026 y máximo estacional (mayo de 2026).
-CO2_AGOSTO_2026 = 427.55
+# Mauna Loa, máximo estacional (mayo de 2026).
 CO2_MAXIMO_2026 = 432.34
 
 

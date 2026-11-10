@@ -1,10 +1,11 @@
 """PRAGMAs de SQLite aplicados a cada conexión nueva.
 
 Va por señal y no por ``DATABASES['default']['OPTIONS']['init_command']``
-porque ese ajuste para SQLite **existe desde Django 5.1** y producción corre
-la 5.0: allí `sqlite3.connect()` recibe `init_command` como argumento
-desconocido y la aplicación no arranca (ni siquiera `manage.py migrate`). La
-señal funciona igual en las dos versiones.
+porque ese ajuste para SQLite **existe desde Django 5.1** y, cuando se
+escribió esto, producción corría la 5.0: allí `sqlite3.connect()` recibe
+`init_command` como argumento desconocido y la aplicación no arranca (ni
+siquiera `manage.py migrate`). Hoy producción va con la 5.2 y valdría
+cualquiera de las dos vías; la señal se queda porque funciona en ambas.
 
 Qué se ajusta y por qué. La base vive en la tarjeta SD de una Raspberry Pi,
 así que lo que se optimiza son las escrituras, no la velocidad:

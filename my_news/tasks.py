@@ -336,10 +336,8 @@ def retry_summarize_pending(limit: int = 50, days: int = 15):
                 AIModelSetting.objects.first()
                 or AIModelSetting(model_name=DEFAULT_AI_MODEL)
             )
-            ai_model_name = ai_model_setting.model_name
         except Exception:
             ai_model_setting = None
-            ai_model_name = DEFAULT_AI_MODEL
 
         try:
             active_instructions = list(AIFilterInstruction.objects.filter(active=True))

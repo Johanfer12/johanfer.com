@@ -7,7 +7,6 @@ from django.http import JsonResponse
 from django.http import HttpResponse
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.contrib import messages
-from .services import FeedService
 from .ingestion_status import current_status, feed_alert
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.views import LoginView
@@ -17,7 +16,6 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.core.cache import cache
 from datetime import datetime, time as datetime_time, timedelta
-import pytz
 from django.db.models import Q, Count, Max
 from .tasks import news_update_running
 from django.conf import settings

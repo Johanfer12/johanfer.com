@@ -150,20 +150,6 @@ class VectorIndexService:
         point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, guid))
         self.client.delete(self.collection, points_selector=qm.PointIdsList(points=[point_id]))
 
-    def delete_many(self, guids: List[str]) -> int:
-        point_ids = [
-            str(uuid.uuid5(uuid.NAMESPACE_URL, guid))
-            for guid in guids
-            if guid
-        ]
-        if not point_ids:
-            return 0
-        self.client.delete(
-            self.collection,
-            points_selector=qm.PointIdsList(points=point_ids),
-        )
-        return len(point_ids)
-
     def tune_for_scale(self, flush_interval_sec: int = 60) -> dict:
         """Ajusta una colección ya creada para una ventana larga en una SD.
 
@@ -266,13 +252,6 @@ class VectorIndexService:
                 if guid:
                     encontrados.add(guid)
         return encontrados
-
-    @staticmethod
-    def _first_vector(raw):
-        """Qdrant devuelve un dict si la colección usa vectores con nombre."""
-        if isinstance(raw, dict):
-            return next(iter(raw.values()), None)
-        return raw
 
     def scroll_points(self, limit: int = 256, with_vectors: bool = False):
         offset = None
