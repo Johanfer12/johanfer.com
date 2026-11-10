@@ -720,6 +720,64 @@ class WatchingViewTests(TestCase):
         self.assertContains(response, '[1]')
 
 
+class WatchingCardsCacheTests(TestCase):
+    """Las tarjetas agrupadas se guardan en memoria entre peticiones."""
+
+    def setUp(self):
+        from . import views
+        # En producción la fila de estado ya existe. Sin crearla aquí, la
+        # primera petición la crearía y eso, con razón, descarta la caché.
+        SimklSyncState.load()
+        views.clear_cards_cache()
+        self.addCleanup(views.clear_cards_cache)
+
+    def _episode(self, tmdb_id, episode, title='Avenue 5'):
+        return WatchedItem(
+            dedup_key=f"show:{tmdb_id}:s01e{episode:02d}",
+            source='simkl',
+            media_type='episode',
+            title=title,
+            season=1,
+            episode=episode,
+            watched_at=timezone.now(),
+            tmdb_id=tmdb_id,
+        )
+
+    def test_second_request_does_not_group_again(self):
+        self._episode(500, 1).save()
+
+        from . import views
+        with patch('watching.views._build_cards', wraps=views._build_cards) as build:
+            self.client.get(reverse('watching:index'))
+            self.client.get(reverse('watching:index'))
+
+        self.assertEqual(build.call_count, 1)
+
+    def test_rows_written_by_another_process_are_seen(self):
+        # bulk_create no dispara señales: es lo más parecido a que el sync,
+        # que corre en otro proceso, añada filas sin avisar a este.
+        self._episode(500, 1).save()
+        self.client.get(reverse('watching:index'))
+
+        WatchedItem.objects.bulk_create([self._episode(600, 1, title='Silo')])
+        response = self.client.get(reverse('watching:index'))
+
+        titles = {card['latest'].title for card in response.context['cards']}
+        self.assertEqual(titles, {'Avenue 5', 'Silo'})
+
+    def test_the_owner_alert_does_not_leak_to_the_next_visitor(self):
+        self._episode(500, 1).save()
+        owner = get_user_model().objects.create_superuser('dueno', 'd@example.com', 'x')
+        self.client.force_login(owner)
+        mine = self.client.get(reverse('watching:index'))
+        self.assertTrue(mine.context['cards'][0]['needs_rating'])
+
+        self.client.logout()
+        theirs = self.client.get(reverse('watching:index'))
+
+        self.assertNotIn('needs_rating', theirs.context['cards'][0])
+
+
 class WatchingArcTests(TestCase):
     """Anime que Simkl parte en arcos y TMDB junta en una sola serie (JoJo)."""
 

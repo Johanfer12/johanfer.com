@@ -1,10 +1,15 @@
 import json
 import os
+import threading
+import time
 from collections import Counter, defaultdict
 from datetime import timedelta
 
 from django.conf import settings
 from django.core.paginator import Paginator
+from django.db.models import Count, Max
+from django.db.models.signals import post_delete, post_save
+from django.dispatch import receiver
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
@@ -112,6 +117,73 @@ def _apply_arcs(show_cards):
             card['poster_name'] = name
 
 
+# Tarjetas ya agrupadas, guardadas en memoria del proceso. Medido en la Pi con
+# 2.360 filas: traerlas cuesta 403 ms y agruparlas 190 ms, y eso se pagaba en
+# cada petición, también en cada tanda del scroll. La huella son 5 ms.
+#
+# Va en una variable del módulo y no en el caché de Django porque LocMem
+# serializa con pickle en cada lectura, y aquí son cientos de modelos.
+#
+# Quien escribe el historial es el sync, que es OTRO proceso: no puede avisar a
+# este. Por eso la huella se consulta en cada petición, y el plazo cubre lo que
+# la huella no ve (una nota o una sinopsis cambiadas sin filas nuevas).
+CARDS_CACHE_TTL = 600
+_cards_cache = {'huella': None, 'hasta': 0.0, 'cards': None}
+_cards_lock = threading.Lock()
+
+
+def _cards_fingerprint():
+    filas = WatchedItem.objects.aggregate(
+        total=Count('id'), ultimo=Max('id'), creado=Max('created_at'),
+    )
+    estado = SimklSyncState.objects.filter(pk=1).values_list('last_synced_at', flat=True).first()
+    return filas['total'], filas['ultimo'], filas['creado'], estado
+
+
+def _build_cards():
+    # Orden por fecha desc; en empate (p.ej. una temporada marcada de golpe con la
+    # misma fecha) gana el episodio más alto, para que "Último" sea el finale real.
+    items = list(WatchedItem.objects.order_by('-watched_at', '-season', '-episode'))
+    show_cards, movie_cards = _group_by_media(items)
+    _apply_arcs(show_cards)
+    for card in movie_cards:
+        card['poster_name'] = card['latest'].poster_name
+    return show_cards, movie_cards
+
+
+def _grouped_cards():
+    """Series y películas agrupadas, como COPIAS que la vista puede modificar.
+
+    Cada petición les añade `is_watching` y `needs_rating`, y este último solo
+    con la sesión iniciada: sobre los diccionarios compartidos, el aviso de una
+    visita mía se le quedaría pegado a la siguiente visita anónima.
+    """
+    huella = _cards_fingerprint()
+    with _cards_lock:
+        vigente = (
+            _cards_cache['cards'] is not None
+            and _cards_cache['huella'] == huella
+            and time.monotonic() < _cards_cache['hasta']
+        )
+        cards = _cards_cache['cards'] if vigente else None
+    if cards is None:
+        cards = _build_cards()
+        with _cards_lock:
+            _cards_cache.update(
+                huella=huella, hasta=time.monotonic() + CARDS_CACHE_TTL, cards=cards,
+            )
+    show_cards, movie_cards = cards
+    return [dict(c) for c in show_cards], [dict(c) for c in movie_cards]
+
+
+@receiver([post_save, post_delete], sender=WatchedItem)
+@receiver([post_save, post_delete], sender=SimklSyncState)
+def clear_cards_cache(**kwargs):
+    """Un cambio hecho en este mismo proceso (el admin) se ve al momento."""
+    with _cards_lock:
+        _cards_cache.update(huella=None, hasta=0.0, cards=None)
+
+
 def _sort_cards(cards, orden):
     """Ordena las tarjetas por fecha de última vista o por mi nota."""
     if orden == 'fecha_asc':
@@ -134,13 +206,7 @@ def watching(request):
         orden = 'fecha_desc'
     query = (request.GET.get('q') or '').strip()
 
-    # Orden por fecha desc; en empate (p.ej. una temporada marcada de golpe con la
-    # misma fecha) gana el episodio más alto, para que "Último" sea el finale real.
-    items = list(WatchedItem.objects.order_by('-watched_at', '-season', '-episode'))
-    show_cards, movie_cards = _group_by_media(items)
-    _apply_arcs(show_cards)
-    for card in movie_cards:
-        card['poster_name'] = card['latest'].poster_name
+    show_cards, movie_cards = _grouped_cards()
 
     # "Viendo" = le quedan episodios por delante del último que vi (los calcula el sync
     # con el catálogo de Simkl) y lo vi hace poco. Hacen falta las dos condiciones: sin
