@@ -83,6 +83,7 @@ class FeedManagementTests(TestCase):
             'url': 'https://science.example/feed',
             'active': 'on',
             'deep_search': 'on',
+            'translate_titles': 'on',
             'similarity_threshold': '0.88',
         })
         self.assertRedirects(
@@ -92,6 +93,7 @@ class FeedManagementTests(TestCase):
         source = FeedSource.objects.get(name='Ciencia')
         self.assertTrue(source.active)
         self.assertTrue(source.deep_search)
+        self.assertTrue(source.translate_titles)
         self.assertEqual(source.similarity_threshold, 0.88)
 
     def test_source_can_be_edited_and_toggled_only_by_post(self):

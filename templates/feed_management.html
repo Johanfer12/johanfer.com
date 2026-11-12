@@ -53,6 +53,7 @@
                         <div>
                             <span class="status-pill {% if source.active %}is-active{% endif %}">{% if source.active %}Activa{% else %}Pausada{% endif %}</span>
                             {% if source.deep_search %}<span class="feature-pill">Lectura profunda</span>{% endif %}
+                            {% if source.translate_titles %}<span class="feature-pill">Titulares traducidos</span>{% endif %}
                         </div>
                         <span class="management-count">{{ source.news_count }} noticias</span>
                     </div>

@@ -14,12 +14,22 @@ class FeedSourceForm(forms.ModelForm):
 
     class Meta:
         model = FeedSource
-        fields = ("name", "url", "active", "deep_search", "similarity_threshold")
+        fields = (
+            "name", "url", "active", "deep_search", "translate_titles",
+            "similarity_threshold",
+        )
         labels = {
             "name": "Nombre",
             "url": "Dirección del feed RSS",
             "active": "Fuente activa",
             "deep_search": "Leer el artículo completo",
+            "translate_titles": "Traducir titulares con IA",
+        }
+        help_texts = {
+            "translate_titles": (
+                "Solo para fuentes en otro idioma. La IA devuelve el titular en "
+                "español junto con el resumen; el original se conserva."
+            ),
         }
         widgets = {
             "name": forms.TextInput(attrs={"autocomplete": "off"}),
