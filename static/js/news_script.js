@@ -821,7 +821,36 @@
         updatePagination(data.total_pages);
     };
 
-    const renderPageFromServerData = (data, {animateMerge = false, animation = null} = {}) => {
+    // Tope de espera a las imagenes de las tarjetas nuevas antes de mostrarlas.
+    // Medido con el feed real, casi todas llegan en menos de un segundo porque
+    // la ingesta ya las dejo calientes en Cloudflare; el tope es para la que
+    // no llega, que entonces entra como antes, con la imagen despues.
+    const NEW_CARD_IMAGE_WAIT = 2500;
+
+    // Imagenes de las tarjetas que aun NO estan en la rejilla. Las que ya
+    // estan se reutilizan con su imagen puesta, asi que no hay nada que
+    // esperar por ellas. El marcado se lee en un <template>, que es inerte:
+    // con un <div> el navegador podria empezar a pedir las imagenes por su
+    // cuenta y la espera no serviria de nada.
+    const preloadNewCardImages = (data) => {
+        if (!CardUi.preloadImages || !DOM.grid) return Promise.resolve(null);
+        const current = new Set(getCurrentCardIds());
+        const specs = [];
+        (data?.cards || []).forEach(item => {
+            const id = normalizeId(extractPayloadId(item));
+            if (!id || current.has(id) || shouldSkipServerCard(extractPayloadId(item)) || !item.html) return;
+            const template = document.createElement('template');
+            template.innerHTML = item.html;
+            const image = template.content.querySelector('.news-image');
+            const src = image?.getAttribute('src');
+            if (!src) return;
+            specs.push({key: id, src, originalSrc: image.dataset.originalSrc || ''});
+        });
+        if (!specs.length) return Promise.resolve(null);
+        return CardUi.preloadImages(specs, {timeout: NEW_CARD_IMAGE_WAIT});
+    };
+
+    const renderPageFromServerData = (data, {animateMerge = false, animation = null, preloaded = null} = {}) => {
         if (!data || data.status !== 'success') return;
         const visibleCards = (data.cards || []).filter(item => !shouldSkipServerCard(extractPayloadId(item)));
         let renderAnimation = animation || (animateMerge ? 'merge' : 'none');
@@ -855,6 +884,7 @@
                 const created = createCardFromPayload(item);
                 card = created.card;
                 if (!card) return;
+                CardUi.usePreloadedImage?.(card, preloaded?.get(normalizeId(payloadId)));
                 if (shouldAnimateInsertions) {
                     prepareCardInsertion(card);
                     insertedCards.push(card);
@@ -905,7 +935,12 @@
                 signal: syncController.signal
             });
             if (isStaleUiRead(readVersion)) return;
-            renderPageFromServerData(data, {animation});
+            // Las tarjetas nuevas esperan a sus imagenes para entrar ya
+            // completas. Mientras tanto pudo pasar cualquier cosa (un borrado,
+            // otra sincronizacion): se vuelve a comprobar antes de pintar.
+            const preloaded = data?.status === 'success' ? await preloadNewCardImages(data) : null;
+            if (isStaleUiRead(readVersion) || STATE.syncController !== syncController) return;
+            renderPageFromServerData(data, {animation, preloaded});
             STATE.pendingNews.length = 0;
             STATE.lastDbSyncAt = Date.now();
         } catch (e) {

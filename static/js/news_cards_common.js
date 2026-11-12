@@ -214,6 +214,79 @@
         image.src = fallbackSrc;
     };
 
+    // Precarga de imagenes ANTES de insertar tarjetas nuevas. Sin esto la
+    // tarjeta entraba con el hueco vacio y la imagen aparecia despues, porque
+    // el navegador no empieza a pedirla hasta que el <img> esta en la pagina.
+    //
+    // Recorre los mismos escalones que useFallbackImage (version de
+    // Cloudflare -> original del medio) y devuelve, por clave, la URL que
+    // cargo de verdad, para que la tarjeta nazca ya apuntando a ella.
+    //
+    // El plazo es para TODO el lote: lo que no llegue a tiempo se queda sin
+    // entrada en el mapa y esa tarjeta se comporta como antes. Una imagen
+    // lenta no puede retrasar la entrada de las demas mas que eso.
+    //
+    // Las Image se guardan en `preloadKeepAlive` hasta la tanda siguiente: lo
+    // que hace que el <img> de la tarjeta pinte sin pedir nada es que la
+    // imagen siga decodificada en memoria.
+    let preloadKeepAlive = [];
+    const preloadOne = (url) => new Promise((resolve) => {
+        if (!url || typeof Image !== 'function') return resolve(null);
+        const image = new Image();
+        image.decoding = 'async';
+        image.onload = () => {
+            // decode() se lanza pero NO se espera: en una pestana en segundo
+            // plano su promesa no se resuelve, y la tanda entera se quedaba
+            // esperando hasta el plazo. Con la imagen ya descargada, el <img>
+            // de la tarjeta (decoding=sync) la pinta en su primer fotograma.
+            image.decode?.().catch(() => {});
+            resolve(image);
+        };
+        image.onerror = () => resolve(null);
+        image.src = url;
+    });
+
+    const preloadImages = (specs, {timeout = 2500} = {}) => {
+        const ready = new Map();
+        const kept = [];
+        preloadKeepAlive = kept;
+        const jobs = (specs || []).map(async ({key, src, originalSrc}) => {
+            const candidates = [src, originalSrc].filter((url, index, all) => url && all.indexOf(url) === index);
+            for (const url of candidates) {
+                const image = await preloadOne(url);
+                if (image) {
+                    kept.push(image);
+                    ready.set(key, url);
+                    return;
+                }
+            }
+        });
+        if (!jobs.length) return Promise.resolve(ready);
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => resolve(ready), timeout);
+            Promise.all(jobs).then(() => {
+                clearTimeout(timer);
+                resolve(ready);
+            });
+        });
+    };
+
+    // Deja el <img> de una tarjeta AUN SIN INSERTAR apuntando a la URL ya
+    // precargada. `eager` y `sync` porque la imagen ya esta en memoria: con
+    // `lazy` y `async` el navegador puede pintar un fotograma sin ella.
+    const usePreloadedImage = (container, url) => {
+        const image = container?.querySelector?.('.news-image');
+        if (!image || !url) return;
+        if (image.getAttribute('src') !== url) {
+            // Cargo el original, no la version de Cloudflare: se marca como
+            // probado para que un fallo posterior vaya directo a la generica.
+            image.dataset.originalTried = 'true';
+            image.setAttribute('src', url);
+        }
+        image.setAttribute('loading', 'eager');
+        image.setAttribute('decoding', 'sync');
+    };
+
     const bindImageFallbacks = (root = document) => {
         root.querySelectorAll?.('.news-image').forEach((image) => {
             if (!image.isConnected) return;
@@ -329,6 +402,8 @@
         isValidMobileTap,
         resetFlipState,
         bindImageFallbacks,
+        preloadImages,
+        usePreloadedImage,
         fitTitleToSummary,
         fitDescriptionToCard,
         fitCardText,

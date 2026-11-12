@@ -174,3 +174,62 @@ test('100 mousemove events do only one hover pass per frame', () => {
     run.frame();
     assert.equal(scans(), 1);
 });
+
+// Image de mentira: carga, falla o no responde nunca segun la URL.
+function fakeImage({fail = [], hang = []} = {}) {
+    const requested = [];
+    class FakeImage {
+        set src(url) {
+            this._src = url;
+            requested.push(url);
+            if (hang.includes(url)) return;
+            Promise.resolve().then(() => (fail.includes(url) ? this.onerror?.() : this.onload?.()));
+        }
+        get src() { return this._src; }
+        decode() { return Promise.resolve(); }
+    }
+    return {FakeImage, requested};
+}
+
+test('preload falls back to the original image and reports the URL that really loaded', async () => {
+    const {FakeImage, requested} = fakeImage({fail: ['/cdn/a.webp']});
+    const run = runtime({Image: FakeImage, Promise}); run.load('news_cards_common.js');
+    const ready = await run.context.NewsCards.preloadImages([
+        {key: '1', src: '/cdn/a.webp', originalSrc: 'https://medio/a.jpg'},
+        {key: '2', src: '/cdn/b.webp', originalSrc: 'https://medio/b.jpg'},
+    ]);
+    assert.equal(ready.get('1'), 'https://medio/a.jpg');
+    assert.equal(ready.get('2'), '/cdn/b.webp');
+    // La original de la segunda no se pide: la de Cloudflare ya cargo.
+    assert.deepEqual(requested, ['/cdn/a.webp', '/cdn/b.webp', 'https://medio/a.jpg']);
+});
+
+test('a slow image does not hold the batch beyond the deadline', async () => {
+    const {FakeImage} = fakeImage({hang: ['/cdn/lenta.webp']});
+    const run = runtime({Image: FakeImage, Promise}); run.load('news_cards_common.js');
+    const pending = run.context.NewsCards.preloadImages([
+        {key: 'rapida', src: '/cdn/rapida.webp'},
+        {key: 'lenta', src: '/cdn/lenta.webp'},
+    ], {timeout: 2500});
+    await new Promise(resolve => setImmediate(resolve));
+    run.timeout();
+    const ready = await pending;
+    assert.equal(ready.get('rapida'), '/cdn/rapida.webp');
+    assert.equal(ready.has('lenta'), false);
+});
+
+test('a card born with a preloaded image paints it at once and skips the tried step', () => {
+    const run = runtime(); run.load('news_cards_common.js');
+    const attrs = new Map([['src', '/cdn/a.webp'], ['loading', 'lazy'], ['decoding', 'async']]);
+    const image = {
+        dataset: {originalSrc: 'https://medio/a.jpg'},
+        getAttribute: name => attrs.get(name),
+        setAttribute: (name, value) => attrs.set(name, value),
+    };
+    const container = {querySelector: () => image};
+    run.context.NewsCards.usePreloadedImage(container, 'https://medio/a.jpg');
+    assert.equal(attrs.get('src'), 'https://medio/a.jpg');
+    assert.equal(attrs.get('loading'), 'eager');
+    assert.equal(attrs.get('decoding'), 'sync');
+    assert.equal(image.dataset.originalTried, 'true');
+});
