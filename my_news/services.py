@@ -898,6 +898,35 @@ class FeedService:
         return FeedService._formatear_resumen(summary), short_answer, ai_filter, title_es
 
     @staticmethod
+    def largest_media_content_url(media_content):
+        """URL de la imagen más ancha entre los `media:content` de una entrada.
+
+        The Guardian manda la misma foto en tres tamaños (140, 460 y 700 px) y
+        el de 140 va primero; quedarse con el primero daba miniaturas que la
+        tarjeta estiraba hasta verse borrosas. No basta con cambiar `width=` en
+        la URL: va firmada (`s=`) y la firma cambia con cada tamaño.
+
+        Sin `width` declarado se cuenta como 0, así que en los feeds que solo
+        traen uno (o no dicen el ancho) se sigue tomando el primero.
+        """
+        mejor_url, mejor_ancho = None, -1
+        for media in media_content or []:
+            url = media.get('url')
+            if not url:
+                continue
+            medio = (media.get('medium') or '').lower()
+            tipo = (media.get('type') or '').lower()
+            if medio in ('video', 'audio') or tipo.startswith(('video/', 'audio/')):
+                continue
+            try:
+                ancho = int(media.get('width') or 0)
+            except (TypeError, ValueError):
+                ancho = 0
+            if ancho > mejor_ancho:
+                mejor_url, mejor_ancho = url, ancho
+        return mejor_url
+
+    @staticmethod
     def extract_image_from_description(description):
         # Buscar una URL de imagen en el HTML de la descripción
         img_pattern = r'<img[^>]+src="([^">]+)"'
@@ -1045,7 +1074,7 @@ class FeedService:
         
         # 1. Buscar en media_content
         if hasattr(entry, 'media_content') and entry.media_content:
-            image_url = entry.media_content[0].get('url')
+            image_url = FeedService.largest_media_content_url(entry.media_content)
         
         # 2. Buscar en enclosures
         if not image_url and hasattr(entry, 'enclosures') and entry.enclosures:
