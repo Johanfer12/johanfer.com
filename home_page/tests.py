@@ -271,6 +271,32 @@ class VisitClientHintsTests(TestCase):
 
         lookup.assert_not_called()
 
+    def test_backfill_fills_only_empty_fields_of_the_country(self):
+        old = VisitLog.objects.create(ip_address='8.8.8.8', country_code='CO', path='/')
+        kept = VisitLog.objects.create(
+            ip_address='8.8.8.8', country_code='CO', path='/b/', city='Chía, Cundinamarca',
+        )
+        foreign = VisitLog.objects.create(ip_address='9.9.9.9', country_code='US', path='/')
+        details = {'isp': 'Telmex Colombia S.A.', 'city': 'Bogota, Bogota D.C.'}
+
+        with patch('home_page.middleware.VisitLogMiddleware.lookup_ip_details',
+                   return_value=details) as lookup:
+            call_command('backfill_visit_ip_data', '--apply', '--pausa', '0', stdout=io.StringIO())
+
+        lookup.assert_called_once_with('8.8.8.8')  # Una por IP, solo Colombia.
+        old.refresh_from_db(), kept.refresh_from_db(), foreign.refresh_from_db()
+        self.assertEqual((old.isp, old.city), ('Telmex Colombia S.A.', 'Bogota, Bogota D.C.'))
+        self.assertEqual(kept.city, 'Chía, Cundinamarca')  # No pisa la de Cloudflare.
+        self.assertEqual(foreign.isp, '')
+
+    def test_backfill_without_apply_only_counts(self):
+        VisitLog.objects.create(ip_address='8.8.8.8', country_code='CO', path='/')
+
+        with patch('home_page.middleware.VisitLogMiddleware.lookup_ip_details') as lookup:
+            call_command('backfill_visit_ip_data', stdout=io.StringIO())
+
+        lookup.assert_not_called()
+
     def test_known_operators_show_their_brand(self):
         from .middleware import isp_label
 

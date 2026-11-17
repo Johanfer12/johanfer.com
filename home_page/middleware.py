@@ -308,9 +308,19 @@ class VisitLogMiddleware:
                 # El hilo abrió su propia conexión a la base: cerrarla.
                 close_old_connections()
 
-    @staticmethod
-    def _lookup_isp(ip):
+    @classmethod
+    def _lookup_isp(cls, ip):
         """Operador según ipwho.is ('connection.isp', o 'org' si no hay)."""
+        return cls.lookup_ip_details(ip)['isp']
+
+    @staticmethod
+    def lookup_ip_details(ip):
+        """Operador y «ciudad, región» de una IP según ipwho.is.
+
+        Vacíos si no responde. La ciudad solo la usa el relleno de visitas
+        viejas (backfill_visit_ip_data): en las nuevas la da Cloudflare.
+        """
+        empty = {'isp': '', 'city': ''}
         try:
             req = Request(
                 f'https://ipwho.is/{ip}',
@@ -319,11 +329,19 @@ class VisitLogMiddleware:
             with urlopen(req, timeout=4) as resp:
                 data = json.loads(resp.read().decode('utf-8', errors='ignore'))
         except Exception:
-            return ''
+            return empty
         if not data.get('success'):
-            return ''
+            return empty
         connection = data.get('connection') or {}
-        return (connection.get('isp') or connection.get('org') or '').strip()[:120]
+        city = (data.get('city') or '').strip()
+        region = (data.get('region') or '').strip()
+        parts = [city] if city else []
+        if region and region != city:
+            parts.append(region)
+        return {
+            'isp': (connection.get('isp') or connection.get('org') or '').strip()[:120],
+            'city': ', '.join(parts)[:120],
+        }
 
     @classmethod
     def _backfill_visitor(cls, visitor_id, user_agent, hints):
