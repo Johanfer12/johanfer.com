@@ -297,6 +297,85 @@ class VisitClientHintsTests(TestCase):
 
         lookup.assert_not_called()
 
+    def test_redirect_is_not_logged_as_a_visit(self):
+        response = self.client.get('/bookshelf', HTTP_ACCEPT='text/html', HTTP_USER_AGENT=self.UA)
+
+        self.assertEqual(response.status_code, 301)
+        self.assertFalse(VisitLog.objects.exists())
+
+    BOT_UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+              '(KHTML, like Gecko) Chrome/124.0.6367.207 Safari/537.36')
+    REAL_CHROME = {
+        'HTTP_X_REAL_IP': '8.8.8.8', 'HTTP_CF_CONNECTING_IP': '8.8.8.8',
+        'HTTP_CF_IPCOUNTRY': 'CO', 'HTTP_SEC_CH_UA': '"Chromium";v="157"',
+        'HTTP_ACCEPT_LANGUAGE': 'es-CO',
+    }
+
+    def test_full_chrome_version_is_flagged_as_bot(self):
+        cache.clear()
+        self._get(**{**self.REAL_CHROME, 'HTTP_USER_AGENT': self.BOT_UA})
+
+        reasons = VisitLog.objects.get(path='/about/').bot_reason.split(',')
+        self.assertIn('version-completa', reasons)
+        self.assertIn('navegador-viejo', reasons)
+
+    def test_real_chrome_through_cloudflare_is_not_flagged(self):
+        cache.clear()
+        self._get(**self.REAL_CHROME)
+
+        self.assertEqual(VisitLog.objects.get(path='/about/').bot_reason, '')
+
+    def test_chrome_without_client_hints_or_language_is_flagged(self):
+        cache.clear()
+        headers = {k: v for k, v in self.REAL_CHROME.items()
+                   if k not in ('HTTP_SEC_CH_UA', 'HTTP_ACCEPT_LANGUAGE')}
+        self._get(**headers)
+
+        self.assertEqual(VisitLog.objects.get(path='/about/').bot_reason,
+                         'sin-client-hints,sin-idioma')
+
+    def test_header_signals_are_not_used_outside_cloudflare(self):
+        # Por la LAN el sitio va en http y Chrome no manda Client Hints.
+        self._get()
+
+        self.assertEqual(VisitLog.objects.get(path='/about/').bot_reason, '')
+
+    def test_bots_do_not_count_in_the_header_badge(self):
+        cache.clear()
+        VisitLog.objects.create(ip_address='8.8.8.8', country_code='CO', path='/')
+        VisitLog.objects.create(ip_address='8.8.4.4', country_code='CO', path='/',
+                                bot_reason='version-completa')
+
+        self.assertEqual(badge_count(), 1)
+
+    def test_flag_command_marks_old_visits_by_user_agent(self):
+        bot = VisitLog.objects.create(ip_address='8.8.8.8', path='/', user_agent=self.BOT_UA)
+        person = VisitLog.objects.create(ip_address='8.8.4.4', path='/', user_agent=self.UA)
+
+        call_command('flag_bot_visits', '--apply', stdout=io.StringIO())
+
+        bot.refresh_from_db(), person.refresh_from_db()
+        self.assertIn('version-completa', bot.bot_reason)
+        self.assertEqual(person.bot_reason, '')
+
+    def test_in_app_browsers_and_phone_models_are_not_bots(self):
+        from datetime import date
+        from .bot_detection import user_agent_reasons
+
+        today = date(2026, 11, 17)
+        for ua in (
+            'Mozilla/5.0 (Linux; Android 16; SM-A256E Build/BP4A; wv) AppleWebKit/537.36 '
+            '(KHTML, like Gecko) Version/4.0 Chrome/151.0.7922.104 Mobile Safari/537.36 Instagram 442',
+            'Mozilla/5.0 (Linux; Android 12; CUBOT X30 Build/SP1A; wv) AppleWebKit/537.36 '
+            '(KHTML, like Gecko) Version/4.0 Chrome/150.0.0.0 Mobile Safari/537.36',
+            'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) '
+            'SamsungBrowser/30.0 Chrome/143.0.0.0 Mobile Safari/537.36',
+            'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/157.0.0.0 Mobile Safari/537.36 Telegram-Android/11.2',
+        ):
+            with self.subTest(ua=ua[-40:]):
+                self.assertEqual(user_agent_reasons(ua, today), [])
+
     def test_known_operators_show_their_brand(self):
         from .middleware import isp_label
 

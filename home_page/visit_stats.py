@@ -37,7 +37,11 @@ def exclude_owner(visit_qs):
 
 
 def foreign_colombian_visits():
-    return exclude_owner(VisitLog.objects.filter(colombian_filter()))
+    # Los robots probables no cuentan: la insignia es para saber si entró
+    # alguien, y un scraper con IP de Claro no es alguien.
+    return exclude_owner(
+        VisitLog.objects.filter(colombian_filter()).filter(bot_reason='')
+    )
 
 
 def mark_seen(visit_qs=None):

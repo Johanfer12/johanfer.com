@@ -150,6 +150,7 @@
             </div>
         </div>
     </div>
+    <template id="bot-icon-template"><span class="bot-badge" role="img"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3"/><circle cx="12" cy="2.6" r="0.9" fill="currentColor" stroke="none"/><rect x="4.5" y="6.5" width="15" height="11" rx="3"/><circle cx="9.2" cy="11.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="14.8" cy="11.5" r="1.4" fill="currentColor" stroke="none"/><path d="M9.5 15h5"/><path d="M2.5 11v3M21.5 11v3"/><path d="M8.5 17.5v3M15.5 17.5v3"/></svg></span></template>
     <script>
         (function () {
             const groups = Array.from(document.querySelectorAll('.visit-country-group'));
@@ -248,6 +249,13 @@
                     badge.className = 'self-badge';
                     badge.textContent = 'YO';
                     ipLine.append(' ', badge);
+                }
+                if (row.bot.length) {
+                    // Mismo sitio que «YO»: es una marca sobre quién visita.
+                    const bot = document.getElementById('bot-icon-template').content.firstElementChild.cloneNode(true);
+                    bot.title = 'Robot probable: ' + row.bot.join('; ');
+                    bot.setAttribute('aria-label', bot.title);
+                    ipLine.append(' ', bot);
                 }
                 origin.appendChild(ipLine);
                 if (row.isp) origin.appendChild(line('visit-isp', row.isp));

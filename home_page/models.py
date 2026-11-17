@@ -101,6 +101,10 @@ class VisitLog(models.Model):
     city = models.CharField(max_length=120, blank=True, default='', db_default='')
     # Operador de la IP según ipwho.is («Telmex Colombia S.A.»).
     isp = models.CharField(max_length=120, blank=True, default='', db_default='')
+    # Motivos por los que parece un robot, separados por comas
+    # («version-completa,sin-idioma»); vacío si parece una persona.
+    # Ver home_page/bot_detection.py.
+    bot_reason = models.CharField(max_length=120, blank=True, default='', db_default='')
     visited_at = models.DateTimeField(auto_now_add=True, db_index=True)
     # Se sella al abrir /visitas/: lo ya mirado deja de contar en la cabecera.
     seen_at = models.DateTimeField(null=True, blank=True, db_index=True)

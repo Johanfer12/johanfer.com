@@ -7,10 +7,16 @@ from urllib.request import urlopen, Request
 
 from django.core.cache import cache
 from django.db import close_old_connections
+from django.middleware.common import CommonMiddleware
 from django.utils import timezone as dj_timezone
 
+from . import bot_detection
 from .models import VisitLog
 from .visit_stats import invalidate_badge
+
+
+# Solo para preguntarle si una ruta acabará redirigida a la misma con «/».
+_APPEND_SLASH = CommonMiddleware(lambda request: None)
 
 
 def os_label(platform, version):
@@ -153,7 +159,7 @@ class VisitLogMiddleware:
             response['Critical-CH'] = self.CLIENT_HINTS
 
         try:
-            self._log_visit(request)
+            self._log_visit(request, response)
         except Exception:
             # Nunca bloquear respuesta al usuario por fallos de logging.
             pass
@@ -178,6 +184,16 @@ class VisitLogMiddleware:
         platform = cls._hint(request, 'Sec-CH-UA-Platform')
         version = cls._hint(request, 'Sec-CH-UA-Platform-Version')
         return model, os_label(platform, version)[:60]
+
+    @classmethod
+    def _bot_reason(cls, request, ip, user_agent):
+        when = dj_timezone.localdate()
+        if cls._is_cloudflare_ip(request, ip):
+            reasons = bot_detection.request_reasons(request, user_agent, when)
+        else:
+            # Por la LAN (http) Chrome no manda Client Hints: solo el UA.
+            reasons = bot_detection.user_agent_reasons(user_agent, when)
+        return ','.join(reasons)[:120]
 
     @staticmethod
     def _language(request):
@@ -220,8 +236,16 @@ class VisitLogMiddleware:
             parts.append(region)
         return ', '.join(parts)[:120]
 
-    def _log_visit(self, request):
+    def _log_visit(self, request, response):
         if request.method != 'GET':
+            return
+        # Una redirección no es ver una página: «/bookshelf» → «/bookshelf/»
+        # contaba dos visitas por una. Los robots piden mucho sin la barra.
+        if 300 <= response.status_code < 400:
+            return
+        # La de la barra final no llega aquí como 301 sino como 404:
+        # CommonMiddleware va por fuera y la convierte en redirección después.
+        if response.status_code == 404 and _APPEND_SLASH.should_redirect_with_slash(request):
             return
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return
@@ -273,6 +297,7 @@ class VisitLogMiddleware:
             os_version=hints[1] if hints else '',
             language=self._language(request),
             city=self._cloudflare_city(request, ip) if self._is_public_ip(ip) else '',
+            bot_reason=self._bot_reason(request, ip, user_agent),
         )
 
         # El contador de la cabecera se recalcula en la siguiente página.

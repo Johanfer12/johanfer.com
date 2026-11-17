@@ -493,6 +493,22 @@
     border-radius: 2px;
 }
 
+/* Robot probable: naranja claro, del alto de «YO». El porqué va en el
+   tooltip (title → data-tip, ver js/tooltips.js). */
+.bot-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 6px;
+    padding: 2px 5px;
+    border: 1px solid rgba(255, 190, 130, 0.55);
+    border-radius: var(--radius-pill);
+    background: rgba(255, 170, 100, 0.16);
+    color: #ffc58f;
+    vertical-align: middle;
+    cursor: help;
+}
+
 .self-badge {
     display: inline-block;
     margin-left: 8px;

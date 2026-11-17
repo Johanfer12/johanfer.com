@@ -7,6 +7,7 @@ from django.views.decorators.http import require_GET
 from .models import Book
 from .models import VisitLog
 from .models import OwnerSignature
+from .bot_detection import labels as bot_labels
 from .middleware import get_client_ip, isp_label
 from .visit_stats import badge_count, invalidate_badge, mark_seen
 from .cover_colors import color_for
@@ -534,7 +535,7 @@ def visits_rows(request):
     page = list(
         group_qs.order_by('-visited_at', '-id')
         .values('id', 'visited_at', 'ip_address', 'visitor_id', 'path', 'user_agent',
-                'device_model', 'os_version', 'language', 'city', 'isp')
+                'device_model', 'os_version', 'language', 'city', 'isp', 'bot_reason')
         [offset:offset + VISITS_ROWS_PAGE_SIZE + 1]
     )
     has_more = len(page) > VISITS_ROWS_PAGE_SIZE
@@ -551,6 +552,8 @@ def visits_rows(request):
         # Dónde: operador, y ciudad e idioma en una línea.
         'isp': isp_label(row['isp']) if row['isp'] else '',
         'place': ' · '.join(v for v in (row['city'], row['language']) if v),
+        # Motivos de «robot probable», ya en frases para el tooltip.
+        'bot': bot_labels(row['bot_reason']),
         'is_self': row['ip_address'] in owner_ips or bool(row['visitor_id'] and row['visitor_id'] in owner_visitor_ids),
     } for row in page]
 
