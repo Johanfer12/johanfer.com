@@ -406,6 +406,10 @@
     font-weight: 600;
 }
 
+.visit-place {
+    color: #c9b6ef;
+}
+
 .visit-actions {
     width: 48px;
     text-align: center !important;

@@ -246,6 +246,12 @@
                     device.textContent = row.device;
                     agent.append(device, document.createElement('br'));
                 }
+                if (row.place) {
+                    const place = document.createElement('span');
+                    place.className = 'visit-place';
+                    place.textContent = row.place;
+                    agent.append(place, document.createElement('br'));
+                }
                 agent.append(row.user_agent);
 
                 const actions = document.createElement('td');

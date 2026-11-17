@@ -175,7 +175,44 @@ class VisitClientHintsTests(TestCase):
         )
 
         visit = VisitLog.objects.get(path='/about/')
-        self.assertEqual((visit.device_model, visit.os_version), ('', 'Windows 19.0.0'))
+        self.assertEqual((visit.device_model, visit.os_version), ('', 'Windows 11'))
+
+    def test_windows_platform_version_is_translated(self):
+        from .middleware import os_label
+
+        self.assertEqual(os_label('Windows', '19.0.0'), 'Windows 11')
+        self.assertEqual(os_label('Windows', '13.0.0'), 'Windows 11')
+        self.assertEqual(os_label('Windows', '10.0.0'), 'Windows 10')
+        self.assertEqual(os_label('Windows', '0.3.0'), 'Windows 7/8')
+        self.assertEqual(os_label('Android', '16.0.0'), 'Android 16.0.0')
+        self.assertEqual(os_label('Linux', ''), 'Linux')
+
+    def test_first_language_is_stored(self):
+        self._get(HTTP_ACCEPT_LANGUAGE='es-CO,es;q=0.9,en;q=0.8')
+
+        self.assertEqual(VisitLog.objects.get(path='/about/').language, 'es-CO')
+
+    def test_city_comes_from_cloudflare_for_the_logged_ip(self):
+        cache.clear()
+        # «Bogotá» en UTF-8, leído como latin-1, que es como llega por WSGI.
+        bogota = 'Bogotá'.encode('utf-8').decode('latin-1')
+        self._get(
+            HTTP_X_REAL_IP='8.8.8.8', HTTP_CF_CONNECTING_IP='8.8.8.8',
+            HTTP_CF_IPCOUNTRY='CO', HTTP_CF_IPCITY=bogota,
+            HTTP_CF_REGION='Bogota D.C.',
+        )
+
+        self.assertEqual(VisitLog.objects.get(path='/about/').city, 'Bogotá, Bogota D.C.')
+
+    def test_city_of_another_ip_is_ignored(self):
+        cache.clear()
+        with patch('home_page.middleware.VisitLogMiddleware._lookup_ipwho', return_value=('', '')):
+            self._get(
+                HTTP_X_REAL_IP='8.8.8.8', HTTP_CF_CONNECTING_IP='9.9.9.9',
+                HTTP_CF_IPCITY='Medellin',
+            )
+
+        self.assertEqual(VisitLog.objects.get(path='/about/').city, '')
 
     def test_a_later_visit_with_hints_is_not_merged_into_an_old_one(self):
         self._get()

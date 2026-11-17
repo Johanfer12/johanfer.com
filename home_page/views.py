@@ -265,7 +265,9 @@ def _apply_visits_filters(filters):
     if filters['ip']:
         visit_qs = visit_qs.filter(ip_address__icontains=filters['ip'])
     if filters['country']:
-        visit_qs = visit_qs.filter(country__icontains=filters['country'])
+        visit_qs = visit_qs.filter(
+            Q(country__icontains=filters['country']) | Q(city__icontains=filters['country'])
+        )
     if filters['path']:
         visit_qs = visit_qs.filter(path__icontains=filters['path'])
     if filters['ua']:
@@ -273,6 +275,7 @@ def _apply_visits_filters(filters):
             Q(user_agent__icontains=filters['ua'])
             | Q(device_model__icontains=filters['ua'])
             | Q(os_version__icontains=filters['ua'])
+            | Q(language__icontains=filters['ua'])
         )
 
     date_from = _parse_visit_date(filters['from'])
@@ -517,7 +520,7 @@ def visits_rows(request):
     page = list(
         group_qs.order_by('-visited_at', '-id')
         .values('id', 'visited_at', 'ip_address', 'visitor_id', 'path', 'user_agent',
-                'device_model', 'os_version')
+                'device_model', 'os_version', 'language', 'city')
         [offset:offset + VISITS_ROWS_PAGE_SIZE + 1]
     )
     has_more = len(page) > VISITS_ROWS_PAGE_SIZE
@@ -531,6 +534,8 @@ def visits_rows(request):
         'user_agent': row['user_agent'] or '-',
         # Lo que dicen los Client Hints; vacío si el navegador no los manda.
         'device': ' · '.join(v for v in (row['device_model'], row['os_version']) if v),
+        # Dónde y en qué idioma: Cloudflare y Accept-Language.
+        'place': ' · '.join(v for v in (row['city'], row['language']) if v),
         'is_self': row['ip_address'] in owner_ips or bool(row['visitor_id'] and row['visitor_id'] in owner_visitor_ids),
     } for row in page]
 

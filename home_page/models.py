@@ -95,6 +95,10 @@ class VisitLog(models.Model):
     # Vacíos en Firefox y Safari, que no los mandan pero tampoco recortan el UA.
     device_model = models.CharField(max_length=120, blank=True, default='', db_default='')
     os_version = models.CharField(max_length=60, blank=True, default='', db_default='')
+    # Primer idioma de Accept-Language ("es-CO").
+    language = models.CharField(max_length=35, blank=True, default='', db_default='')
+    # "Ciudad, región" de Cloudflare (Managed Transform de ubicación).
+    city = models.CharField(max_length=120, blank=True, default='', db_default='')
     visited_at = models.DateTimeField(auto_now_add=True, db_index=True)
     # Se sella al abrir /visitas/: lo ya mirado deja de contar en la cabecera.
     seen_at = models.DateTimeField(null=True, blank=True, db_index=True)

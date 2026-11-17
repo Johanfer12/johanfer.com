@@ -11,6 +11,28 @@ from .models import VisitLog
 from .visit_stats import invalidate_badge
 
 
+def os_label(platform, version):
+    """Nombre del sistema a partir de Sec-CH-UA-Platform(-Version).
+
+    En Windows el número no es la versión comercial sino la de la plataforma
+    UWP: 13 o más es Windows 11, de 1 a 10 es Windows 10 y 0 es 7, 8 u 8.1
+    (https://learn.microsoft.com/microsoft-edge/web-platform/how-to-detect-win11).
+    El resto (Android 16.0.0, macOS 15.1.0) ya es la versión que se conoce.
+    """
+    if platform == 'Windows' and version:
+        try:
+            major = int(version.split('.')[0])
+        except ValueError:
+            major = None
+        if major is not None:
+            if major >= 13:
+                return 'Windows 11'
+            if major >= 1:
+                return 'Windows 10'
+            return 'Windows 7/8'
+    return ' '.join(part for part in (platform, version) if part)
+
+
 def get_client_ip(request):
     real_ip = (request.headers.get('X-Real-IP') or '').strip()
     if real_ip:
@@ -100,8 +122,48 @@ class VisitLogMiddleware:
         model = cls._hint(request, 'Sec-CH-UA-Model')[:120]
         platform = cls._hint(request, 'Sec-CH-UA-Platform')
         version = cls._hint(request, 'Sec-CH-UA-Platform-Version')
-        os_version = ' '.join(part for part in (platform, version) if part)[:60]
-        return model, os_version
+        return model, os_label(platform, version)[:60]
+
+    @staticmethod
+    def _language(request):
+        """Primer idioma de Accept-Language ("es-CO"), sin el peso q=.
+
+        No es un Client Hint: lo manda cualquier navegador desde la primera
+        petición. Distingue un teléfono configurado en Colombia de uno en
+        España o de un robot (que suele no mandarlo o mandar "en-US").
+        """
+        first = (request.headers.get('Accept-Language') or '').split(',')[0]
+        return first.split(';')[0].strip()[:35]
+
+    @staticmethod
+    def _cloudflare_text(request, name):
+        """Cabecera de Cloudflare con texto libre, como CF-IPCity.
+
+        Cloudflare manda los nombres con tilde en UTF-8 y el servidor WSGI los
+        lee como latin-1, así que «Bogotá» llegaría como «BogotÃ¡».
+        """
+        value = (request.headers.get(name) or '').strip()
+        try:
+            return value.encode('latin-1').decode('utf-8')
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            return value
+
+    @classmethod
+    def _cloudflare_city(cls, request, ip):
+        """"Ciudad, región" que Cloudflare calculó para ESTA ip, o ''.
+
+        Llega solo con el Managed Transform «Add visitor location headers»
+        activado en el panel. Se exige lo mismo que al país: que
+        CF-Connecting-IP sea la IP que se guarda.
+        """
+        if not cls._is_cloudflare_ip(request, ip):
+            return ''
+        city = cls._cloudflare_text(request, 'CF-IPCity')
+        region = cls._cloudflare_text(request, 'CF-Region')
+        parts = [city] if city else []
+        if region and region != city:
+            parts.append(region)
+        return ', '.join(parts)[:120]
 
     def _log_visit(self, request):
         if request.method != 'GET':
@@ -149,6 +211,8 @@ class VisitLogMiddleware:
             referrer=(request.headers.get('Referer') or '')[:1500],
             device_model=hints[0] if hints else '',
             os_version=hints[1] if hints else '',
+            language=self._language(request),
+            city=self._cloudflare_city(request, ip) if self._is_public_ip(ip) else '',
         )
 
         # El contador de la cabecera se recalcula en la siguiente página.
@@ -220,16 +284,21 @@ class VisitLogMiddleware:
         code = (request.headers.get('CF-IPCountry') or '').strip().upper()
         if len(code) != 2 or not code.isalpha() or code in cls.CLOUDFLARE_NO_COUNTRY:
             return ''
+        return code if cls._is_cloudflare_ip(request, ip) else ''
+
+    @staticmethod
+    def _is_cloudflare_ip(request, ip):
+        """¿La IP que Cloudflare geolocalizó es la que se va a guardar?"""
         try:
             connecting = ipaddress.ip_address(
                 (request.headers.get('CF-Connecting-IP') or '').strip()
             )
             logged = ipaddress.ip_address(ip)
         except ValueError:
-            return ''
+            return False
         # Se comparan como direcciones y no como texto: una IPv6 se puede
         # escribir de varias formas.
-        return code if connecting == logged else ''
+        return connecting == logged
 
     @classmethod
     def _country_name(cls, country_code):
