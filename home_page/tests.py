@@ -358,6 +358,24 @@ class VisitClientHintsTests(TestCase):
         self.assertIn('version-completa', bot.bot_reason)
         self.assertEqual(person.bot_reason, '')
 
+    def test_scanner_probing_a_path_that_does_not_exist_is_flagged(self):
+        self.client.get(
+            '/api/session/properties', HTTP_ACCEPT='text/html',
+            HTTP_USER_AGENT='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        )
+
+        reasons = VisitLog.objects.get(path='/api/session/properties').bot_reason.split(',')
+        self.assertEqual(reasons, ['ua-incompleto', 'ruta-inexistente'])
+
+    def test_flag_command_also_uses_the_path(self):
+        probe = VisitLog.objects.create(ip_address='8.8.8.8', path='/wp-login.php', user_agent=self.UA)
+        page = VisitLog.objects.create(ip_address='8.8.8.8', path='/viendo/', user_agent=self.UA)
+
+        call_command('flag_bot_visits', '--apply', stdout=io.StringIO())
+
+        probe.refresh_from_db(), page.refresh_from_db()
+        self.assertEqual((probe.bot_reason, page.bot_reason), ('ruta-inexistente', ''))
+
     def test_in_app_browsers_and_phone_models_are_not_bots(self):
         from datetime import date
         from .bot_detection import user_agent_reasons
@@ -372,6 +390,9 @@ class VisitClientHintsTests(TestCase):
             'SamsungBrowser/30.0 Chrome/143.0.0.0 Mobile Safari/537.36',
             'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) '
             'Chrome/157.0.0.0 Mobile Safari/537.36 Telegram-Android/11.2',
+            # Facebook en iOS: sin «Safari/», pero con «like Gecko».
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 '
+            '(KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/450.0]',
         ):
             with self.subTest(ua=ua[-40:]):
                 self.assertEqual(user_agent_reasons(ua, today), [])

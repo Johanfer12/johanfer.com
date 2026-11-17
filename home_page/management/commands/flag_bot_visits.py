@@ -1,7 +1,7 @@
 """Marca como «robot probable» las visitas guardadas antes del detector.
 
-Solo puede usar lo que salió del user agent, que es lo único guardado: las
-señales de cabeceras (Accept-Language, Sec-CH-UA) no se pueden recuperar.
+Solo puede usar lo guardado (el user agent y la ruta): las señales de
+cabeceras (Accept-Language, Sec-CH-UA) no se pueden recuperar.
 Cada visita se juzga con la fecha en que llegó, para que «navegador viejo»
 signifique viejo entonces y no ahora. No toca las ya marcadas.
 
@@ -14,7 +14,7 @@ from collections import Counter
 from django.core.management.base import BaseCommand
 from django.utils import timezone as dj_timezone
 
-from home_page.bot_detection import user_agent_reasons
+from home_page.bot_detection import path_reasons, user_agent_reasons
 from home_page.models import VisitLog
 from home_page.visit_stats import invalidate_badge
 
@@ -28,9 +28,12 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         to_flag = {}
         by_reason = Counter()
-        rows = VisitLog.objects.filter(bot_reason='').values_list('id', 'user_agent', 'visited_at')
-        for visit_id, user_agent, visited_at in rows.iterator():
+        rows = VisitLog.objects.filter(bot_reason='').values_list(
+            'id', 'user_agent', 'visited_at', 'path',
+        )
+        for visit_id, user_agent, visited_at, path in rows.iterator():
             reasons = user_agent_reasons(user_agent, dj_timezone.localdate(visited_at))
+            reasons += path_reasons(path)
             if reasons:
                 to_flag.setdefault(','.join(reasons)[:120], []).append(visit_id)
                 by_reason.update(reasons)

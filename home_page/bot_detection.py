@@ -15,6 +15,8 @@ Hay dos familias:
 import re
 from datetime import date
 
+from django.urls import Resolver404, resolve
+
 # Un robot que se presenta como tal: buscadores, librerías HTTP, navegadores
 # sin ventana y las vistas previas de enlaces (WhatsApp/, TelegramBot,
 # Slackbot...), que no son una persona mirando la página sino una app leyendo
@@ -63,7 +65,16 @@ LABELS = {
     'sin-client-hints': 'Dice ser Chrome pero no manda Sec-CH-UA',
     'sin-idioma': 'No manda Accept-Language',
     'sin-user-agent': 'Sin user agent',
+    'ua-incompleto': 'User agent cortado: no nombra ningún navegador',
+    'ruta-inexistente': 'Pidió una página que no existe en el sitio',
 }
+
+# Todo navegador real termina su user agent nombrándose: Chrome y derivados
+# con «Safari/537.36», Safari con «Safari/», Firefox con «Gecko/… Firefox/»,
+# y los navegadores dentro de apps de iOS con «like Gecko». Uno que empieza
+# como navegador («Mozilla/5.0 (Windows…) AppleWebKit/537.36») y se corta
+# antes es un user agent fabricado a medias.
+BROWSER_TOKENS = ('Safari/', 'Firefox/', 'Gecko')
 
 
 def _expected_major(anchor, when):
@@ -83,6 +94,11 @@ def user_agent_reasons(user_agent, when):
         return ['declarado']
 
     reasons = []
+    if user_agent.startswith('Mozilla/') and not any(
+        token in user_agent for token in BROWSER_TOKENS
+    ):
+        reasons.append('ua-incompleto')
+
     chrome = CHROME.search(user_agent)
     if chrome and not _is_fork(user_agent):
         major, minor, build, patch = (int(part) for part in chrome.groups())
@@ -101,6 +117,22 @@ def user_agent_reasons(user_agent, when):
     if firefox and int(firefox.group(1)) < _expected_major(FIREFOX_ANCHOR, when) - OLD_VERSIONS:
         reasons.append('navegador-viejo')
     return reasons
+
+
+def path_reasons(path):
+    """'ruta-inexistente' si la ruta no es ninguna página del sitio.
+
+    Los escáneres prueban direcciones de otras aplicaciones
+    («/api/session/properties», «/wp-login.php») por si hay una abierta. Se
+    mira contra las URLs de Django, no contra el código de respuesta, para
+    poder aplicarlo también a visitas viejas: una noticia borrada da 404 pero
+    su ruta existe, y quien la pidió puede ser una persona con un enlace viejo.
+    """
+    try:
+        resolve(path)
+    except Resolver404:
+        return ['ruta-inexistente']
+    return []
 
 
 def request_reasons(request, user_agent, when):

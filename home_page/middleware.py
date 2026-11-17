@@ -193,6 +193,7 @@ class VisitLogMiddleware:
         else:
             # Por la LAN (http) Chrome no manda Client Hints: solo el UA.
             reasons = bot_detection.user_agent_reasons(user_agent, when)
+        reasons += bot_detection.path_reasons(request.path)
         return ','.join(reasons)[:120]
 
     @staticmethod
