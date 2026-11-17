@@ -109,7 +109,7 @@
                                     <colgroup>
                                         <col class="visit-col-date">
                                         <col class="visit-col-check">
-                                        <col class="visit-col-ip">
+                                        <col class="visit-col-origin">
                                         <col class="visit-col-path">
                                         <col class="visit-col-agent">
                                         <col class="visit-col-actions">
@@ -118,9 +118,9 @@
                                         <tr>
                                             <th>Fecha/Hora</th>
                                             <th class="visit-check">Sel.</th>
-                                            <th>IP</th>
+                                            <th>Origen</th>
                                             <th>Ruta</th>
-                                            <th>User-Agent</th>
+                                            <th>Dispositivo</th>
                                             <th class="visit-actions">X</th>
                                         </tr>
                                     </thead>
@@ -225,34 +225,44 @@
                 if (row.is_self) box.dataset.self = '1';
                 check.appendChild(box);
 
-                const ip = document.createElement('td');
-                ip.textContent = row.ip_address;
+                // Una línea por dato; las que no traen nada no se pintan.
+                function line(className, text) {
+                    const span = document.createElement('span');
+                    span.className = className;
+                    span.textContent = text;
+                    return span;
+                }
+
+                // Origen: IP (con YO), operador, y ciudad · idioma.
+                const origin = document.createElement('td');
+                origin.className = 'visit-origin';
+                const ipLine = document.createElement('span');
+                ipLine.className = 'visit-ip';
+                // Punto de corte tras cada «:» para que una IPv6 parta por grupos.
+                row.ip_address.split(':').forEach((part, index, parts) => {
+                    ipLine.append(part + (index < parts.length - 1 ? ':' : ''));
+                    if (index < parts.length - 1) ipLine.appendChild(document.createElement('wbr'));
+                });
                 if (row.is_self) {
                     const badge = document.createElement('span');
                     badge.className = 'self-badge';
                     badge.textContent = 'YO';
-                    ip.append(' ', badge);
+                    ipLine.append(' ', badge);
                 }
+                origin.appendChild(ipLine);
+                if (row.isp) origin.appendChild(line('visit-isp', row.isp));
+                if (row.place) origin.appendChild(line('visit-place', row.place));
 
                 const path = document.createElement('td');
                 path.className = 'visit-path';
                 path.textContent = row.path;
 
+                // Dispositivo: modelo y sistema (si los hay) y debajo el UA
+                // completo en pequeño: el dato crudo, para cuando haga falta.
                 const agent = document.createElement('td');
                 agent.className = 'visit-agent';
-                if (row.device) {
-                    const device = document.createElement('strong');
-                    device.className = 'visit-device';
-                    device.textContent = row.device;
-                    agent.append(device, document.createElement('br'));
-                }
-                if (row.place) {
-                    const place = document.createElement('span');
-                    place.className = 'visit-place';
-                    place.textContent = row.place;
-                    agent.append(place, document.createElement('br'));
-                }
-                agent.append(row.user_agent);
+                if (row.device) agent.appendChild(line('visit-device', row.device));
+                agent.appendChild(line('visit-ua', row.user_agent));
 
                 const actions = document.createElement('td');
                 actions.className = 'visit-actions';
@@ -265,7 +275,7 @@
                 remove.textContent = '×';
                 actions.appendChild(remove);
 
-                tr.append(date, check, ip, path, agent, actions);
+                tr.append(date, check, origin, path, agent, actions);
                 return tr;
             }
 

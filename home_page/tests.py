@@ -21,6 +21,24 @@ from .models import Book, OwnerSignature, VisitLog
 from .utils import build_shelf_url, download_as_webp, sync_currently_reading
 from .visit_stats import badge_count
 
+# Las visitas con IP pública preguntan el operador a ipwho.is en un hilo. En
+# los tests, ni red ni hilos: cada test que lo necesite parchea _lookup_isp.
+_isp_patches = [
+    patch('home_page.middleware.VisitLogMiddleware.ISP_LOOKUP_IN_THREAD', False),
+    patch('home_page.middleware.VisitLogMiddleware._lookup_isp', return_value=''),
+]
+
+
+def setUpModule():
+    for p in _isp_patches:
+        p.start()
+
+
+def tearDownModule():
+    for p in reversed(_isp_patches):
+        p.stop()
+
+
 READING_ENTRY = {
     'book_id': '777',
     'title': 'Proyecto Hail Mary',
@@ -230,6 +248,36 @@ class VisitClientHintsTests(TestCase):
         self._get(**self.HINTS)
 
         self.assertEqual(VisitLog.objects.get(visitor_id='otro').device_model, '')
+
+    def test_isp_is_looked_up_and_reused_for_the_same_ip(self):
+        cache.clear()
+        headers = {'HTTP_X_REAL_IP': '8.8.8.8', 'HTTP_CF_CONNECTING_IP': '8.8.8.8',
+                   'HTTP_CF_IPCOUNTRY': 'CO'}
+        with patch('home_page.middleware.VisitLogMiddleware._lookup_isp',
+                   return_value='Telmex Colombia S.A.') as lookup:
+            self._get(**headers)
+            cache.clear()  # La segunda tiene que salir de la visita anterior.
+            self.client.get('/', HTTP_ACCEPT='text/html', **headers)
+
+        lookup.assert_called_once_with('8.8.8.8')
+        self.assertEqual(
+            set(VisitLog.objects.values_list('isp', flat=True)),
+            {'Telmex Colombia S.A.'},
+        )
+
+    def test_private_ip_does_not_ask_for_the_isp(self):
+        with patch('home_page.middleware.VisitLogMiddleware._lookup_isp') as lookup:
+            self._get()
+
+        lookup.assert_not_called()
+
+    def test_known_operators_show_their_brand(self):
+        from .middleware import isp_label
+
+        self.assertEqual(isp_label('Telmex Colombia S.A.'), 'Claro (Telmex Colombia S.A.)')
+        self.assertEqual(isp_label('UNE EPM Telecomunicaciones S.A.'),
+                         'Tigo (UNE EPM Telecomunicaciones S.A.)')
+        self.assertEqual(isp_label('Google LLC'), 'Google LLC')
 
     def test_a_later_visit_with_hints_is_not_merged_into_an_old_one(self):
         self._get()

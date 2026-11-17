@@ -1,10 +1,12 @@
 import ipaddress
 import json
 import secrets
+import threading
 from datetime import timedelta
 from urllib.request import urlopen, Request
 
 from django.core.cache import cache
+from django.db import close_old_connections
 from django.utils import timezone as dj_timezone
 
 from .models import VisitLog
@@ -31,6 +33,32 @@ def os_label(platform, version):
                 return 'Windows 10'
             return 'Windows 7/8'
     return ' '.join(part for part in (platform, version) if part)
+
+
+# Razón social que da ipwho.is → marca con la que se conoce el operador. Solo
+# los de Colombia, que es donde se mira. Se compara en minúsculas y por
+# fragmento porque el mismo operador sale con variantes («UNE EPM
+# Telecomunicaciones S.A.», «EPM Telecomunicaciones S.A. E.S.P.»).
+ISP_BRANDS = (
+    ('telmex colombia', 'Claro'),
+    ('comunicacion celular', 'Claro'),
+    ('colombia movil', 'Tigo'),
+    ('epm telecomunicaciones', 'Tigo'),
+    ('colombia telecomunicaciones', 'Movistar'),
+    ('empresa de telecomunicaciones de bogota', 'ETB'),
+    ('partners telecom colombia', 'WOM'),
+    ('avantel', 'WOM'),
+    ('hv television', 'HV Multiplay'),
+)
+
+
+def isp_label(isp):
+    """«Claro (Telmex Colombia S.A.)» si se conoce la marca; si no, tal cual."""
+    lowered = isp.lower()
+    for fragment, brand in ISP_BRANDS:
+        if fragment in lowered:
+            return f'{brand} ({isp})'
+    return isp
 
 
 def get_client_ip(request):
@@ -89,6 +117,12 @@ class VisitLogMiddleware:
     # Hasta dónde se rellenan hacia atrás las visitas del mismo visitante que
     # llegaron sin hints (_backfill_visitor).
     HINTS_BACKFILL_WINDOW = timedelta(minutes=30)
+    # El operador de una IP no cambia de un día para otro: se reutiliza el de
+    # una visita anterior de esa IP antes de volver a preguntar a ipwho.is.
+    ISP_REUSE_WINDOW = timedelta(days=30)
+    # En segundo plano para no hacer esperar al visitante (ipwho.is puede
+    # tardar segundos). Los tests lo ponen a False para verlo en el momento.
+    ISP_LOOKUP_IN_THREAD = True
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -209,7 +243,7 @@ class VisitLogMiddleware:
         else:
             country, country_code = 'Local', ''
 
-        VisitLog.objects.create(
+        visit = VisitLog.objects.create(
             ip_address=ip,
             visitor_id=visitor_id,
             country_code=country_code or '',
@@ -225,6 +259,71 @@ class VisitLogMiddleware:
 
         # El contador de la cabecera se recalcula en la siguiente página.
         invalidate_badge()
+
+        if self._is_public_ip(ip):
+            self._fill_isp(visit.pk, ip)
+
+    @classmethod
+    def _known_isp(cls, ip):
+        """Operador ya conocido de esta IP (caché o visita reciente), o ''."""
+        cached = cache.get(f'visit-isp:{ip}')
+        if cached:
+            return cached
+        since = dj_timezone.now() - cls.ISP_REUSE_WINDOW
+        return (
+            VisitLog.objects
+            .filter(ip_address=ip, visited_at__gte=since)
+            .exclude(isp='')
+            .order_by('-id')
+            .values_list('isp', flat=True)
+            .first()
+        ) or ''
+
+    @classmethod
+    def _fill_isp(cls, visit_id, ip):
+        """Anota el operador de la visita: al momento si ya se conoce, si no
+        en un hilo aparte que pregunta a ipwho.is."""
+        known = cls._known_isp(ip)
+        if known:
+            VisitLog.objects.filter(pk=visit_id).update(isp=known)
+            return
+        if cls.ISP_LOOKUP_IN_THREAD:
+            threading.Thread(
+                target=cls._lookup_and_store_isp, args=(visit_id, ip), daemon=True,
+            ).start()
+        else:
+            cls._lookup_and_store_isp(visit_id, ip)
+
+    @classmethod
+    def _lookup_and_store_isp(cls, visit_id, ip):
+        try:
+            isp = cls._lookup_isp(ip)
+            if isp:
+                cache.set(f'visit-isp:{ip}', isp, cls.COUNTRY_CACHE_TTL)
+                VisitLog.objects.filter(pk=visit_id).update(isp=isp)
+        except Exception:
+            pass
+        finally:
+            if cls.ISP_LOOKUP_IN_THREAD:
+                # El hilo abrió su propia conexión a la base: cerrarla.
+                close_old_connections()
+
+    @staticmethod
+    def _lookup_isp(ip):
+        """Operador según ipwho.is ('connection.isp', o 'org' si no hay)."""
+        try:
+            req = Request(
+                f'https://ipwho.is/{ip}',
+                headers={'User-Agent': 'johanfer-visit-logger/1.0'},
+            )
+            with urlopen(req, timeout=4) as resp:
+                data = json.loads(resp.read().decode('utf-8', errors='ignore'))
+        except Exception:
+            return ''
+        if not data.get('success'):
+            return ''
+        connection = data.get('connection') or {}
+        return (connection.get('isp') or connection.get('org') or '').strip()[:120]
 
     @classmethod
     def _backfill_visitor(cls, visitor_id, user_agent, hints):

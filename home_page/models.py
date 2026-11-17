@@ -99,6 +99,8 @@ class VisitLog(models.Model):
     language = models.CharField(max_length=35, blank=True, default='', db_default='')
     # "Ciudad, región" de Cloudflare (Managed Transform de ubicación).
     city = models.CharField(max_length=120, blank=True, default='', db_default='')
+    # Operador de la IP según ipwho.is («Telmex Colombia S.A.»).
+    isp = models.CharField(max_length=120, blank=True, default='', db_default='')
     visited_at = models.DateTimeField(auto_now_add=True, db_index=True)
     # Se sella al abrir /visitas/: lo ya mirado deja de contar en la cabecera.
     seen_at = models.DateTimeField(null=True, blank=True, db_index=True)

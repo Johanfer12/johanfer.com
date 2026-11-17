@@ -320,7 +320,7 @@
 
 .visits-table {
     width: 100%;
-    min-width: 860px;
+    min-width: 920px;
     border-collapse: collapse;
     table-layout: fixed;
 }
@@ -333,12 +333,12 @@
     width: 46px;
 }
 
-.visit-col-ip {
-    width: 154px;
+.visit-col-origin {
+    width: 230px;
 }
 
 .visit-col-path {
-    width: 17%;
+    width: 15%;
 }
 
 .visit-col-agent {
@@ -380,9 +380,26 @@
     white-space: nowrap;
 }
 
-.visits-table th:nth-child(3),
-.visits-table td:nth-child(3) {
+.visits-table th:nth-child(3) {
     white-space: nowrap;
+}
+
+/* Origen y dispositivo van en líneas apiladas, una por dato. */
+.visit-origin > span,
+.visit-agent > span {
+    display: block;
+}
+
+/* Una IPv6 (hasta 39 caracteres) no cabe en la columna y, con nowrap, se
+   montaba sobre la ruta. Parte en los «:» (el <wbr> lo pone visits.html);
+   overflow-wrap es la red para lo que no traiga dónde partir. */
+.visit-ip {
+    overflow-wrap: anywhere;
+}
+
+.visit-isp {
+    margin-top: 2px;
+    color: #e3e9f5;
 }
 
 .visit-check {
@@ -402,12 +419,20 @@
 }
 
 .visit-device {
+    margin-bottom: 2px;
     color: #8fb4e8;
     font-weight: 600;
 }
 
 .visit-place {
     color: #c9b6ef;
+    font-size: var(--text-xs);
+}
+
+/* El UA crudo: se lee si hace falta, no compite con el modelo. */
+.visit-ua {
+    color: rgba(227, 233, 245, 0.62);
+    font-size: var(--text-xs);
 }
 
 .visit-actions {
