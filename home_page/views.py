@@ -452,6 +452,9 @@ def _delete_visits(request, filtered_qs):
             deleted, _ = group_qs.delete()
     elif action == 'delete_all_filtered':
         deleted, _ = filtered_qs.delete()
+    elif action == 'delete_bots':
+        # Solo los robots probables, dentro del filtro activo.
+        deleted, _ = filtered_qs.exclude(bot_reason='').delete()
 
     invalidate_badge()
     return deleted
@@ -496,6 +499,7 @@ def visits(request):
     return render(request, 'visits.html', {
         'visit_groups': visit_groups,
         'total_visits': sum(group['visit_count'] for group in visit_groups),
+        'bot_count': filtered_qs.exclude(bot_reason='').count(),
         'filters': filters,
         'rows_page_size': VISITS_ROWS_PAGE_SIZE,
     })

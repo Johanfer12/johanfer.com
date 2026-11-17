@@ -547,6 +547,31 @@ class VisitsViewTests(TestCase):
         self.assertContains(response, '2 visitas')
         self.assertContains(response, '(1 tuya)')
 
+    def test_delete_bots_removes_only_bots_inside_the_filter(self):
+        person = VisitLog.objects.create(ip_address='203.0.113.30', country='Colombia', path='/')
+        bot_co = VisitLog.objects.create(ip_address='203.0.113.31', country='Colombia', path='/',
+                                         bot_reason='version-completa')
+        bot_us = VisitLog.objects.create(ip_address='203.0.113.32', country='United States',
+                                         path='/', bot_reason='declarado')
+
+        page = self.client.get('/visitas/')
+        self.assertContains(page, 'Eliminar robots (2)')
+
+        response = self.client.post(
+            '/visitas/', {'action': 'delete_bots', 'country': 'Colombia'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.json()['deleted'], 1)
+        remaining = set(VisitLog.objects.values_list('pk', flat=True))
+        self.assertEqual(remaining, {person.pk, bot_us.pk})
+        self.assertNotIn(bot_co.pk, remaining)
+
+    def test_delete_bots_button_hides_without_bots(self):
+        VisitLog.objects.create(ip_address='203.0.113.30', country='Colombia', path='/')
+
+        self.assertNotContains(self.client.get('/visitas/'), 'Eliminar robots')
+
     def test_countries_are_ordered_by_latest_visit_with_colombia_first(self):
         now = dj_timezone.now()
         for code, name, minutes_ago, copies in (

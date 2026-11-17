@@ -45,6 +45,7 @@
                     <a class="btn secondary" href="/visitas/">Limpiar filtros</a>
                 </div>
                 <div class="toolbar-group toolbar-group-danger">
+                    {% if bot_count %}<button class="btn danger" type="button" data-confirm-delete="bots" data-bot-count="{{ bot_count }}">Eliminar robots ({{ bot_count }})</button>{% endif %}
                     <button class="btn danger" type="button" data-confirm-delete="filtered">Eliminar todo</button>
                 </div>
             </div>
@@ -455,6 +456,11 @@
                     };
                     modalMessage.textContent = '¿Eliminar ' + (total === 1 ? 'la visita de ' : 'las ' + total + ' visitas de ')
                         + countryName + '? Esta acción no se puede deshacer.';
+                } else if (deleteType === 'bots') {
+                    const bots = Number(button.dataset.botCount);
+                    pendingDelete = {reload: true, fields: {action: 'delete_bots'}};
+                    modalMessage.textContent = '¿Eliminar ' + (bots === 1 ? 'la visita marcada' : 'las ' + bots + ' visitas marcadas')
+                        + ' como robot probable? Solo las del filtro actual. Esta acción no se puede deshacer.';
                 } else {
                     pendingDelete = {reload: true, fields: {action: 'delete_all_filtered'}};
                     modalMessage.textContent = '¿Eliminar todas las visitas del filtro actual? Si no hay filtros activos, se eliminarán todas. Esta acción no se puede deshacer.';
