@@ -240,7 +240,13 @@
 
                 const agent = document.createElement('td');
                 agent.className = 'visit-agent';
-                agent.textContent = row.user_agent;
+                if (row.device) {
+                    const device = document.createElement('strong');
+                    device.className = 'visit-device';
+                    device.textContent = row.device;
+                    agent.append(device, document.createElement('br'));
+                }
+                agent.append(row.user_agent);
 
                 const actions = document.createElement('td');
                 actions.className = 'visit-actions';

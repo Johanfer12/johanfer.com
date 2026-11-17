@@ -127,6 +127,64 @@ class VisitLogMiddlewareTests(TestCase):
         self.assertFalse(VisitLog.objects.filter(path='/noticias/get-page/').exists())
 
 
+class VisitClientHintsTests(TestCase):
+    """Chromium congela su UA; el modelo llega por Client Hints."""
+
+    UA = ('Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 '
+          '(KHTML, like Gecko) Chrome/154.0.0.0 Mobile Safari/537.36')
+    HINTS = {
+        'HTTP_SEC_CH_UA_MODEL': '"SM-A256E"',
+        'HTTP_SEC_CH_UA_PLATFORM': '"Android"',
+        'HTTP_SEC_CH_UA_PLATFORM_VERSION': '"16.0.0"',
+    }
+
+    def _get(self, **headers):
+        headers = {'HTTP_ACCEPT': 'text/html', 'HTTP_USER_AGENT': self.UA, **headers}
+        return self.client.get('/about/', **headers)
+
+    def test_html_responses_ask_for_the_hints(self):
+        response = self._get()
+
+        self.assertIn('Sec-CH-UA-Model', response['Accept-CH'])
+        self.assertEqual(response['Critical-CH'], response['Accept-CH'])
+
+    def test_hints_are_stored_without_their_quotes(self):
+        self._get(**self.HINTS)
+
+        visit = VisitLog.objects.get(path='/about/')
+        self.assertEqual((visit.device_model, visit.os_version), ('SM-A256E', 'Android 16.0.0'))
+
+    def test_critical_ch_retry_completes_the_first_visit(self):
+        self._get()
+        self._get(**self.HINTS)
+
+        visit = VisitLog.objects.get(path='/about/')
+        self.assertEqual(visit.device_model, 'SM-A256E')
+
+    def test_browser_without_hints_is_logged_as_before(self):
+        self._get(HTTP_USER_AGENT='Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Firefox/153.0')
+
+        visit = VisitLog.objects.get(path='/about/')
+        self.assertEqual((visit.device_model, visit.os_version), ('', ''))
+
+    def test_desktop_sends_an_empty_model(self):
+        self._get(
+            HTTP_SEC_CH_UA_MODEL='""',
+            HTTP_SEC_CH_UA_PLATFORM='"Windows"',
+            HTTP_SEC_CH_UA_PLATFORM_VERSION='"19.0.0"',
+        )
+
+        visit = VisitLog.objects.get(path='/about/')
+        self.assertEqual((visit.device_model, visit.os_version), ('', 'Windows 19.0.0'))
+
+    def test_a_later_visit_with_hints_is_not_merged_into_an_old_one(self):
+        self._get()
+        VisitLog.objects.update(visited_at=dj_timezone.now() - timedelta(minutes=5))
+        self._get(**self.HINTS)
+
+        self.assertEqual(VisitLog.objects.filter(path='/about/').count(), 2)
+
+
 class VisitCountryFromCloudflareTests(TestCase):
     """El país de Cloudflare solo vale si es el de la IP que se guarda."""
 

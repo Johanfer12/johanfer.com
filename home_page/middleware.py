@@ -1,9 +1,11 @@
 import ipaddress
 import json
 import secrets
+from datetime import timedelta
 from urllib.request import urlopen, Request
 
 from django.core.cache import cache
+from django.utils import timezone as dj_timezone
 
 from .models import VisitLog
 from .visit_stats import invalidate_badge
@@ -49,11 +51,29 @@ class VisitLogMiddleware:
         '/offline/',
     )
 
+    # Client Hints de alta entropía que se piden a Chromium. Su user agent está
+    # congelado: en Android dice siempre «Android 10; K» y la versión llega
+    # como 154.0.0.0, así que sin esto no hay forma de saber qué teléfono es.
+    #
+    # Accept-CH solo vale a partir de la SIGUIENTE petición, y la mayoría de
+    # visitas ajenas son de una página. Critical-CH hace que el navegador, si
+    # le faltaban, repita la misma navegación ya con ellas. Pasa una vez por
+    # navegador: después recuerda lo que pide el sitio. La petición repetida
+    # no se apunta como visita nueva, completa la anterior (_log_visit).
+    CLIENT_HINTS = 'Sec-CH-UA-Model, Sec-CH-UA-Platform-Version'
+    # Margen para reconocer la repetición: llega en milisegundos, pero la Pi
+    # puede tardar en servir la primera.
+    HINTS_RETRY_WINDOW = timedelta(seconds=15)
+
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         response = self.get_response(request)
+
+        if (response.get('Content-Type') or '').startswith('text/html'):
+            response['Accept-CH'] = self.CLIENT_HINTS
+            response['Critical-CH'] = self.CLIENT_HINTS
 
         try:
             self._log_visit(request)
@@ -62,6 +82,26 @@ class VisitLogMiddleware:
             pass
 
         return response
+
+    @staticmethod
+    def _hint(request, name):
+        """Valor de un Client Hint sin las comillas de su sintaxis ("SM-A256E")."""
+        return (request.headers.get(name) or '').strip().strip('"').strip()
+
+    @classmethod
+    def _client_hints(cls, request):
+        """(modelo, sistema y versión) o None si el navegador no las mandó.
+
+        None y ('', '') no son lo mismo: un escritorio manda el modelo vacío
+        (`""`), y eso ya es la respuesta; lo que falta es la cabecera.
+        """
+        if 'Sec-CH-UA-Platform-Version' not in request.headers:
+            return None
+        model = cls._hint(request, 'Sec-CH-UA-Model')[:120]
+        platform = cls._hint(request, 'Sec-CH-UA-Platform')
+        version = cls._hint(request, 'Sec-CH-UA-Platform-Version')
+        os_version = ' '.join(part for part in (platform, version) if part)[:60]
+        return model, os_version
 
     def _log_visit(self, request):
         if request.method != 'GET':
@@ -84,6 +124,14 @@ class VisitLogMiddleware:
             return
 
         visitor_id = self._get_or_create_visitor_id(request)
+        user_agent = (request.headers.get('User-Agent') or '')[:1500]
+        hints = self._client_hints(request)
+
+        if hints is not None and self._complete_previous_visit(
+            ip, request.path[:255], user_agent, visitor_id, hints,
+        ):
+            return
+
         if self._is_public_ip(ip):
             country, country_code = self._resolve_country(
                 ip, self._cloudflare_country_code(request, ip),
@@ -97,12 +145,43 @@ class VisitLogMiddleware:
             country_code=country_code or '',
             country=country or '',
             path=request.path[:255],
-            user_agent=(request.headers.get('User-Agent') or '')[:1500],
+            user_agent=user_agent,
             referrer=(request.headers.get('Referer') or '')[:1500],
+            device_model=hints[0] if hints else '',
+            os_version=hints[1] if hints else '',
         )
 
         # El contador de la cabecera se recalcula en la siguiente página.
         invalidate_badge()
+
+    @classmethod
+    def _complete_previous_visit(cls, ip, path, user_agent, visitor_id, hints):
+        """Rellena la visita que dejó la petición sin Client Hints, si la hay.
+
+        Es la repetición que pide Critical-CH: misma IP, misma ruta y mismo
+        navegador, segundos después y ya con las cabeceras. Apuntarla aparte
+        contaría dos visitas por una. Se le pone el visitor_id de ahora porque
+        la sesión que sigue usando el navegador es la de esta respuesta.
+
+        Lo que no case (un navegador que no repite, o que ya las mandaba)
+        se apunta como siempre, así que no se pierde ninguna visita.
+        """
+        since = dj_timezone.now() - cls.HINTS_RETRY_WINDOW
+        previous = (
+            VisitLog.objects
+            .filter(
+                ip_address=ip, path=path, user_agent=user_agent,
+                device_model='', os_version='', visited_at__gte=since,
+            )
+            .order_by('-id')
+            .first()
+        )
+        if previous is None:
+            return False
+        previous.device_model, previous.os_version = hints
+        previous.visitor_id = visitor_id
+        previous.save(update_fields=['device_model', 'os_version', 'visitor_id'])
+        return True
 
     @staticmethod
     def _is_public_ip(value):

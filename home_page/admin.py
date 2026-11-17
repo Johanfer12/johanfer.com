@@ -16,7 +16,7 @@ class DeletedBookAdmin(admin.ModelAdmin):
 @admin.register(VisitLog)
 class VisitLogAdmin(admin.ModelAdmin):
     list_display = ('visited_at', 'ip_address', 'visitor_id', 'country_code', 'country', 'path')
-    search_fields = ('ip_address', 'visitor_id', 'country_code', 'country', 'path', 'user_agent')
+    search_fields = ('ip_address', 'visitor_id', 'country_code', 'country', 'path', 'user_agent', 'device_model')
     list_filter = ('country_code', 'country', 'visited_at')
 
 

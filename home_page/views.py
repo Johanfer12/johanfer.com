@@ -269,7 +269,11 @@ def _apply_visits_filters(filters):
     if filters['path']:
         visit_qs = visit_qs.filter(path__icontains=filters['path'])
     if filters['ua']:
-        visit_qs = visit_qs.filter(user_agent__icontains=filters['ua'])
+        visit_qs = visit_qs.filter(
+            Q(user_agent__icontains=filters['ua'])
+            | Q(device_model__icontains=filters['ua'])
+            | Q(os_version__icontains=filters['ua'])
+        )
 
     date_from = _parse_visit_date(filters['from'])
     date_to = _parse_visit_date(filters['to'])
@@ -512,7 +516,8 @@ def visits_rows(request):
     owner_ips, owner_visitor_ids = _owner_marks(request)
     page = list(
         group_qs.order_by('-visited_at', '-id')
-        .values('id', 'visited_at', 'ip_address', 'visitor_id', 'path', 'user_agent')
+        .values('id', 'visited_at', 'ip_address', 'visitor_id', 'path', 'user_agent',
+                'device_model', 'os_version')
         [offset:offset + VISITS_ROWS_PAGE_SIZE + 1]
     )
     has_more = len(page) > VISITS_ROWS_PAGE_SIZE
@@ -524,6 +529,8 @@ def visits_rows(request):
         'ip_address': row['ip_address'],
         'path': row['path'],
         'user_agent': row['user_agent'] or '-',
+        # Lo que dicen los Client Hints; vacío si el navegador no los manda.
+        'device': ' · '.join(v for v in (row['device_model'], row['os_version']) if v),
         'is_self': row['ip_address'] in owner_ips or bool(row['visitor_id'] and row['visitor_id'] in owner_visitor_ids),
     } for row in page]
 

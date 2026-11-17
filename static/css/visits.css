@@ -401,6 +401,11 @@
     overflow-wrap: anywhere;
 }
 
+.visit-device {
+    color: #8fb4e8;
+    font-weight: 600;
+}
+
 .visit-actions {
     width: 48px;
     text-align: center !important;

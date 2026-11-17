@@ -90,6 +90,11 @@ class VisitLog(models.Model):
     path = models.CharField(max_length=255, db_index=True)
     user_agent = models.TextField(blank=True, default='')
     referrer = models.TextField(blank=True, default='')
+    # Client Hints de Chromium. Su user agent ya no dice el modelo ni la
+    # versión del sistema (en Android siempre es «Android 10; K»); esto sí.
+    # Vacíos en Firefox y Safari, que no los mandan pero tampoco recortan el UA.
+    device_model = models.CharField(max_length=120, blank=True, default='', db_default='')
+    os_version = models.CharField(max_length=60, blank=True, default='', db_default='')
     visited_at = models.DateTimeField(auto_now_add=True, db_index=True)
     # Se sella al abrir /visitas/: lo ya mirado deja de contar en la cabecera.
     seen_at = models.DateTimeField(null=True, blank=True, db_index=True)
