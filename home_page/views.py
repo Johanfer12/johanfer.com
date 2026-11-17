@@ -10,7 +10,7 @@ from .models import OwnerSignature
 from .middleware import get_client_ip, isp_label
 from .visit_stats import badge_count, invalidate_badge, mark_seen
 from .cover_colors import color_for
-from django.db.models import Count, Sum
+from django.db.models import Count, Max, Sum
 from django.db.models import F, Q
 from django.urls import reverse
 from django.utils import timezone as dj_timezone
@@ -356,7 +356,11 @@ def _country_groups(visit_qs, mine):
     rows = (
         visit_qs
         .values('country_code', 'country')
-        .annotate(total=Count('id'), mine_total=Count('id', filter=mine))
+        .annotate(
+            total=Count('id'),
+            mine_total=Count('id', filter=mine),
+            last_visit=Max('visited_at'),
+        )
     )
 
     groups = {}
@@ -380,19 +384,27 @@ def _country_groups(visit_qs, mine):
                 'is_unknown': country_label == 'País desconocido',
                 'visit_count': 0,
                 'self_count': 0,
+                'last_visit': None,
             }
         if group['country'] in (iso2, 'País desconocido') and country_name:
             group['country'] = country_name
         group['visit_count'] += row['total']
         group['self_count'] += row['mine_total']
+        if row['last_visit'] and (
+            group['last_visit'] is None or row['last_visit'] > group['last_visit']
+        ):
+            group['last_visit'] = row['last_visit']
 
+    # Colombia siempre primero; el resto, el que tuvo la visita más reciente
+    # antes. Por número de visitas se quedaba arriba Estados Unidos, que son
+    # sobre todo robots, y un país nuevo se perdía al final.
     grouped_visits = list(groups.values())
     grouped_visits.sort(key=lambda group: (
         not (
             group['country_iso2'] == 'co'
             or group['country'].casefold() == 'colombia'
         ),
-        -group['visit_count'],
+        -(group['last_visit'].timestamp() if group['last_visit'] else 0),
     ))
     return grouped_visits
 

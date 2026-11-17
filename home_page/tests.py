@@ -434,6 +434,26 @@ class VisitsViewTests(TestCase):
         self.assertContains(response, '2 visitas')
         self.assertContains(response, '(1 tuya)')
 
+    def test_countries_are_ordered_by_latest_visit_with_colombia_first(self):
+        now = dj_timezone.now()
+        for code, name, minutes_ago, copies in (
+            ('US', 'United States', 60, 5),  # Más visitas, pero viejas.
+            ('MX', 'Mexico', 1, 1),          # La más reciente.
+            ('CO', 'Colombia', 600, 1),      # La más vieja, y aun así primero.
+        ):
+            for _ in range(copies):
+                visit = VisitLog.objects.create(
+                    ip_address='203.0.113.20', country_code=code, country=name, path='/',
+                )
+                VisitLog.objects.filter(pk=visit.pk).update(
+                    visited_at=now - timedelta(minutes=minutes_ago),
+                )
+
+        response = self.client.get('/visitas/')
+
+        order = [group['country'] for group in response.context['visit_groups']]
+        self.assertEqual(order[:3], ['Colombia', 'Mexico', 'United States'])
+
     def test_country_cards_open_hidden_visit_modals(self):
         VisitLog.objects.create(
             ip_address='203.0.113.20',
