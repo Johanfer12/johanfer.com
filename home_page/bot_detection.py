@@ -26,7 +26,11 @@ from django.urls import Resolver404, resolve
 DECLARED = re.compile(
     r'(?<!cu)bot\b|bot/|crawl|spider|slurp|scrap|curl/|wget|python|httpx|'
     r'aiohttp|go-http-client|java/|okhttp|headless|phantomjs|libwww|axios|'
-    r'node-fetch|postman|facebookexternalhit|whatsapp/|lighthouse|pagespeed',
+    r'node-fetch|postman|facebookexternalhit|whatsapp/|lighthouse|pagespeed|'
+    # Escáneres que no dicen «bot»: «nameserver-checker-http-validator»,
+    # y la firma clásica de robot, una URL de contacto dentro del UA
+    # («compatible; Shadowserver; +https://www.shadowserver.org»).
+    r'checker|validator|scanner|\+https?://',
     re.IGNORECASE,
 )
 
@@ -67,7 +71,47 @@ LABELS = {
     'sin-user-agent': 'Sin user agent',
     'ua-incompleto': 'User agent cortado: no nombra ningún navegador',
     'ruta-inexistente': 'Pidió una página que no existe en el sitio',
+    'centro-de-datos': 'Viene de un centro de datos, no de una conexión de casa o móvil',
+    'sin-javascript': 'No ejecutó JavaScript: la página no avisó de que se abrió',
 }
+
+# Provisional: toda visita nueva entra con él y lo quita el aviso que manda
+# la página al cargar (views.visit_js_beacon). Un navegador ejecuta la
+# página; un script que solo baja el HTML, no.
+NO_JS = 'sin-javascript'
+
+# Operadores que son nubes o hosting. Una persona no navega desde ahí salvo
+# por una VPN, y casi todo el tráfico de esas IPs son escáneres. Se compara
+# en minúsculas y por fragmento. Fuera a propósito: Cloudflare (su VPN,
+# WARP, la usa gente normal) y los operadores móviles y de casa.
+DATACENTER_ISPS = (
+    'amazon', 'aws', 'google llc', 'google cloud', 'microsoft', 'azure',
+    'digitalocean', 'hetzner', 'ovh', 'contabo', 'linode', 'akamai', 'vultr',
+    'the constant company', 'choopa', 'oracle', 'alibaba', 'tencent',
+    'huawei cloud', 'scaleway', 'leaseweb', 'm247', 'datacamp', 'hostinger',
+    'ionos', 'servers tech', 'aeza', 'stark industries', 'cherry servers',
+    'gcore', 'g-core', 'psychz', 'colocrossing', 'hostroyale', 'netcup',
+    'web master colombia',
+)
+
+
+def isp_reasons(isp):
+    """'centro-de-datos' si el operador es una nube o un hosting."""
+    lowered = isp.lower()
+    if lowered and any(fragment in lowered for fragment in DATACENTER_ISPS):
+        return ['centro-de-datos']
+    return []
+
+
+def add_reasons(bot_reason, new):
+    """Une motivos sin repetir: 'a,b' + ['b', 'c'] → 'a,b,c'."""
+    codes = [code for code in bot_reason.split(',') if code]
+    codes += [code for code in new if code not in codes]
+    return ','.join(codes)[:120]
+
+
+def remove_reason(bot_reason, code):
+    return ','.join(c for c in bot_reason.split(',') if c and c != code)
 
 # Todo navegador real termina su user agent nombrándose: Chrome y derivados
 # con «Safari/537.36», Safari con «Safari/», Firefox con «Gecko/… Firefox/»,

@@ -16,6 +16,7 @@ urlpatterns = [
     path('visitas/', views.visits, name='visits'),
     path('visitas/filas/', views.visits_rows, name='visits_rows'),
     path('visitas/insignia/', views.visits_badge_state, name='visits_badge_state'),
+    path('visitas/js/', views.visit_js_beacon, name='visit_js_beacon'),
     path('bookshelf/stats/', views.stats, name='stats'),
     path('retos/', views.retos, name='retos'),
     path('about/', views.about, name='about'),

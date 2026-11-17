@@ -1,3 +1,4 @@
+import hashlib
 import ipaddress
 import json
 import secrets
@@ -83,6 +84,33 @@ def short_region(region):
         if region.startswith(prefix):
             return region[len(prefix):]
     return region
+
+
+JS_SEEN_TTL = 60 * 30
+
+
+def _js_seen_key(request):
+    visitor_id = (request.session.get(VisitLogMiddleware.SESSION_VISITOR_KEY) or '').strip()
+    if visitor_id:
+        return f'visit-js:v:{visitor_id}'
+    ip = get_client_ip(request)
+    user_agent = (request.headers.get('User-Agent') or '')[:200]
+    digest = hashlib.sha1(user_agent.encode('utf-8', 'ignore')).hexdigest()[:12]
+    return f'visit-js:ip:{ip}:{digest}'
+
+
+def mark_js_seen(request):
+    """El navegador de esta sesión ejecutó la página.
+
+    Se recuerda un rato porque el aviso puede llegar ANTES que la visita que
+    confirma: la portada de la PWA se pinta desde la caché y la petición a la
+    red que la apunta sale por detrás.
+    """
+    cache.set(_js_seen_key(request), True, JS_SEEN_TTL)
+
+
+def js_already_seen(request):
+    return bool(cache.get(_js_seen_key(request)))
 
 
 def get_client_ip(request):
@@ -194,6 +222,8 @@ class VisitLogMiddleware:
             # Por la LAN (http) Chrome no manda Client Hints: solo el UA.
             reasons = bot_detection.user_agent_reasons(user_agent, when)
         reasons += bot_detection.path_reasons(request.path)
+        if not js_already_seen(request):
+            reasons.append(bot_detection.NO_JS)
         return ','.join(reasons)[:120]
 
     @staticmethod
@@ -329,7 +359,7 @@ class VisitLogMiddleware:
         en un hilo aparte que pregunta a ipwho.is."""
         known = cls._known_isp(ip)
         if known:
-            VisitLog.objects.filter(pk=visit_id).update(isp=known)
+            cls._store_isp(visit_id, known)
             return
         if cls.ISP_LOOKUP_IN_THREAD:
             threading.Thread(
@@ -338,13 +368,28 @@ class VisitLogMiddleware:
         else:
             cls._lookup_and_store_isp(visit_id, ip)
 
+    @staticmethod
+    def _store_isp(visit_id, isp):
+        """Guarda el operador y, si es un centro de datos, lo suma a los
+        motivos de robot. Va aparte porque el operador llega después de
+        crear la visita (en el hilo de ipwho.is)."""
+        update = {'isp': isp}
+        extra = bot_detection.isp_reasons(isp)
+        if extra:
+            current = VisitLog.objects.filter(pk=visit_id).values_list('bot_reason', flat=True).first()
+            if current is not None:
+                update['bot_reason'] = bot_detection.add_reasons(current, extra)
+        VisitLog.objects.filter(pk=visit_id).update(**update)
+        if extra:
+            invalidate_badge()
+
     @classmethod
     def _lookup_and_store_isp(cls, visit_id, ip):
         try:
             isp = cls._lookup_isp(ip)
             if isp:
                 cache.set(f'visit-isp:{ip}', isp, cls.COUNTRY_CACHE_TTL)
-                VisitLog.objects.filter(pk=visit_id).update(isp=isp)
+                cls._store_isp(visit_id, isp)
         except Exception:
             pass
         finally:

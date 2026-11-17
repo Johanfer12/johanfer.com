@@ -322,8 +322,61 @@ class VisitClientHintsTests(TestCase):
     def test_real_chrome_through_cloudflare_is_not_flagged(self):
         cache.clear()
         self._get(**self.REAL_CHROME)
+        # Hasta que la página avisa, la visita está en duda.
+        self.assertEqual(VisitLog.objects.get(path='/about/').bot_reason, 'sin-javascript')
+
+        self.client.post('/visitas/js/', **self.REAL_CHROME)
 
         self.assertEqual(VisitLog.objects.get(path='/about/').bot_reason, '')
+
+    def test_beacon_before_the_visit_still_counts(self):
+        # La portada de la PWA se pinta de la caché: el aviso puede llegar
+        # antes que la petición a la red que apunta la visita.
+        cache.clear()
+        self._get(**self.REAL_CHROME)
+        self.client.post('/visitas/js/', **self.REAL_CHROME)
+        self.client.get('/', HTTP_ACCEPT='text/html', HTTP_USER_AGENT=self.UA, **self.REAL_CHROME)
+
+        self.assertEqual(VisitLog.objects.get(path='/').bot_reason, '')
+
+    def test_beacon_only_clears_its_own_browser(self):
+        cache.clear()
+        other = VisitLog.objects.create(ip_address='8.8.4.4', visitor_id='otro', path='/',
+                                        bot_reason='sin-javascript')
+        self._get(**self.REAL_CHROME)
+        self.client.post('/visitas/js/', **self.REAL_CHROME)
+
+        other.refresh_from_db()
+        self.assertEqual(other.bot_reason, 'sin-javascript')
+
+    def test_beacon_keeps_the_other_reasons(self):
+        cache.clear()
+        self._get(**{**self.REAL_CHROME, 'HTTP_USER_AGENT': self.BOT_UA})
+        self.client.post('/visitas/js/', **{**self.REAL_CHROME, 'HTTP_USER_AGENT': self.BOT_UA})
+
+        self.assertEqual(VisitLog.objects.get(path='/about/').bot_reason,
+                         'version-completa,navegador-viejo')
+
+    def test_datacenter_isp_adds_a_reason(self):
+        cache.clear()
+        with patch('home_page.middleware.VisitLogMiddleware._lookup_isp',
+                   return_value='DigitalOcean, LLC'):
+            self._get(**self.REAL_CHROME)
+
+        reasons = VisitLog.objects.get(path='/about/').bot_reason.split(',')
+        self.assertIn('centro-de-datos', reasons)
+
+    def test_new_declared_scanners(self):
+        from datetime import date
+        from .bot_detection import user_agent_reasons
+
+        for ua in (
+            'nameserver-checker-http-validator/1.0',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko; '
+            'compatible; CriminalIP; +https://www.criminalip.io) Chrome/153.0.0.0 Safari/537.36',
+        ):
+            with self.subTest(ua=ua[:40]):
+                self.assertEqual(user_agent_reasons(ua, date(2026, 11, 17)), ['declarado'])
 
     def test_chrome_without_client_hints_or_language_is_flagged(self):
         cache.clear()
@@ -332,13 +385,13 @@ class VisitClientHintsTests(TestCase):
         self._get(**headers)
 
         self.assertEqual(VisitLog.objects.get(path='/about/').bot_reason,
-                         'sin-client-hints,sin-idioma')
+                         'sin-client-hints,sin-idioma,sin-javascript')
 
     def test_header_signals_are_not_used_outside_cloudflare(self):
         # Por la LAN el sitio va en http y Chrome no manda Client Hints.
         self._get()
 
-        self.assertEqual(VisitLog.objects.get(path='/about/').bot_reason, '')
+        self.assertEqual(VisitLog.objects.get(path='/about/').bot_reason, 'sin-javascript')
 
     def test_bots_do_not_count_in_the_header_badge(self):
         cache.clear()
@@ -365,7 +418,7 @@ class VisitClientHintsTests(TestCase):
         )
 
         reasons = VisitLog.objects.get(path='/api/session/properties').bot_reason.split(',')
-        self.assertEqual(reasons, ['ua-incompleto', 'ruta-inexistente'])
+        self.assertEqual(reasons, ['ua-incompleto', 'ruta-inexistente', 'sin-javascript'])
 
     def test_flag_command_also_uses_the_path(self):
         probe = VisitLog.objects.create(ip_address='8.8.8.8', path='/wp-login.php', user_agent=self.UA)

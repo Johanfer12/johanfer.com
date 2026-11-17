@@ -14,7 +14,7 @@ from collections import Counter
 from django.core.management.base import BaseCommand
 from django.utils import timezone as dj_timezone
 
-from home_page.bot_detection import path_reasons, user_agent_reasons
+from home_page.bot_detection import isp_reasons, path_reasons, user_agent_reasons
 from home_page.models import VisitLog
 from home_page.visit_stats import invalidate_badge
 
@@ -29,11 +29,12 @@ class Command(BaseCommand):
         to_flag = {}
         by_reason = Counter()
         rows = VisitLog.objects.filter(bot_reason='').values_list(
-            'id', 'user_agent', 'visited_at', 'path',
+            'id', 'user_agent', 'visited_at', 'path', 'isp',
         )
-        for visit_id, user_agent, visited_at, path in rows.iterator():
+        for visit_id, user_agent, visited_at, path, isp in rows.iterator():
             reasons = user_agent_reasons(user_agent, dj_timezone.localdate(visited_at))
             reasons += path_reasons(path)
+            reasons += isp_reasons(isp)
             if reasons:
                 to_flag.setdefault(','.join(reasons)[:120], []).append(visit_id)
                 by_reason.update(reasons)
