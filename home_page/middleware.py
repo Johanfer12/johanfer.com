@@ -86,6 +86,9 @@ class VisitLogMiddleware:
     # Margen para reconocer la repetición: llega en milisegundos, pero la Pi
     # puede tardar en servir la primera.
     HINTS_RETRY_WINDOW = timedelta(seconds=15)
+    # Hasta dónde se rellenan hacia atrás las visitas del mismo visitante que
+    # llegaron sin hints (_backfill_visitor).
+    HINTS_BACKFILL_WINDOW = timedelta(minutes=30)
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -189,10 +192,15 @@ class VisitLogMiddleware:
         user_agent = (request.headers.get('User-Agent') or '')[:1500]
         hints = self._client_hints(request)
 
-        if hints is not None and self._complete_previous_visit(
-            ip, request.path[:255], user_agent, visitor_id, hints,
-        ):
-            return
+        if hints is not None:
+            # Primero la repetición de Critical-CH: si el relleno fuera antes,
+            # completaría esa fila y la repetición se apuntaría como otra visita.
+            completed = self._complete_previous_visit(
+                ip, request.path[:255], user_agent, visitor_id, hints,
+            )
+            self._backfill_visitor(visitor_id, user_agent, hints)
+            if completed:
+                return
 
         if self._is_public_ip(ip):
             country, country_code = self._resolve_country(
@@ -217,6 +225,23 @@ class VisitLogMiddleware:
 
         # El contador de la cabecera se recalcula en la siguiente página.
         invalidate_badge()
+
+    @classmethod
+    def _backfill_visitor(cls, visitor_id, user_agent, hints):
+        """Pone los hints a las páginas anteriores del mismo visitante.
+
+        Un navegador que ya tenía el service worker no repite la primera
+        navegación con Critical-CH: la hace el worker con fetch(), y eso no se
+        repite. Esa página queda sin modelo, pero la siguiente ya lo trae, y
+        es el mismo navegador (mismo visitor_id de sesión y mismo UA).
+        """
+        if not visitor_id:
+            return
+        since = dj_timezone.now() - cls.HINTS_BACKFILL_WINDOW
+        VisitLog.objects.filter(
+            visitor_id=visitor_id, user_agent=user_agent,
+            device_model='', os_version='', visited_at__gte=since,
+        ).update(device_model=hints[0], os_version=hints[1])
 
     @classmethod
     def _complete_previous_visit(cls, ip, path, user_agent, visitor_id, hints):

@@ -214,6 +214,23 @@ class VisitClientHintsTests(TestCase):
 
         self.assertEqual(VisitLog.objects.get(path='/about/').city, '')
 
+    def test_next_page_fills_the_page_the_service_worker_left_without_hints(self):
+        # La portada la pidió el service worker: sin hints y sin repetición.
+        self.client.get('/', HTTP_ACCEPT='text/html', HTTP_USER_AGENT=self.UA)
+        self._get(**self.HINTS)
+
+        home = VisitLog.objects.get(path='/')
+        self.assertEqual((home.device_model, home.os_version), ('SM-A256E', 'Android 16.0.0'))
+        self.assertEqual(VisitLog.objects.count(), 2)
+
+    def test_backfill_does_not_touch_another_visitor(self):
+        VisitLog.objects.create(
+            ip_address='127.0.0.1', visitor_id='otro', path='/', user_agent=self.UA,
+        )
+        self._get(**self.HINTS)
+
+        self.assertEqual(VisitLog.objects.get(visitor_id='otro').device_model, '')
+
     def test_a_later_visit_with_hints_is_not_merged_into_an_old_one(self):
         self._get()
         VisitLog.objects.update(visited_at=dj_timezone.now() - timedelta(minutes=5))
