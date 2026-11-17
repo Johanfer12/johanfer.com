@@ -304,6 +304,14 @@ class VisitClientHintsTests(TestCase):
         self.assertEqual(isp_label('UNE EPM Telecomunicaciones S.A.'),
                          'Tigo (UNE EPM Telecomunicaciones S.A.)')
         self.assertEqual(isp_label('Google LLC'), 'Google LLC')
+        self.assertEqual(isp_label('ETB - Colombia'), 'ETB - Colombia')
+
+    def test_official_region_names_are_shortened(self):
+        from .middleware import short_region
+
+        self.assertEqual(short_region('Departamento del Valle del Cauca'), 'Valle del Cauca')
+        self.assertEqual(short_region('Departamento de Antioquia'), 'Antioquia')
+        self.assertEqual(short_region('Cundinamarca'), 'Cundinamarca')
 
     def test_a_later_visit_with_hints_is_not_merged_into_an_old_one(self):
         self._get()

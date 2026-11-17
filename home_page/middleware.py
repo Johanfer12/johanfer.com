@@ -46,6 +46,7 @@ ISP_BRANDS = (
     ('epm telecomunicaciones', 'Tigo'),
     ('colombia telecomunicaciones', 'Movistar'),
     ('empresa de telecomunicaciones de bogota', 'ETB'),
+    ('etb - ', 'ETB'),
     ('partners telecom colombia', 'WOM'),
     ('avantel', 'WOM'),
     ('hv television', 'HV Multiplay'),
@@ -53,12 +54,29 @@ ISP_BRANDS = (
 
 
 def isp_label(isp):
-    """«Claro (Telmex Colombia S.A.)» si se conoce la marca; si no, tal cual."""
+    """«Claro (Telmex Colombia S.A.)» si se conoce la marca; si no, tal cual.
+
+    Si el nombre ya empieza por la marca («ETB - Colombia») no se repite.
+    """
     lowered = isp.lower()
     for fragment, brand in ISP_BRANDS:
         if fragment in lowered:
+            if lowered.startswith(brand.lower()):
+                return isp
             return f'{brand} ({isp})'
     return isp
+
+
+def short_region(region):
+    """«Departamento del Valle del Cauca» → «Valle del Cauca».
+
+    ipwho.is da el nombre oficial y Cloudflare el corto; se guarda el corto
+    para que la misma región no salga de dos formas.
+    """
+    for prefix in ('Departamento del ', 'Departamento de ', 'Departamento '):
+        if region.startswith(prefix):
+            return region[len(prefix):]
+    return region
 
 
 def get_client_ip(request):
@@ -334,7 +352,7 @@ class VisitLogMiddleware:
             return empty
         connection = data.get('connection') or {}
         city = (data.get('city') or '').strip()
-        region = (data.get('region') or '').strip()
+        region = short_region((data.get('region') or '').strip())
         parts = [city] if city else []
         if region and region != city:
             parts.append(region)
