@@ -370,11 +370,17 @@ class VisitClientHintsTests(TestCase):
     def test_flag_command_also_uses_the_path(self):
         probe = VisitLog.objects.create(ip_address='8.8.8.8', path='/wp-login.php', user_agent=self.UA)
         page = VisitLog.objects.create(ip_address='8.8.8.8', path='/viendo/', user_agent=self.UA)
+        # Sin barra existe (Django redirige): no es una ruta inventada.
+        no_slash = VisitLog.objects.create(ip_address='8.8.8.8', path='/viendo', user_agent=self.UA)
 
         call_command('flag_bot_visits', '--apply', stdout=io.StringIO())
 
-        probe.refresh_from_db(), page.refresh_from_db()
-        self.assertEqual((probe.bot_reason, page.bot_reason), ('ruta-inexistente', ''))
+        for visit in (probe, page, no_slash):
+            visit.refresh_from_db()
+        self.assertEqual(
+            (probe.bot_reason, page.bot_reason, no_slash.bot_reason),
+            ('ruta-inexistente', '', ''),
+        )
 
     def test_in_app_browsers_and_phone_models_are_not_bots(self):
         from datetime import date

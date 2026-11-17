@@ -128,11 +128,17 @@ def path_reasons(path):
     poder aplicarlo también a visitas viejas: una noticia borrada da 404 pero
     su ruta existe, y quien la pidió puede ser una persona con un enlace viejo.
     """
-    try:
-        resolve(path)
-    except Resolver404:
-        return ['ruta-inexistente']
-    return []
+    # «/bookshelf» sin barra existe: Django lo redirige a «/bookshelf/». Son
+    # las mitades de las parejas que se apuntaban antes de ignorar las
+    # redirecciones, no rutas inventadas.
+    candidates = (path, path + '/') if not path.endswith('/') else (path,)
+    for candidate in candidates:
+        try:
+            resolve(candidate)
+            return []
+        except Resolver404:
+            continue
+    return ['ruta-inexistente']
 
 
 def request_reasons(request, user_agent, when):
