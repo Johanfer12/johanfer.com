@@ -8,6 +8,7 @@ from urllib.request import urlopen, Request
 
 from django.core.cache import cache
 from django.db import close_old_connections
+from django.db.models import Q
 from django.middleware.common import CommonMiddleware
 from django.utils import timezone as dj_timezone
 
@@ -87,30 +88,86 @@ def short_region(region):
 
 
 JS_SEEN_TTL = 60 * 30
+# Hasta dónde se miran hacia atrás las visitas que una prueba de JavaScript
+# confirma.
+JS_CONFIRM_WINDOW = timedelta(minutes=10)
+
+# Peticiones que solo hace un navegador ejecutando la página: el aviso de
+# pwa.js, el registro del service worker y el manifiesto que lee el
+# navegador. Más cualquier llamada AJAX (X-Requested-With), que es el feed y
+# las tablas pidiendo datos. Edge en Android no manda el aviso (no se sabe
+# por qué; noviembre 2026) pero sí todo lo demás, y por eso no basta con él.
+JS_PROOF_PATHS = ('/visitas/js/', '/sw.js', '/manifest.webmanifest')
 
 
-def _js_seen_key(request):
-    visitor_id = (request.session.get(VisitLogMiddleware.SESSION_VISITOR_KEY) or '').strip()
-    if visitor_id:
-        return f'visit-js:v:{visitor_id}'
-    ip = get_client_ip(request)
+def _visitor_id(request):
+    return (request.session.get(VisitLogMiddleware.SESSION_VISITOR_KEY) or '').strip()
+
+
+def _ip_ua_key(request):
     user_agent = (request.headers.get('User-Agent') or '')[:200]
     digest = hashlib.sha1(user_agent.encode('utf-8', 'ignore')).hexdigest()[:12]
-    return f'visit-js:ip:{ip}:{digest}'
+    return f'visit-js:ip:{get_client_ip(request)}:{digest}'
 
 
-def mark_js_seen(request):
-    """El navegador de esta sesión ejecutó la página.
+def _js_seen_keys(request):
+    """Las dos señas del navegador. Hacen falta las dos porque no todas las
+    pruebas llevan la cookie de sesión: el manifiesto se pide sin ella."""
+    keys = [_ip_ua_key(request)]
+    visitor_id = _visitor_id(request)
+    if visitor_id:
+        keys.append(f'visit-js:v:{visitor_id}')
+    return keys
 
-    Se recuerda un rato porque el aviso puede llegar ANTES que la visita que
-    confirma: la portada de la PWA se pinta desde la caché y la petición a la
-    red que la apunta sale por detrás.
-    """
-    cache.set(_js_seen_key(request), True, JS_SEEN_TTL)
+
+def is_js_proof(request):
+    return (
+        request.path in JS_PROOF_PATHS
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    )
 
 
 def js_already_seen(request):
-    return bool(cache.get(_js_seen_key(request)))
+    return any(cache.get(key) for key in _js_seen_keys(request))
+
+
+def confirm_js(request):
+    """Este navegador ejecutó la página: quita «sin-javascript» de sus
+    visitas recientes y lo recuerda un rato.
+
+    Se recuerda porque la prueba puede llegar ANTES que la visita que
+    confirma: la portada de la PWA se pinta desde la caché y la petición a la
+    red que la apunta sale por detrás, y una página recargada pide el
+    manifiesto antes de que el servidor apunte la visita.
+    """
+    keys = _js_seen_keys(request)
+    if all(cache.get(key) for key in keys):
+        # Ya confirmado hace poco: lo nuevo lo cubre js_already_seen al
+        # apuntarse, así que no hace falta tocar la base en cada AJAX.
+        return 0
+    for key in keys:
+        cache.set(key, True, JS_SEEN_TTL)
+
+    since = dj_timezone.now() - JS_CONFIRM_WINDOW
+    same_browser = Q(
+        ip_address=get_client_ip(request),
+        user_agent=(request.headers.get('User-Agent') or '')[:1500],
+    )
+    visitor_id = _visitor_id(request)
+    if visitor_id:
+        same_browser |= Q(visitor_id=visitor_id)
+    changed = 0
+    recent = VisitLog.objects.filter(
+        same_browser, visited_at__gte=since, bot_reason__contains=bot_detection.NO_JS,
+    )
+    for visit_id, bot_reason in recent.values_list('id', 'bot_reason'):
+        VisitLog.objects.filter(pk=visit_id).update(
+            bot_reason=bot_detection.remove_reason(bot_reason, bot_detection.NO_JS),
+        )
+        changed += 1
+    if changed:
+        invalidate_badge()
+    return changed
 
 
 def get_client_ip(request):
@@ -187,6 +244,8 @@ class VisitLogMiddleware:
             response['Critical-CH'] = self.CLIENT_HINTS
 
         try:
+            if is_js_proof(request) and request.path != '/visitas/js/':
+                confirm_js(request)
             self._log_visit(request, response)
         except Exception:
             # Nunca bloquear respuesta al usuario por fallos de logging.

@@ -339,6 +339,28 @@ class VisitClientHintsTests(TestCase):
 
         self.assertEqual(VisitLog.objects.get(path='/').bot_reason, '')
 
+    def test_manifest_or_ajax_also_prove_javascript(self):
+        # Edge en Android no manda el aviso, pero pide el manifiesto y hace
+        # las llamadas AJAX del feed: eso también es ejecutar la página.
+        for proof in (
+            lambda: self.client.get('/manifest.webmanifest', HTTP_USER_AGENT=self.UA, **self.REAL_CHROME),
+            lambda: self.client.get('/visitas/insignia/', HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+                                    HTTP_USER_AGENT=self.UA, **self.REAL_CHROME),
+        ):
+            with self.subTest():
+                cache.clear()
+                VisitLog.objects.all().delete()
+                self._get(**self.REAL_CHROME)
+                proof()
+                self.assertEqual(VisitLog.objects.get(path='/about/').bot_reason, '')
+
+    def test_proof_before_the_visit_still_counts(self):
+        cache.clear()
+        self.client.get('/manifest.webmanifest', HTTP_USER_AGENT=self.UA, **self.REAL_CHROME)
+        self._get(**self.REAL_CHROME)
+
+        self.assertEqual(VisitLog.objects.get(path='/about/').bot_reason, '')
+
     def test_beacon_only_clears_its_own_browser(self):
         cache.clear()
         other = VisitLog.objects.create(ip_address='8.8.4.4', visitor_id='otro', path='/',

@@ -8,7 +8,7 @@ from .models import Book
 from .models import VisitLog
 from .models import OwnerSignature
 from .bot_detection import labels as bot_labels
-from .middleware import get_client_ip, isp_label, mark_js_seen
+from .middleware import confirm_js, get_client_ip, isp_label
 from . import bot_detection
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -567,9 +567,6 @@ def visits_rows(request):
     return JsonResponse({'rows': rows, 'has_more': has_more, 'offset': offset + len(rows)})
 
 
-JS_BEACON_WINDOW = timedelta(minutes=10)
-
-
 @csrf_exempt
 @require_POST
 def visit_js_beacon(request):
@@ -581,27 +578,7 @@ def visit_js_beacon(request):
     marca; un robot que lo llamara tendría que ejecutar JavaScript, que es
     justo lo que se mide.
     """
-    mark_js_seen(request)
-    since = dj_timezone.now() - JS_BEACON_WINDOW
-    visitor_id = (request.session.get('visit_visitor_id') or '').strip()
-    recent = VisitLog.objects.filter(
-        visited_at__gte=since, bot_reason__contains=bot_detection.NO_JS,
-    )
-    if visitor_id:
-        recent = recent.filter(visitor_id=visitor_id)
-    else:
-        recent = recent.filter(
-            ip_address=get_client_ip(request),
-            user_agent=(request.headers.get('User-Agent') or '')[:1500],
-        )
-    changed = 0
-    for visit_id, bot_reason in recent.values_list('id', 'bot_reason'):
-        VisitLog.objects.filter(pk=visit_id).update(
-            bot_reason=bot_detection.remove_reason(bot_reason, bot_detection.NO_JS),
-        )
-        changed += 1
-    if changed:
-        invalidate_badge()
+    confirm_js(request)
     return HttpResponse(status=204)
 
 
