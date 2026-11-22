@@ -1,4 +1,5 @@
 import feedparser
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone as dt_timezone
 from django.utils import timezone
 from .models import (
@@ -1025,6 +1026,39 @@ class FeedService:
         return False, None
 
     @staticmethod
+    def _guardar_noticia(item, tipo, **campos):
+        """Crea la fila de una entrada del feed.
+
+        Las cinco salidas de la ingesta (título largo, palabra filtro,
+        duplicada, filtrada por la IA y visible) comparten guid, enlace, fecha
+        y fuente; aquí solo llega lo que las distingue. ``title`` se puede
+        pasar para guardar uno recortado.
+
+        Un fallo al guardar no corta la pasada: queda en el log con ``tipo``
+        y se devuelve None.
+        """
+        entry = item['entry']
+        title = campos.pop('title', entry.title)
+        try:
+            return News.objects.create(
+                guid=item['guid'],
+                title=title,
+                link=entry.link,
+                published_date=item['published'],
+                source=item['source'],
+                **campos,
+            )
+        except Exception:
+            logger.exception(
+                "Error al guardar noticia %s. GUID=%s título=%s link=%s",
+                tipo,
+                str(item['guid'])[:100],
+                (entry.title or '')[:100],
+                (entry.link or '')[:100],
+            )
+            return None
+
+    @staticmethod
     def _preparar_entrada(item, filter_word_patterns, fifteen_days_ago):
         """Fase 1: todo lo que se puede resolver sin llamar a la IA.
 
@@ -1049,24 +1083,17 @@ class FeedService:
         # (registrando el guid) para no re-descargarlas en cada ciclo.
         if len(entry.title) > 200:
             logger.info(f"FILTRANDO noticia con título muy largo ({len(entry.title)} caracteres): {entry.title[:100]}...")
-            try:
-                News.objects.create(
-                    guid=guid,
-                    title=entry.title[:500],
-                    # Fila oculta: guardar solo texto plano recortado
-                    description=FeedService.prepare_content_for_ai(
-                        entry.title, entry.get('description', '') or '', content_limit=2000
-                    ),
-                    link=entry.link,
-                    published_date=published,
-                    source=source,
-                    is_filtered=True,
-                    is_ai_processed=True,
-                )
-            except Exception:
-                logger.exception(
-                    "Error al guardar noticia con título largo. GUID=%s", guid[:100]
-                )
+            # No suma a `creadas`: nunca ha contado como noticia nueva.
+            FeedService._guardar_noticia(
+                item, 'con título largo',
+                title=entry.title[:500],
+                # Fila oculta: guardar solo texto plano recortado
+                description=FeedService.prepare_content_for_ai(
+                    entry.title, entry.get('description', '') or '', content_limit=2000
+                ),
+                is_filtered=True,
+                is_ai_processed=True,
+            )
             return None, creadas
         
         # Primero intentar obtener la imagen del feed
@@ -1135,32 +1162,18 @@ class FeedService:
                 logger.debug(f"Descripción original: {len(entry.description)} caracteres")
             logger.debug(f"Descripción procesada: {len(original_description)} caracteres")
             
-            try:
-                News.objects.create(
-                    guid=guid,
-                    title=entry.title,
-                    short_answer=None,
-                    # Fila oculta: texto plano recortado, no el HTML completo del feed
-                    description=sanitize_html(plain_description[:2000]),
-                    link=entry.link,
-                    published_date=published,
-                    source=source,
-                    is_filtered=True,
-                    filtered_by=filter_word,
-                    image_url=image_url,
-                    is_ai_processed=True
-                )
+            guardada = FeedService._guardar_noticia(
+                item, 'filtrada por keyword',
+                short_answer=None,
+                # Fila oculta: texto plano recortado, no el HTML completo del feed
+                description=sanitize_html(plain_description[:2000]),
+                is_filtered=True,
+                filtered_by=filter_word,
+                image_url=image_url,
+                is_ai_processed=True,
+            )
+            if guardada is not None:
                 creadas += 1
-            except Exception:
-                logger.exception(
-                    "Error al guardar noticia filtrada por keyword. GUID=%s título=%s link=%s descripción_len=%s",
-                    guid[:100],
-                    entry.title[:100],
-                    entry.link[:100],
-                    len(original_description) if original_description else 0,
-                )
-                return None, creadas
-
             return None, creadas
         # <<<<< FIN FILTRO PALABRA CLAVE >>>>>
 
@@ -1203,45 +1216,78 @@ class FeedService:
     def fetch_and_save_news(max_ai_items=None):
         logger.info("Iniciando proceso de obtención de noticias...")
         start_time = time.time()
-        # Motivo por el que la pasada se cortó antes de tiempo, si se corta.
-        ai_failure = None
 
         logger.info("Inicializando modelos...")
         # Gemini solo para embeddings: los resúmenes los pide
         # process_news_content al proveedor que toque.
         gemini_client = FeedService.initialize_gemini()
         vector_index = FeedService.initialize_vector_index()
+        ai_model_setting, ai_model_name = FeedService._cargar_modelo_ia()
 
-        # Obtener modelo de IA desde el admin (base de datos) o usar default
+        active_instructions = list(AIFilterInstruction.objects.filter(active=True))
+        pasada = _Pasada(
+            gemini_client=gemini_client,
+            vector_index=vector_index,
+            ai_model_setting=ai_model_setting,
+            active_instructions=active_instructions,
+            filter_instructions_text=FeedService.build_filter_instructions_text(
+                active_instructions
+            ),
+            filter_word_patterns=FeedService.build_filter_word_patterns(
+                FilterWord.objects.filter(active=True)
+            ),
+            max_ai_items=max_ai_items,
+            # Calcular la fecha límite (15 días atrás)
+            fifteen_days_ago=timezone.now() - timedelta(days=15),
+        )
+
+        sources = list(FeedSource.objects.filter(active=True))
+        logger.info(f"Procesando {len(sources)} fuentes activas con {ai_model_name}")
+
+        all_entries = FeedService._recolectar_entradas(sources, pasada.fifteen_days_ago)
+
+        # Procesar todas las entradas en orden (de más antigua a más reciente)
+        # Se procesa por tandas y no de una: la tanda es lo que se pide a la
+        # API de embeddings en una sola llamada, y acotarla evita descargar
+        # artículos y gastar vectores de entradas que el presupuesto de IA no
+        # va a llegar a resumir en esta pasada.
+        tam_tanda = EmbeddingService.EMBEDDING_BATCH_SIZE
+        if max_ai_items:
+            # Sin esto, una tanda podría descargar 32 artículos para que el
+            # presupuesto se agotase en el vigésimo y se tirasen doce descargas.
+            tam_tanda = min(tam_tanda, max_ai_items)
+
+        for inicio_tanda in range(0, len(all_entries), tam_tanda):
+            FeedService._procesar_tanda(
+                all_entries[inicio_tanda:inicio_tanda + tam_tanda], pasada
+            )
+            if pasada.detener:
+                break
+
+        FeedService._cerrar_pasada(sources, pasada, start_time)
+        return pasada.new_articles_count
+
+    @staticmethod
+    def _cargar_modelo_ia():
+        """(ajuste, nombre del modelo) desde el admin, o el modelo por defecto."""
         try:
             ai_model_setting = AIModelSetting.objects.first()
             if not ai_model_setting:
                 logger.warning("No se encontró configuración global de modelo IA. Creando con modelo predeterminado.")
                 ai_model_setting = AIModelSetting.objects.create(model_name=DEFAULT_AI_MODEL)
-            ai_model_name = ai_model_setting.model_name
+            return ai_model_setting, ai_model_setting.model_name
         except Exception:
             logger.exception("Error al obtener configuración de modelo IA. Usando default.")
-            ai_model_setting = None
-            ai_model_name = DEFAULT_AI_MODEL
-        
-        filter_word_patterns = FeedService.build_filter_word_patterns(
-            FilterWord.objects.filter(active=True)
-        )
-        active_instructions = list(AIFilterInstruction.objects.filter(active=True))
-        filter_instructions_text = FeedService.build_filter_instructions_text(
-            active_instructions
-        )
+            return None, DEFAULT_AI_MODEL
 
-        sources = list(FeedSource.objects.filter(active=True))
-        logger.info(f"Procesando {len(sources)} fuentes activas con {ai_model_name}")
-        new_articles_count = 0
-        # Imágenes de las noticias que sí llegan al feed, para calentar la caché.
-        imagenes_visibles = []
-        
-        # Calcular la fecha límite (15 días atrás)
-        fifteen_days_ago = timezone.now() - timedelta(days=15)
-        recent_news_cache = []
+    @staticmethod
+    def _recolectar_entradas(sources, fifteen_days_ago):
+        """Entradas nuevas de todas las fuentes, de más antigua a más reciente.
 
+        Se salta lo que ya está en la base (por guid) y lo anterior a la última
+        noticia visible de cada fuente. Una fuente que no responde se omite en
+        esta pasada sin tumbar las demás.
+        """
         existing_guids = set(
             News.objects.filter(published_date__gte=fifteen_days_ago).values_list('guid', flat=True)
         )
@@ -1260,20 +1306,18 @@ class FeedService:
                 ).values_list('source_id', 'latest_date')
             )
 
-        
         # Lista para almacenar todas las entradas de todas las fuentes
         all_entries = []
-        
-        # Primero, recolectar todas las entradas de todas las fuentes
+
         for source in sources:
             logger.info(f"\nRecolectando entradas de fuente: {source.name}")
-            
+
             # Obtener la fecha de la última noticia visible por fuente (cacheada en memoria)
             latest_date = latest_by_source.get(source.id) or fifteen_days_ago
-            
+
             # Usar la fecha más reciente entre la última noticia y hace 15 días
             cutoff_date = max(latest_date, fifteen_days_ago)
-            
+
             try:
                 feed_response = requests.get(
                     source.url,
@@ -1286,7 +1330,7 @@ class FeedService:
                 logger.exception(f"Error descargando feed de {source.name}; se omite esta fuente en este ciclo.")
                 continue
             logger.info(f"Encontradas {len(feed.entries)} entradas en el feed")
-            
+
             # Recolectar entradas válidas
             for entry in feed.entries:
                 # Convertir la fecha de publicación
@@ -1295,16 +1339,16 @@ class FeedService:
                     published_utc = datetime(*entry.published_parsed[:6])
                     if timezone.is_naive(published_utc):
                         published_utc = timezone.make_aware(published_utc, timezone=dt_timezone.utc)
-                    
+
                     # Convertir a la zona horaria del proyecto
                     published = published_utc.astimezone(timezone.get_current_timezone())
                 else:
                     published = timezone.now()
-                
+
                 # Si la noticia es más antigua que el límite, la saltamos
                 if published < cutoff_date:
                     continue
-                
+
                 # Verificar si la noticia ya existe
                 guid = entry.get('id', entry.link)
                 # GUIDs desmesurados: usar un hash estable para poder
@@ -1323,277 +1367,230 @@ class FeedService:
                     'published': published,
                     'guid': guid
                 })
-        
-                # Ordenar todas las entradas de más antigua a más reciente para procesamiento estable
+
+        # Ordenar todas las entradas de más antigua a más reciente para procesamiento estable
         all_entries.sort(key=lambda x: x['published'])
         logger.info(f"\nSe recolectaron {len(all_entries)} nuevas entradas de todas las fuentes")
+        return all_entries
 
-        # Contador para noticias redundantes
-        redundant_count = 0
-        ai_attempts = 0
-        # Fallos de vectorización: hasta ahora se perdían en silencio.
-        embedding_failures = 0
-        indexing_failures = 0
-        
-        # Procesar todas las entradas en orden (de más antigua a más reciente)
-        # Se procesa por tandas y no de una: la tanda es lo que se pide a la
-        # API de embeddings en una sola llamada, y acotarla evita descargar
-        # artículos y gastar vectores de entradas que el presupuesto de IA no
-        # va a llegar a resumir en esta pasada.
-        tam_tanda = EmbeddingService.EMBEDDING_BATCH_SIZE
-        if max_ai_items:
-            # Sin esto, una tanda podría descargar 32 artículos para que el
-            # presupuesto se agotase en el vigésimo y se tirasen doce descargas.
-            tam_tanda = min(tam_tanda, max_ai_items)
-        detener = False
+    @staticmethod
+    def _procesar_tanda(items, pasada):
+        """Prepara una tanda, pide sus embeddings de una vez y la guarda.
 
-        for inicio_tanda in range(0, len(all_entries), tam_tanda):
-            if detener:
+        Marca ``pasada.detener`` si hay que cortar la pasada (presupuesto de IA
+        agotado o la IA no devolvió resumen).
+        """
+        preparadas = []
+        for item in items:
+            try:
+                preparada, creadas = FeedService._preparar_entrada(
+                    item, pasada.filter_word_patterns, pasada.fifteen_days_ago
+                )
+            except Exception:
+                logger.exception(
+                    "Error preparando la entrada. GUID=%s", str(item.get('guid'))[:100]
+                )
+                continue
+            pasada.new_articles_count += creadas
+            if preparada is not None:
+                preparadas.append(preparada)
+
+        if not preparadas:
+            return
+
+        # Una sola petición de embeddings para toda la tanda.
+        textos_embedding = [
+            f"{p['entry'].title} {p['plain_description']}" for p in preparadas
+        ]
+        vectores = EmbeddingService.generate_embeddings_batch(
+            textos_embedding, pasada.gemini_client,
+        )
+
+        for preparada, vector, texto_embedding in zip(preparadas, vectores, textos_embedding):
+            FeedService._procesar_preparada(preparada, vector, texto_embedding, pasada)
+            if pasada.detener:
                 break
 
-            preparadas = []
-            for item in all_entries[inicio_tanda:inicio_tanda + tam_tanda]:
-                try:
-                    preparada, creadas = FeedService._preparar_entrada(
-                        item, filter_word_patterns, fifteen_days_ago
-                    )
-                except Exception:
-                    logger.exception(
-                        "Error preparando la entrada. GUID=%s", str(item.get('guid'))[:100]
-                    )
-                    continue
-                new_articles_count += creadas
-                if preparada is not None:
-                    preparadas.append(preparada)
+    @staticmethod
+    def _procesar_preparada(preparada, vector, texto_embedding, pasada):
+        """Fase 2 de una entrada: duplicados, IA y la fila que le toca."""
+        entry = preparada['entry']
+        source = preparada['source']
+        image_url = preparada['image_url']
+        max_ai_items = pasada.max_ai_items
 
-            if not preparadas:
-                continue
+        # Verificar redundancia ANTES de llamar a la IA: una noticia
+        # redundante no debe consumir presupuesto de resúmenes. El
+        # embedding se genera desde título + contenido original limpio.
+        candidate = News(
+            guid=preparada['guid'],
+            title=entry.title,
+            description=preparada['plain_description'],
+            source=source,
+            published_date=preparada['published'],
+        )
+        # El vector ya viene del lote de la tanda; se marca el intento
+        # para que check_redundancy no vuelva a pedirlo de uno en uno.
+        candidate._embedding_vector = vector
+        candidate._embedding_attempted = True
+        is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
+            candidate, pasada.gemini_client, pasada.recent_news_cache, pasada.vector_index
+        )
+        embedding = getattr(candidate, "_embedding_vector", None)
+        similar_ref = getattr(candidate, "_similar_ref", '') or ''
 
-            # Una sola petición de embeddings para toda la tanda.
-            textos_embedding = [
-                f"{p['entry'].title} {p['plain_description']}" for p in preparadas
-            ]
-            vectores = EmbeddingService.generate_embeddings_batch(
-                textos_embedding, gemini_client,
+        # El original puede haberse purgado hace meses y no tener fila:
+        # sigue siendo un duplicado, así que basta con que Qdrant lo
+        # haya reconocido (similar_ref) aunque similar_news sea None.
+        if is_redundant and (similar_news or similar_ref):
+            referencia = similar_news.title if similar_news else similar_ref
+            logger.info(f"¡Noticia redundante detectada! Similar a: {referencia}")
+            logger.info(f"Puntuación de similitud: {similarity_score:.4f} (Umbral: {source.similarity_threshold})")
+            guardada = FeedService._guardar_noticia(
+                preparada, 'redundante',
+                short_answer=None,
+                # Fila oculta: texto plano recortado, no el artículo completo
+                description=sanitize_html(preparada['plain_description'][:2000]),
+                image_url=image_url,
+                is_redundant=True,
+                is_filtered=True,
+                similar_to=similar_news,
+                similar_ref=similar_ref,
+                similarity_score=similarity_score,
+                is_ai_processed=True,
             )
+            if guardada is not None:
+                pasada.new_articles_count += 1
+                pasada.redundant_count += 1
+            return
 
-            for preparada, vector, texto_embedding in zip(preparadas, vectores, textos_embedding):
-                entry = preparada['entry']
-                source = preparada['source']
-                published = preparada['published']
-                guid = preparada['guid']
-                image_url = preparada['image_url']
-                original_description = preparada['original_description']
-                plain_description = preparada['plain_description']
-                ai_content_limit = preparada['ai_content_limit']
+        if max_ai_items is not None and pasada.ai_attempts >= max_ai_items:
+            logger.info(
+                f"Presupuesto de IA agotado ({max_ai_items}); "
+                "se pausa la ingesta para continuar en la próxima actualización."
+            )
+            pasada.detener = True
+            return
 
-                # Verificar redundancia ANTES de llamar a la IA: una noticia
-                # redundante no debe consumir presupuesto de resúmenes. El
-                # embedding se genera desde título + contenido original limpio.
-                candidate = News(
-                    guid=guid,
-                    title=entry.title,
-                    description=plain_description,
-                    source=source,
-                    published_date=published,
-                )
-                # El vector ya viene del lote de la tanda; se marca el intento
-                # para que check_redundancy no vuelva a pedirlo de uno en uno.
-                candidate._embedding_vector = vector
-                candidate._embedding_attempted = True
-                is_redundant, similar_news, similarity_score = EmbeddingService.check_redundancy(
-                    candidate, gemini_client, recent_news_cache, vector_index
-                )
-                embedding = getattr(candidate, "_embedding_vector", None)
-                similar_ref = getattr(candidate, "_similar_ref", '') or ''
+        pasada.ai_attempts += 1
 
-                # El original puede haberse purgado hace meses y no tener fila:
-                # sigue siendo un duplicado, así que basta con que Qdrant lo
-                # haya reconocido (similar_ref) aunque similar_news sea None.
-                if is_redundant and (similar_news or similar_ref):
-                    referencia = similar_news.title if similar_news else similar_ref
-                    logger.info(f"¡Noticia redundante detectada! Similar a: {referencia}")
-                    logger.info(f"Puntuación de similitud: {similarity_score:.4f} (Umbral: {source.similarity_threshold})")
-                    try:
-                        News.objects.create(
-                            guid=guid,
-                            title=entry.title,
-                            short_answer=None,
-                            # Fila oculta: texto plano recortado, no el artículo completo
-                            description=sanitize_html(plain_description[:2000]),
-                            link=entry.link,
-                            published_date=published,
-                            source=source,
-                            image_url=image_url,
-                            is_redundant=True,
-                            is_filtered=True,
-                            similar_to=similar_news,
-                            similar_ref=similar_ref,
-                            similarity_score=similarity_score,
-                            is_ai_processed=True,
-                        )
-                        new_articles_count += 1
-                        redundant_count += 1
-                    except Exception:
-                        logger.exception(
-                            "Error al guardar noticia redundante. GUID=%s título=%s",
-                            guid[:100],
-                            entry.title[:100],
-                        )
-                    continue
+        # Si no se filtró por palabra clave ni es redundante, procesar con IA
+        processed_description, short_answer, ai_filter_reason, title_es = FeedService.process_news_content(
+            entry.title,
+            preparada['original_description'],
+            pasada.filter_instructions_text,
+            content_limit=preparada['ai_content_limit'],
+            ai_model_setting=pasada.ai_model_setting,
+            translate_title=source.translate_titles,
+        )
+        if not processed_description:
+            logger.warning(
+                "La IA no generó resumen; se pausa la ingesta para reintentar luego."
+            )
+            pasada.ai_failure = FeedService._LAST_AI_FAILURE or {
+                'kind': 'error',
+                'reason': 'La IA no devolvió resumen y la ingesta se detuvo.',
+                'detail': '',
+                'retry_seconds': None,
+            }
+            pasada.detener = True
+            return
 
-                ai_was_processed = False
-                short_answer = None
-                ai_filter_reason = None
+        # >>>>> LÓGICA DE FILTRADO IA (después de palabra clave) <<<<<
+        # Solo filtra si la respuesta corresponde a una instrucción activa.
+        ai_filter_reason = FeedService.resolve_ai_filter(
+            ai_filter_reason, pasada.active_instructions
+        )
+        if ai_filter_reason:
+            logger.info(f"Noticia marcada para FILTRAR por IA. Razón: {ai_filter_reason}")
+            guardada = FeedService._guardar_noticia(
+                preparada, 'filtrada por IA',
+                title_es=title_es or '',
+                short_answer=short_answer,
+                description=processed_description,
+                image_url=image_url,
+                is_filtered=True,
+                is_ai_filtered=True,
+                ai_filter_reason=ai_filter_reason.strip(),
+                is_ai_processed=True,
+            )
+            if guardada is not None:
+                pasada.new_articles_count += 1
+            return
+        # <<<<< FIN LÓGICA FILTRADO IA >>>>>
 
-                if max_ai_items is not None and ai_attempts >= max_ai_items:
-                    logger.info(
-                        f"Presupuesto de IA agotado ({max_ai_items}); "
-                        "se pausa la ingesta para continuar en la próxima actualización."
-                    )
-                    detener = True
-                    break
+        # Crear la nueva noticia (si no fue filtrada por IA ni por palabra)
+        news_item = FeedService._guardar_noticia(
+            preparada, 'normal',
+            title_es=title_es or '',
+            short_answer=short_answer,
+            description=processed_description,
+            image_url=image_url,
+            is_ai_processed=True,
+            # Conservar la referencia a la más parecida aunque no supere el umbral.
+            # La puntuación se guarda también si el vecino ya se purgó (su
+            # vector dura un año, su fila 15 días); 0.0 es "sin comparación".
+            similar_to=similar_news,
+            similarity_score=similarity_score or None,
+        )
+        if news_item is None:
+            return
+        pasada.new_articles_count += 1
+        pasada.imagenes_visibles.append(image_url)
+        FeedService._indexar_visible(news_item, embedding, texto_embedding, pasada)
 
-                ai_attempts += 1
-
-                # Si no se filtró por palabra clave ni es redundante, procesar con IA
-                processed_description, short_answer, ai_filter_reason, title_es = FeedService.process_news_content(
-                    entry.title,
-                    original_description,
-                    filter_instructions_text,
-                    content_limit=ai_content_limit,
-                    ai_model_setting=ai_model_setting,
-                    translate_title=source.translate_titles,
-                )
-                if processed_description:
-                    ai_was_processed = True
-                else:
-                    logger.warning(
-                        "La IA no generó resumen; se pausa la ingesta para reintentar luego."
-                    )
-                    ai_failure = FeedService._LAST_AI_FAILURE or {
-                        'kind': 'error',
-                        'reason': 'La IA no devolvió resumen y la ingesta se detuvo.',
-                        'detail': '',
-                        'retry_seconds': None,
-                    }
-                    detener = True
-                    break
-
-                # >>>>> LÓGICA DE FILTRADO IA (después de palabra clave) <<<<<
-                # Solo filtra si la respuesta corresponde a una instrucción activa.
-                ai_filter_reason = FeedService.resolve_ai_filter(
-                    ai_filter_reason, active_instructions
-                )
-                if ai_was_processed and ai_filter_reason:
-                    logger.info(f"Noticia marcada para FILTRAR por IA. Razón: {ai_filter_reason}")
-                
-                    try:
-                        News.objects.create(
-                            guid=guid,
-                            title=entry.title,
-                            title_es=title_es or '',
-                            short_answer=short_answer,
-                            description=processed_description,
-                            link=entry.link,
-                            published_date=published,
-                            source=source,
-                            image_url=image_url,
-                            is_filtered=True,
-                            is_ai_filtered=True,
-                            ai_filter_reason=ai_filter_reason.strip(),
-                            is_ai_processed=True
-                        )
-                        new_articles_count += 1
-                    except Exception:
-                        logger.exception(
-                            "Error al guardar noticia filtrada por IA. GUID=%s título=%s link=%s ai_filter_reason=%s",
-                            guid[:100],
-                            entry.title[:100],
-                            entry.link[:100],
-                            ai_filter_reason[:100],
-                        )
-                        continue
-                    
-                    continue # Pasar a la siguiente noticia
-                # <<<<< FIN LÓGICA FILTRADO IA >>>>>
-
-                # Crear la nueva noticia (si no fue filtrada por IA ni por palabra)
+    @staticmethod
+    def _indexar_visible(news_item, embedding, texto_embedding, pasada):
+        """Lleva a Qdrant una noticia visible, o la deja anotada si no se pudo."""
+        if embedding:
+            news_item._embedding_vector = embedding
+            pasada.recent_news_cache.append(news_item)
+            # Indexar en Qdrant (si está disponible) para futuras búsquedas
+            indexada = False
+            vector_index = pasada.vector_index
+            if vector_index is not None:
                 try:
-                    news_item = News.objects.create(
-                        guid=guid,
-                        title=entry.title,
-                        title_es=title_es or '',
-                        short_answer=short_answer,
-                        description=processed_description,
-                        link=entry.link,
-                        published_date=published,
-                        source=source,
-                        image_url=image_url,
-                        is_ai_processed=ai_was_processed,
-                        # Conservar la referencia a la más parecida aunque no supere el umbral.
-                        # La puntuación se guarda también si el vecino ya se purgó (su
-                        # vector dura un año, su fila 15 días); 0.0 es "sin comparación".
-                        similar_to=similar_news,
-                        similarity_score=similarity_score or None,
+                    vector_index.ensure_collection(len(embedding))
+                    vector_index.upsert(
+                        news_item.guid,
+                        embedding,
+                        FeedService.build_vector_payload(news_item),
                     )
-                    new_articles_count += 1
-                    imagenes_visibles.append(image_url)
+                    indexada = True
                 except Exception:
+                    # No se silencia: una noticia sin indexar no participa en
+                    # la detección de duplicados de las siguientes, y el fallo
+                    # era invisible hasta ahora.
+                    pasada.indexing_failures += 1
                     logger.exception(
-                        "Error al guardar noticia normal. GUID=%s título=%s link=%s",
-                        guid[:100],
-                        entry.title[:100],
-                        entry.link[:100],
-                    )
-                    continue
-
-                if embedding:
-                    news_item._embedding_vector = embedding
-                    recent_news_cache.append(news_item)
-                    # Indexar en Qdrant (si está disponible) para futuras búsquedas
-                    indexada = False
-                    if vector_index is not None:
-                        try:
-                            vector_index.ensure_collection(len(embedding))
-                            vector_index.upsert(
-                                news_item.guid,
-                                embedding,
-                                FeedService.build_vector_payload(news_item),
-                            )
-                            indexada = True
-                        except Exception:
-                            # No se silencia: una noticia sin indexar no participa en
-                            # la detección de duplicados de las siguientes, y el fallo
-                            # era invisible hasta ahora.
-                            indexing_failures += 1
-                            logger.exception(
-                                "Error indexando en Qdrant. news_id=%s título=%s",
-                                news_item.id,
-                                news_item.title[:100],
-                            )
-                    if not indexada:
-                        FeedService.save_pending_embedding(
-                            news_item, texto_embedding, embedding
-                        )
-                else:
-                    # Sin embedding esta noticia no pasó por el control de duplicados
-                    # y tampoco servirá para comparar las futuras.
-                    embedding_failures += 1
-                    logger.warning(
-                        "Noticia guardada SIN embedding (se salta el control de duplicados). "
-                        "news_id=%s título=%s",
+                        "Error indexando en Qdrant. news_id=%s título=%s",
                         news_item.id,
                         news_item.title[:100],
                     )
-                    FeedService.save_pending_embedding(news_item, texto_embedding, None)
+            if not indexada:
+                FeedService.save_pending_embedding(
+                    news_item, texto_embedding, embedding
+                )
+        else:
+            # Sin embedding esta noticia no pasó por el control de duplicados
+            # y tampoco servirá para comparar las futuras.
+            pasada.embedding_failures += 1
+            logger.warning(
+                "Noticia guardada SIN embedding (se salta el control de duplicados). "
+                "news_id=%s título=%s",
+                news_item.id,
+                news_item.title[:100],
+            )
+            FeedService.save_pending_embedding(news_item, texto_embedding, None)
 
-        
+    @staticmethod
+    def _cerrar_pasada(sources, pasada, start_time):
+        """Calienta imágenes, sella las fuentes y deja anotado cómo fue."""
         # Solo las que pasaron todos los filtros (palabra, IA, duplicadas): las
         # demás no se muestran, y pedirlas gastaría cuota de transformaciones.
-        if imagenes_visibles:
+        if pasada.imagenes_visibles:
             from .templatetags.news_images import warm_news_images
-            warm_news_images(imagenes_visibles)
+            warm_news_images(pasada.imagenes_visibles)
 
         # Actualizar la fecha de última obtención para todas las fuentes con una sola escritura
         fetched_at = timezone.now()
@@ -1603,11 +1600,12 @@ class FeedService:
             FeedSource.objects.bulk_update(sources, ['last_fetch'])
             for source in sources:
                 logger.info(f"Actualizada fecha de última obtención para {source.name}")
-        
+
         total_time = time.time() - start_time
 
         # Dejar anotado cómo fue la pasada: es lo único que verá la web, que
         # corre en otro proceso y no tiene acceso a este log.
+        ai_failure = pasada.ai_failure
         if ai_failure:
             retry_at = None
             if ai_failure.get('retry_seconds'):
@@ -1615,22 +1613,47 @@ class FeedService:
             report_paused(
                 ai_failure['reason'],
                 detail=ai_failure.get('detail', ''),
-                new_count=new_articles_count,
+                new_count=pasada.new_articles_count,
                 retry_at=retry_at,
             )
         else:
-            report_ok(new_count=new_articles_count)
+            report_ok(new_count=pasada.new_articles_count)
 
         logger.info(f"\nProceso completado en {total_time:.2f} segundos")
-        logger.info(f"Total de nuevas noticias: {new_articles_count}")
-        logger.info(f"Noticias redundantes eliminadas: {redundant_count}")
-        if embedding_failures or indexing_failures:
+        logger.info(f"Total de nuevas noticias: {pasada.new_articles_count}")
+        logger.info(f"Noticias redundantes eliminadas: {pasada.redundant_count}")
+        if pasada.embedding_failures or pasada.indexing_failures:
             logger.warning(
                 "Vectorización con fallos: %s sin embedding y %s sin indexar. "
                 "Esas noticias no pasaron el control de duplicados; "
                 "retry_missing_embeddings las recuperará.",
-                embedding_failures,
-                indexing_failures,
+                pasada.embedding_failures,
+                pasada.indexing_failures,
             )
-        
-        return new_articles_count 
+
+
+@dataclass
+class _Pasada:
+    """Lo que comparten los pasos de una pasada de `fetch_and_save_news`:
+    la configuración que se lee una vez al empezar y los contadores."""
+
+    gemini_client: object
+    vector_index: object
+    ai_model_setting: object
+    active_instructions: list
+    filter_instructions_text: str
+    filter_word_patterns: list
+    max_ai_items: object
+    fifteen_days_ago: datetime
+    new_articles_count: int = 0
+    redundant_count: int = 0
+    ai_attempts: int = 0
+    # Fallos de vectorización: hasta ahora se perdían en silencio.
+    embedding_failures: int = 0
+    indexing_failures: int = 0
+    # Imágenes de las noticias que sí llegan al feed, para calentar la caché.
+    imagenes_visibles: list = field(default_factory=list)
+    recent_news_cache: list = field(default_factory=list)
+    # Motivo por el que la pasada se cortó antes de tiempo, si se corta.
+    ai_failure: object = None
+    detener: bool = False
