@@ -299,7 +299,7 @@ html.instagram-webview .news-card-container {
      * Los 15px de margen original se reparten entre margen y relleno. */
     padding: 0 6px 10px;
     margin: 0 9px -5px 9px;
-    color: #f2f5fb;
+    color: var(--text-primary);
     line-height: 1.28;
     word-break: normal;
     overflow-wrap: anywhere;
@@ -415,7 +415,7 @@ html.instagram-webview .news-card-container {
 }
 
 .news-description strong {
-    color: #f2f5fb;
+    color: var(--text-primary);
 }
 
 .news-description img {
@@ -436,11 +436,11 @@ html.instagram-webview .news-card-container {
 
 .news-link {
     text-decoration: none;
-    color: #c6d6f5;
+    color: var(--accent);
     font-size: 0.9em;
     font-weight: bold;
     padding: 6px 12px;
-    border: 1px solid #c6d6f5;
+    border: 1px solid var(--accent);
     border-radius: var(--radius-md);
     transition: all 0.3s ease;
     cursor: pointer;
@@ -476,7 +476,7 @@ html.instagram-webview .news-card-container {
     min-height: 30px;
     padding: 6px 9px;
     line-height: 1;
-    color: #c6d6f5;
+    color: var(--accent);
 }
 
 .news-link.share-opener .share-icon {
@@ -516,19 +516,8 @@ html.instagram-webview .news-card-container {
    sus colores para no fundirse con el fondo. */
 .news-link.comments-btn:hover .comments-badge {
     background: #06101f;
-    color: #8fb4e8;
+    color: var(--accent-strong);
     border-color: rgba(143, 180, 232, 0.55);
-}
-
-@keyframes comments-badge-pop {
-    from {
-        transform: scale(0.4);
-        opacity: 0;
-    }
-    to {
-        transform: scale(1);
-        opacity: 1;
-    }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -539,7 +528,7 @@ html.instagram-webview .news-card-container {
 
 .news-link:hover,
 .news-link.comments-btn:hover {
-    background: #8fb4e8;
+    background: var(--accent-strong);
     color: #06101f;
 }
 
@@ -561,13 +550,13 @@ html.instagram-webview .news-card-container {
 }
 
 .news-link.save-btn {
-    border: 1px solid #8fb4e8;
-    color: #8fb4e8;
+    border: 1px solid var(--accent-strong);
+    color: var(--accent-strong);
     background-color: rgba(15, 27, 43, 0.72);
 }
 
 .news-link.save-btn:hover {
-    background-color: #8fb4e8;
+    background-color: var(--accent-strong);
     color: #06101f;
 }
 
@@ -1054,21 +1043,14 @@ body.comments-modal-open {
     justify-content: center;
     gap: 10px;
     margin: 15px auto;
-    /* Era un bloque opaco con una sombra suelta. Ahora es cristal de verdad,
-     * con las mismas piezas que la caja de la portada: fondo en degradado,
-     * desenfoque de lo que hay detras, sombra de contacto + ambiental y los
-     * dos filos (claro arriba, oscuro abajo) que dan el grosor del vidrio. */
-    background: linear-gradient(155deg, rgba(255, 255, 255, 0.16), rgba(20, 31, 48, 0.4) 18%, rgba(9, 16, 28, 0.56) 74%);
-    backdrop-filter: blur(22px) saturate(150%) brightness(0.9);
-    -webkit-backdrop-filter: blur(22px) saturate(150%) brightness(0.9);
+    /* Fue cristal (degradado, desenfoque y filos) hasta que se decidió dejar el
+     * vidrio solo en la cabecera: repetido en cada pieza era el sello de
+     * plantilla. Ahora es la superficie opaca de las tarjetas. */
+    background: var(--surface);
     padding: 15px 30px;
     border-radius: var(--radius-sm);
-    border: 1px solid rgba(207, 220, 241, 0.27);
-    box-shadow:
-        0 4px 10px rgba(2, 8, 18, 0.5),
-        0 18px 36px rgba(2, 8, 18, 0.5),
-        inset 0 1px 0 rgba(255, 255, 255, 0.3),
-        inset 0 -14px 28px rgba(2, 8, 18, 0.18);
+    border: 1px solid var(--surface-border);
+    box-shadow: var(--surface-shadow);
     max-width: 20%;
 }
 
@@ -1078,19 +1060,19 @@ body.comments-modal-open {
         0 6px 12px rgba(0, 0, 0, 0.45);
     padding: 8px 16px;
     text-decoration: none;
-    color: #f2f5fb;
+    color: var(--text-primary);
     font-size: 16px;
     border: none;
     transition: color 0.3s ease;
 }
 
 .pagination a:hover {
-    color: #c6d6f5;
+    color: var(--accent);
 }
 
 .pagination .active {
     background: none;
-    color: #c6d6f5;
+    color: var(--accent);
 }
 
 /* Botón de actualización */
@@ -1099,7 +1081,7 @@ body.comments-modal-open {
     bottom: calc(20px + var(--tabbar-inset, 0px));
     right: 20px;
     background: var(--fab-bg);
-    color: #f2f5fb;
+    color: var(--text-primary);
     border: 1px solid rgba(207, 220, 241, 0.3);
     border-radius: var(--radius-sm);
     width: 48px;
@@ -1129,64 +1111,6 @@ body.comments-modal-open {
     height: 20px;
     transition: transform 0.5s ease;
 }
-
-.update-feed-btn.loading svg {
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    100% {
-        transform: rotate(360deg);
-    }
-}
-
-/* Botón de deshacer (encima del de actualizar) */
-.undo-btn {
-    position: fixed;
-    bottom: calc(76px + var(--tabbar-inset, 0px));
-    right: 20px;
-    background: var(--fab-bg-warm);
-    color: #06101f;
-    border: 1px solid rgba(207, 220, 241, 0.26);
-    border-radius: var(--radius-sm);
-    width: 48px;
-    height: 48px;
-    cursor: pointer;
-    box-shadow: var(--shadow-md);
-    transition: all 0.3s ease;
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.undo-btn:hover { transform: scale(1.1); background: var(--fab-bg-warm-hover); }
-.undo-btn:disabled { background: #666; color: #ccc; cursor: not-allowed; }
-.undo-btn svg { width: 20px; height: 20px; }
-
-/* Botón cambio de orden (encima del deshacer) */
-.order-btn {
-    position: fixed;
-    bottom: calc(132px + var(--tabbar-inset, 0px));
-    right: 20px;
-    background: var(--fab-bg);
-    color: #f2f5fb;
-    border: 1px solid rgba(207, 220, 241, 0.26);
-    border-radius: var(--radius-sm);
-    width: 48px;
-    height: 48px;
-    cursor: pointer;
-    box-shadow: var(--shadow-md);
-    transition: all 0.3s ease;
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.order-btn:hover { transform: scale(1.1); background: var(--fab-bg-hover); }
-.order-btn:disabled { background: #666; cursor: not-allowed; }
-.order-btn svg { width: 20px; height: 20px; }
 
 /* Media Queries */
 @media (max-width: 1080px) {
@@ -1241,11 +1165,6 @@ body.comments-modal-open {
     .news-card .news-image { filter: saturate(0.95) contrast(0.98); }
 }
 
-.news-card-container.deleting {
-    pointer-events: none !important;
-    z-index: 10 !important;
-}
-
 /* El clon de salida usa solo transform/opacidad; no participa en el layout. */
 .news-card-container.collapsing {
     overflow: hidden;
@@ -1253,18 +1172,6 @@ body.comments-modal-open {
 
 .news-card-container.collapsing .news-card::before {
     box-shadow: none;
-}
-
-/* Animación para la nueva tarjeta que entra */
-@keyframes insertCard {
-    0% {
-        transform: scale(0.8) translateY(20px);
-        opacity: 0;
-    }
-    100% {
-        transform: scale(1) translateY(0);
-        opacity: 1;
-    }
 }
 
 .news-card-container.inserting {
@@ -1276,72 +1183,6 @@ body.comments-modal-open {
     .news-card-container.inserting {
         animation-duration: 0.34s;
     }
-}
-
-/* Notificación de nuevas noticias */
-.notification {
-    position: fixed;
-    top: -100px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: rgba(143, 180, 232, 0.9);
-    color: white;
-    padding: 12px 20px;
-    border-radius: var(--radius-sm);
-    z-index: 1001;
-    box-shadow: var(--shadow-md);
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    transition: top 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.5s ease;
-    font-weight: bold;
-    font-size: 16px;
-    opacity: 0;
-}
-
-.notification.show {
-    top: 110px; 
-    opacity: 1;
-}
-
-.notification.hiding {
-    opacity: 0;
-}
-
-.close-notification {
-    background: none;
-    border: none;
-    color: white;
-    font-size: 24px;
-    line-height: 1;
-    cursor: pointer;
-    padding: 0 0 0 10px;
-    margin-left: auto;
-}
-
-.close-notification:hover {
-    transform: scale(1.2);
-}
-
-/* Animación para el contador actualizado */
-@keyframes counterPulse {
-    0% {
-        transform: scale(1);
-        color: #f2f5fb;
-    }
-    50% {
-        transform: scale(1.3);
-        color: #c6d6f5;
-    }
-    100% {
-        transform: scale(1);
-        color: #f2f5fb;
-    }
-}
-
-.header-counter.counter-updated {
-    animation: counterPulse 1s ease-in-out;
-    display: inline-block;
 }
 
 /* Botón de eliminación para móvil */
@@ -1375,13 +1216,20 @@ body.comments-modal-open {
     outline: none;
 }
 
+/* El outline de arriba quita el rectángulo del toque; con teclado sí se ve.
+ * Va pegado al círculo (offset negativo): la caja mide 44 y se ven 36. */
+.mobile-delete-btn:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -4px;
+}
+
 .mobile-delete-btn::before,
 .mobile-delete-btn::after {
     content: '';
     position: absolute;
     width: 18px;
     height: 2px;
-    background-color: #f2f5fb;
+    background-color: var(--text-primary);
     border-radius: 1px;
 }
 
@@ -1418,30 +1266,6 @@ body.comments-modal-open {
     }
 }
 
-/* Animación de pulsación para el botón móvil */
-@keyframes pulse {
-    0% {
-        transform: scale(1);
-        box-shadow: var(--shadow-sm);
-    }
-    50% {
-        transform: scale(1.15); /* Slightly larger pulse */
-        box-shadow: 0 4px 10px rgba(255, 68, 68, 0.5); /* Red shadow during pulse */
-    }
-    100% {
-        transform: scale(1);
-        box-shadow: var(--shadow-sm);
-    }
-}
-
-.mobile-delete-btn.pulse {
-    animation: pulse 0.3s ease-in-out;
-}
-
-.undo-btn.pulse {
-    animation: pulse 0.3s ease-in-out;
-}
-
 .short-answer {
     font-size: var(--news-summary-size);
     color: rgba(227, 233, 245, 0.68);
@@ -1453,408 +1277,6 @@ body.comments-modal-open {
     overflow-wrap: anywhere;
 }
 
-/* Botón de modo lectura (encima del order-btn) */
-.reader-btn {
-    position: fixed;
-    bottom: calc(188px + var(--tabbar-inset, 0px));
-    right: 20px;
-    background: #10ac84;
-    color: #f2f5fb;
-    border: none;
-    border-radius: var(--radius-sm);
-    width: 48px;
-    height: 48px;
-    cursor: pointer;
-    box-shadow: var(--shadow-md);
-    transition: all 0.3s ease;
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.reader-btn:hover {
-    transform: scale(1.1);
-    background: #0e9872;
-}
-
-.reader-btn:disabled {
-    background: #666;
-    cursor: not-allowed;
-}
-
-.reader-btn svg {
-    width: 20px;
-    height: 20px;
-}
-
-.reader-btn.active {
-    background: #ee5a6f;
-}
-
-.reader-btn.active:hover {
-    background: #d64456;
-}
-
-.news-actions-menu {
-    position: fixed;
-    right: 20px;
-    bottom: calc(20px + var(--tabbar-inset, 0px));
-    z-index: 1000;
-    width: 48px;
-    height: 48px;
-}
-
-.news-actions-list {
-    position: absolute;
-    right: 0;
-    bottom: 58px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease;
-}
-
-.news-actions-menu:not(.is-open) .news-actions-list {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transform: translateY(12px) scale(0.96);
-}
-
-.news-actions-menu.is-open .news-actions-list {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    transform: translateY(0) scale(1);
-}
-
-/* Añadir palabra filtro: solo vive dentro del menú, no tiene posición propia. */
-.filter-word-btn {
-    width: 48px;
-    height: 48px;
-    background: var(--fab-bg);
-    color: #f2f5fb;
-    border: 1px solid rgba(207, 220, 241, 0.26);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    box-shadow: var(--shadow-md);
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.filter-word-btn:hover { transform: scale(1.1); background: var(--fab-bg-hover); }
-.filter-word-btn svg { width: 20px; height: 20px; }
-
-/* Modal de alta rápida: reutiliza la caja del de comentarios. */
-.news-filter-panel {
-    width: min(440px, 100%);
-}
-
-.news-filter-form {
-    display: grid;
-    gap: 10px;
-    padding: 18px 24px 22px;
-}
-
-.news-filter-label {
-    color: rgba(227, 233, 245, 0.8);
-    font-size: var(--text-sm);
-}
-
-.news-filter-input {
-    box-sizing: border-box;
-    width: 100%;
-    padding: 11px 13px;
-    border: 1px solid rgba(198, 214, 242, 0.28);
-    border-radius: var(--radius-sm);
-    color: #edf4ff;
-    background: rgba(5, 12, 23, 0.6);
-    font: inherit;
-    font-size: var(--text-base);
-}
-
-.news-filter-input:focus {
-    outline: none;
-    border-color: #8fb4e8;
-    box-shadow: 0 0 0 3px rgba(143, 180, 232, 0.25);
-}
-
-.news-filter-check {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: rgba(227, 233, 245, 0.8);
-    font-size: var(--text-sm);
-    cursor: pointer;
-}
-
-.news-filter-check input {
-    width: 18px;
-    height: 18px;
-    accent-color: #8fb4e8;
-}
-
-.news-filter-status {
-    min-height: 1.3em;
-    margin: 0;
-    color: rgba(227, 233, 245, 0.72);
-    font-size: var(--text-sm);
-}
-
-.news-filter-status.is-error { color: #ff9b9b; }
-.news-filter-status.is-success { color: #7fdca4; }
-
-.news-filter-actions {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-}
-
-.news-filter-link {
-    color: #8fd5f4;
-    font-size: var(--text-sm);
-    text-decoration: none;
-}
-
-.news-filter-link:hover { text-decoration: underline; }
-
-.news-filter-submit {
-    min-height: 44px;
-    padding: 0 20px;
-    border: 1px solid rgba(207, 220, 241, 0.3);
-    border-radius: var(--radius-sm);
-    color: #f2f5fb;
-    background: var(--fab-bg);
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.news-filter-submit:hover { background: var(--fab-bg-hover); }
-.news-filter-submit:disabled { opacity: 0.6; cursor: wait; }
-
-@media (max-width: 600px) {
-    /* No a pantalla completa como los comentarios: es un formulario corto. */
-    .news-filter-modal {
-        align-items: center;
-    }
-
-    .news-filter-panel {
-        height: auto;
-    }
-
-    .news-filter-form {
-        padding: 16px;
-    }
-}
-
-.news-actions-menu .update-feed-btn,
-.news-actions-menu .undo-btn,
-.news-actions-menu .order-btn,
-.news-actions-menu .reader-btn {
-    position: static;
-    right: auto;
-    bottom: auto;
-    z-index: auto;
-    flex: 0 0 48px;
-}
-
-.news-actions-toggle {
-    width: 48px;
-    height: 48px;
-    border: 1px solid rgba(207, 220, 241, 0.3);
-    border-radius: var(--radius-sm);
-    background: var(--fab-bg);
-    color: #f2f5fb;
-    cursor: pointer;
-    box-shadow: var(--shadow-md);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    backdrop-filter: blur(12px);
-    transition: transform 0.22s ease, background 0.22s ease, border-color 0.22s ease;
-}
-
-.news-actions-toggle:hover {
-    transform: scale(1.06);
-    background: var(--fab-bg-hover);
-    border-color: rgba(207, 220, 241, 0.48);
-}
-
-/* ⋮ cerrado, ✕ abierto: el mismo par de iconos y tamaño que .fab-toggle. */
-.news-actions-toggle svg {
-    width: 18px;
-    height: 18px;
-}
-
-.news-actions-menu.is-open .news-actions-icon-open,
-.news-actions-menu:not(.is-open) .news-actions-icon-close {
-    display: none;
-}
-
-/* Overlay de modo lectura */
-.reader-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    width: 100vw;
-    height: 100vh;
-    background: #000 !important; /* Negro puro forzado */
-    background-color: #000 !important;
-    z-index: 10000;
-    display: none;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    overflow: hidden;
-    touch-action: pan-y; /* Solo gestos verticales/horizontales, no scroll */
-    color-scheme: dark;
-}
-
-.reader-overlay.active {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 1;
-}
-
-/* Bloquear scroll del body cuando modo lectura está activo */
-body.reader-active {
-    overflow: hidden !important;
-    position: fixed;
-    width: 100%;
-    height: 100%;
-    background: #000 !important; /* Forzar negro también en body */
-}
-
-.reader-content {
-    color: #f2f5fb;
-    text-align: center;
-    padding: 40px 20px;
-    max-width: 90%;
-    user-select: none;
-}
-
-/* El fondo sigue en negro puro (en AMOLED es lo que ahorra: casi toda la
-   pantalla apagada). El texto ocupa poco, así que aclararlo cuesta muy poco;
-   el #333 de antes no se leía. */
-.reader-title {
-    font-size: 1.8em;
-    font-weight: bold;
-    margin-bottom: 30px;
-    line-height: 1.4;
-    color: #c9d1de;
-}
-
-.reader-text {
-    font-size: 1.2em;
-    line-height: 1.6;
-    margin-bottom: 50px;
-    color: #9aa4b5;
-}
-
-.reader-remaining {
-    font-size: 1em;
-    margin-bottom: 35px;
-    color: #6b7485;
-}
-
-/* Lectura continua: al terminar una noticia pasa sola a la siguiente */
-.reader-continuous-btn {
-    position: absolute;
-    top: calc(16px + env(safe-area-inset-top, 0px));
-    right: 16px;
-    min-width: 44px;
-    min-height: 44px;
-    padding: 8px 14px;
-    font: inherit;
-    font-size: var(--text-sm);
-    color: #6b7485;
-    background: transparent;
-    border: 1px solid #2a2f38;
-    border-radius: var(--radius-pill);
-    cursor: pointer;
-}
-
-.reader-continuous-btn[aria-pressed="true"] {
-    color: #8fb4e8;
-    border-color: #8fb4e8;
-}
-
-.reader-gestures-hint {
-    position: absolute;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 0.85em;
-    opacity: 0.4;
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-    justify-content: center;
-}
-
-.reader-gestures-hint > div {
-    padding: 8px 12px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: var(--radius-sm);
-}
-
-/* Ocultar hints después de 5 segundos */
-.reader-overlay.hide-hints .reader-gestures-hint {
-    opacity: 0;
-    transition: opacity 0.5s ease;
-}
-
-@media (max-width: 768px) {
-    .reader-btn {
-        width: 48px;
-        height: 48px;
-        bottom: calc(188px + var(--tabbar-inset, 0px)); /* Encima del resto de botones, no centrado */
-        right: 20px;
-    }
-
-    .reader-title {
-        font-size: 1.5em;
-    }
-
-    .reader-text {
-        font-size: 1.1em;
-    }
-
-    .reader-gestures-hint {
-        font-size: 0.75em;
-        gap: 10px;
-    }
-}
-
-
-/* Aviso de que la ingesta de noticias no está corriendo bien. Solo se pinta en
-   la vista privada: sin él, una cuota agotada o un cron parado se ven igual que
-   un día tranquilo de noticias, y había que entrar por SSH a leer el log. */
-.ingest-alert {
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    max-width: 940px;
-    margin: 0 auto 18px;
-    padding: 14px 16px;
-    border-radius: var(--radius-sm);
-    border: 1px solid rgba(240, 185, 120, 0.5);
-    /* Casi opaco: el feed tiene un degradado de fondo y con transparencia alta
-       el aviso se fundía con él y dejaba de leerse como una alerta. */
-    background: rgba(46, 30, 16, 0.92);
-    color: #f6e3cd;
-    font-size: 0.92rem;
-    line-height: 1.45;
-}
-
 .ingest-alert--error .ingest-alert__title {
     color: #ffb4b4;
 }
@@ -1864,80 +1286,6 @@ body.reader-active {
     background: rgba(50, 20, 20, 0.92);
     color: #f8dada;
 }
-
-.ingest-alert__icon {
-    flex: 0 0 auto;
-    width: 20px;
-    height: 20px;
-    margin-top: 2px;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    opacity: 0.85;
-}
-
-.ingest-alert__body {
-    min-width: 0;
-}
-
-.ingest-alert__title {
-    margin: 0 0 4px;
-    font-weight: 600;
-    color: #ffd9a8;
-}
-
-.ingest-alert__message {
-    margin: 0;
-}
-
-.ingest-alert__meta {
-    margin: 6px 0 0;
-    font-size: 0.82rem;
-    opacity: 0.7;
-}
-
-.ingest-alert__detail {
-    margin-top: 8px;
-    font-size: 0.82rem;
-}
-
-.ingest-alert__detail summary {
-    cursor: pointer;
-    opacity: 0.8;
-}
-
-.ingest-alert__detail pre {
-    margin: 8px 0 0;
-    padding: 10px;
-    border-radius: var(--radius-sm);
-    background: rgba(0, 0, 0, 0.3);
-    overflow-x: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
-    font-size: 0.78rem;
-    opacity: 0.9;
-}
-
-@media (max-width: 768px) {
-    .ingest-alert {
-        margin: 0 12px 14px;
-        padding: 12px 14px;
-    }
-}
-
-.news-empty { text-align: center; padding: 48px 20px; color: #e3e9f5; }
-.news-empty h2 { font-size: 20px; margin: 0 0 12px; }
-.news-empty p { color: #b7c4d9; line-height: 1.6; }
-.news-empty a { color: #b7d4ff; text-underline-offset: 3px; }
-.news-feedback {
-    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
-    z-index: 10001; width: min(460px, calc(100% - 32px));
-    box-sizing: border-box; display: flex; align-items: center; gap: 12px;
-    padding: 12px 16px; background: #18263b; color: #f2f5fb;
-    border: 1px solid #61748f; border-radius: var(--radius-sm); box-shadow: 0 8px 24px #0005;
-}
-.news-feedback p { margin: 0; flex: 1; line-height: 1.5; }
-.news-feedback button { color: inherit; background: transparent; border: 0; font-size: 24px; cursor: pointer; }
-.news-feedback[hidden], .news-empty[hidden] { display: none; }
 
 
 /* Volver arriba, el mismo botón que en Libros y TV (styles.css). Aquí va suelto
@@ -1951,11 +1299,6 @@ body.reader-active {
 
 .news-scroll-top--alone {
     bottom: calc(20px + var(--tabbar-inset, 0px));
-}
-
-body:has(.news-actions-menu.is-open) .news-scroll-top {
-    opacity: 0;
-    pointer-events: none;
 }
 
 
@@ -1975,5 +1318,28 @@ body:has(.news-actions-menu.is-open) .news-scroll-top {
     .news-link.share-opener .share-icon {
         width: 20px;
         height: 20px;
+    }
+}
+
+@keyframes comments-badge-pop {
+    from {
+        transform: scale(0.4);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Animación para la nueva tarjeta que entra */
+@keyframes insertCard {
+    0% {
+        transform: scale(0.8) translateY(20px);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1) translateY(0);
+        opacity: 1;
     }
 }

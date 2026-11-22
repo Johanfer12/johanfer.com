@@ -7,7 +7,7 @@
 /* Sin caja propia: antes era una tarjeta de vidrio que contenía otras
  * tarjetas, y el doble marco no aportaba nada. Cada gráfica es su tarjeta. */
 .statistics-content {
-    color: #f2f5fb;
+    color: var(--text-primary);
 }
 
 .charts-row {

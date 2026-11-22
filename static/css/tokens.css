@@ -27,6 +27,8 @@
     --accent: #c6d6f5;
     --accent-strong: #8fb4e8;
     --accent-warm: #d6bc8f;
+    /* Anillo de foco de teclado: el mismo azul claro en todo el sitio. */
+    --focus-ring: #b7d4ff;
     /* Radios. Había diecinueve valores distintos (5, 6, 7, 8, 9, 10, 11, 12,
        14, 15, 16, 18, 20, 22, 28...) repartidos sin criterio, y cada pieza se
        veía de una familia distinta. Cinco escalones:

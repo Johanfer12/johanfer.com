@@ -75,176 +75,6 @@ a:hover {
     color: #ffffff;
 }
 
-.book-container {
-    display: grid;
-    /* La portada llena su columna. Antes cada tramo de anchura fijaba un tamaño
-       (200, 250, 200 px) dentro de columnas elásticas, y entre un tramo y otro
-       quedaban tres portadas de 200 px en columnas de 300: huecos enormes. */
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 24px;
-    margin: 0 auto;
-    max-width: 1400px;
-    padding: 0 20px;
-}
-
-.book-item {
-    width: 100%;
-    aspect-ratio: 2 / 3;
-}
-
-.book-info-container {
-    width: 100%;
-    height: 100%;
-    position: relative;
-    text-align: center;
-}
-
-.book-cover {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--card-border);
-    box-shadow: var(--shadow-md);
-}
-
-.book-cover:focus-visible,
-.book-modal-content :focus-visible {
-    outline: 3px solid #a9ccff;
-    outline-offset: 3px;
-}
-
-/* Hueco mientras carga la portada (la Pi no es instantánea): el color medio
- * de la propia imagen (home_page/cover_colors.py), rebajado hacia el fondo para
- * que una portada blanca no destelle en la rejilla oscura. Sin color anotado,
- * el degradado de siempre.
- *
- * Va en la <img> y NO en .book-cover. Debajo de la imagen, el fondo redondeado
- * de la caja se seguía rasterizando con la portada ya cargada, y era la mitad
- * del raster del scroll: medido en un Helio G99 en Películas, 750 ms frente a
- * 480 y el doble de fotogramas tarde. En la propia imagen, Chrome se salta el
- * fondo en cuanto hay una imagen opaca que lo tapa entero. */
-.book-cover img {
-    max-width: 100%;
-    max-height: 100%;
-    border-radius: inherit;
-    object-fit: cover;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(165deg, rgba(30, 42, 72, 0.85), rgba(13, 20, 38, 0.92));
-    background: color-mix(in srgb, var(--cover-color, #1a2440) 72%, #0b142c);
-}
-
-.book-cover:hover {
-    cursor: pointer;
-}
-
-/* --- Página "Viendo" (Trakt) --- */
-/* Listón diagonal "Viendo" en la esquina de la portada */
-.watching-ribbon {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 110px;
-    height: 110px;
-    overflow: hidden;
-    border-top-right-radius: 12px;
-    pointer-events: none;
-    z-index: 2;
-}
-
-.watching-ribbon span {
-    position: absolute;
-    display: block;
-    width: 170px;
-    padding: 5px 0;
-    background: linear-gradient(135deg, var(--accent-strong), #4f66b0);
-    box-shadow: var(--shadow-sm);
-    color: #fff;
-    font-size: 0.75em;
-    font-weight: 700;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    text-align: center;
-    transform: rotate(45deg);
-    right: -44px;
-    top: 28px;
-}
-
-/* Aviso de "sin calificar" en la esquina opuesta al listón "Viendo": los dos
-   nunca coinciden en una tarjeta, pero así ninguno tapa al otro si algún día sí.
-   Triángulo macizo sobre cristal oscuro: la carátula de debajo puede ser de
-   cualquier color, y un icono de solo contorno se pierde en las claras. */
-.rating-alert {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-sm);
-    background: rgba(9, 16, 36, 0.62);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    border: 1px solid rgba(214, 188, 143, 0.5);
-    box-shadow: var(--shadow-sm);
-    z-index: 2;
-}
-
-/* Es un enlace a la ficha de Simkl: la zona de toque se amplía a 44 × 44 sin
- * agrandar el icono. Va en ::before porque ::after es el tooltip (base.css). */
-a.rating-alert::before {
-    content: '';
-    position: absolute;
-    inset: -7px;
-}
-
-a.rating-alert:focus-visible {
-    outline: 2px solid #b7d4ff;
-    outline-offset: 2px;
-}
-
-.rating-alert svg {
-    display: block;
-    width: 18px;
-    height: 18px;
-    filter: drop-shadow(0 1px 2px rgba(3, 10, 20, 0.55));
-}
-
-.rating-alert-shape {
-    fill: var(--accent-warm);
-}
-
-/* El signo va en el azul del fondo, no en blanco: así se lee como un hueco del
-   triángulo y no como una segunda figura encima. */
-.rating-alert-mark {
-    fill: #0b142c;
-}
-
-.book-search-btn {
-    position: fixed;
-    bottom: calc(76px + var(--tabbar-inset, 0px));
-    right: 20px;
-    width: 48px;
-    height: 48px;
-    box-shadow: var(--shadow-md);
-    border-radius: var(--radius-sm);
-    background: var(--fab-bg);
-    border: 1px solid var(--glass-border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    color: #f2f5fb;
-    z-index: 1000;
-    transition: transform 0.2s ease, background 0.2s ease;
-}
-
 .book-scroll-top-btn {
     position: fixed;
     bottom: calc(132px + var(--tabbar-inset, 0px));
@@ -259,7 +89,7 @@ a.rating-alert:focus-visible {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    color: #f2f5fb;
+    color: var(--text-primary);
     z-index: 1000;
     transition: transform 0.2s ease, background 0.2s ease;
 }
@@ -273,155 +103,6 @@ a.rating-alert:focus-visible {
     width: 20px;
     height: 20px;
     fill: currentColor;
-}
-
-.book-search-btn:hover {
-    transform: scale(1.08);
-    background: var(--fab-bg-hover);
-}
-
-.book-search-btn svg {
-    width: 20px;
-    height: 20px;
-    fill: currentColor;
-}
-
-.book-search-btn.is-clear {
-    background: var(--fab-bg-warm);
-}
-
-.book-search-btn.is-clear:hover {
-    background: var(--fab-bg-warm-hover);
-}
-
-/* En Mi TV el buscador va justo sobre ordenar (como en libros): ordenar (20) · buscar (76) */
-.book-search-btn.watch-search {
-    bottom: calc(76px + var(--tabbar-inset, 0px));
-}
-
-/* Botón flotante de ordenar (Mis Libros y Mi TV): siempre el de más abajo */
-.book-sort-btn {
-    position: fixed;
-    bottom: calc(20px + var(--tabbar-inset, 0px));
-    right: 20px;
-    width: 48px;
-    height: 48px;
-    box-shadow: var(--shadow-md);
-    border-radius: var(--radius-sm);
-    background: var(--fab-bg);
-    border: 1px solid var(--glass-border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    color: #f2f5fb;
-    z-index: 1000;
-    transition: transform 0.2s ease, background 0.2s ease;
-}
-
-.book-sort-btn:hover {
-    transform: scale(1.08);
-    background: var(--fab-bg-hover);
-}
-
-.book-sort-btn svg {
-    width: 20px;
-    height: 20px;
-    fill: currentColor;
-}
-
-/* Grupo de botones flotantes (Libros y TV). Iban sueltos, cada uno con su
-   `bottom` fijo, y en TV eran cuatro en columna tapando las portadas de la
-   derecha. Ahora se apilan solos y, salvo "volver arriba", quedan plegados
-   tras un único botón. Dentro del grupo pierden su posición propia. */
-.fab-stack {
-    position: fixed;
-    right: 20px;
-    bottom: calc(20px + var(--tabbar-inset, 0px));
-    z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-}
-
-.fab-stack .book-search-btn,
-.fab-stack .book-scroll-top-btn,
-.fab-stack .book-sort-btn {
-    position: static;
-}
-
-.fab-menu {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-}
-
-.fab-stack:not(.is-open) .fab-menu {
-    display: none;
-}
-
-.fab-stack.is-open .fab-menu > * {
-    animation: fab-in 0.18s ease-out both;
-}
-
-@keyframes fab-in {
-    from { opacity: 0; transform: translateY(8px) scale(0.9); }
-    to { opacity: 1; transform: none; }
-}
-
-.fab-toggle {
-    position: relative;
-    width: 48px;
-    height: 48px;
-    padding: 0;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--glass-border);
-    background: var(--fab-bg);
-    box-shadow: var(--shadow-md);
-    color: #f2f5fb;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: transform 0.2s ease, background 0.2s ease;
-}
-
-.fab-toggle:hover {
-    transform: scale(1.08);
-}
-
-.fab-toggle svg {
-    width: 18px;
-    height: 18px;
-    fill: currentColor;
-}
-
-.fab-stack.is-open .fab-icon-open,
-.fab-stack:not(.is-open) .fab-icon-close {
-    display: none;
-}
-
-/* Con el menú plegado, un filtro de búsqueda activo quedaría escondido: el
-   punto dorado (el mismo tono de .is-clear) avisa de que hay uno puesto. */
-/* ::before y no ::after: ::after es el tooltip (base.css). */
-.fab-stack:not(.is-open):has(.book-search-btn.is-clear) .fab-toggle::before {
-    content: '';
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: rgb(214, 188, 143);
-    box-shadow: 0 0 0 2px rgba(11, 20, 44, 0.9);
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .fab-stack.is-open .fab-menu > * {
-        animation: none;
-    }
 }
 
 ::-webkit-scrollbar {
@@ -454,50 +135,8 @@ a.rating-alert:focus-visible {
     justify-content: center;
 }
 
-.modal-content {
-    /* Sólido, como las tarjetas: el vidrio se queda en la cabecera. */
-    background: var(--surface);
-    border: 1px solid var(--surface-border);
-    color: var(--text-primary);
-    margin: 0;
-    padding: 20px;
-    border-radius: var(--radius-md);
-    width: min(920px, 92vw);
-    max-height: calc(100vh - 32px);
-    box-shadow: var(--shadow-lg);
-    position: relative;
-    animation: zoomIn 0.3s ease-out;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
 .modal.modal-open {
     animation: modalFadeIn 0.22s ease-out;
-}
-
-.modal.modal-closing {
-    display: flex !important;
-    pointer-events: none;
-    animation: modalFadeOut 0.22s ease-in forwards;
-}
-
-.modal.modal-closing .modal-content {
-    animation: zoomOut 0.22s ease-in forwards;
-}
-
-.modal-content h2 {
-    margin: 20px 0 10px;
-    line-height: 1.15;
-}
-
-.modal-content p {
-    margin: 8px 0;
-    line-height: 1.35;
-}
-
-.book-modal-content h2 {
-    padding-right: 40px;
 }
 
 .close {
@@ -553,188 +192,6 @@ a.rating-alert:focus-visible {
         padding: 8px;
         align-items: center;
     }
-
-    .modal-content {
-        width: 100%;
-        max-height: calc(100svh - 16px);
-        max-height: calc(100dvh - 16px);
-        padding: 16px 14px;
-    }
-
-    .book-modal-content {
-        font-size: 0.88rem;
-        padding: 12px 14px;
-        border-radius: var(--radius-md);
-    }
-
-    .book-modal-content h2 {
-        margin: 0 42px 8px 0;
-        padding-left: 13px;
-        padding-right: 0;
-        font-size: clamp(1.08rem, 5.4vw, 1.32rem);
-        line-height: 1.14;
-        letter-spacing: 0;
-    }
-
-    .book-modal-content p {
-        margin: 5px 0;
-        padding: 0 13px;
-        /* Metadatos de la ficha: texto secundario, no por debajo de 14 px. */
-        font-size: clamp(var(--text-sm), 3.9vw, 0.9375rem);
-        line-height: 1.24;
-    }
-
-    .book-modal-content .close {
-        top: 10px;
-        right: 10px;
-        width: 32px;
-        height: 32px;
-    }
-
-    .book-modal-content .book-description {
-        margin-top: 10px;
-        padding: 11px 13px;
-        /* La sinopsis es lo que se lee: cuerpo de 16 px. */
-        font-size: var(--text-base);
-        line-height: 1.42;
-        text-align: left;
-        overflow-wrap: anywhere;
-        hyphens: auto;
-    }
-
-    .book-modal-content .book-description-scroll {
-        scrollbar-width: thin;
-    }
-
-    .book-modal-content .book-description-scroll::-webkit-scrollbar {
-        width: 5px;
-    }
-
-    .book-modal-content .book-description-scroll:hover::-webkit-scrollbar-thumb,
-    .book-modal-content .book-description-scroll.is-scrolling::-webkit-scrollbar-thumb {
-        border-radius: var(--radius-pill);
-        background-color: rgba(163, 181, 212, 0.58);
-    }
-
-    .book-modal-content .book-description strong {
-        display: block;
-        margin-bottom: 8px;
-        font-size: 1.02em;
-    }
-
-    .book-modal-content .book-description br:first-of-type,
-    .book-modal-content .book-description br:nth-of-type(2) {
-        display: none;
-    }
-}
-
-@media (max-width: 767px) {
-    .book-container {
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-        gap: 15px;
-        padding: 0 15px;
-    }
-}
-
-@media (max-width: 479px) {
-    .book-container {
-        padding: 0 10px;
-        gap: 10px;
-    }
-}
-
-.book-description {
-    /* Sin justify: en columnas estrechas genera "ríos" de espacios. */
-    text-align: left;
-    margin-top: 10px;
-    padding: 12px 7px 12px 14px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--surface-border);
-    background: rgba(255, 255, 255, 0.035);
-    line-height: 1.55;
-    /* Mide lo que su texto y solo encoge (con scroll) si no cabe. Antes crecía
-     * hasta el alto de la portada, y una sinopsis de dos líneas dejaba una caja
-     * vacía de 300px. */
-    flex: 0 1 auto;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-    overscroll-behavior: contain;
-}
-
-.book-description-scroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    padding-right: 7px;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-    scrollbar-color: transparent transparent;
-}
-
-.book-description-scroll.has-more {
-    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent);
-    mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent);
-}
-
-.book-description-scroll:hover,
-.book-description-scroll.is-scrolling {
-    scrollbar-color: rgba(163, 181, 212, 0.58) transparent;
-}
-
-.book-description-scroll::-webkit-scrollbar {
-    width: 6px;
-}
-
-.book-description-scroll::-webkit-scrollbar-thumb {
-    background-color: transparent;
-}
-
-.book-description-scroll:hover::-webkit-scrollbar-thumb,
-.book-description-scroll.is-scrolling::-webkit-scrollbar-thumb {
-    background-color: rgba(163, 181, 212, 0.58);
-}
-
-/* Modal de libro: dos columnas con la portada protagonista */
-.book-modal-body {
-    display: flex;
-    gap: 22px;
-    align-items: stretch;
-    flex: 1 1 auto;
-    min-height: 0;
-}
-
-.book-modal-cover {
-    flex: 0 0 235px;
-    align-self: center;
-    position: relative; /* ancla para el listón "Leyendo" */
-}
-
-.book-modal-cover img {
-    display: block;
-    width: 100%;
-    border-radius: var(--radius-sm);
-    border: 1px solid rgba(198, 214, 242, 0.24);
-    box-shadow: var(--shadow-lg);
-}
-
-.book-modal-info {
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-.book-modal-info h2 {
-    margin-top: 0;
-}
-
-.book-modal-metadata {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: 28px;
 }
 
 .stars {
@@ -773,220 +230,12 @@ a.rating-alert:focus-visible {
     text-shadow: 0 0 8px rgba(240, 212, 150, 0.35);
 }
 
-@media (min-width: 768px) {
-    /* En escritorio la ficha es apaisada: mas ancha y mas baja, y el hueco que
-     * se gana va entero a la portada.
-     *
-     * Manda el ANCHO de la portada y el alto se deduce de su proporcion, nunca
-     * al reves. Atarla al alto disponible parecia mas listo —llenaba la ficha
-     * entera— pero las portadas no comparten proporcion, asi que la imagen se
-     * estiraba, desbordaba su carril y se comia el texto de al lado.
-     *
-     * El tope de 315px no es redondo: medidas las 281 portadas, la mas
-     * alargada es 1,76 de alto por ancho (la mediana es 1,53). 315 x 1,76 = 554
-     * y el hueco util de la ficha es 558, asi que hasta la peor entra sin que el
-     * modal la recorte. Si se sube el tope de ancho hay que subir tambien el de
-     * alto, y al reves. */
-    .book-modal-content {
-        /* 1020 y no 1180: con 1180 la sinopsis iba a ~105 caracteres por
-         * línea, y pasadas las 80 cuesta encontrar el principio de la
-         * siguiente. La portada no cambia: su ancho no depende de este. */
-        width: min(1020px, 94vw);
-        max-height: min(calc(100vh - 32px), 600px);
-    }
-
-    .book-modal-cover {
-        flex: 0 0 clamp(280px, 24vw, 315px);
-    }
-}
-
-@media (max-width: 767px) {
-    /* En móvil la portada ya se vio en el grid: prioriza el texto. */
-    .book-modal-cover {
-        display: none;
-    }
-
-    .book-modal-body,
-    .book-modal-info {
-        display: flex;
-        flex-direction: column;
-        max-height: none;
-        min-height: 0;
-        flex: 1 1 auto;
-    }
-
-    .book-modal-metadata {
-        grid-template-columns: 1fr;
-    }
-}
-
-.books-search-content {
-    width: min(560px, 92vw);
-    max-height: none;
-    overflow: visible;
-    padding: 22px 20px 18px;
-    background: var(--surface);
-    border-color: rgba(220, 232, 250, 0.38);
-    box-shadow: var(--shadow-lg);
-}
-
-.books-search-content h2 {
-    margin: 0 0 6px;
-}
-
-.books-search-subtitle {
-    margin: 0 0 14px;
-    color: var(--text-secondary);
-}
-
-.books-search-form {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.books-search-input {
-    width: 100%;
-    height: 44px;
-    border-radius: var(--radius-sm);
-    border: 1px solid rgba(198, 214, 242, 0.34);
-    background: rgba(8, 14, 30, 0.7);
-    color: var(--text-primary);
-    padding: 0 12px;
-    font: inherit;
-    outline: none;
-}
-
-.books-search-input:focus {
-    border-color: var(--accent-strong);
-    box-shadow: 0 0 0 2px rgba(143, 180, 232, 0.25);
-}
-
-.books-search-actions {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-}
-
-.books-search-apply,
-.books-search-cancel {
-    height: 38px;
-    min-width: 92px;
-    border-radius: var(--radius-sm);
-    border: 1px solid rgba(198, 214, 242, 0.28);
-    font: inherit;
-    cursor: pointer;
-    transition: transform 0.15s ease, background-color 0.2s ease, color 0.2s ease;
-}
-
-.books-search-apply {
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
-    color: #06101f;
-    font-weight: 700;
-}
-
-.books-search-cancel {
-    background: rgba(8, 14, 30, 0.72);
-    color: var(--text-primary);
-}
-
-.books-search-apply:hover,
-.books-search-cancel:hover {
-    transform: translateY(-1px);
-}
-
-.books-search-close {
-    background: rgba(8, 16, 34, 0.72);
-}
-
-@media (max-width: 767px) {
-    .books-search-modal {
-        align-items: center;
-        justify-content: center;
-    }
-
-    .books-search-content {
-        width: min(560px, 92vw);
-        max-height: none;
-    }
-}
-
-/* Mini modal de ordenamiento */
-.sort-modal-content {
-    width: min(300px, 92vw);
-    max-height: none;
-    overflow: visible;
-    padding: 22px 20px 18px;
-    background: var(--surface);
-    border-color: rgba(220, 232, 250, 0.38);
-    box-shadow: var(--shadow-lg);
-}
-
-.sort-modal-content h2 {
-    margin: 0 0 14px;
-}
-
-.sort-options {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.sort-option {
-    height: 44px;
-    border-radius: var(--radius-sm);
-    border: 1px solid rgba(198, 214, 242, 0.28);
-    background: rgba(8, 14, 30, 0.72);
-    color: var(--text-primary);
-    font-family: inherit;
-    font-size: 1rem;
-    font-weight: 600;
-    letter-spacing: 0.2px;
-    cursor: pointer;
-    transition: transform 0.15s ease, background-color 0.2s ease, color 0.2s ease;
-}
-
-.sort-option:hover {
-    transform: translateY(-1px);
-    border-color: var(--accent-strong);
-}
-
-.sort-option.active {
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
-    color: #06101f;
-    font-weight: 700;
-    pointer-events: none;
-}
-
 @media (min-width: 1024px) {
     .modal {
         background-color: rgba(2, 10, 20, 0.72);
         -webkit-backdrop-filter: blur(10px) saturate(120%);
         backdrop-filter: blur(10px) saturate(120%);
     }
-
-    .modal-content::before {
-        content: '';
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        border-radius: inherit;
-        background: linear-gradient(155deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.04) 34%, rgba(255, 255, 255, 0.02) 70%);
-        mix-blend-mode: screen;
-    }
-}
-
-/* Indicador de carga compartido (scroll infinito de libros y Mi TV, modal de
-   comentarios). La pastilla de cristal reutiliza los tokens de --glass-* y el
-   satélite en órbita sigue el motivo espacial del fondo. */
-.feed-loader {
-    display: none;
-    justify-content: center;
-    padding: 24px 16px 36px;
-}
-
-.feed-loader.is-visible {
-    display: flex;
 }
 
 .feed-loader-pill {
@@ -1059,79 +308,6 @@ a.rating-alert:focus-visible {
     }
 }
 
-@keyframes orbitSpin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-@keyframes loaderPulse {
-    0%, 100% {
-        opacity: 0.58;
-    }
-    50% {
-        opacity: 1;
-    }
-}
-
-@keyframes zoomIn {
-    from {
-        transform: scale(0.7);
-        opacity: 0;
-    }
-    to {
-        transform: scale(1);
-        opacity: 1;
-    }
-}
-
-@keyframes zoomOut {
-    from {
-        transform: scale(1);
-        opacity: 1;
-    }
-    to {
-        transform: scale(0.92);
-        opacity: 0;
-    }
-}
-
-@keyframes modalFadeIn {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
-}
-
-@keyframes modalFadeOut {
-    from {
-        opacity: 1;
-    }
-    to {
-        opacity: 0;
-    }
-}
-
-@keyframes nebulaDrift {
-    from {
-        transform: translate3d(-1.5%, -1%, 0) scale(1);
-    }
-    to {
-        transform: translate3d(1.5%, 1%, 0) scale(1.06);
-    }
-}
-
-@keyframes starTwinkle {
-    from {
-        opacity: 0.34;
-    }
-    to {
-        opacity: 0.58;
-    }
-}
-
 /* Modo rendimiento para móvil / dispositivos modestos */
 @media (max-width: 900px), (prefers-reduced-motion: reduce) {
     body {
@@ -1180,21 +356,64 @@ a.rating-alert:focus-visible {
 .visits-badge,
 .comments-badge {
     position: absolute;
-    top: -6px;
-    right: -6px;
-    min-width: 16px;
-    height: 16px;
+    top: -7px;
+    right: -7px;
+    min-width: 18px;
+    height: 18px;
     padding: 0 4px;
     box-sizing: border-box;
     border: 1px solid rgba(9, 16, 28, 0.85);
     border-radius: var(--radius-pill);
-    background: #8fb4e8;
+    background: var(--accent-strong);
     color: #06101f;
-    font-size: 10px;
+    /* 12 px, el mínimo legible de tokens.css: a 10 la cifra era un borrón. */
+    font-size: var(--text-xs);
     font-weight: 700;
-    line-height: 14px;
+    line-height: 16px;
     letter-spacing: -0.02em;
     text-align: center;
     pointer-events: none;
     box-shadow: var(--shadow-sm);
+}
+
+@keyframes orbitSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes loaderPulse {
+    0%, 100% {
+        opacity: 0.58;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes nebulaDrift {
+    from {
+        transform: translate3d(-1.5%, -1%, 0) scale(1);
+    }
+    to {
+        transform: translate3d(1.5%, 1%, 0) scale(1.06);
+    }
+}
+
+@keyframes starTwinkle {
+    from {
+        opacity: 0.34;
+    }
+    to {
+        opacity: 0.58;
+    }
 }

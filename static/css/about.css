@@ -10,7 +10,7 @@
     background: var(--surface);
     border: 1px solid var(--surface-border);
     padding: 40px;
-    color: #f2f5fb;
+    color: var(--text-primary);
     border-radius: var(--radius-md);
     box-shadow: var(--surface-shadow);
     max-width: min(920px, 75%);

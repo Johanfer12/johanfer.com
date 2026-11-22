@@ -361,7 +361,7 @@
 
 .visits-table th {
     background: rgba(12, 22, 40, 0.78);
-    color: #c6d6f5;
+    color: var(--accent);
     font-size: 0.78rem;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -420,7 +420,7 @@
 
 .visit-device {
     margin-bottom: 2px;
-    color: #8fb4e8;
+    color: var(--accent-strong);
     font-weight: 600;
 }
 
@@ -627,6 +627,11 @@ body.modal-open {
 
     .toolbar-group-danger {
         justify-content: flex-start;
+    }
+
+    .btn {
+        /* 44 px de zona de toque en móvil, como el resto del sitio. */
+        min-height: 44px;
     }
 }
 

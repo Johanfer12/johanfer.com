@@ -1,7 +1,7 @@
 .header {
     background: linear-gradient(155deg, rgba(255, 255, 255, 0.14), rgba(20, 31, 48, 0.35) 18%, rgba(9, 16, 28, 0.62) 74%);
     border: 1px solid rgba(207, 220, 241, 0.27);
-    color: #f2f5fb;
+    color: var(--text-primary);
     height: 80px;
     display: flex;
     align-items: center;
@@ -86,7 +86,8 @@
     width: 40px;
     height: 40px;
     border-radius: var(--radius-sm);
-    color: rgba(242, 245, 251, 0.6);
+    /* Al 0.6 los iconos inactivos se perdían sobre la parte clara del vidrio. */
+    color: rgba(242, 245, 251, 0.72);
     transition: color 0.2s ease, background-color 0.2s ease;
 }
 
@@ -109,20 +110,22 @@
 }
 
 .header-sections a:hover {
-    color: #f2f5fb;
+    color: var(--text-primary);
     background: rgba(255, 255, 255, 0.07);
 }
 
 .header-sections a:focus-visible {
-    color: #f2f5fb;
-    outline: 2px solid #b7d4ff;
+    color: var(--text-primary);
+    outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
 }
 
-/* La sección actual, entera y con una raya debajo en el azul del feed
- * (`#8fb4e8`), el mismo de la insignia de visitas. */
+/* La sección actual, entera, con un fondo tenue y una raya debajo en el azul
+ * del feed (--accent-strong), el mismo de la insignia de visitas. Solo con la
+ * raya, de 2 px, costaba distinguirla de un vistazo. */
 .header-sections a[aria-current] {
-    color: #f2f5fb;
+    color: var(--text-primary);
+    background: rgba(143, 180, 232, 0.14);
 }
 
 .header-sections a[aria-current]::before {
@@ -133,11 +136,11 @@
     bottom: 1px;
     height: 2px;
     border-radius: 2px;
-    background: #8fb4e8;
+    background: var(--accent-strong);
 }
 
 .header-nav :is(a, summary) {
-    color: #f2f5fb;
+    color: var(--text-primary);
     text-decoration: none;
     font-size: 16px;
     margin-left: 0;
@@ -225,7 +228,8 @@
 
 .total {
     margin: 4px 0 0;
-    color: rgba(227, 233, 245, 0.76);
+    /* Al 0.76 el subtítulo («285 libros») apenas se leía sobre el degradado. */
+    color: rgba(227, 233, 245, 0.9);
 }
 
 @media (max-width: 1080px) {
@@ -445,7 +449,7 @@
 .header-tools { position: relative; flex: 0 0 auto; }
 .header-tools summary { cursor: pointer; list-style: none; }
 .header-tools summary::-webkit-details-marker { display: none; }
-.header-tools summary:focus-visible { outline: 2px solid #b7d4ff; outline-offset: 3px; }
+.header-tools summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 /* El panel es la misma pieza de cristal que la cabecera, no una caja aparte:
    antes iba con un azul plano y un borde propio, sin desenfoque ni filo, y se
    veia pegado debajo como si fuera de otra pagina. El fondo termina casi opaco

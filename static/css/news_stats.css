@@ -28,7 +28,7 @@
 
 .news-stats-windows a.is-active {
     color: #081120;
-    background: var(--accent-strong, #8fb4e8);
+    background: var(--accent-strong, var(--accent-strong));
     border-color: rgba(255, 255, 255, 0.25);
 }
 

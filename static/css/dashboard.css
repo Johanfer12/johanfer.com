@@ -23,7 +23,7 @@
 }
 
 h1, h3 {
-    color: #f2f5fb;
+    color: var(--text-primary);
     margin-bottom: 1rem;
 }
 
@@ -32,7 +32,7 @@ h1, h3 {
     margin-bottom: 1rem;
     border-radius: var(--radius-sm);
     background-color: rgba(19, 32, 52, 0.7);
-    color: #f2f5fb;
+    color: var(--text-primary);
     border: 1px solid rgba(198, 214, 242, 0.16);
 }
 
@@ -46,25 +46,29 @@ h1, h3 {
     display: block;
 }
 
+/* En escritorio el reproductor va dentro de una tarjeta como las del resto del
+ * sitio: el interior lo pinta Spotify en negro y no se puede tocar, y suelto
+ * sobre el fondo morado se leía como un bloque ajeno. Con el marco de
+ * superficie se lee como una pantalla dentro de la página. En móvil no hay
+ * sitio para el marco y va a sangre (ver la media query de abajo). */
 .music-section.playlist-section {
     width: 100%;
-    padding: 0;
-    background: transparent;
-    border: 0;
-    box-shadow: none;
+    padding: 12px;
+    box-sizing: border-box;
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--surface-shadow);
 }
 
 .spotify-playlist-frame {
     display: block;
     width: 100%;
-    height: clamp(520px, calc(100svh - 213px), 860px);
+    height: clamp(520px, calc(100svh - 237px), 836px);
     border: 0;
-    /* El interior lo pinta Spotify y no se puede tocar; lo que sí es nuestro
-     * es el borde, que va como el de las tarjetas (radio, filo y sombra). El
-     * fondo es el que se ve hasta que carga: antes su gris #121212. */
+    /* El fondo es el que se ve hasta que carga: antes el gris #121212. */
     border-radius: var(--radius-md);
     background: var(--surface);
-    box-shadow: 0 0 0 1px var(--surface-border), var(--surface-shadow);
 }
 
 .music-section {
@@ -116,7 +120,7 @@ h1, h3 {
 }
 
 .song-details a {
-    color: #f2f5fb;
+    color: var(--text-primary);
     text-decoration: none;
     display: block;
     font-size: 1.1rem;
@@ -172,10 +176,12 @@ h1, h3 {
         padding: 0;
         background: transparent;
         border: 0;
+        box-shadow: none;
     }
 
     .spotify-playlist-frame {
         height: clamp(540px, calc(100svh - 145px), 760px);
+        box-shadow: 0 0 0 1px var(--surface-border), var(--surface-shadow);
     }
 
     .music-section:last-child .song-list {

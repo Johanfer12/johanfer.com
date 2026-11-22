@@ -42,7 +42,9 @@ const PALETTE = {
     },
 };
 const GRID_COLOR = 'rgba(255, 255, 255, 0.05)';
-const TICK_COLOR = 'rgba(238, 243, 251, 0.78)';
+// Al 0.78 las etiquetas de los ejes (años, estrellas) se leían mal sobre la
+// superficie oscura de las tarjetas.
+const TICK_COLOR = 'rgba(238, 243, 251, 0.88)';
 
 // Degradado a lo largo de TODO el eje de valores, no de cada barra: una barra
 // baja solo llega a los tonos oscuros y la más alta alcanza el claro, así que
@@ -104,7 +106,9 @@ const categoryAxis = (extra = {}) => ({
     border: { display: false },
     ticks: {
         color: TICK_COLOR,
-        font: { size: 12 },
+        // En escritorio a 13: las estrellas de las calificaciones (★★★★½) son
+        // glifos finos y a 12 se quedaban en una raya de puntos.
+        font: { size: window.innerWidth < 768 ? 12 : 13 },
     },
     ...extra,
 });

@@ -11,11 +11,11 @@
 .management-hero,
 .management-section,
 .management-form-card {
-    background: linear-gradient(155deg, rgba(255, 255, 255, 0.13), rgba(18, 28, 52, 0.54) 28%, rgba(8, 14, 28, 0.78));
-    border: 1px solid var(--glass-border);
-    box-shadow: 0 18px 42px rgba(2, 8, 18, 0.46), inset 0 1px 0 var(--glass-highlight);
-    backdrop-filter: blur(18px) saturate(120%);
-    -webkit-backdrop-filter: blur(18px) saturate(120%);
+    /* Superficie opaca, como las tarjetas del resto del sitio: el vidrio se
+       queda solo en la cabecera. */
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    box-shadow: var(--surface-shadow);
 }
 
 .management-hero {
@@ -605,6 +605,14 @@
 }
 
 @media (max-width: 760px) {
+    .management-primary,
+    .management-secondary,
+    .management-danger,
+    .management-danger-solid {
+        /* 44 px de zona de toque en móvil, como el resto del sitio. */
+        min-height: 44px;
+    }
+
     .management-shell,
     .management-form-shell {
         width: min(100% - 20px, 720px);
