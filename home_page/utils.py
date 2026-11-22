@@ -190,6 +190,60 @@ def download_cover_as_webp(cover_url, book_id, folder_path):
     )
 
 
+def _aplicar_campos_rss(book, entry, book_link, **extra):
+    """Vuelca en `book` los campos de una entrada del RSS de Goodreads.
+
+    Comparten la asignación la estantería "leyendo ahora" y la de leídos;
+    lo propio de cada una (calificación, fecha de lectura, `is_reading`) llega
+    en `extra`. Se compara contra el valor ya normalizado (HTML saneado, fechas
+    parseadas) para que un libro que no cambió no cuente como cambiado.
+
+    Devuelve la lista de campos que cambiaron, apta para
+    `save(update_fields=...)`.
+    """
+    rss_description = entry.get("book_description")
+    valores = {
+        "title": (entry.get("title") or "").strip(),
+        "author": (entry.get("author_name") or "").strip() or "Autor desconocido",
+        "cover_link": (
+            entry.get("book_large_image_url")
+            or entry.get("book_medium_image_url")
+            or entry.get("book_image_url")
+            or ""
+        ).strip(),
+        "public_rating": (entry.get("average_rating") or "0.0").strip(),
+        "book_link": book_link,
+        "description": sanitize_html(rss_description) if rss_description else book.description,
+        "goodreads_id": (entry.get("book_id") or "").strip() or book.goodreads_id,
+        "isbn": (entry.get("isbn") or "").strip() or book.isbn,
+        "num_pages": parse_positive_int(entry.get("num_pages")) or book.num_pages,
+        "published_year": parse_positive_int(entry.get("book_published")) or book.published_year,
+        "goodreads_date_added": (
+            parse_rss_datetime(entry.get("user_date_added")) or book.goodreads_date_added
+        ),
+        **extra,
+    }
+    cambiados = []
+    for campo, valor in valores.items():
+        if getattr(book, campo) != valor:
+            setattr(book, campo, valor)
+            cambiados.append(campo)
+    return cambiados
+
+
+def _guardar_libro(book, is_new, cambiados):
+    """Guarda solo lo que cambió: cada noche pasan ~270 libros por aquí y casi
+    ninguno trae novedades, así que un `save()` completo serían escrituras en
+    balde. Devuelve True si se escribió algo."""
+    if is_new:
+        book.save()
+        return True
+    if cambiados:
+        book.save(update_fields=cambiados)
+        return True
+    return False
+
+
 def sync_currently_reading(rss_url, folder_path):
     """Sincroniza la estantería currently-reading: marca is_reading y crea
     los libros en curso que aún no existan (sin fecha ni calificación).
@@ -218,20 +272,8 @@ def sync_currently_reading(rss_url, folder_path):
                 if is_new:
                     book = Book(my_rating=0, date_read=None)
 
-                book.title = title
-                book.author = (entry.get("author_name") or "").strip() or "Autor desconocido"
-                book.cover_link = (entry.get("book_large_image_url") or entry.get("book_medium_image_url") or entry.get("book_image_url") or "").strip()
-                book.public_rating = (entry.get("average_rating") or "0.0").strip()
-                book.book_link = book_link
-                book.is_reading = True
-                rss_description = entry.get("book_description")
-                book.description = sanitize_html(rss_description) if rss_description else book.description
-                book.goodreads_id = goodreads_id or book.goodreads_id
-                book.isbn = (entry.get("isbn") or "").strip() or book.isbn
-                book.num_pages = parse_positive_int(entry.get("num_pages")) or book.num_pages
-                book.published_year = parse_positive_int(entry.get("book_published")) or book.published_year
-                book.goodreads_date_added = parse_rss_datetime(entry.get("user_date_added")) or book.goodreads_date_added
-                book.save()
+                cambiados = _aplicar_campos_rss(book, entry, book_link, is_reading=True)
+                _guardar_libro(book, is_new, cambiados)
 
             if book.cover_link:
                 cover_path = os.path.join(folder_path, f"{book.id}.webp")
@@ -253,7 +295,7 @@ def refresh_books_data():
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
-    rss_url = getattr(settings, "GOODREADS_RSS_URL", "https://www.goodreads.com/review/list_rss/27786474?shelf=read")
+    rss_url = settings.GOODREADS_RSS_URL
 
     # Estantería "leyendo ahora": marcar en curso y limpiar los que salieron
     reading_ids = sync_currently_reading(rss_url, folder_path)
@@ -267,13 +309,13 @@ def refresh_books_data():
 
     created = 0
     updated = 0
+    unchanged = 0
 
     for entry in reversed(entries):
         goodreads_id = (entry.get("book_id") or "").strip() or None
         title = (entry.get("title") or "").strip()
         try:
             book_link = normalize_goodreads_book_link(entry)
-            author = (entry.get("author_name") or "").strip() or "Autor desconocido"
             date_read = parse_rss_date(entry.get("user_read_at"))
 
             if not title or not date_read:
@@ -286,22 +328,15 @@ def refresh_books_data():
                 if is_new:
                     book = Book()
 
-                book.title = title
-                book.author = author
-                book.cover_link = (entry.get("book_large_image_url") or entry.get("book_medium_image_url") or entry.get("book_image_url") or "").strip()
-                book.my_rating = parse_positive_int(entry.get("user_rating")) or 0
-                book.public_rating = (entry.get("average_rating") or "0.0").strip()
-                book.date_read = date_read
-                book.is_reading = False  # está en la estantería "read": terminado
-                book.book_link = book_link
-                rss_description = entry.get("book_description")
-                book.description = sanitize_html(rss_description) if rss_description else book.description
-                book.goodreads_id = goodreads_id or book.goodreads_id
-                book.isbn = (entry.get("isbn") or "").strip() or book.isbn
-                book.num_pages = parse_positive_int(entry.get("num_pages")) or book.num_pages
-                book.published_year = parse_positive_int(entry.get("book_published")) or book.published_year
-                book.goodreads_date_added = parse_rss_datetime(entry.get("user_date_added")) or book.goodreads_date_added
-                book.save()
+                cambiados = _aplicar_campos_rss(
+                    book,
+                    entry,
+                    book_link,
+                    my_rating=parse_positive_int(entry.get("user_rating")) or 0,
+                    date_read=date_read,
+                    is_reading=False,  # está en la estantería "read": terminado
+                )
+                escrito = _guardar_libro(book, is_new, cambiados)
 
             # La descarga va fuera de la transacción para no mantener
             # bloqueada la BD (SQLite) durante peticiones de red.
@@ -313,10 +348,15 @@ def refresh_books_data():
             if is_new:
                 created += 1
                 logger.info("Libro creado desde RSS: %s", title)
-            else:
+            elif escrito:
                 updated += 1
+            else:
+                unchanged += 1
         except Exception:
             logger.exception("Error procesando libro RSS: %s", title or goodreads_id)
             continue
 
-    logger.info("Goodreads RSS procesado: creados=%s, actualizados=%s, items=%s", created, updated, len(entries))
+    logger.info(
+        "Goodreads RSS procesado: creados=%s, actualizados=%s, sin cambios=%s, items=%s",
+        created, updated, unchanged, len(entries),
+    )

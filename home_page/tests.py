@@ -76,6 +76,60 @@ class CurrentlyReadingSyncTests(TestCase):
         self.assertEqual(Book.objects.count(), 1)
 
 
+READ_ENTRY = {
+    'book_id': '888',
+    'title': 'El nombre del viento',
+    'author_name': 'Patrick Rothfuss',
+    'average_rating': '4.5',
+    'user_rating': '5',
+    'user_read_at': 'Mon, 12 Jan 2026 10:00:00 -0800',
+    'user_date_added': 'Sat, 03 Jan 2026 09:30:00 -0800',
+    'book_description': '<p>Una <b>historia</b> <script>x</script></p>',
+    'num_pages': '662',
+    'book_published': '2007',
+}
+
+
+class RssBookWritesTests(TestCase):
+    """Un libro que no cambió en Goodreads no debe volver a escribirse."""
+
+    def _refresh(self, entries):
+        from .utils import refresh_books_data
+
+        with patch('home_page.utils.sync_currently_reading', return_value=None), \
+                patch('home_page.utils.fetch_goodreads_rss_entries', return_value=entries):
+            refresh_books_data()
+
+    def test_unchanged_read_book_is_not_saved(self):
+        self._refresh([READ_ENTRY])
+        book = Book.objects.get(goodreads_id='888')
+        self.assertEqual(book.date_read, date(2026, 1, 12))
+        self.assertEqual(book.my_rating, 5)
+
+        # Sin cambios: ni una escritura, aunque haya HTML que sanear y fechas
+        # en otra zona horaria que comparar.
+        with patch.object(Book, 'save', autospec=True) as save:
+            self._refresh([READ_ENTRY])
+        save.assert_not_called()
+
+    def test_changed_field_saves_only_that_field(self):
+        self._refresh([READ_ENTRY])
+
+        with patch.object(Book, 'save', autospec=True) as save:
+            self._refresh([{**READ_ENTRY, 'average_rating': '4.6'}])
+        save.assert_called_once()
+        self.assertEqual(save.call_args.kwargs, {'update_fields': ['public_rating']})
+
+    @patch('home_page.utils.fetch_feed_with_timeout')
+    def test_unchanged_reading_book_is_not_saved(self, mock_fetch):
+        mock_fetch.return_value = SimpleNamespace(entries=[READING_ENTRY])
+        sync_currently_reading('https://example.com/rss?shelf=read', '/tmp')
+
+        with patch.object(Book, 'save', autospec=True) as save:
+            sync_currently_reading('https://example.com/rss?shelf=read', '/tmp')
+        save.assert_not_called()
+
+
 class BookshelfReadingViewTests(TestCase):
     def _create_read_book(self, pk_hint='read'):
         return Book.objects.create(
