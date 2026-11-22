@@ -13,6 +13,8 @@ from django.db.models import Q
 from django.middleware.common import CommonMiddleware
 from django.utils import timezone as dj_timezone
 
+from Bookshelf.http_utils import is_ajax
+
 from . import bot_detection
 from .models import VisitLog
 from .visit_stats import invalidate_badge
@@ -115,7 +117,8 @@ JS_CONFIRM_WINDOW = timedelta(minutes=10)
 JS_PROOF_PATHS = ('/visitas/js/', '/sw.js', '/manifest.webmanifest')
 
 
-def _visitor_id(request):
+def get_visitor_id(request):
+    """El visitor_id de la sesión, o '' si aún no tiene."""
     return (request.session.get(VisitLogMiddleware.SESSION_VISITOR_KEY) or '').strip()
 
 
@@ -129,7 +132,7 @@ def _js_seen_keys(request):
     """Las dos señas del navegador. Hacen falta las dos porque no todas las
     pruebas llevan la cookie de sesión: el manifiesto se pide sin ella."""
     keys = [_ip_ua_key(request)]
-    visitor_id = _visitor_id(request)
+    visitor_id = get_visitor_id(request)
     if visitor_id:
         keys.append(f'visit-js:v:{visitor_id}')
     return keys
@@ -138,7 +141,7 @@ def _js_seen_keys(request):
 def is_js_proof(request):
     return (
         request.path in JS_PROOF_PATHS
-        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or is_ajax(request)
     )
 
 
@@ -168,7 +171,7 @@ def confirm_js(request):
         ip_address=get_client_ip(request),
         user_agent=(request.headers.get('User-Agent') or '')[:1500],
     )
-    visitor_id = _visitor_id(request)
+    visitor_id = get_visitor_id(request)
     if visitor_id:
         same_browser |= Q(visitor_id=visitor_id)
     changed = 0
@@ -352,7 +355,7 @@ class VisitLogMiddleware:
         # CommonMiddleware va por fuera y la convierte en redirección después.
         if response.status_code == 404 and _APPEND_SLASH.should_redirect_with_slash(request):
             return
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        if is_ajax(request):
             return
         if request.path in self.SKIP_PATHS:
             return
@@ -695,7 +698,7 @@ class VisitLogMiddleware:
         return details['country'], details['country_code']
 
     def _get_or_create_visitor_id(self, request):
-        visitor_id = request.session.get(self.SESSION_VISITOR_KEY, '').strip()
+        visitor_id = get_visitor_id(request)
         if visitor_id:
             return visitor_id
 

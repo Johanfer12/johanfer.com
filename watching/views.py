@@ -15,6 +15,7 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from Bookshelf.html_sanitizer import sanitize_html
+from Bookshelf.http_utils import is_ajax
 from home_page.cover_colors import color_for
 from home_page.templatetags.sanitizers import rating_stars
 
@@ -245,7 +246,7 @@ def watching(request):
     paginator = Paginator(cards, 20)  # 20 tarjetas por vista, igual que en libros
     page_obj = paginator.get_page(request.GET.get('page', 1))
 
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+    if is_ajax(request):
         card_data = []
         for card in page_obj:
             latest = card['latest']

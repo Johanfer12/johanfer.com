@@ -8,7 +8,7 @@ from django.http import HttpResponse
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.contrib import messages
 from .ingestion_status import current_status, feed_alert
-from django.contrib.auth.decorators import user_passes_test
+from Bookshelf.http_utils import is_ajax, superuser_required
 from django.contrib.auth.views import LoginView
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -339,7 +339,7 @@ def _build_page_response(request, *, order, page, cursor, search_query, saved_on
     }
 
 @require_POST
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+@superuser_required
 def delete_news(request, pk):
     try:
         current_page = _safe_page(request.POST.get('current_page', 1))
@@ -383,11 +383,6 @@ def delete_news(request, pk):
         return JsonResponse({'status': 'error', 'message': 'Noticia no encontrada'})
     except Exception:
         return _json_server_error(request)
-
-def superuser_required(view_func):
-    decorated_view = user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')(view_func)
-    return decorated_view
-
 
 def _management_redirect(section):
     return redirect(f"{reverse('my_news:feed_management')}#{section}")
@@ -558,7 +553,7 @@ def source_edit(request, pk):
 @superuser_required
 def word_filter_create(request):
     form = FilterWordForm(request.POST or None)
-    if request.method == 'POST' and _is_ajax(request):
+    if request.method == 'POST' and is_ajax(request):
         # El modal del feed: crea sin salir de la página que se está leyendo.
         if not form.is_valid():
             errors = [error for field_errors in form.errors.values() for error in field_errors]
@@ -619,15 +614,11 @@ def ai_filter_edit(request, pk):
     )
 
 
-def _is_ajax(request):
-    return request.headers.get('x-requested-with') == 'XMLHttpRequest'
-
-
 def _toggle_management_object(request, obj, section, label):
     obj.active = not obj.active
     obj.save(update_fields=['active'])
     state = 'activado' if obj.active else 'desactivado'
-    if _is_ajax(request):
+    if is_ajax(request):
         # Sin recargar: la configuración pierde la búsqueda escrita y la
         # posición de la lista si se responde con el redirect de siempre.
         return JsonResponse({'status': 'success', 'active': obj.active, 'message': f'{label} {state}.'})
@@ -839,7 +830,7 @@ def _launch_manual_update(started_at):
 
 
 @require_POST
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+@superuser_required
 def update_feed(request):
     started_at = timezone.now()
     if _manual_update_alive() or news_update_running():
@@ -855,7 +846,7 @@ def update_feed(request):
 
 
 @require_GET
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+@superuser_required
 def update_feed_status(request):
     since = parse_datetime(request.GET.get('since') or '')
     if since is None:
@@ -887,7 +878,7 @@ def update_feed_status(request):
     return JsonResponse({'status': 'running'})
 
 @require_GET
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+@superuser_required
 def check_new_news(request):
     try:
         cursor = request.GET.get('cursor')
@@ -969,7 +960,7 @@ def image_proxy(request):
 
 
 @require_GET
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+@superuser_required
 def get_page(request):
     try:
         order = request.GET.get('order', 'desc')
@@ -1002,7 +993,7 @@ def get_page(request):
 
 
 @require_POST
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+@superuser_required
 def undo_delete(request, pk):
     try:
         saved_only = request.POST.get('saved_only', 'false').lower() == 'true'
@@ -1033,7 +1024,7 @@ def undo_delete(request, pk):
 
 
 @require_GET
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+@superuser_required
 def latest_deleted_news(request):
     try:
         saved_only = request.GET.get('saved_only', 'false').lower() == 'true'
@@ -1067,7 +1058,7 @@ def latest_deleted_news(request):
 
 
 @require_POST
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+@superuser_required
 def toggle_save_news(request, pk):
     try:
         saved_only = request.POST.get('saved_only', 'false').lower() == 'true'
@@ -1314,7 +1305,7 @@ def _news_stats_rows(days):
 
 
 @require_GET
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+@superuser_required
 def news_stats(request):
     """Cuántas noticias trae cada fuente y cuántas se quedan por el camino."""
     try:
@@ -1367,7 +1358,7 @@ def news_stats(request):
 
 
 @require_GET
-@user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')
+@superuser_required
 def system_stats(request):
     """Vista para mostrar estadísticas del sistema Raspberry Pi"""
     stats = {}

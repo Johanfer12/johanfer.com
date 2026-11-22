@@ -19,8 +19,12 @@ def colombian_filter():
     return Q(country_code__iexact='CO') | Q(country__icontains='colombia')
 
 
-def exclude_owner(visit_qs):
-    """Quita las visitas propias: IP o visitor_id que hayan pasado por el login."""
+def owner_signatures():
+    """(IPs, visitor_ids) que han pasado por el login; es decir, míos.
+
+    Devuelve conjuntos nuevos en cada llamada: quien los recibe puede
+    añadirles señas (las de la sesión actual) sin tocar los de nadie más.
+    """
     ips = set()
     visitor_ids = set()
     for ip, visitor_id in OwnerSignature.objects.values_list('ip_address', 'visitor_id'):
@@ -28,7 +32,12 @@ def exclude_owner(visit_qs):
             ips.add(ip)
         if visitor_id:
             visitor_ids.add(visitor_id)
+    return ips, visitor_ids
 
+
+def exclude_owner(visit_qs):
+    """Quita las visitas propias: IP o visitor_id que hayan pasado por el login."""
+    ips, visitor_ids = owner_signatures()
     if ips:
         visit_qs = visit_qs.exclude(ip_address__in=ips)
     if visitor_ids:

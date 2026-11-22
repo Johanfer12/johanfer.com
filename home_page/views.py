@@ -3,16 +3,16 @@ from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.http import HttpResponse
 from django.contrib.auth.decorators import user_passes_test
+from Bookshelf.http_utils import LOGIN_URL, is_ajax
 from django.views.decorators.http import require_GET
 from .models import Book
 from .models import VisitLog
-from .models import OwnerSignature
 from .bot_detection import labels as bot_labels
-from .middleware import confirm_js, get_client_ip, isp_label
+from .middleware import confirm_js, get_client_ip, get_visitor_id, isp_label
 from . import bot_detection
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from .visit_stats import badge_count, invalidate_badge, mark_seen
+from .visit_stats import badge_count, invalidate_badge, mark_seen, owner_signatures
 from .cover_colors import color_for
 from django.db.models import Count, Max, Sum
 from django.db.models import F, Q
@@ -27,8 +27,6 @@ import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
-
-SESSION_VISITOR_KEY = 'visit_visitor_id'
 
 # PWA: color de marca y estáticos que el service worker guarda al instalarse.
 PWA_THEME_COLOR = '#070715'
@@ -122,7 +120,7 @@ def bookshelf(request):
         if ':' in book.title:
             book.title = book.title.split(':', 1)[0]
 
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+    if is_ajax(request):
         # Si la petición es AJAX, devolver los datos en formato JSON
         book_data = []
         for book in page_obj:
@@ -231,10 +229,6 @@ def custom_404_view(request, exception):
     return render(request, '404.html', status=404)
 
 
-def _get_visitor_id(request):
-    return (request.session.get(SESSION_VISITOR_KEY) or '').strip()
-
-
 def _parse_visit_date(value):
     if not value:
         return None
@@ -294,23 +288,11 @@ def _apply_visits_filters(filters):
     return visit_qs
 
 
-def _owner_signatures():
-    """IPs y visitor_id que han pasado por el login; es decir, míos."""
-    ips = set()
-    visitor_ids = set()
-    for ip, visitor_id in OwnerSignature.objects.values_list('ip_address', 'visitor_id'):
-        if ip:
-            ips.add(ip)
-        if visitor_id:
-            visitor_ids.add(visitor_id)
-    return ips, visitor_ids
-
-
 def _owner_marks(request):
     """Señas que identifican mis visitas: las del login más la sesión de ahora."""
-    owner_ips, owner_visitor_ids = _owner_signatures()
+    owner_ips, owner_visitor_ids = owner_signatures()
     current_ip = get_client_ip(request)
-    current_visitor_id = _get_visitor_id(request)
+    current_visitor_id = get_visitor_id(request)
     if current_ip:
         owner_ips.add(current_ip)
     if current_visitor_id:
@@ -419,12 +401,8 @@ visits_access_required = user_passes_test(
     lambda u: u.is_superuser or (
         settings.DEBUG and settings.VISITS_ALLOW_LOCAL_WITHOUT_LOGIN
     ),
-    login_url='/noticias/login/',
+    login_url=LOGIN_URL,
 )
-
-
-def _is_ajax(request):
-    return request.headers.get('x-requested-with') == 'XMLHttpRequest'
 
 
 def _delete_visits(request, filtered_qs):
@@ -471,7 +449,7 @@ def visits(request):
     if request.method == 'POST':
         deleted = _delete_visits(request, filtered_qs)
 
-        if _is_ajax(request):
+        if is_ajax(request):
             # Sin recargar: el modal abierto se queda donde estaba.
             group_key = (request.POST.get('group') or '').strip()
             group_qs = _group_queryset(filtered_qs, group_key) if group_key else None

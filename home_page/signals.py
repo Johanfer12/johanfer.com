@@ -2,7 +2,7 @@ from django.contrib.auth.signals import user_logged_in
 from django.dispatch import receiver
 from django.utils import timezone as dj_timezone
 
-from .middleware import VisitLogMiddleware, get_client_ip
+from .middleware import get_client_ip, get_visitor_id
 from .models import OwnerSignature
 from .visit_stats import invalidate_badge
 
@@ -12,7 +12,7 @@ def record_owner_signature(sender, request, user, **kwargs):
     """Nadie más usa el login, así que quien entra por ahí soy yo: anotar sus señas."""
     try:
         ip = get_client_ip(request) or ''
-        visitor_id = (request.session.get(VisitLogMiddleware.SESSION_VISITOR_KEY) or '').strip()
+        visitor_id = get_visitor_id(request)
         if not ip and not visitor_id:
             return
 
