@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect
+from django.template.loader import render_to_string
 from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.http import HttpResponse
@@ -9,11 +10,9 @@ from .models import Book
 from .models import VisitLog
 from .bot_detection import labels as bot_labels
 from .middleware import confirm_js, get_client_ip, get_visitor_id, isp_label
-from . import bot_detection
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from .visit_stats import badge_count, invalidate_badge, mark_seen, owner_signatures
-from .cover_colors import color_for
 from django.db.models import Count, Max, Sum
 from django.db.models import F, Q
 from django.urls import reverse
@@ -21,8 +20,6 @@ from django.utils import timezone as dj_timezone
 from django.utils.safestring import mark_safe
 from django.templatetags.static import static
 from django.conf import settings
-from Bookshelf.html_sanitizer import sanitize_html
-from home_page.templatetags.sanitizers import rating_stars
 import hashlib
 import json
 from datetime import datetime, timedelta, timezone
@@ -121,27 +118,12 @@ def bookshelf(request):
             book.title = book.title.split(':', 1)[0]
 
     if is_ajax(request):
-        # Si la petición es AJAX, devolver los datos en formato JSON
-        book_data = []
-        for book in page_obj:
-            book_data.append({
-                'title': book.title,
-                'author': book.author,
-                'my_rating_html': rating_stars(book.my_rating, 5),
-                'public_rating_html': rating_stars(book.public_rating, 5),
-                'date_read': book.date_read.strftime('%Y-%m-%d') if book.date_read else None,
-                'is_reading': book.is_reading,
-                'book_link': book.goodreads_url,
-                'cover_image': f"{settings.MEDIA_URL}Covers/{book.id}.webp",
-                'cover_color': color_for('Covers', f"{book.id}.webp"),
-                'id': book.id,
-                'description': sanitize_html(book.description),
-                'genres': book.genres or '',
-                'num_pages': book.num_pages,
-                'published_year': book.published_year,
-            })
+        # El scroll infinito recibe las tarjetas ya renderizadas con el mismo
+        # include que la página: antes recibía un JSON y infinite_scroll.js
+        # rearmaba el marcado por su cuenta.
+        html = render_to_string('book_items.html', {'books': page_obj}, request=request)
         return JsonResponse({
-            'books': book_data,
+            'html': html,
             'has_next': page_obj.has_next(),
             'query': query,
             'total_books': total_books,

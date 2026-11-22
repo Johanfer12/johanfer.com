@@ -639,7 +639,7 @@ class WatchingViewTests(TestCase):
             reverse('watching:index'), HTTP_X_REQUESTED_WITH='XMLHttpRequest'
         )
 
-        self.assertTrue(response.json()['cards'][0]['needs_rating'])
+        self.assertIn('class="rating-alert"', response.json()['html'])
 
     def test_the_alert_links_to_the_simkl_page(self):
         item = self._create_episode(500, 1, 1, timezone.now())
@@ -663,9 +663,9 @@ class WatchingViewTests(TestCase):
             reverse('watching:index'), {'tipo': 'peliculas'}, HTTP_X_REQUESTED_WITH='XMLHttpRequest'
         )
 
-        self.assertEqual(
-            response.json()['cards'][0]['simkl_url'],
-            'https://api.simkl.com/redirect?to=Simkl&tmdb=42&type=movie',
+        self.assertIn(
+            'href="https://api.simkl.com/redirect?to=Simkl&amp;tmdb=42&amp;type=movie"',
+            response.json()['html'],
         )
 
     def test_rewatched_movie_groups_and_shows_play_count(self):

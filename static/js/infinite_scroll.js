@@ -1,86 +1,19 @@
-// Mis Libros: solo el marcado de la tarjeta y del modal. La paginación, la
-// búsqueda y el scroll los lleva infinite_scroll_core.js, compartido con Mi TV.
+// Mis Libros: la paginación, la búsqueda y el scroll los lleva
+// infinite_scroll_core.js, compartido con Mi TV.
+//
+// Las tarjetas llegan ya renderizadas por el servidor (templates/book_item.html,
+// el mismo include que pinta la página). Antes este fichero rearmaba en JS el
+// marcado de la tarjeta y de la ficha a partir de un JSON, y cualquier cambio
+// había que hacerlo dos veces; las dos copias ya se habían separado (el título
+// de la portada, el formato de la fecha).
 const bookContainer = document.getElementById('book-container');
-
-const formatDate = (isoDate) => {
-    if (!isoDate) return '';
-    const [year, month, day] = isoDate.split('-');
-    return `${day}/${month}/${year}`;
-};
-
-const createBookItem = (book) => {
-    const item = document.createElement('div');
-    item.className = 'book-item';
-    const coverImage = (book.cover_image || '').replace('.jpg', '.webp');
-    const readingRibbon = book.is_reading
-        ? '<div class="watching-ribbon"><span>Leyendo</span></div>'
-        : '';
-
-    item.innerHTML = `
-        <div class="book-info-container">
-            <div class="book-cover"${book.cover_color ? ` style="--cover-color: ${escapeHtml(book.cover_color)}"` : ''} role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-${book.id}" aria-label="Ver detalles de ${escapeHtml(book.title)}" onclick="openModal('${book.id}')">
-                <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(book.title)}">
-                ${readingRibbon}
-            </div>
-        </div>
-    `;
-
-    return item;
-};
-
-const createBookModal = (book) => {
-    const modal = document.createElement('div');
-    modal.id = `modal-${book.id}`;
-    modal.className = 'modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-labelledby', `title-${book.id}`);
-    modal.tabIndex = -1;
-    const coverImage = (book.cover_image || '').replace('.jpg', '.webp');
-    modal.innerHTML = `
-        <div class="modal-content book-modal-content">
-            <button type="button" class="close" aria-label="Cerrar detalles" onclick="closeModal('${book.id}')">&times;</button>
-            <div class="book-modal-body">
-                <div class="book-modal-cover">
-                    <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(book.title)}" loading="lazy">
-                    ${book.is_reading ? '<div class="watching-ribbon"><span>Leyendo</span></div>' : ''}
-                </div>
-                <div class="book-modal-info">
-                    <h2 id="title-${book.id}">${escapeHtml(book.title)}</h2>
-                    <div class="book-modal-metadata">
-                        <div>
-                            <p><strong>Autor:</strong> ${escapeHtml(book.author)}</p>
-                            ${book.is_reading ? '' : `<p><strong>Mi calificación:</strong> ${book.my_rating_html || ''}</p>`}
-                            <p><strong>Calificación general:</strong> ${book.public_rating_html || ''}</p>
-                        </div>
-                        <div>
-                            ${book.num_pages ? `<p><strong>Páginas:</strong> ${escapeHtml(String(book.num_pages))}</p>` : ''}
-                            ${book.published_year ? `<p><strong>Publicado:</strong> ${escapeHtml(String(book.published_year))}</p>` : ''}
-                            ${book.is_reading ? '' : `<p><strong>Leído el:</strong> ${escapeHtml(formatDate(book.date_read))}</p>`}
-                        </div>
-                    </div>
-                    <div class="book-description">
-                        <div class="book-description-scroll" tabindex="0" role="region" aria-label="Descripción">
-                            <strong>Descripción</strong><br><br>
-                            ${book.description || 'No hay descripción disponible'}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    return modal;
-};
 
 const renderBooks = (data, {replace}) => {
     if (replace) {
         bookContainer.innerHTML = '';
         document.querySelectorAll('div.modal[id^="modal-"]').forEach((modal) => modal.remove());
     }
-    (data.books || []).forEach((book) => {
-        bookContainer.appendChild(createBookItem(book));
-        bookContainer.appendChild(createBookModal(book));
-    });
+    bookContainer.insertAdjacentHTML('beforeend', data.html || '');
 };
 
 const setTotalBooksLabel = (count) => {

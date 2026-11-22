@@ -172,11 +172,13 @@ class BookshelfReadingViewTests(TestCase):
         self._create_reading_book()
 
         response = self.client.get('/bookshelf/', HTTP_X_REQUESTED_WITH='XMLHttpRequest')
-        payload = response.json()
+        html = response.json()['html']
 
-        card = payload['books'][0]
-        self.assertTrue(card['is_reading'])
-        self.assertIsNone(card['date_read'])
+        # La tanda llega renderizada con el mismo include que la página: un
+        # libro en curso lleva el listón y no muestra fecha de lectura.
+        self.assertIn('watching-ribbon', html)
+        self.assertIn('Leyendo', html)
+        self.assertNotIn('Leído el:', html)
 
     def test_stats_ignores_books_without_date(self):
         self._create_read_book()

@@ -12,12 +12,10 @@ from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.template.loader import render_to_string
 from django.utils import timezone
 
-from Bookshelf.html_sanitizer import sanitize_html
 from Bookshelf.http_utils import is_ajax
-from home_page.cover_colors import color_for
-from home_page.templatetags.sanitizers import rating_stars
 
 from .models import SimklSyncState, WatchedItem
 
@@ -247,32 +245,11 @@ def watching(request):
     page_obj = paginator.get_page(request.GET.get('page', 1))
 
     if is_ajax(request):
-        card_data = []
-        for card in page_obj:
-            latest = card['latest']
-            card_data.append({
-                'id': latest.id,
-                'title': latest.title,
-                'media_type': latest.media_type,
-                'poster_url': f"{settings.MEDIA_URL}Posters/{card['poster_name']}",
-                'cover_color': color_for('Posters', card['poster_name']),
-                'arc': card.get('arc', ''),
-                'detail_url': latest.detail_url or '#',
-                'year': latest.year,
-                'episode_total': card.get('episode_total'),
-                'display_label': latest.display_label,
-                'episode_title': latest.episode_title,
-                'plays': card.get('plays', 1),
-                'user_rating_html': rating_stars(latest.user_rating),
-                'public_rating_html': rating_stars(latest.public_rating),
-                'watched_at': timezone.localtime(latest.watched_at).strftime('%d/%m/%Y'),
-                'overview': sanitize_html(latest.overview) if latest.overview else '',
-                'is_watching': card.get('is_watching', False),
-                'needs_rating': card.get('needs_rating', False),
-                'simkl_url': latest.simkl_url if card.get('needs_rating') else '',
-            })
+        # Tarjetas ya renderizadas con el mismo include que la página (ver
+        # watch_item.html); antes iba un JSON que watching_scroll.js rearmaba.
+        html = render_to_string('watch_items.html', {'cards': page_obj}, request=request)
         return JsonResponse({
-            'cards': card_data,
+            'html': html,
             'has_next': page_obj.has_next(),
             'total_watched': paginator.count,
             'query': query,

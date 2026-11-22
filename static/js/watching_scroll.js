@@ -1,119 +1,20 @@
-// Mi TV: solo el marcado de la tarjeta y del modal. La paginación, la búsqueda
-// y el scroll los lleva infinite_scroll_core.js, compartido con Mis Libros.
+// Mi TV: la paginación, la búsqueda y el scroll los lleva
+// infinite_scroll_core.js, compartido con Mis Libros.
+//
+// Las tarjetas llegan ya renderizadas por el servidor (templates/watch_item.html,
+// el mismo include que pinta la página), con el listón de "Viendo" y el aviso
+// de "sin calificar" incluidos. Antes este fichero rearmaba en JS el marcado de
+// la tarjeta, la ficha y el aviso, y había que mantener las dos copias a la par.
 const watchContainer = document.getElementById('watch-container');
-const fallbackPoster = watchContainer ? watchContainer.dataset.fallbackPoster : '';
 let currentTipo = 'series';
 let currentOrden = '';
-
-// Aviso de "sin calificar": el mismo marcado que pinta la plantilla, que solo
-// lo manda cuando la sesión es la del dueño del historial. Con ficha de Simkl
-// es un enlace a ella, que es donde se califica.
-const ratingAlert = (card) => {
-    const icon = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
-            <path class="rating-alert-shape" d="M10.28 3.3 1.57 18.6a2 2 0 0 0 1.74 2.99h17.38a2 2 0 0 0 1.74-2.99L13.72 3.3a2 2 0 0 0-3.44 0z"/>
-            <rect class="rating-alert-mark" x="11" y="8.9" width="2" height="5.9" rx="1"/>
-            <rect class="rating-alert-mark" x="11" y="16.4" width="2" height="2.2" rx="1"/>
-        </svg>`;
-    if (!card.simkl_url) {
-        return `<div class="rating-alert" title="Sin calificar" role="img" aria-label="Sin calificar">${icon}</div>`;
-    }
-    return `<a class="rating-alert" href="${escapeHtml(card.simkl_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Calificar ${escapeHtml(card.title)} en Simkl" title="Sin calificar: abrir en Simkl">${icon}</a>`;
-};
-
-const posterImg = (card) => `
-    <img src="${escapeHtml(card.poster_url)}"
-         alt="${escapeHtml(card.title)}"
-         loading="lazy"
-         onerror="this.onerror=null;this.src='${escapeHtml(fallbackPoster)}';">
-`;
-
-const createWatchItem = (card) => {
-    const item = document.createElement('div');
-    item.className = 'book-item';
-
-    item.innerHTML = `
-        <div class="book-info-container">
-            <div class="book-cover"${card.cover_color ? ` style="--cover-color: ${escapeHtml(card.cover_color)}"` : ''} role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-watch-${card.id}" aria-label="Ver detalles de ${escapeHtml(card.title)}" onclick="openModal('watch-${card.id}')">
-                ${posterImg(card)}
-                ${card.is_watching ? '<div class="watching-ribbon"><span>Viendo</span></div>' : ''}
-                ${card.needs_rating ? ratingAlert(card) : ''}
-            </div>
-        </div>
-    `;
-
-    return item;
-};
-
-const createWatchModal = (card) => {
-    const modal = document.createElement('div');
-    modal.id = `modal-watch-${card.id}`;
-    modal.className = 'modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-labelledby', `title-watch-${card.id}`);
-    modal.tabIndex = -1;
-
-    let metaLeft = '';
-    if (card.arc) {
-        metaLeft += `<p><strong>Arco:</strong> ${escapeHtml(card.arc)}</p>`;
-    }
-    if (card.media_type === 'episode') {
-        metaLeft += `<p><strong>Episodios vistos:</strong> ${escapeHtml(String(card.episode_total || ''))}</p>`;
-        metaLeft += `<p><strong>Último:</strong> ${escapeHtml(card.display_label)}${card.episode_title ? ' - ' + escapeHtml(card.episode_title) : ''}</p>`;
-    } else if (card.plays > 1) {
-        metaLeft += `<p><strong>Vista:</strong> ${escapeHtml(String(card.plays))} veces</p>`;
-    } else {
-        metaLeft += '<p><strong>Tipo:</strong> Película</p>';
-    }
-    if (card.user_rating_html) {
-        metaLeft += `<p><strong>Mi calificación:</strong> ${card.user_rating_html}</p>`;
-    }
-    if (card.public_rating_html) {
-        metaLeft += `<p><strong>Calificación general:</strong> ${card.public_rating_html}</p>`;
-    }
-
-    let metaRight = '';
-    if (card.year) {
-        metaRight += `<p><strong>Año:</strong> ${escapeHtml(String(card.year))}</p>`;
-    }
-    metaRight += `<p><strong>Visto el:</strong> ${escapeHtml(card.watched_at)}</p>`;
-
-    modal.innerHTML = `
-        <div class="modal-content book-modal-content">
-            <button type="button" class="close" aria-label="Cerrar detalles" onclick="closeModal('watch-${card.id}')">&times;</button>
-            <div class="book-modal-body">
-                <div class="book-modal-cover">
-                    ${posterImg(card)}
-                </div>
-                <div class="book-modal-info">
-                    <h2 id="title-watch-${card.id}">${escapeHtml(card.title)}</h2>
-                    <div class="book-modal-metadata">
-                        <div>${metaLeft}</div>
-                        <div>${metaRight}</div>
-                    </div>
-                    <div class="book-description">
-                        <div class="book-description-scroll" tabindex="0" role="region" aria-label="Descripción">
-                            <strong>Descripción</strong><br><br>
-                            ${card.overview || 'No hay descripción disponible.'}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    return modal;
-};
 
 const renderCards = (data, {replace}) => {
     if (replace) {
         watchContainer.innerHTML = '';
         document.querySelectorAll('div.modal[id^="modal-watch-"]').forEach((modal) => modal.remove());
     }
-    (data.cards || []).forEach((card) => {
-        watchContainer.appendChild(createWatchItem(card));
-        watchContainer.appendChild(createWatchModal(card));
-    });
+    watchContainer.insertAdjacentHTML('beforeend', data.html || '');
 };
 
 const setWatchedTotalLabel = (count) => {
