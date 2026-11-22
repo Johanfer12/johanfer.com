@@ -21,5 +21,3 @@ urlpatterns = [
     path('retos/', views.retos, name='retos'),
     path('about/', views.about, name='about'),
 ]
-
-handler404 = views.custom_404_view

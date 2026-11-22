@@ -1,6 +1,7 @@
 import hashlib
 import ipaddress
 import json
+import logging
 import secrets
 import threading
 from datetime import timedelta
@@ -15,6 +16,20 @@ from django.utils import timezone as dj_timezone
 from . import bot_detection
 from .models import VisitLog
 from .visit_stats import invalidate_badge
+
+logger = logging.getLogger(__name__)
+
+# Un fallo al registrar visitas no debe tumbar la respuesta, pero tampoco puede
+# pasar en silencio: si falta una columna tras una migración a medias, el
+# registro se para entero. Se avisa una vez cada tanto por tipo de fallo para no
+# llenar el journal con una traza por petición.
+ERROR_LOG_INTERVAL = 10 * 60
+
+
+def log_swallowed_error(where):
+    if cache.add(f'visit-log-error:{where}', 1, ERROR_LOG_INTERVAL):
+        logger.exception('Fallo en %s (se omiten repeticiones durante %d min)',
+                         where, ERROR_LOG_INTERVAL // 60)
 
 
 # Solo para preguntarle si una ruta acabará redirigida a la misma con «/».
@@ -249,7 +264,7 @@ class VisitLogMiddleware:
             self._log_visit(request, response)
         except Exception:
             # Nunca bloquear respuesta al usuario por fallos de logging.
-            pass
+            log_swallowed_error('el registro de visitas')
 
         return response
 
@@ -450,7 +465,7 @@ class VisitLogMiddleware:
                 cache.set(f'visit-isp:{ip}', isp, cls.COUNTRY_CACHE_TTL)
                 cls._store_isp(visit_id, isp)
         except Exception:
-            pass
+            log_swallowed_error('la consulta del operador')
         finally:
             if cls.ISP_LOOKUP_IN_THREAD:
                 # El hilo abrió su propia conexión a la base: cerrarla.

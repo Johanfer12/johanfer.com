@@ -70,9 +70,13 @@
 }
 
 .cat img {
-    width: 500px;
-    height: 375px;
-    margin-top: 10px;
+    /* Los 500×375 los fijan los atributos del <img> para reservar el hueco;
+       aquí solo se impide que se salga de la tarjeta en móvil. */
+    display: block;
+    width: 100%;
+    max-width: 500px;
+    height: auto;
+    margin: 10px auto 0;
     transition: transform 0.3s ease;
 }
 

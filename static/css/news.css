@@ -1323,29 +1323,6 @@ body.comments-modal-open {
     transform: scale(1.2);
 }
 
-/* Animación para nuevas noticias */
-@keyframes newNewsHighlight {
-    0% {
-        transform: scale(0.8);
-        opacity: 0;
-        box-shadow: 0 0 30px rgba(0, 168, 255, 0.8);
-    }
-    50% {
-        transform: scale(1.05);
-        opacity: 1;
-        box-shadow: 0 0 40px rgba(0, 168, 255, 0.9);
-    }
-    100% {
-        transform: scale(1);
-        opacity: 1;
-    }
-}
-
-.news-card-container.new-news {
-    animation: newNewsHighlight 1.2s ease-out forwards;
-    z-index: 5;
-}
-
 /* Animación para el contador actualizado */
 @keyframes counterPulse {
     0% {

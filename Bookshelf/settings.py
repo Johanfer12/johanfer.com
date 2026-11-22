@@ -271,11 +271,6 @@ LOGGING = {
             'level': LOG_LEVEL,
             'propagate': False,
         },
-        'spotify': {
-            'handlers': ['console'],
-            'level': LOG_LEVEL,
-            'propagate': False,
-        },
         'watching': {
             'handlers': ['console'],
             'level': LOG_LEVEL,

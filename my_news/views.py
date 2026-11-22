@@ -17,7 +17,7 @@ from django.utils.dateparse import parse_datetime
 from django.core.cache import cache
 from datetime import datetime, time as datetime_time, timedelta
 from django.db.models import Q, Count, Max
-from .tasks import news_update_running
+from .locks import news_update_running
 from django.conf import settings
 import subprocess
 import sys
@@ -36,6 +36,16 @@ from .comment_extractors import (
 
 # Create your views here.
 logger = logging.getLogger(__name__)
+
+
+def _json_server_error(request):
+    """Respuesta de un endpoint JSON que ha fallado.
+
+    Se registra la traza, que antes se perdía, y al navegador va un 500 con un
+    mensaje genérico en vez del texto de la excepción.
+    """
+    logger.exception('Fallo en %s %s', request.method, request.path)
+    return JsonResponse({'status': 'error', 'message': 'Error interno del servidor.'}, status=500)
 
 PAGE_SIZE = 25
 # Palabras filtro por tanda en la configuración. Con 150 reglas, pintarlas
@@ -371,8 +381,8 @@ def delete_news(request, pk):
         return JsonResponse(response_data)
     except News.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Noticia no encontrada'})
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)})
+    except Exception:
+        return _json_server_error(request)
 
 def superuser_required(view_func):
     decorated_view = user_passes_test(lambda u: u.is_superuser, login_url='/noticias/login/')(view_func)
@@ -838,9 +848,9 @@ def update_feed(request):
         return JsonResponse({'status': 'running', 'since': started_at.isoformat()})
     try:
         _launch_manual_update(started_at)
-    except Exception as e:
+    except Exception:
         logger.exception("No se pudo lanzar la actualización manual de noticias")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'No se pudo lanzar la actualización.'}, status=500)
     return JsonResponse({'status': 'started', 'since': started_at.isoformat()})
 
 
@@ -924,8 +934,8 @@ def check_new_news(request):
             'total_news': total_news,
             'total_pages': total_pages
         })
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)})
+    except Exception:
+        return _json_server_error(request)
 
 @require_GET
 @superuser_required
@@ -987,8 +997,8 @@ def get_page(request):
         )
         cache.set(cache_key, payload, PAGE_CACHE_TTL)
         return JsonResponse(payload)
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)})
+    except Exception:
+        return _json_server_error(request)
 
 
 @require_POST
@@ -1018,8 +1028,8 @@ def undo_delete(request, pk):
         })
     except News.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Noticia no encontrada'})
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)})
+    except Exception:
+        return _json_server_error(request)
 
 
 @require_GET
@@ -1052,8 +1062,8 @@ def latest_deleted_news(request):
             'news_id': latest.id,
             'card': _serialize_news_card(latest, request),
         })
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)})
+    except Exception:
+        return _json_server_error(request)
 
 
 @require_POST
@@ -1076,8 +1086,8 @@ def toggle_save_news(request, pk):
         })
     except News.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Noticia no encontrada'})
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)})
+    except Exception:
+        return _json_server_error(request)
 
 
 REDUNDANCY_TABS = ('keyword', 'ai', 'redundant')
