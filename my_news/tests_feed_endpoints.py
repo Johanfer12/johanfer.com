@@ -3,7 +3,7 @@
 Nacieron como tests de regresión de la migración SSE→polling, y el nombre que
 tenían (``tests_smoke_changes``) los hacía parecer un resto temporal. No lo son:
 medido con coverage, este fichero es lo ÚNICO que cubre 15 líneas de
-``views.py``, entre ellas el cuerpo entero de ``toggle_save_news``. Si se
+``my_news/views/``, entre ellas el cuerpo entero de ``toggle_save_news``. Si se
 borran, guardar y desguardar una noticia se queda sin ninguna prueba.
 
 Cubren la ausencia del endpoint news-stream, el chequeo por cursor del sondeo,

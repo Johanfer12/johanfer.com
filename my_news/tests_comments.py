@@ -350,7 +350,7 @@ class NewsCommentsViewTests(TestCase):
         )
         self.assertEqual(response.content.count(b'class="news-link icon-only comments-btn"'), 1)
 
-    @patch('my_news.views.extract_comments')
+    @patch('my_news.views.comments.extract_comments')
     def test_endpoint_returns_normalized_comments(self, extract_mock):
         article = self.create_news(link='https://www.3djuegos.com/noticias/prueba')
         extract_mock.return_value = {

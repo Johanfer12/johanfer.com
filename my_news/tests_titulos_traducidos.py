@@ -197,7 +197,7 @@ class MigracionTests(TestCase):
 
 class BusquedaTests(TestCase):
     def test_se_encuentra_por_el_titular_traducido_y_por_el_original(self):
-        from .views import _apply_feed_filters
+        from .views.common import _apply_feed_filters
 
         source = FeedSource.objects.create(name="Wowhead", url="https://example.com/rss.xml")
         News.objects.create(

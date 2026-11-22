@@ -1,5 +1,7 @@
 import json
 from datetime import timedelta
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -139,3 +141,47 @@ class NewsStatsTests(TestCase):
         response = self.stats()
 
         self.assertEqual(self.payload(response, 'source_labels_json'), ['Sin nombre'])
+
+
+class SystemStatsTests(TestCase):
+    """Lo que se lee de `vcgencmd` en la Raspberry Pi."""
+
+    OUTPUTS = {
+        ('measure_temp',): "temp=48.3'C",
+        ('measure_volts', 'core'): 'volt=1.2000V',
+        ('measure_clock', 'arm'): 'frequency(48)=1200000000',
+        ('get_mem', 'arm'): 'arm=948M',
+        ('get_mem', 'gpu'): 'gpu=76M',
+        ('get_throttled',): 'throttled=0x50005',
+    }
+
+    def setUp(self):
+        user = get_user_model().objects.create_superuser(
+            username='admin', email='admin@example.com', password='pass'
+        )
+        self.client.force_login(user)
+
+    def _run(self, command, **kwargs):
+        args = tuple(command[1:])
+        if args == ('get_mem', 'gpu'):
+            raise OSError('sin respuesta')
+        return SimpleNamespace(returncode=0, stdout=self.OUTPUTS[args] + '\n')
+
+    def test_reads_each_value_and_keeps_going_after_a_failure(self):
+        uname = SimpleNamespace(system='Linux', release='6.6', machine='aarch64', node='pi')
+        with patch('my_news.views.stats.platform.uname', return_value=uname), \
+                patch('my_news.views.stats.subprocess.run', side_effect=self._run):
+            response = self.client.get(reverse('my_news:system_stats'))
+
+        stats = response.context['stats']
+        self.assertTrue(response.context['is_raspberry_pi'])
+        self.assertEqual(stats['temperature'], '48.3°C')
+        self.assertEqual(stats['voltage'], '1.2000V')
+        self.assertEqual(stats['cpu_frequency'], '1200 MHz')
+        self.assertEqual(stats['memory_arm'], '948M')
+        self.assertEqual(stats['memory_gpu'], 'Error: sin respuesta')
+        self.assertEqual(
+            stats['throttled'],
+            'Under-voltage detectado, Actualmente limitado, '
+            'Under-voltage ha ocurrido, Throttling ha ocurrido',
+        )

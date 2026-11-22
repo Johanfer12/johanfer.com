@@ -29,7 +29,8 @@ from .ai_providers import (
 )
 from .services import FeedService
 from .tasks import purge_old_news
-from .views import NEWS_NOTIFICATION_SETTLE_DELAY, PAGE_SIZE, _collapse_html_whitespace
+from .views import NEWS_NOTIFICATION_SETTLE_DELAY, PAGE_SIZE
+from .views.common import _collapse_html_whitespace
 
 
 class FeedEntry(dict):
