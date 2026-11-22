@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="{% static 'css/stats.css' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     {% include 'head_charts.html' %}
+    <link rel="stylesheet" href="{% static 'css/header.css' %}">
     {% include 'pwa_head.html' %}
 </head>
 <body class="has-header stats-page books-stats-page">
@@ -50,8 +51,8 @@
         const pagesPerYearLabels = JSON.parse('{{ pages_per_year_labels|escapejs }}');
         const pagesPerYearValues = JSON.parse('{{ pages_per_year_values|escapejs }}');
     </script>
-    <script src="{% static 'js/charts_common.js' %}"></script>
-    <script src="{% static 'js/stats.js' %}"></script>
+    <script defer src="{% static 'js/charts_common.js' %}"></script>
+    <script defer src="{% static 'js/stats.js' %}"></script>
     <script src="{% static 'js/background_motion.js' %}"></script>
     <script>
         window.addEventListener('resize', function() {

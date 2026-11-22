@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="{% static 'css/stats.css' %}">
     <link rel="stylesheet" href="{% static 'css/retos.css' %}">
     {% if tema == 'clima' %}{% include 'head_charts.html' %}{% endif %}
+    <link rel="stylesheet" href="{% static 'css/header.css' %}">
     {% include 'pwa_head.html' %}
 </head>
 <body class="has-header stats-page retos-page">
@@ -133,8 +134,8 @@
     {{ aire|json_script:"retos-aire" }}
     {{ nivel_mar|json_script:"retos-nivel" }}
     <script src="{% static 'js/modal.js' %}"></script>
-    <script src="{% static 'js/charts_common.js' %}"></script>
-    <script src="{% static 'js/retos_stats.js' %}"></script>
+    <script defer src="{% static 'js/charts_common.js' %}"></script>
+    <script defer src="{% static 'js/retos_stats.js' %}"></script>
     {% endif %}
     <script src="{% static 'js/fab_stack.js' %}"></script>
     <script src="{% static 'js/background_motion.js' %}"></script>

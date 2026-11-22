@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="{% static 'css/news_stats.css' %}">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     {% include 'head_charts.html' %}
+    <link rel="stylesheet" href="{% static 'css/header.css' %}">
     {% include 'pwa_head.html' %}
 </head>
 <body class="has-header stats-page news-stats-page">
@@ -83,8 +84,8 @@
         const dayFeed = JSON.parse('{{ day_feed_json|escapejs }}');
         const dayDiscarded = JSON.parse('{{ day_discarded_json|escapejs }}');
     </script>
-    <script src="{% static 'js/charts_common.js' %}"></script>
-    <script src="{% static 'js/news_stats.js' %}"></script>
+    <script defer src="{% static 'js/charts_common.js' %}"></script>
+    <script defer src="{% static 'js/news_stats.js' %}"></script>
     {% endif %}
     <script src="{% static 'js/background_motion.js' %}"></script>
 </body>

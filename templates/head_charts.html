@@ -11,10 +11,15 @@ navegador se niega a ejecutarlo en vez de confiar. Al subir de versión hay que
 recalcularlo, o el script deja de cargar:
 
   curl -s https://cdn.jsdelivr.net/npm/chart.js@X.Y.Z | openssl dgst -sha384 -binary | openssl base64 -A
+
+Van con `defer` para no frenar el pintado de la página mientras se bajan del
+CDN. Por eso `charts_common.js` y el script de cada página también lo llevan:
+`defer` respeta el orden del documento, pero un script normal al final del
+<body> correría ANTES que estos y no encontraría `Chart`.
 {% endcomment %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"
         integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ"
         crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"
+<script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"
         integrity="sha384-y49Zu59jZHJL/PLKgZPv3k2WI9c0Yp3pWB76V8OBVCb0QBKS8l4Ff3YslzHVX76Y"
         crossorigin="anonymous"></script>

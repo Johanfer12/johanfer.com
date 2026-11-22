@@ -11,9 +11,8 @@ from .models import PendingEmbedding
 from .models import AIModelSetting
 from .models import AIFilterInstruction
 from .ingestion_status import report_error
-from django.conf import settings
+from .locks import news_update_running, update_lock_path  # noqa: F401 (se reexporta)
 from django.db import connection
-import os
 import portalocker
 import logging
 
@@ -212,26 +211,12 @@ def _sin_vector_ni_pendiente(vector_index, cutoff, limit):
     return [n for n in candidatas if n.guid not in ya_indexados][:limit]
 
 
-def _update_lock_path():
-    # En BASE_DIR y no en /tmp: ahí el sistema puede borrarlo en limpiezas/reinicios.
-    return os.path.join(settings.BASE_DIR, 'my_news_update.lock')
-
-
-def news_update_running():
-    """Indica si hay una pasada en marcha (del cron o lanzada desde el feed)."""
-    try:
-        with portalocker.Lock(_update_lock_path(), timeout=0):
-            return False
-    except portalocker.exceptions.LockException:
-        return True
-
-
 def update_news_cron():
     """Devuelve si la pasada terminó bien, para que el comando lo traduzca a su código de salida.
 
     Encontrar el cerrojo tomado cuenta como bien: la otra pasada hará el trabajo.
     """
-    lock_path = _update_lock_path()
+    lock_path = update_lock_path()
     try:
         with portalocker.Lock(lock_path, timeout=0):
             # Completar algunas pendientes antes de traer nuevas, sin solapar el siguiente cron.
