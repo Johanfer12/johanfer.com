@@ -265,7 +265,8 @@ def news_comments(request, pk):
     return response
 
 
-def _parse_created_cursor(cursor):
+def _parse_cursor(cursor):
+    """Cursor «fecha ISO|id» → (datetime con zona, id), o (None, None) si no vale."""
     if not cursor:
         return None, None
     try:
@@ -280,6 +281,16 @@ def _parse_created_cursor(cursor):
         return None, None
 
 
+def _keyset_after(field, value, pk, *, ascending):
+    """Filas que van después de (value, pk) en el orden (field, id).
+
+    El id desempata las filas con la misma fecha, así que una página nunca
+    repite ni se salta una noticia aunque compartan sello de tiempo.
+    """
+    op = 'gt' if ascending else 'lt'
+    return Q(**{f'{field}__{op}': value}) | (Q(**{field: value}) & Q(**{f'id__{op}': pk}))
+
+
 def _news_notification_cutoff():
     return timezone.now() - NEWS_NOTIFICATION_SETTLE_DELAY
 
@@ -292,31 +303,23 @@ def _build_page_response(request, *, order, page, cursor, search_query, saved_on
         order=order,
     )
 
+    # El ancla es la última noticia de la página anterior: la da el cursor o,
+    # sin él, se busca por posición. Un cursor que no se entiende se ignora
+    # y sale la primera página.
+    anchor_date = anchor_id = None
     if cursor:
-        try:
-            ts_str, id_str = cursor.split('|')
-            anchor_dt = parse_datetime(ts_str)
-            anchor_id = int(id_str)
-            if order == 'asc':
-                key_q = Q(published_date__gt=anchor_dt) | (Q(published_date=anchor_dt) & Q(id__gt=anchor_id))
-            else:
-                key_q = Q(published_date__lt=anchor_dt) | (Q(published_date=anchor_dt) & Q(id__lt=anchor_id))
-            base_qs = base_qs.filter(key_q)
-        except Exception:
-            pass
+        anchor_date, anchor_id = _parse_cursor(cursor)
     elif page and page > 1:
         anchor_idx = (page - 1) * PAGE_SIZE - 1
-        if anchor_idx >= 0:
-            # Solo se necesita la clave (fecha, id) del ancla: evitar
-            # materializar todas las filas previas como objetos completos.
-            anchor_row = list(base_qs.values_list('published_date', 'id')[anchor_idx:anchor_idx + 1])
-            if anchor_row:
-                anchor_date, anchor_id = anchor_row[0]
-                if order == 'asc':
-                    key_q = Q(published_date__gt=anchor_date) | (Q(published_date=anchor_date) & Q(id__gt=anchor_id))
-                else:
-                    key_q = Q(published_date__lt=anchor_date) | (Q(published_date=anchor_date) & Q(id__lt=anchor_id))
-                base_qs = base_qs.filter(key_q)
+        # Solo se necesita la clave (fecha, id) del ancla: evitar
+        # materializar todas las filas previas como objetos completos.
+        anchor_row = list(base_qs.values_list('published_date', 'id')[anchor_idx:anchor_idx + 1])
+        if anchor_row:
+            anchor_date, anchor_id = anchor_row[0]
+    if anchor_date is not None and anchor_id is not None:
+        base_qs = base_qs.filter(
+            _keyset_after('published_date', anchor_date, anchor_id, ascending=order == 'asc')
+        )
 
     items = list(base_qs[:PAGE_SIZE + 1])
     has_more = len(items) > PAGE_SIZE
@@ -888,12 +891,11 @@ def check_new_news(request):
         current_time = notification_cutoff.isoformat()
         news_qs = _apply_feed_filters(News.visible.select_related('source'), saved_only=saved_only)
         news_qs = news_qs.filter(created_at__lte=notification_cutoff)
-        created_dt, created_id = _parse_created_cursor(cursor)
+        created_dt, created_id = _parse_cursor(cursor)
 
         if created_dt and created_id is not None:
             news_qs = news_qs.filter(
-                Q(created_at__gt=created_dt) |
-                (Q(created_at=created_dt) & Q(id__gt=created_id))
+                _keyset_after('created_at', created_dt, created_id, ascending=True)
             )
         elif last_checked:
             dt = parse_datetime(last_checked)
@@ -1030,19 +1032,16 @@ def latest_deleted_news(request):
         saved_only = request.GET.get('saved_only', 'false').lower() == 'true'
         search_query = (request.GET.get('q') or '').strip() or None
 
-        deleted_qs = News.objects.select_related('source').filter(
-            is_deleted=True,
-            is_saved=saved_only,
-            is_filtered=False,
-            is_ai_filtered=False,
-            is_redundant=False,
+        deleted_qs = _apply_feed_filters(
+            News.objects.select_related('source').filter(
+                is_deleted=True,
+                is_filtered=False,
+                is_ai_filtered=False,
+                is_redundant=False,
+            ),
+            saved_only=saved_only,
+            search_query=search_query,
         )
-        if search_query:
-            deleted_qs = deleted_qs.filter(
-                Q(title__icontains=search_query)
-                | Q(title_es__icontains=search_query)
-                | Q(description__icontains=search_query)
-            )
 
         latest = deleted_qs.order_by('-deleted_at', '-id').first()
         if not latest:
