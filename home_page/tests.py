@@ -21,11 +21,14 @@ from .models import Book, OwnerSignature, VisitLog
 from .utils import build_shelf_url, download_as_webp, sync_currently_reading
 from .visit_stats import badge_count
 
-# Las visitas con IP pública preguntan el operador a ipwho.is en un hilo. En
-# los tests, ni red ni hilos: cada test que lo necesite parchea _lookup_isp.
+# Las visitas con IP pública preguntan el operador a ipwho.is en un hilo (y el
+# país, si Cloudflare no lo da). En los tests, ni red ni hilos: la petición
+# HTTP no responde, y cada test que lo necesite parchea _lookup_isp,
+# _lookup_ipwho o _fetch_ipwho.
 _isp_patches = [
     patch('home_page.middleware.VisitLogMiddleware.ISP_LOOKUP_IN_THREAD', False),
     patch('home_page.middleware.VisitLogMiddleware._lookup_isp', return_value=''),
+    patch('home_page.middleware.VisitLogMiddleware._fetch_ipwho', return_value=None),
 ]
 
 
@@ -318,6 +321,41 @@ class VisitClientHintsTests(TestCase):
             set(VisitLog.objects.values_list('isp', flat=True)),
             {'Telmex Colombia S.A.'},
         )
+
+    def test_country_lookup_leaves_the_isp_ready_without_a_second_request(self):
+        cache.clear()
+        details = {'country': 'Germany', 'country_code': 'DE',
+                   'isp': 'Deutsche Telekom AG', 'city': 'Berlin'}
+        with patch('home_page.middleware.VisitLogMiddleware._fetch_ipwho',
+                   return_value=details) as fetch,                 patch('home_page.middleware.VisitLogMiddleware._lookup_isp') as lookup:
+            # Sin país de Cloudflare: se pregunta en el momento.
+            self._get(HTTP_X_REAL_IP='8.8.8.8')
+
+        fetch.assert_called_once_with('8.8.8.8', 2)
+        lookup.assert_not_called()
+        visit = VisitLog.objects.get(path='/about/')
+        self.assertEqual((visit.country, visit.country_code, visit.isp),
+                         ('Germany', 'DE', 'Deutsche Telekom AG'))
+
+    def test_isp_thread_reuses_the_cached_ipwho_answer(self):
+        from .middleware import VisitLogMiddleware
+
+        cache.clear()
+        details = {'country': 'Germany', 'country_code': 'DE',
+                   'isp': 'Deutsche Telekom AG', 'city': 'Berlin'}
+        with patch('home_page.middleware.VisitLogMiddleware._fetch_ipwho',
+                   return_value=details) as fetch:
+            VisitLogMiddleware._lookup_ipwho('8.8.8.8')
+            self.assertEqual(VisitLogMiddleware.lookup_ip_details('8.8.8.8'), details)
+
+        fetch.assert_called_once()
+
+    def test_failed_ipwho_answer_is_not_cached(self):
+        from .middleware import VisitLogMiddleware
+
+        cache.clear()
+        VisitLogMiddleware._lookup_ipwho('8.8.8.8')  # _fetch_ipwho no responde.
+        self.assertIsNone(cache.get('visit-ipwho:8.8.8.8'))
 
     def test_private_ip_does_not_ask_for_the_isp(self):
         with patch('home_page.middleware.VisitLogMiddleware._lookup_isp') as lookup:

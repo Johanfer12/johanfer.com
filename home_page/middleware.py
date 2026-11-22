@@ -413,10 +413,14 @@ class VisitLogMiddleware:
 
     @classmethod
     def _known_isp(cls, ip):
-        """Operador ya conocido de esta IP (caché o visita reciente), o ''."""
-        cached = cache.get(f'visit-isp:{ip}')
-        if cached:
-            return cached
+        """Operador ya conocido de esta IP (caché o visita reciente), o ''.
+
+        Si el país acaba de preguntarse a ipwho.is, el operador vino en la
+        misma respuesta y está en su caché: no hace falta otra consulta.
+        """
+        cached = cache.get(cls._ipwho_cache_key(ip))
+        if cached and cached.get('isp'):
+            return cached['isp']
         since = dj_timezone.now() - cls.ISP_REUSE_WINDOW
         return (
             VisitLog.objects
@@ -462,7 +466,6 @@ class VisitLogMiddleware:
         try:
             isp = cls._lookup_isp(ip)
             if isp:
-                cache.set(f'visit-isp:{ip}', isp, cls.COUNTRY_CACHE_TTL)
                 cls._store_isp(visit_id, isp)
         except Exception:
             log_swallowed_error('la consulta del operador')
@@ -476,25 +479,53 @@ class VisitLogMiddleware:
         """Operador según ipwho.is ('connection.isp', o 'org' si no hay)."""
         return cls.lookup_ip_details(ip)['isp']
 
+    # Lo que tarda como mucho ipwho.is en contestar. El país se pregunta
+    # mientras el visitante espera la página, así que va más corto; el
+    # operador va en un hilo (o en un comando) y puede esperar más.
+    IPWHO_TIMEOUT = 4
+    IPWHO_COUNTRY_TIMEOUT = 2
+    IPWHO_EMPTY = {'country': '', 'country_code': '', 'isp': '', 'city': ''}
+
     @staticmethod
-    def lookup_ip_details(ip):
-        """Operador y «ciudad, región» de una IP según ipwho.is.
+    def _ipwho_cache_key(ip):
+        return f'visit-ipwho:{ip}'
+
+    @classmethod
+    def lookup_ip_details(cls, ip, timeout=None):
+        """País, código, operador y «ciudad, región» de una IP según ipwho.is.
+
+        Es la única consulta a ipwho.is. Una misma respuesta trae el país y el
+        operador, así que se guarda entera en caché: cuando el país se pregunta
+        en el momento, el operador ya no necesita una segunda petición. Solo se
+        guardan las respuestas buenas; un fallo se vuelve a intentar.
 
         Vacíos si no responde. La ciudad solo la usa el relleno de visitas
         viejas (backfill_visit_ip_data): en las nuevas la da Cloudflare.
         """
-        empty = {'isp': '', 'city': ''}
+        cache_key = cls._ipwho_cache_key(ip)
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+        details = cls._fetch_ipwho(ip, timeout or cls.IPWHO_TIMEOUT)
+        if details is None:
+            return dict(cls.IPWHO_EMPTY)
+        cache.set(cache_key, details, cls.COUNTRY_CACHE_TTL)
+        return details
+
+    @staticmethod
+    def _fetch_ipwho(ip, timeout):
+        """La petición HTTP, o None si no hay respuesta válida."""
         try:
             req = Request(
                 f'https://ipwho.is/{ip}',
                 headers={'User-Agent': 'johanfer-visit-logger/1.0'},
             )
-            with urlopen(req, timeout=4) as resp:
+            with urlopen(req, timeout=timeout) as resp:
                 data = json.loads(resp.read().decode('utf-8', errors='ignore'))
         except Exception:
-            return empty
+            return None
         if not data.get('success'):
-            return empty
+            return None
         connection = data.get('connection') or {}
         city = (data.get('city') or '').strip()
         region = short_region((data.get('region') or '').strip())
@@ -502,6 +533,8 @@ class VisitLogMiddleware:
         if region and region != city:
             parts.append(region)
         return {
+            'country': data.get('country', '') or '',
+            'country_code': (data.get('country_code', '') or '').upper(),
             'isp': (connection.get('isp') or connection.get('org') or '').strip()[:120],
             'city': ', '.join(parts)[:120],
         }
@@ -652,25 +685,14 @@ class VisitLogMiddleware:
         cache.set(cache_key, result, cls.COUNTRY_CACHE_TTL)
         return result
 
-    @staticmethod
-    def _lookup_ipwho(ip):
-        """Consulta externa: bloquea hasta 2 s, por eso es el último recurso."""
-        country = ''
-        country_code = ''
-        try:
-            req = Request(
-                f'https://ipwho.is/{ip}',
-                headers={'User-Agent': 'johanfer-visit-logger/1.0'},
-            )
-            with urlopen(req, timeout=2) as resp:
-                data = json.loads(resp.read().decode('utf-8', errors='ignore'))
-                if data.get('success'):
-                    country = data.get('country', '') or ''
-                    country_code = (data.get('country_code', '') or '').upper()
-        except Exception:
-            country = ''
-            country_code = ''
-        return country, country_code
+    @classmethod
+    def _lookup_ipwho(cls, ip):
+        """País según ipwho.is: bloquea hasta 2 s, por eso es el último recurso.
+
+        La respuesta queda en caché con el operador, que es lo que luego
+        reutiliza _known_isp sin volver a preguntar."""
+        details = cls.lookup_ip_details(ip, timeout=cls.IPWHO_COUNTRY_TIMEOUT)
+        return details['country'], details['country_code']
 
     def _get_or_create_visitor_id(self, request):
         visitor_id = request.session.get(self.SESSION_VISITOR_KEY, '').strip()
