@@ -659,29 +659,8 @@ a.rating-alert:focus-visible {
 
 .books-search-apply,
 .books-search-cancel {
-    height: 38px;
+    /* El aspecto es el .btn común de base.css; aquí solo el ancho. */
     min-width: 92px;
-    border-radius: var(--radius-sm);
-    border: 1px solid rgba(198, 214, 242, 0.28);
-    font: inherit;
-    cursor: pointer;
-    transition: transform 0.15s ease, background-color 0.2s ease, color 0.2s ease;
-}
-
-.books-search-apply {
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), rgba(143, 180, 232, 0.86));
-    color: #06101f;
-    font-weight: 700;
-}
-
-.books-search-cancel {
-    background: rgba(8, 14, 30, 0.72);
-    color: var(--text-primary);
-}
-
-.books-search-apply:hover,
-.books-search-cancel:hover {
-    transform: translateY(-1px);
 }
 
 .books-search-close {
@@ -697,12 +676,6 @@ a.rating-alert:focus-visible {
     .books-search-content {
         width: min(560px, 92vw);
         max-height: none;
-    }
-
-    .books-search-apply,
-    .books-search-cancel {
-        /* 44 px de zona de toque en móvil, como el resto del sitio. */
-        height: 44px;
     }
 }
 

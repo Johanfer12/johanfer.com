@@ -1,103 +1,19 @@
+{% extends 'base.html' %}
 {% load static sanitizers covers %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% if active_tipo == 'peliculas' %}Películas{% else %}TV{% endif %}</title>
-    {% include 'head_meta.html' with meta_title='TV' meta_description='Películas y series vistas por Johan, sincronizadas desde Simkl.' meta_image='Img/watch-icon.svg' %}
-    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
-    {% include 'head_base.html' %}
+{% block title %}{% if active_tipo == 'peliculas' %}Películas{% else %}TV{% endif %}{% endblock %}
+{% block meta %}{% include 'head_meta.html' with meta_title='TV' meta_description='Películas y series vistas por Johan, sincronizadas desde Simkl.' meta_image='Img/watch-icon.svg' %}{% endblock %}
+{% block styles %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/collection.css' %}">
-    <link rel="stylesheet" href="{% static 'css/header.css' %}">
-    {% include 'pwa_head.html' %}
-</head>
-<body class="has-header">
-    {% include 'header.html' %}
+{% endblock %}
+{% block content %}
 
     <div id="watch-container" class="book-container"
          data-has-next="{% if cards.has_next %}true{% else %}false{% endif %}"
          data-fallback-poster="{% static 'Img/Poster_Default.svg' %}"
          data-watch-noun="{{ watch_noun }}">
         {% for card in cards %}
-        <div class="book-item">
-            <div class="book-info-container">
-                <div class="book-cover"{% cover_style "Posters" card.poster_name %} role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-watch-{{ card.latest.id }}" aria-label="Ver detalles de {{ card.latest.title }}" onclick="openModal('watch-{{ card.latest.id }}')">
-                    <img src="{{ MEDIA_URL }}Posters/{{ card.poster_name }}"
-                         alt="{{ card.latest.title }}"
-                         loading="lazy"
-                         onerror="this.onerror=null;this.src='{% static 'Img/Poster_Default.svg' %}';">
-                    {% if card.is_watching %}
-                    <div class="watching-ribbon"><span>Viendo</span></div>
-                    {% endif %}
-                    {% if card.needs_rating %}
-                    {% with simkl_url=card.latest.simkl_url %}
-                    <{% if simkl_url %}a href="{{ simkl_url }}" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Calificar {{ card.latest.title }} en Simkl" title="Sin calificar: abrir en Simkl"{% else %}div role="img" aria-label="Sin calificar" title="Sin calificar"{% endif %} class="rating-alert">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
-                            <path class="rating-alert-shape" d="M10.28 3.3 1.57 18.6a2 2 0 0 0 1.74 2.99h17.38a2 2 0 0 0 1.74-2.99L13.72 3.3a2 2 0 0 0-3.44 0z"/>
-                            <rect class="rating-alert-mark" x="11" y="8.9" width="2" height="5.9" rx="1"/>
-                            <rect class="rating-alert-mark" x="11" y="16.4" width="2" height="2.2" rx="1"/>
-                        </svg>
-                    </{% if simkl_url %}a{% else %}div{% endif %}>
-                    {% endwith %}
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <div id="modal-watch-{{ card.latest.id }}" class="modal" role="dialog" aria-modal="true" aria-labelledby="title-watch-{{ card.latest.id }}" tabindex="-1">
-            <div class="modal-content book-modal-content">
-                <button type="button" class="close" aria-label="Cerrar detalles" onclick="closeModal('watch-{{ card.latest.id }}')">&times;</button>
-                <div class="book-modal-body">
-                    <div class="book-modal-cover">
-                        <img src="{{ MEDIA_URL }}Posters/{{ card.poster_name }}"
-                             alt="{{ card.latest.title }}"
-                             loading="lazy"
-                             onerror="this.onerror=null;this.src='{% static 'Img/Poster_Default.svg' %}';">
-                    </div>
-                    <div class="book-modal-info">
-                        <h2 id="title-watch-{{ card.latest.id }}">{{ card.latest.title }}</h2>
-                        <div class="book-modal-metadata">
-                            <div>
-                                {% if card.latest.media_type == 'episode' %}
-                                    {% if card.arc %}<p><strong>Arco:</strong> {{ card.arc }}</p>{% endif %}
-                                    <p><strong>Episodios vistos:</strong> {{ card.episode_total }}</p>
-                                    <p><strong>Último:</strong> {{ card.latest.display_label }}{% if card.latest.episode_title %} - {{ card.latest.episode_title }}{% endif %}</p>
-                                {% elif card.plays > 1 %}
-                                    <p><strong>Vista:</strong> {{ card.plays }} veces</p>
-                                {% else %}
-                                    <p><strong>Tipo:</strong> Película</p>
-                                {% endif %}
-                                {% if card.latest.user_rating %}
-                                    <p><strong>Mi calificación:</strong> {{ card.latest.user_rating|rating_stars }}</p>
-                                {% endif %}
-                                {% if card.latest.public_rating %}
-                                    <p><strong>Calificación general:</strong> {{ card.latest.public_rating|rating_stars }}</p>
-                                {% endif %}
-                            </div>
-                            <div>
-                                {% if card.latest.year %}
-                                    <p><strong>Año:</strong> {{ card.latest.year }}</p>
-                                {% endif %}
-                                <p><strong>Visto el:</strong> {{ card.latest.watched_at|date:"d/m/Y" }}</p>
-                            </div>
-                        </div>
-
-                        <div class="book-description">
-                            <div class="book-description-scroll" tabindex="0" role="region" aria-label="Descripción">
-                                <strong>Descripción</strong><br><br>
-                                {% if card.latest.overview %}
-                                    {{ card.latest.overview|sanitize }}
-                                {% else %}
-                                    No hay descripción disponible.
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        {% include 'watch_item.html' %}
         {% empty %}
         <p class="total" style="grid-column: 1 / -1; text-align: center;">
             Aún no hay {{ watch_label }} sincronizadas desde Simkl.
@@ -117,8 +33,8 @@
             <form id="watchSearchForm" class="books-search-form">
                 <input id="watchSearchInput" type="text" class="books-search-input" aria-label="Título de serie o película" placeholder="Escribe aquí..." autocomplete="off" value="{{ current_query|default:'' }}">
                 <div class="books-search-actions">
-                    <button type="submit" class="books-search-apply">Buscar</button>
-                    <button type="button" class="books-search-cancel" id="watchSearchCancelBtn">Cancelar</button>
+                    <button type="submit" class="btn btn--primary books-search-apply">Buscar</button>
+                    <button type="button" class="btn btn--secondary books-search-cancel" id="watchSearchCancelBtn">Cancelar</button>
                 </div>
             </form>
         </div>
@@ -147,8 +63,8 @@
             </svg>
         </button>
     </div>
-
-    {% include 'footer.html' %}
+{% endblock %}
+{% block scripts %}
     <script src="{% static 'js/books_scroll_top.js' %}"></script>
     <script src="{% static 'js/modal.js' %}"></script>
     <script src="{% static 'js/infinite_scroll_core.js' %}"></script>
@@ -157,6 +73,4 @@
     <script src="{% static 'js/watching_search.js' %}"></script>
     <script src="{% static 'js/sort_modal.js' %}"></script>
     <script src="{% static 'js/fab_stack.js' %}"></script>
-    <script src="{% static 'js/background_motion.js' %}"></script>
-</body>
-</html>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% load sanitizers covers %}
+{% comment %} Tarjeta y ficha de un libro. La usan la página (bookshelf.html) y las tandas
+   del scroll infinito, que el servidor devuelve ya renderizadas: antes el
+   mismo marcado vivía también en infinite_scroll.js y había que cambiarlo en
+   los dos sitios.
+{% endcomment %}
+<div class="book-item">
+    <div class="book-info-container">
+        <!-- Carátula con cursor "manito" y evento de apertura -->
+        <div class="book-cover"{% cover_style "Covers" book.id ".webp" %} role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-{{ book.id }}" aria-label="Ver detalles de {{ book.title }}" onclick="openModal('{{ book.id }}')">
+            <img src="{{ MEDIA_URL }}Covers/{{ book.id }}.webp" alt="{{ book.title }}">
+            {% if book.is_reading %}
+            <div class="watching-ribbon"><span>Leyendo</span></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal de la descripción (uno por cada libro) -->
+<div id="modal-{{ book.id }}" class="modal" role="dialog" aria-modal="true" aria-labelledby="title-{{ book.id }}" tabindex="-1">
+    <div class="modal-content book-modal-content">
+        <button type="button" class="close" aria-label="Cerrar detalles" onclick="closeModal('{{ book.id }}')">&times;</button>
+        <div class="book-modal-body">
+            <div class="book-modal-cover">
+                <img src="{{ MEDIA_URL }}Covers/{{ book.id }}.webp" alt="{{ book.title }}" loading="lazy">
+                {% if book.is_reading %}
+                <div class="watching-ribbon"><span>Leyendo</span></div>
+                {% endif %}
+            </div>
+            <div class="book-modal-info">
+                <h2 id="title-{{ book.id }}">{{ book.title }}</h2>
+                <div class="book-modal-metadata">
+                    <div>
+                        <p><strong>Autor:</strong> {{ book.author }}</p>
+                        {% if not book.is_reading %}
+                        <p><strong>Mi calificación:</strong> {{ book.my_rating|rating_stars:5 }}</p>
+                        {% endif %}
+                        <p><strong>Calificación general:</strong> {{ book.public_rating|rating_stars:5 }}</p>
+                    </div>
+                    <div>
+                        {% if book.num_pages %}
+                            <p><strong>Páginas:</strong> {{ book.num_pages }}</p>
+                        {% endif %}
+                        {% if book.published_year %}
+                            <p><strong>Publicado:</strong> {{ book.published_year }}</p>
+                        {% endif %}
+                        {% if not book.is_reading %}
+                            <p><strong>Leído el:</strong> {{ book.date_read|date:"d/m/Y" }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="book-description">
+                    <div class="book-description-scroll" tabindex="0" role="region" aria-label="Descripción">
+                        <strong>Descripción</strong><br><br>
+                        {{ book.description|sanitize }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

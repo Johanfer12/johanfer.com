@@ -1,26 +1,23 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="dark">
+{% block head_early %}
     <script>
         if (/Instagram/i.test(navigator.userAgent || '')) {
             document.documentElement.classList.add('instagram-webview');
         }
     </script>
-    <title>Noticias de hoy | {{ site_name }}</title>
-    {% include 'head_meta.html' with meta_title='Noticias de hoy' meta_image='Img/news-icon.svg' meta_description='Las noticias más recientes disponibles en '|add:site_name|add:'.' %}
-    {% include 'head_base.html' %}
+{% endblock %}
+{% block title %}Noticias de hoy | {{ site_name }}{% endblock %}
+{% block meta %}{% include 'head_meta.html' with meta_title='Noticias de hoy' meta_image='Img/news-icon.svg' meta_description='Las noticias más recientes disponibles en '|add:site_name|add:'.' %}{% endblock %}
+{% block styles %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/header.css' %}">
     <link rel="stylesheet" href="{% static 'css/news.css' %}">
     <link rel="stylesheet" href="{% static 'css/news_public.css' %}">
-    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
-    {% include 'pwa_head.html' %}
-</head>
-<body class="has-header">
+{% endblock %}
+{% block header_css %}{% endblock %}
+{% block header %}{% endblock %}
+{% block content %}
     {% include 'news_public_header.html' %}
 
     <main class="main-content public-news-page">
@@ -59,8 +56,8 @@
     </main>
 
     {% include 'news_comments_modal.html' %}
-
-    {% include 'footer.html' %}
+{% endblock %}
+{% block scripts %}
 
     {{ public_storage_key|json_script:"public-news-storage-key" }}
     {{ public_page_data|json_script:"public-news-page-data" }}
@@ -74,6 +71,4 @@
     <script src="{% static 'js/books_scroll_top.js' %}"></script>
     <script src="{% static 'js/news_comments.js' %}"></script>
     <script src="{% static 'js/news_public.js' %}"></script>
-    <script src="{% static 'js/background_motion.js' %}"></script>
-</body>
-</html>
+{% endblock %}

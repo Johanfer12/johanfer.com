@@ -1,26 +1,20 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="dark">
+{% block head_early %}
     <script>
         if (/Instagram/i.test(navigator.userAgent || '')) {
             document.documentElement.classList.add('instagram-webview');
         }
     </script>
-    <title>Noticias</title>
-    {% include 'head_base.html' %}
+{% endblock %}
+{% block title %}Noticias{% endblock %}
+{% block styles %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/news.css' %}">
     <link rel="stylesheet" href="{% static 'css/news_admin.css' %}">
-    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
-    <link rel="stylesheet" href="{% static 'css/header.css' %}">
-    {% include 'pwa_head.html' %}
-</head>
-<body class="has-header">
-    {% include 'header.html' %}
+{% endblock %}
+{% block footer %}{% endblock %}
+{% block content %}
     
     <div class="main-content">
         {% if ingestion_alert %}
@@ -191,6 +185,4 @@
     <script src="{% static 'js/news_script.js' %}"></script>
     <script src="{% static 'js/books_scroll_top.js' %}"></script>
     <script src="{% static 'js/reader_mode.js' %}"></script>
-    <script src="{% static 'js/background_motion.js' %}"></script>
-</body>
-</html>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% load static %}<!DOCTYPE html>
+{% comment %}
+Esqueleto común de todas las páginas (menos offline.html, que se pinta sin red
+y lleva sus estilos dentro). Antes cada plantilla repetía este bloque entero y
+se habían ido separando: el color-scheme estaba en 7 de 21, el favicon en 17.
+
+El ORDEN de las hojas no es cosmético (ver head_base.html): primero tokens y
+base, luego las de la página (`styles`), después lo que va tras ellas
+(`head_extra`: gráficas, <style> propios) y al final header.css, que hasta
+noviembre de 2026 se enlazaba dentro del <body>, detrás de todo. Una página que
+necesite header.css en otro punto lo pone en `styles` y vacía `header_css`.
+
+Bloques:
+  title, meta        <title> y las etiquetas para compartir (head_meta.html)
+  head_early         scripts que tienen que correr antes de pintar nada
+  styles             las hojas de la página; por defecto, styles.css
+  head_extra         lo que va detrás de esas hojas
+  header_css         header.css; vacío en las páginas sin cabecera
+  color_scheme       vacío solo en Música (ver dashboard.html)
+  body_attrs         atributos del <body>
+  header, footer     los includes comunes; vacíos donde no van
+  content, scripts   el cuerpo, y lo que va detrás del pie
+  modal_js           el foco atrapado en los modales; vacío en la portada,
+                     que no tiene ninguno (y así no hay que añadirlo a
+                     PWA_PRECACHE_STATIC)
+{% endcomment %}
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% block color_scheme %}<meta name="color-scheme" content="dark">{% endblock %}
+    {% block head_early %}{% endblock %}
+    <title>{% block title %}{{ site_name }}{% endblock %}</title>
+    {% block meta %}{% endblock %}
+    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    {% include 'head_base.html' %}
+    {% block styles %}<link rel="stylesheet" href="{% static 'css/styles.css' %}">{% endblock %}
+    {% block head_extra %}{% endblock %}
+    {% block header_css %}<link rel="stylesheet" href="{% static 'css/header.css' %}">{% endblock %}
+    {% include 'pwa_head.html' %}
+</head>
+<body{% block body_attrs %} class="has-header"{% endblock %}>
+    {% block header %}{% include 'header.html' %}{% endblock %}
+{% block content %}{% endblock %}
+    {% block footer %}{% include 'footer.html' %}{% endblock %}
+{% block scripts %}{% endblock %}
+    {% block modal_js %}<script src="{% static 'js/modal_focus.js' %}" defer></script>{% endblock %}
+    <script src="{% static 'js/background_motion.js' %}"></script>
+</body>
+</html>

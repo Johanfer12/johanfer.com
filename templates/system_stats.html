@@ -1,13 +1,11 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estadísticas del sistema</title>
-    {% include 'head_base.html' %}
+{% block title %}Estadísticas del sistema{% endblock %}
+{% block styles %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/news.css' %}">
+{% endblock %}
+{% block head_extra %}
     <style>
         .stats-container {
             max-width: 1500px;
@@ -162,11 +160,9 @@
             background: linear-gradient(to right, transparent, rgba(198, 214, 242, 0.7), transparent);
         }
     </style>
-    <link rel="stylesheet" href="{% static 'css/header.css' %}">
-    {% include 'pwa_head.html' %}
-</head>
-<body class="has-header">
-    {% include 'header.html' %}
+{% endblock %}
+{% block footer %}{% endblock %}
+{% block content %}
 
     <div class="stats-container">
         <div class="stats-topbar">
@@ -273,6 +269,4 @@
             <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
         </svg>
     </button>
-    <script src="{% static 'js/background_motion.js' %}"></script>
-</body>
-</html>
+{% endblock %}

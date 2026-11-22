@@ -1,21 +1,16 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estadísticas de mi TV</title>
-    {% include 'head_meta.html' with meta_title='Estadísticas de mi TV' meta_description='Series y películas por año, mis calificaciones y décadas de estreno.' meta_image='Img/watch-icon.svg' meta_page_description='Estadísticas de series y películas: vistas por año, mis calificaciones y décadas de estreno.' %}
-    {% include 'head_base.html' %}
+{% block title %}Estadísticas de mi TV{% endblock %}
+{% block meta %}{% include 'head_meta.html' with meta_title='Estadísticas de mi TV' meta_description='Series y películas por año, mis calificaciones y décadas de estreno.' meta_image='Img/watch-icon.svg' meta_page_description='Estadísticas de series y películas: vistas por año, mis calificaciones y décadas de estreno.' %}{% endblock %}
+{% block styles %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/stats.css' %}">
-    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+{% endblock %}
+{% block head_extra %}
     {% include 'head_charts.html' %}
-    <link rel="stylesheet" href="{% static 'css/header.css' %}">
-    {% include 'pwa_head.html' %}
-</head>
-<body class="has-header stats-page watching-stats-page">
-    {% include 'header.html' %}
+{% endblock %}
+{% block body_attrs %} class="has-header stats-page watching-stats-page"{% endblock %}
+{% block content %}
     <div class="statistics-container">
         <div class="statistics-content">
             <div class="charts-row">
@@ -40,8 +35,8 @@
             </div>
         </div>
     </div>
-
-    {% include 'footer.html' %}
+{% endblock %}
+{% block scripts %}
     <script>
         const yearsLabels = JSON.parse('{{ years_labels|escapejs }}');
         const showsPerYear = JSON.parse('{{ shows_per_year|escapejs }}');
@@ -53,6 +48,4 @@
     </script>
     <script defer src="{% static 'js/charts_common.js' %}"></script>
     <script defer src="{% static 'js/watching_stats.js' %}"></script>
-    <script src="{% static 'js/background_motion.js' %}"></script>
-</body>
-</html>
+{% endblock %}

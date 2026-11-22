@@ -1,18 +1,14 @@
+{% extends 'base.html' %}
 {% load static %}
-
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ site_name }}</title>
-    {% include 'head_meta.html' with meta_description=site_meta_description meta_image='Img/library-icon.svg' %}
-    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
-    {% include 'head_base.html' %}
-    <link rel="stylesheet" href="{% static 'css/home.css' %}">
-    {% include 'pwa_head.html' %}
-</head>
-<body>
+{% block title %}{{ site_name }}{% endblock %}
+{% block meta %}{% include 'head_meta.html' with meta_description=site_meta_description meta_image='Img/library-icon.svg' %}{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'css/home.css' %}">{% endblock %}
+{% block header_css %}{% endblock %}
+{% block body_attrs %}{% endblock %}
+{% block header %}{% endblock %}
+{% block modal_js %}{% endblock %}
+{% block footer %}{% include 'footer.html' with footer_fixed=True %}{% endblock %}
+{% block content %}
     <div class="content-container">
         <div class="welcome-text">
             <h1>{{ site_name }}</h1>
@@ -59,8 +55,7 @@
             </div>
         </div>
     </div>
-    {% include 'footer.html' with footer_fixed=True %}
+{% endblock %}
+{% block scripts %}
     <script src="{% static 'js/gyro_parallax.js' %}"></script>
-    <script src="{% static 'js/background_motion.js' %}"></script>
-</body>
-</html>
+{% endblock %}

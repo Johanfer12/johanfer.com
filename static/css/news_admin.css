@@ -294,20 +294,9 @@
 
 .news-filter-link:hover { text-decoration: underline; }
 
-.news-filter-submit {
-    min-height: 44px;
-    padding: 0 20px;
-    border: 1px solid rgba(207, 220, 241, 0.3);
-    border-radius: var(--radius-sm);
-    color: var(--text-primary);
-    background: var(--fab-bg);
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.news-filter-submit:hover { background: var(--fab-bg-hover); }
-.news-filter-submit:disabled { opacity: 0.6; cursor: wait; }
+/* El botón de enviar es el .btn común de base.css; solo cambia el cursor
+   mientras se guarda. */
+.news-filter-submit:disabled { cursor: wait; }
 
 @media (max-width: 600px) {
     /* No a pantalla completa como los comentarios: es un formulario corto. */

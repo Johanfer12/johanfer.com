@@ -368,3 +368,97 @@ body:has(.site-footer:not(.site-footer--fixed)) {
         display: none;
     }
 }
+
+/* Botones de formulario y de acción (no los flotantes, que van con --fab-bg).
+ * Había cuatro estilos para lo mismo —buscar en Libros/TV, palabra filtro,
+ * visitas y gestión del feed—, con alturas de 34 a 44 px y tres azules
+ * distintos. Este sale del de gestión, que era el más completo.
+ *   .btn                 forma, tamaño, foco y estado deshabilitado
+ *   .btn--primary        la acción principal: azul del sitio, texto oscuro
+ *   .btn--secondary      cancelar, filtros, acciones neutras
+ *   .btn--danger         borrar, en contorno: se confirma después
+ *   .btn--danger-solid   el botón que confirma el borrado */
+.btn {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    font: inherit;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    line-height: 1.2;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+/* `[hidden]` solo trae un display:none de la hoja del navegador, y el
+ * display de arriba lo pisaría: sin esto, ocultar un botón desde el script
+ * no lo quitaba de la vista. */
+.btn[hidden] {
+    display: none;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn--primary {
+    color: #081120;
+    background: var(--accent-strong);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.btn--primary:hover:not(:disabled) {
+    color: #081120;
+    background: #bdd5f6;
+    transform: translateY(-1px);
+}
+
+.btn--secondary {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.055);
+    border-color: var(--card-border);
+}
+
+.btn--secondary:hover:not(:disabled) {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.btn--danger {
+    color: #ffb7b7;
+    background: transparent;
+    border-color: rgba(255, 113, 113, 0.3);
+}
+
+.btn--danger:hover:not(:disabled),
+.btn--danger-solid {
+    color: #fff;
+    background: rgba(196, 48, 61, 0.7);
+    border-color: rgba(255, 130, 140, 0.45);
+}
+
+.btn--danger-solid:hover:not(:disabled) {
+    background: rgba(224, 55, 70, 0.9);
+}
+
+@media (max-width: 767px) {
+    .btn {
+        /* 44 px de zona de toque en móvil, como el resto del sitio. */
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 900px), (prefers-reduced-motion: reduce) {
+    .btn {
+        transition: none;
+    }
+}

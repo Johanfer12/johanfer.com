@@ -1,21 +1,16 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estadísticas de lectura</title>
-    {% include 'head_meta.html' with meta_title='Estadísticas de lectura' meta_description='Libros por año, calificaciones y páginas leídas.' meta_image='Img/library-icon.svg' meta_page_description='Estadísticas de lectura: libros por año, calificaciones y páginas leídas.' %}
-    {% include 'head_base.html' %}
+{% block title %}Estadísticas de lectura{% endblock %}
+{% block meta %}{% include 'head_meta.html' with meta_title='Estadísticas de lectura' meta_description='Libros por año, calificaciones y páginas leídas.' meta_image='Img/library-icon.svg' meta_page_description='Estadísticas de lectura: libros por año, calificaciones y páginas leídas.' %}{% endblock %}
+{% block styles %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/stats.css' %}">
-    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+{% endblock %}
+{% block head_extra %}
     {% include 'head_charts.html' %}
-    <link rel="stylesheet" href="{% static 'css/header.css' %}">
-    {% include 'pwa_head.html' %}
-</head>
-<body class="has-header stats-page books-stats-page">
-    {% include 'header.html' %}
+{% endblock %}
+{% block body_attrs %} class="has-header stats-page books-stats-page"{% endblock %}
+{% block content %}
     <div class="statistics-container">
         <div class="statistics-content">
             <div class="charts-row">
@@ -40,8 +35,8 @@
             </div>
         </div>
     </div>
-
-    {% include 'footer.html' %}
+{% endblock %}
+{% block scripts %}
 
     <script>
         const booksPerYearData = JSON.parse('{{ books_per_year_labels|escapejs }}');
@@ -53,7 +48,6 @@
     </script>
     <script defer src="{% static 'js/charts_common.js' %}"></script>
     <script defer src="{% static 'js/stats.js' %}"></script>
-    <script src="{% static 'js/background_motion.js' %}"></script>
     <script>
         window.addEventListener('resize', function() {
             Object.values(Chart.instances).forEach(chart => {
@@ -61,5 +55,4 @@
             });
         });
     </script>
-</body>
-</html>
+{% endblock %}

@@ -1,19 +1,12 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visitas</title>
-    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
-    {% include 'head_base.html' %}
+{% block title %}Visitas{% endblock %}
+{% block styles %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/visits.css' %}">
-    <link rel="stylesheet" href="{% static 'css/header.css' %}">
-    {% include 'pwa_head.html' %}
-</head>
-<body class="has-header">
-    {% include 'header.html' %}
+{% endblock %}
+{% block footer %}{% endblock %}
+{% block content %}
 
     <div class="visits-wrap">
         <div class="visits-toolbar">
@@ -42,12 +35,12 @@
 
             <div class="toolbar-actions">
                 <div class="toolbar-group toolbar-group-primary">
-                    <button class="btn" type="submit" form="visits-filter-form">Filtrar</button>
-                    <a class="btn secondary" href="/visitas/">Limpiar filtros</a>
+                    <button class="btn btn--primary" type="submit" form="visits-filter-form">Filtrar</button>
+                    <a class="btn btn--secondary" href="/visitas/">Limpiar filtros</a>
                 </div>
                 <div class="toolbar-group toolbar-group-danger">
-                    {% if bot_count %}<button class="btn danger" type="button" data-confirm-delete="bots" data-bot-count="{{ bot_count }}">Eliminar robots ({{ bot_count }})</button>{% endif %}
-                    <button class="btn danger" type="button" data-confirm-delete="filtered">Eliminar todo</button>
+                    {% if bot_count %}<button class="btn btn--danger" type="button" data-confirm-delete="bots" data-bot-count="{{ bot_count }}">Eliminar robots ({{ bot_count }})</button>{% endif %}
+                    <button class="btn btn--danger" type="button" data-confirm-delete="filtered">Eliminar todo</button>
                 </div>
             </div>
         </div>
@@ -100,9 +93,9 @@
                                         <input class="select-country-visits" type="checkbox" aria-label="Seleccionar todas las visitas de {{ group.country }}">
                                         <span>Seleccionar país</span>
                                     </label>
-                                    <button class="btn danger country-delete-selected" type="button" data-confirm-delete="selected">Eliminar seleccionadas</button>
-                                    <button class="btn danger country-delete-self" type="button" data-confirm-delete="self"{% if not group.self_count %} hidden{% endif %}>Eliminar mías</button>
-                                    <button class="btn danger country-delete-all" type="button" data-confirm-delete="country">Eliminar país</button>
+                                    <button class="btn btn--danger country-delete-selected" type="button" data-confirm-delete="selected">Eliminar seleccionadas</button>
+                                    <button class="btn btn--danger country-delete-self" type="button" data-confirm-delete="self"{% if not group.self_count %} hidden{% endif %}>Eliminar mías</button>
+                                    <button class="btn btn--danger country-delete-all" type="button" data-confirm-delete="country">Eliminar país</button>
                                     <button class="country-modal-close" type="button" data-close-country-modal aria-label="Cerrar visitas de {{ group.country }}">&times;</button>
                                 </div>
                             </div>
@@ -129,7 +122,7 @@
                                     <tbody class="country-visit-rows"></tbody>
                                 </table>
                                 <p class="rows-status" role="status">Cargando visitas…</p>
-                                <button class="btn secondary load-more-rows" type="button" hidden>Cargar más</button>
+                                <button class="btn btn--secondary load-more-rows" type="button" hidden>Cargar más</button>
                             </div>
                         </div>
                     </div>
@@ -147,8 +140,8 @@
             <h2 id="delete-modal-title">Confirmar eliminación</h2>
             <p id="delete-modal-message"></p>
             <div class="delete-modal-actions">
-                <button class="btn secondary" id="cancel-delete" type="button">Cancelar</button>
-                <button class="btn danger" id="confirm-delete" type="button">Eliminar</button>
+                <button class="btn btn--secondary" id="cancel-delete" type="button">Cancelar</button>
+                <button class="btn btn--danger" id="confirm-delete" type="button">Eliminar</button>
             </div>
         </div>
     </div>
@@ -562,6 +555,4 @@
             groups.forEach(updateCountryState);
         })();
     </script>
-    <script src="{% static 'js/background_motion.js' %}"></script>
-</body>
-</html>
+{% endblock %}

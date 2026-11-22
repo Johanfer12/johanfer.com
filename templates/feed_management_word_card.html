@@ -20,19 +20,19 @@ no perder la búsqueda que hubiera escrita.
         <div class="management-actions management-icon-actions">
             <form method="post" action="{% url 'my_news:word_filter_toggle' filter.pk %}" data-word-filter-toggle>
                 {% csrf_token %}
-                <button class="management-secondary management-icon-button" type="submit"
+                <button class="btn btn--secondary management-icon-button" type="submit"
                         aria-label="{% if filter.active %}Pausar{% else %}Activar{% endif %} {{ filter.word }}"
                         title="{% if filter.active %}Pausar{% else %}Activar{% endif %}">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-filter-{% if filter.active %}pause{% else %}play{% endif %}"></use></svg>
                 </button>
             </form>
-            <a class="management-secondary management-icon-button" href="{% url 'my_news:word_filter_edit' filter.pk %}"
+            <a class="btn btn--secondary management-icon-button" href="{% url 'my_news:word_filter_edit' filter.pk %}"
                aria-label="Editar {{ filter.word }}" title="Editar" data-word-filter-edit
                data-word="{{ filter.word }}" data-active="{{ filter.active|yesno:'true,false' }}"
                data-title-only="{{ filter.title_only|yesno:'true,false' }}">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-filter-edit"></use></svg>
             </a>
-            <a class="management-danger management-icon-button" href="{% url 'my_news:word_filter_delete' filter.pk %}"
+            <a class="btn btn--danger management-icon-button" href="{% url 'my_news:word_filter_delete' filter.pk %}"
                aria-label="Eliminar {{ filter.word }}" title="Eliminar">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-filter-delete"></use></svg>
             </a>

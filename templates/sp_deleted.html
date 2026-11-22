@@ -1,20 +1,12 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Canciones eliminadas</title>
-    {% include 'head_meta.html' with meta_title='Canciones eliminadas' meta_description='Historial de canciones eliminadas de favoritos en Spotify.' meta_image='Img/spotify-icon.svg' %}
-    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
-    {% include 'head_base.html' %}
+{% block title %}Canciones eliminadas{% endblock %}
+{% block meta %}{% include 'head_meta.html' with meta_title='Canciones eliminadas' meta_description='Historial de canciones eliminadas de favoritos en Spotify.' meta_image='Img/spotify-icon.svg' %}{% endblock %}
+{% block styles %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
-    <link rel="stylesheet" href="{% static 'css/header.css' %}">
-    {% include 'pwa_head.html' %}
-</head>
-<body class="has-header">
-    {% include 'header.html' %}
+{% endblock %}
+{% block content %}
     
     <div class="content-container">
         <div class="music-grid">
@@ -55,8 +47,7 @@
             </div>
         </div>
     </div>
-    {% include 'footer.html' %}
+{% endblock %}
+{% block scripts %}
     <script src="{% static 'js/audio-player.js' %}"></script>
-    <script src="{% static 'js/background_motion.js' %}"></script>
-</body>
-</html> 
+{% endblock %}

@@ -1,13 +1,7 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iniciar sesión - Noticias</title>
-    {% include 'head_base.html' %}
-    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+{% block title %}Iniciar sesión - Noticias{% endblock %}
+{% block head_extra %}
     <style>
         body {
             display: flex;
@@ -52,21 +46,11 @@
             border-radius: var(--radius-sm);
             box-sizing: border-box; /* Para incluir padding en el width */
         }
-        /* El morado de los botones del sitio (--fab-bg) y 44 px de alto. */
-        .login-container button {
+        /* El botón es el .btn común de base.css; aquí solo su sitio y ancho. */
+        .login-container .btn {
             min-height: 44px;
-            padding: 10px 28px;
-            background: var(--fab-bg);
-            color: #f2f5fb;
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            font: inherit;
-            font-weight: 600;
+            padding-inline: 28px;
             margin-top: 10px;
-        }
-        .login-container button:hover {
-            background: var(--fab-bg-hover);
         }
         .errorlist {
             color: #ff4d4d;
@@ -87,9 +71,12 @@
             color: #f2f5fb;
         }
     </style>
-    {% include 'pwa_head.html' %}
-</head>
-<body>
+{% endblock %}
+{% block header_css %}{% endblock %}
+{% block body_attrs %}{% endblock %}
+{% block header %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block content %}
     <div class="login-container">
         <h2>Iniciar sesión</h2>
 
@@ -107,12 +94,10 @@
                 <label for="{{ form.password.id_for_label }}">Contraseña</label>
                 {{ form.password }}
             </p>
-            <button type="submit">Entrar</button>
+            <button class="btn btn--primary" type="submit">Entrar</button>
             <input type="hidden" name="next" value="{{ next }}"> {# Importante para la redirección #}
         </form>
 
         <a class="login-back" href="/noticias/">&larr; Volver a noticias</a>
     </div>
-    <script src="{% static 'js/background_motion.js' %}"></script>
-</body>
-</html>
+{% endblock %}

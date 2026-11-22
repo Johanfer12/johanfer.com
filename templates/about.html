@@ -1,20 +1,12 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acerca de</title>
-    {% include 'head_meta.html' with meta_title='Acerca de' meta_image='Img/library-icon.svg' meta_description='Conoce el propósito, las secciones y la lógica detrás de libros, Spotify y noticias en '|add:site_name|add:'.' meta_page_description='Acerca de '|add:site_name|add:': libros, series, música, noticias, filtros y resúmenes.' %}
-    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
-    {% include 'head_base.html' %}
+{% block title %}Acerca de{% endblock %}
+{% block meta %}{% include 'head_meta.html' with meta_title='Acerca de' meta_image='Img/library-icon.svg' meta_description='Conoce el propósito, las secciones y la lógica detrás de libros, Spotify y noticias en '|add:site_name|add:'.' meta_page_description='Acerca de '|add:site_name|add:': libros, series, música, noticias, filtros y resúmenes.' %}{% endblock %}
+{% block styles %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/about.css' %}">
-    <link rel="stylesheet" href="{% static 'css/header.css' %}">
-    {% include 'pwa_head.html' %}
-</head>
-<body class="has-header">
-    {% include 'header.html' %}
+{% endblock %}
+{% block content %}
     
     <div class="about-container">
         <div class="about-content">
@@ -70,7 +62,4 @@
         </div>
 
     </div>
-    {% include 'footer.html' %}
-    <script src="{% static 'js/background_motion.js' %}"></script>
-</body>
-</html>
+{% endblock %}

@@ -1,21 +1,16 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="dark">
+{% block head_early %}
     <script>document.documentElement.classList.add('management-js');</script>
-    <title>Configuración del feed</title>
-    {% include 'head_base.html' %}
+{% endblock %}
+{% block title %}Configuración del feed{% endblock %}
+{% block styles %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/feed_management.css' %}">
-    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
-    <link rel="stylesheet" href="{% static 'css/header.css' %}">
-    {% include 'pwa_head.html' %}
-</head>
-<body class="has-header management-page">
-    {% include 'header.html' %}
+{% endblock %}
+{% block body_attrs %} class="has-header management-page"{% endblock %}
+{% block footer %}{% endblock %}
+{% block content %}
     {% include 'feed_management_word_icons.html' %}
 
     <main class="management-shell">
@@ -45,7 +40,7 @@
                     <h2>Fuentes RSS</h2>
                     <p>{{ sources|length }} configuradas; {{ active_sources }} activas.</p>
                 </div>
-                <a class="management-primary" href="{% url 'my_news:source_create' %}">+ Nueva fuente</a>
+                <a class="btn btn--primary" href="{% url 'my_news:source_create' %}">+ Nueva fuente</a>
             </div>
             <div class="management-grid management-grid-sources">
                 {% for source in sources %}
@@ -66,10 +61,10 @@
                     </dl>
                     <div class="management-actions">
                         <form method="post" action="{% url 'my_news:source_toggle' source.pk %}">
-                            {% csrf_token %}<button class="management-secondary" type="submit">{% if source.active %}Pausar{% else %}Activar{% endif %}</button>
+                            {% csrf_token %}<button class="btn btn--secondary" type="submit">{% if source.active %}Pausar{% else %}Activar{% endif %}</button>
                         </form>
-                        <a class="management-secondary" href="{% url 'my_news:source_edit' source.pk %}">Editar</a>
-                        <a class="management-danger" href="{% url 'my_news:source_delete' source.pk %}">Eliminar</a>
+                        <a class="btn btn--secondary" href="{% url 'my_news:source_edit' source.pk %}">Editar</a>
+                        <a class="btn btn--danger" href="{% url 'my_news:source_delete' source.pk %}">Eliminar</a>
                     </div>
                 </article>
                 {% empty %}
@@ -85,7 +80,7 @@
                     <h2>Filtros por palabra</h2>
                     <p>Descartan coincidencias antes del procesamiento con IA.</p>
                 </div>
-                <a class="management-primary" href="{% url 'my_news:word_filter_create' %}">+ Nuevo filtro</a>
+                <a class="btn btn--primary" href="{% url 'my_news:word_filter_create' %}">+ Nuevo filtro</a>
             </div>
             {% comment %}
             El formulario es GET de verdad para que la búsqueda funcione sin
@@ -109,7 +104,7 @@
                     <option value="alfabetico" {% if word_filter_order == 'alfabetico' %}selected{% endif %}>A-Z</option>
                     <option value="filtradas" {% if word_filter_order == 'filtradas' %}selected{% endif %}>Más filtradas ({{ word_filters_recent_days }} días)</option>
                 </select>
-                <button class="management-secondary" type="submit">Buscar</button>
+                <button class="btn btn--secondary" type="submit">Buscar</button>
             </form>
             <p class="management-search-summary" data-word-filter-summary aria-live="polite"></p>
             <div class="management-grid management-grid-words" data-word-filter-grid
@@ -124,7 +119,7 @@
                 {% endfor %}
             </div>
             <div class="management-load-more">
-                <button class="management-secondary" type="button" data-word-filter-more
+                <button class="btn btn--secondary" type="button" data-word-filter-more
                         {% if not has_more_word_filters %}hidden{% endif %}>Cargar más</button>
             </div>
         </section>
@@ -136,7 +131,7 @@
                     <h2>Filtros con IA</h2>
                     <p>Instrucciones que se comparan con cada noticia procesada.</p>
                 </div>
-                <a class="management-primary" href="{% url 'my_news:ai_filter_create' %}">+ Nueva instrucción</a>
+                <a class="btn btn--primary" href="{% url 'my_news:ai_filter_create' %}">+ Nueva instrucción</a>
             </div>
             <div class="management-grid">
                 {% for filter in ai_filters %}
@@ -148,10 +143,10 @@
                     <h3>{{ filter.instruction }}</h3>
                     <div class="management-actions">
                         <form method="post" action="{% url 'my_news:ai_filter_toggle' filter.pk %}">
-                            {% csrf_token %}<button class="management-secondary" type="submit">{% if filter.active %}Pausar{% else %}Activar{% endif %}</button>
+                            {% csrf_token %}<button class="btn btn--secondary" type="submit">{% if filter.active %}Pausar{% else %}Activar{% endif %}</button>
                         </form>
-                        <a class="management-secondary" href="{% url 'my_news:ai_filter_edit' filter.pk %}">Editar</a>
-                        <a class="management-danger" href="{% url 'my_news:ai_filter_delete' filter.pk %}">Eliminar</a>
+                        <a class="btn btn--secondary" href="{% url 'my_news:ai_filter_edit' filter.pk %}">Editar</a>
+                        <a class="btn btn--danger" href="{% url 'my_news:ai_filter_delete' filter.pk %}">Eliminar</a>
                     </div>
                 </article>
                 {% empty %}
@@ -183,12 +178,10 @@
                 <span>Buscar solo en el título</span>
             </label>
             <div class="management-form-actions">
-                <button class="management-secondary" type="button" data-modal-close>Cancelar</button>
-                <button class="management-primary" type="submit">Guardar cambios</button>
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancelar</button>
+                <button class="btn btn--primary" type="submit">Guardar cambios</button>
             </div>
         </form>
     </dialog>
     <script src="{% static 'js/feed_management.js' %}"></script>
-    <script src="{% static 'js/background_motion.js' %}"></script>
-</body>
-</html>
+{% endblock %}

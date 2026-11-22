@@ -1,79 +1,16 @@
+{% extends 'base.html' %}
 {% load static sanitizers covers %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Libros</title>
-    {% include 'head_meta.html' with meta_title='Libros' meta_description='Lista de libros leídos por Johan con calificaciones, páginas y descripciones.' meta_image='Img/library-icon.svg' %}
-    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
-    {% include 'head_base.html' %}
+{% block title %}Libros{% endblock %}
+{% block meta %}{% include 'head_meta.html' with meta_title='Libros' meta_description='Lista de libros leídos por Johan con calificaciones, páginas y descripciones.' meta_image='Img/library-icon.svg' %}{% endblock %}
+{% block styles %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/collection.css' %}">
-    <link rel="stylesheet" href="{% static 'css/header.css' %}">
-    {% include 'pwa_head.html' %}
-</head>
-<body class="has-header">
-    {% include 'header.html' %}
+{% endblock %}
+{% block content %}
     
     <div id="book-container" class="book-container" data-has-next="{% if page_obj.has_next %}true{% else %}false{% endif %}">
         {% for book in page_obj %}
-        <div class="book-item">
-            <div class="book-info-container">
-                <!-- Carátula con cursor "manito" y evento de apertura -->
-                <div class="book-cover"{% cover_style "Covers" book.id ".webp" %} role="button" tabindex="0" aria-haspopup="dialog" aria-controls="modal-{{ book.id }}" aria-label="Ver detalles de {{ book.title }}" onclick="openModal('{{ book.id }}')">
-                    <img src="{{ MEDIA_URL }}Covers/{{ book.id }}.webp" alt="{{ book.title }}">
-                    {% if book.is_reading %}
-                    <div class="watching-ribbon"><span>Leyendo</span></div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        
-        <!-- Modal de la descripción (uno por cada libro) -->
-        <div id="modal-{{ book.id }}" class="modal" role="dialog" aria-modal="true" aria-labelledby="title-{{ book.id }}" tabindex="-1">
-            <div class="modal-content book-modal-content">
-                <button type="button" class="close" aria-label="Cerrar detalles" onclick="closeModal('{{ book.id }}')">&times;</button>
-                <div class="book-modal-body">
-                    <div class="book-modal-cover">
-                        <img src="{{ MEDIA_URL }}Covers/{{ book.id }}.webp" alt="{{ book.title }}" loading="lazy">
-                        {% if book.is_reading %}
-                        <div class="watching-ribbon"><span>Leyendo</span></div>
-                        {% endif %}
-                    </div>
-                    <div class="book-modal-info">
-                        <h2 id="title-{{ book.id }}">{{ book.title }}</h2>
-                        <div class="book-modal-metadata">
-                            <div>
-                                <p><strong>Autor:</strong> {{ book.author }}</p>
-                                {% if not book.is_reading %}
-                                <p><strong>Mi calificación:</strong> {{ book.my_rating|rating_stars:5 }}</p>
-                                {% endif %}
-                                <p><strong>Calificación general:</strong> {{ book.public_rating|rating_stars:5 }}</p>
-                            </div>
-                            <div>
-                                {% if book.num_pages %}
-                                    <p><strong>Páginas:</strong> {{ book.num_pages }}</p>
-                                {% endif %}
-                                {% if book.published_year %}
-                                    <p><strong>Publicado:</strong> {{ book.published_year }}</p>
-                                {% endif %}
-                                {% if not book.is_reading %}
-                                    <p><strong>Leído el:</strong> {{ book.date_read|date:"d/m/Y" }}</p>
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        <div class="book-description">
-                            <div class="book-description-scroll" tabindex="0" role="region" aria-label="Descripción">
-                                <strong>Descripción</strong><br><br>
-                                {{ book.description|sanitize }}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        {% include 'book_item.html' %}
         {% endfor %}
         
     </div>
@@ -114,14 +51,14 @@
             <form id="booksSearchForm" class="books-search-form">
                 <input id="booksSearchInput" type="text" class="books-search-input" aria-label="Título, autor o año" placeholder="Escribe aquí..." autocomplete="off" value="{{ current_query|default:'' }}">
                 <div class="books-search-actions">
-                    <button type="submit" class="books-search-apply">Buscar</button>
-                    <button type="button" class="books-search-cancel" id="booksSearchCancelBtn">Cancelar</button>
+                    <button type="submit" class="btn btn--primary books-search-apply">Buscar</button>
+                    <button type="button" class="btn btn--secondary books-search-cancel" id="booksSearchCancelBtn">Cancelar</button>
                 </div>
             </form>
         </div>
     </div>
-
-    {% include 'footer.html' %}
+{% endblock %}
+{% block scripts %}
     <script src="{% static 'js/modal.js' %}"></script>
     <script src="{% static 'js/infinite_scroll_core.js' %}"></script>
     <script src="{% static 'js/infinite_scroll.js' %}"></script>
@@ -130,6 +67,4 @@
     <script src="{% static 'js/books_search.js' %}"></script>
     <script src="{% static 'js/sort_modal.js' %}"></script>
     <script src="{% static 'js/fab_stack.js' %}"></script>
-    <script src="{% static 'js/background_motion.js' %}"></script>
-</body>
-</html>
+{% endblock %}

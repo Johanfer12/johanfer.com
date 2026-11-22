@@ -1,22 +1,17 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="dark">
-    <title>Estadísticas del feed</title>
-    {% include 'head_base.html' %}
+{% block title %}Estadísticas del feed{% endblock %}
+{% block styles %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/stats.css' %}">
     <link rel="stylesheet" href="{% static 'css/news_stats.css' %}">
-    <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+{% endblock %}
+{% block head_extra %}
     {% include 'head_charts.html' %}
-    <link rel="stylesheet" href="{% static 'css/header.css' %}">
-    {% include 'pwa_head.html' %}
-</head>
-<body class="has-header stats-page news-stats-page">
-    {% include 'header.html' %}
+{% endblock %}
+{% block body_attrs %} class="has-header stats-page news-stats-page"{% endblock %}
+{% block footer %}{% endblock %}
+{% block content %}
     <div class="statistics-container">
         <div class="statistics-content">
             <h2>Estadísticas del feed</h2>
@@ -87,6 +82,4 @@
     <script defer src="{% static 'js/charts_common.js' %}"></script>
     <script defer src="{% static 'js/news_stats.js' %}"></script>
     {% endif %}
-    <script src="{% static 'js/background_motion.js' %}"></script>
-</body>
-</html>
+{% endblock %}

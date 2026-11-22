@@ -1,18 +1,11 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Página no encontrada</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {% include 'head_base.html' %}
+{% block title %}Página no encontrada{% endblock %}
+{% block styles %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="stylesheet" href="{% static 'css/about.css' %}">
-    <link rel="stylesheet" href="{% static 'css/header.css' %}">
-    {% include 'pwa_head.html' %}
-</head>
-<body class="has-header">
-    {% include 'header.html' %}
+{% endblock %}
+{% block content %}
     <div class="about-container">
         <div class="about-content">
             <h1>Página no encontrada</h1>
@@ -24,7 +17,4 @@
             </div>
         </div>
     </div>
-    {% include 'footer.html' %}
-    <script src="{% static 'js/background_motion.js' %}"></script>
-</body>
-</html>
+{% endblock %}
