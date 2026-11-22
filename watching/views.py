@@ -6,7 +6,6 @@ from collections import Counter, defaultdict
 from datetime import timedelta
 
 from django.conf import settings
-from django.core.paginator import Paginator
 from django.db.models import Count, Max
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
@@ -15,7 +14,7 @@ from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from Bookshelf.http_utils import is_ajax
+from Bookshelf.http_utils import is_ajax, tanda
 
 from .models import SimklSyncState, WatchedItem
 
@@ -241,8 +240,8 @@ def watching(request):
         ]
     _sort_cards(cards, orden)
 
-    paginator = Paginator(cards, 20)  # 20 tarjetas por vista, igual que en libros
-    page_obj = paginator.get_page(request.GET.get('page', 1))
+    total_watched = len(cards)
+    page_obj, has_next = tanda(request, cards, total_watched)
 
     if is_ajax(request):
         # Tarjetas ya renderizadas con el mismo include que la página (ver
@@ -250,18 +249,19 @@ def watching(request):
         html = render_to_string('watch_items.html', {'cards': page_obj}, request=request)
         return JsonResponse({
             'html': html,
-            'has_next': page_obj.has_next(),
-            'total_watched': paginator.count,
+            'has_next': has_next,
+            'total_watched': total_watched,
             'query': query,
         })
 
     return render(request, 'watching.html', {
         'cards': page_obj,
+        'has_next': has_next,
         'active_tipo': tipo,
         'active_orden': orden,
         'watch_label': watch_label,
         'watch_noun': watch_noun,
-        'total_watched': paginator.count,
+        'total_watched': total_watched,
         'current_query': query,
     })
 

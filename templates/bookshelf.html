@@ -8,7 +8,7 @@
 {% endblock %}
 {% block content %}
     
-    <div id="book-container" class="book-container" data-has-next="{% if page_obj.has_next %}true{% else %}false{% endif %}">
+    <div id="book-container" class="book-container" data-has-next="{{ has_next|yesno:'true,false' }}">
         {% for book in page_obj %}
         {% include 'book_item.html' %}
         {% endfor %}

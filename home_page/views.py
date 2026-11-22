@@ -1,10 +1,9 @@
 from django.shortcuts import render, redirect
 from django.template.loader import render_to_string
-from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.http import HttpResponse
 from django.contrib.auth.decorators import user_passes_test
-from Bookshelf.http_utils import LOGIN_URL, is_ajax
+from Bookshelf.http_utils import LOGIN_URL, is_ajax, tanda
 from django.views.decorators.http import require_GET
 from .models import Book
 from .models import VisitLog
@@ -106,11 +105,8 @@ def bookshelf(request):
             book_filter |= Q(date_read__year=int(query))
         books = books.filter(book_filter)
 
-    # Set up pagination
-    paginator = Paginator(books, 20)  # 20 libros por vista
-    page_number = request.GET.get('page', 1)
-    page_obj = paginator.get_page(page_number)
-    total_books = paginator.count  # Total de libros (reutiliza el count del paginador)
+    total_books = books.count()
+    page_obj, has_next = tanda(request, books, total_books)
 
     # Truncar el título de los libros que tienen ':' (solo los de la página visible)
     for book in page_obj:
@@ -124,7 +120,7 @@ def bookshelf(request):
         html = render_to_string('book_items.html', {'books': page_obj}, request=request)
         return JsonResponse({
             'html': html,
-            'has_next': page_obj.has_next(),
+            'has_next': has_next,
             'query': query,
             'total_books': total_books,
         })
@@ -132,6 +128,7 @@ def bookshelf(request):
         # Para peticiones normales, renderizar la plantilla
         return render(request, 'bookshelf.html', {
             'page_obj': page_obj,
+            'has_next': has_next,
             'total_books': total_books,
             'current_query': query,
         })

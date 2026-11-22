@@ -1,3 +1,4 @@
+import re
 from datetime import date, datetime, time, timedelta
 import io
 import os
@@ -188,6 +189,46 @@ class BookshelfReadingViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotIn('null', response.context['books_per_year_labels'])
+
+
+class BookshelfBatchTests(TestCase):
+    """Las tandas del scroll infinito van por offset y límite: el navegador pide
+    lo que le cabe para acabar en fila completa."""
+
+    def setUp(self):
+        for i in range(30):
+            Book.objects.create(
+                title=f'Libro {i:02d}', author='Autor', cover_link='', my_rating=3,
+                public_rating='3.5', date_read=date(2025, 1, 1) + timedelta(days=i),
+                book_link=f'/book/show/{i}',
+            )
+
+    def _ajax(self, **params):
+        return self.client.get('/bookshelf/', params, HTTP_X_REQUESTED_WITH='XMLHttpRequest').json()
+
+    def test_first_page_sends_the_initial_batch(self):
+        response = self.client.get('/bookshelf/')
+        self.assertEqual(len(response.context['page_obj']), 24)
+        self.assertContains(response, 'data-has-next="true"')
+
+    def test_offset_and_limit_cut_the_list_without_repeats(self):
+        first = self._ajax(offset=0, limit=7)
+        second = self._ajax(offset=7, limit=7)
+        self.assertEqual(first['html'].count('class="book-item"'), 7)
+        self.assertEqual(second['html'].count('class="book-item"'), 7)
+        ids = lambda html: set(re.findall(r'aria-controls="(modal-\d+)"', html))
+        self.assertFalse(ids(first['html']) & ids(second['html']))
+        self.assertTrue(second['has_next'])
+
+    def test_last_batch_says_there_is_no_more(self):
+        data = self._ajax(offset=28, limit=7)
+        self.assertEqual(data['html'].count('class="book-item"'), 2)
+        self.assertFalse(data['has_next'])
+
+    def test_limit_is_capped_and_bad_values_fall_back(self):
+        from Bookshelf.http_utils import TANDA_INICIAL, TANDA_MAXIMA
+        self.assertEqual(self._ajax(offset=0, limit=10_000)['html'].count('class="book-item"'), min(30, TANDA_MAXIMA))
+        self.assertEqual(self._ajax(offset='x', limit='y')['html'].count('class="book-item"'), TANDA_INICIAL)
 
 
 class VisitLogMiddlewareTests(TestCase):

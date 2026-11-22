@@ -9,7 +9,7 @@
 {% block content %}
 
     <div id="watch-container" class="book-container"
-         data-has-next="{% if cards.has_next %}true{% else %}false{% endif %}"
+         data-has-next="{{ has_next|yesno:'true,false' }}"
          data-watch-noun="{{ watch_noun }}">
         {% for card in cards %}
         {% include 'watch_item.html' %}
