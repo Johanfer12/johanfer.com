@@ -1,7 +1,7 @@
 # Retención y verificación del backup. Instalar en /etc/systemd/system/.
 # El script va en /usr/local/sbin/johanfer-backup-maintenance (ver deploy/bin/).
 [Unit]
-Description=Retencion y verificacion completa del backup de johanfer.com
+Description=Verificacion semanal de las copias de johanfer.com (descifrar y comprobar la mas reciente)
 After=network-online.target
 Wants=network-online.target
 

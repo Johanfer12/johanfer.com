@@ -1,0 +1,79 @@
+#!/bin/bash
+# Funciones comunes de las copias de seguridad. No se ejecuta: lo cargan
+# (`source`) johanfer-db-backup, johanfer-qdrant-backup, johanfer-config-backup
+# y johanfer-backup-maintenance. Instalar en /usr/local/sbin/johanfer-backup-lib.
+#
+# CADA COPIA ES UN SOLO ARCHIVO, Y SE SOBRESCRIBE EN UN HUECO FIJO (noviembre
+# 2026). Hasta entonces las copias iban a un repositorio de restic en el remoto:
+# deduplicaba bien, pero es un formato de muchos ficheros pequeños, y el
+# mantenimiento semanal (`forget --prune`) borraba ~30 de golpe. El servicio
+# de almacenamiento avisaba por correo de un «borrado masivo» cada domingo, y
+# lo borrado iba a su papelera ocupando espacio.
+#
+# Ahora cada copia es `zstd | gpg` (cifrado simétrico AES-256 con la misma
+# contraseña que usaba restic) y se sube con rclone a un nombre de un conjunto
+# FIJO: la base, por ejemplo, rota entre `base-6h-0..7`, `base-dia-00..13`,
+# `base-semana-0..7` y `base-mes-01..12`. Subir encima de un hueco sustituye la
+# copia vieja sin borrar nada: ni avisos, ni papelera, y un número de ficheros
+# que no crece. Los huecos se eligen por días desde 1970 (no por día del año),
+# para que el ciclo no se rompa en Año Nuevo.
+#
+# Restaurar una copia (en cualquier máquina con rclone, gpg y zstd):
+#   rclone lsl "$BACKUP_REMOTE/base"                      # la más reciente
+#   rclone cat "$BACKUP_REMOTE/base/base-6h-3.db.zst.gpg" \
+#     | gpg --batch --pinentry-mode loopback --passphrase-file <contraseña> -d \
+#     | zstd -d > database.db
+
+set -a; . /etc/johanfer-backup.env; set +a
+: "${BACKUP_REMOTE:?falta BACKUP_REMOTE en /etc/johanfer-backup.env}"
+: "${RESTIC_PASSWORD_FILE:?falta RESTIC_PASSWORD_FILE en /etc/johanfer-backup.env}"
+
+# tmpfs (ver deploy/fstab-tmpfs): los temporales no tocan la SD.
+WORK_DIR=/var/lib/johanfer-backup
+install -d -m 700 "$WORK_DIR"
+# gpg guarda su estado y el socket de su agente aquí, también en RAM.
+export GNUPGHOME="$WORK_DIR/.gnupg"
+install -d -m 700 "$GNUPGHOME"
+
+DIA=$(( $(date +%s) / 86400 ))      # días desde 1970
+SEMANA=$(( DIA / 7 ))
+
+# cifrar <entrada> <salida>: comprime y cifra un fichero.
+cifrar() {
+  zstd -q -T0 "-${NIVEL_ZSTD:-10}" -c "$1" \
+    | gpg --batch --yes --quiet --pinentry-mode loopback --no-symkey-cache \
+          --passphrase-file "$RESTIC_PASSWORD_FILE" \
+          --symmetric --cipher-algo AES256 --compress-algo none -o "$2"
+}
+
+# descifrar <remoto> <salida>: baja una copia y la deja descomprimida.
+descifrar() {
+  rclone cat "$BACKUP_REMOTE/$1" \
+    | gpg --batch --quiet --pinentry-mode loopback --no-symkey-cache \
+          --passphrase-file "$RESTIC_PASSWORD_FILE" -d \
+    | zstd -q -d -c > "$2"
+}
+
+# subir <local> <carpeta/nombre>: sube encima del hueco. rclone comprueba el
+# hash del fichero subido contra el local antes de dar la subida por buena.
+subir() {
+  rclone copyto --retries 3 "$1" "$BACKUP_REMOTE/$2"
+  echo "Subido $2 ($(du -h "$1" | cut -f1))"
+}
+
+# fecha_remota <carpeta/nombre>: fecha (AAAA-MM-DD) de la copia que ocupa un
+# hueco, o nada si está vacío. Con un hueco que aún no existe rclone falla y
+# no devuelve JSON válido: eso es «vacío», no un error de la copia.
+fecha_remota() {
+  { rclone lsjson "$BACKUP_REMOTE/$1" 2>/dev/null || true; } | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except ValueError:
+    d = []
+print(d[0]["ModTime"][:10] if d else "")'
+}
+
+terminar_gpg() {
+  gpgconf --kill gpg-agent 2>/dev/null || true
+}

@@ -1,24 +1,27 @@
 #!/bin/bash
 # Copia cifrada de la base SQLite. Instalar en /usr/local/sbin/johanfer-db-backup.
+# Corre cuatro veces al día (johanfer-db-backup.timer). Formato y restauración:
+# ver johanfer-backup-lib.
+#
+# Huecos (la misma retención que tenía restic: 2 días enteros, 14 diarias,
+# 8 semanales y 12 mensuales, 42 ficheros de ~2 MB):
+#   base-6h-0..7       cada pasada; 4 al día × 2 días
+#   base-dia-00..13    la primera pasada de cada día
+#   base-semana-0..7   la primera de cada semana
+#   base-mes-01..12    la primera de cada mes
+# «Primera» se decide mirando la fecha de lo que ocupa el hueco en el remoto,
+# así que una pasada perdida (Pi apagada) no deja un hueco sin renovar.
 set -Eeuo pipefail
 umask 077
+. /usr/local/sbin/johanfer-backup-lib
+trap terminar_gpg EXIT
 
 SOURCE_DB=/home/johan/My_Bookshelf/database.db
-WORK_DIR=/var/lib/johanfer-backup
-CACHE_DIR=/var/cache/johanfer-restic
-SNAPSHOT_DB="$WORK_DIR/database.db"
-HASH_FILE="$WORK_DIR/database.db.sha256"
-# Destino y credenciales de restic: fuera del repo, en un fichero solo de root
-# (plantilla en deploy/backup.env.example).
-set -a; . /etc/johanfer-backup.env; set +a
-export RESTIC_CACHE_DIR="$CACHE_DIR"
-
-install -d -m 700 "$WORK_DIR" "$CACHE_DIR"
-temporary_db=$(mktemp "$WORK_DIR/database.db.XXXXXX")
-trap 'rm -f "$temporary_db"' EXIT
+COPIA="$WORK_DIR/database.db"
+CIFRADA="$WORK_DIR/base.db.zst.gpg"
 
 # sqlite3.backup() y no cp: con la base en WAL, cp daría una copia inconsistente.
-/usr/bin/python3 - "$SOURCE_DB" "$temporary_db" <<'PY'
+/usr/bin/python3 - "$SOURCE_DB" "$COPIA" <<'PY'
 import sqlite3
 import sys
 
@@ -35,9 +38,24 @@ finally:
     source.close()
 PY
 
-mv -f "$temporary_db" "$SNAPSHOT_DB"
-trap - EXIT
-sha256sum "$SNAPSHOT_DB" > "$HASH_FILE"
-/usr/bin/restic backup "$SNAPSHOT_DB" "$HASH_FILE" --host raspberrypi --tag johanfer-database
-# Sin `restic check` aquí: costaba ~3 min por pasada, cuatro veces al día, y el
-# mantenimiento de los domingos ya hace `check --read-data`, que es más completo.
+NIVEL_ZSTD=19 cifrar "$COPIA" "$CIFRADA"
+rm -f "$COPIA"
+
+HORA=$(date -u +%H); HORA=${HORA#0}
+subir "$CIFRADA" "base/base-6h-$(( (DIA % 2) * 4 + HORA / 6 )).db.zst.gpg"
+
+HOY=$(date -u +%F)
+dia="base/base-dia-$(printf %02d $(( DIA % 14 ))).db.zst.gpg"
+[ "$(fecha_remota "$dia")" = "$HOY" ] || subir "$CIFRADA" "$dia"
+
+semana="base/base-semana-$(( SEMANA % 8 )).db.zst.gpg"
+f=$(fecha_remota "$semana")
+if [ -z "$f" ] || [ $(( $(date -u -d "$f" +%s) / 86400 / 7 )) -ne "$SEMANA" ]; then
+  subir "$CIFRADA" "$semana"
+fi
+
+mes="base/base-mes-$(date -u +%m).db.zst.gpg"
+f=$(fecha_remota "$mes")
+[ "${f:0:7}" = "$(date -u +%Y-%m)" ] || subir "$CIFRADA" "$mes"
+
+rm -f "$CIFRADA"

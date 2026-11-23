@@ -3,15 +3,16 @@
 # Los temporales de las copias de seguridad iban a la SD: el snapshot de Qdrant
 # (78 MB) se escribía dos veces cada noche y la copia de database.db (21 MB)
 # cuatro veces al día. Son ~240 MB diarios de ficheros que solo existen para
-# subirlos a OneDrive con restic, una cuarta parte de todo lo que se escribía
+# subirlos al remoto de las copias, una cuarta parte de todo lo que se escribía
 # en la tarjeta. En RAM cuestan lo mismo y no gastan la SD.
 #
 # Las rutas NO cambian: se monta un tmpfs encima de las de siempre, así que los
-# scripts de deploy/bin/ y las rutas que guarda restic siguen igual. Lo que hay
-# dentro se pierde al reiniciar, y está bien: cada copia lo regenera.
+# scripts de deploy/bin/ no cambian. Lo que hay dentro se pierde al reiniciar,
+# y está bien: cada copia lo regenera.
 #
 # Memoria: `size` es un tope, no una reserva; solo se usa lo que ocupa. El pico
-# es a las 02:45 (snapshot de Qdrant + su copia: ~160 MB) con la Pi en reposo.
+# es a las 02:45 (snapshot de Qdrant + su versión cifrada: ~135 MB) con la Pi
+# en reposo.
 #
 # Aplicar (con las copias paradas):
 #   sudo rm -rf /var/lib/johanfer-backup/* /var/lib/qdrant/snapshots/*

@@ -316,43 +316,61 @@ gunicorn con `--preload` en una Pi 3. No es un fallo.
 
 ## Copias de seguridad
 
-Restic cifrado sobre un remoto de rclone, en tres piezas con ritmos distintos
-porque lo que cuesta recuperar no es lo mismo:
+**Desde noviembre de 2026, cada copia es un solo archivo** comprimido con zstd
+y cifrado con gpg (AES-256, con la contraseña de siempre, la de restic), que se
+sube con rclone al remoto **sobrescribiendo un hueco fijo**. Antes iban a un
+repositorio de restic: es un formato de muchos ficheros pequeños, y la poda
+semanal borraba ~30 de golpe; el servicio de almacenamiento avisaba de un
+«borrado masivo» cada domingo y lo borrado se acumulaba en su papelera. Con huecos fijos no se borra
+nada nunca y el número de ficheros no crece. El porqué y los detalles, en la
+cabecera de [`deploy/bin/johanfer-backup-lib`](bin/johanfer-backup-lib).
 
-| qué | script | timer | retención |
-|---|---|---|---|
-| `database.db` | `/usr/local/sbin/johanfer-db-backup` | cada 6 h (00,06,12,18:15) | 14 diarias, 8 semanales, 12 mensuales |
-| Storage de Qdrant | `/usr/local/sbin/johanfer-qdrant-backup` | diario (02:45) | 7 diarias, 4 semanales, 6 mensuales |
-| Configuración y secretos (lo que no está en el repo) | `/usr/local/sbin/johanfer-config-backup` | sábados 03:15 | 8 semanales, 12 mensuales |
-| Retención y `check --read-data` | `/usr/local/sbin/johanfer-backup-maintenance` | domingos 03:30 | — |
+| qué | script | timer | huecos | en el remoto |
+|---|---|---|---|---|
+| `database.db` | `johanfer-db-backup` | cada 6 h (00,06,12,18:15) | 8 de las últimas 48 h, 14 diarios, 8 semanales, 12 mensuales | 42 × ~1,8 MB |
+| Storage de Qdrant | `johanfer-qdrant-backup` | diario (02:45) | 3 (uno por día) | 3 × ~59 MB |
+| Configuración, secretos y portadas | `johanfer-config-backup` | sábados 03:15 | 4 (uno por semana) | 4 × ~11 MB |
+| Verificación | `johanfer-backup-maintenance` | domingos 03:30 | — | — |
 
-Los cuatro scripts están en [`deploy/bin/`](bin/) y sus unidades en
-[`deploy/systemd/`](systemd/). Las tres de copia reintentan tres veces, cada
-15 min, si falla la subida.
+En total unos 300 MB, en la carpeta `BACKUP_REMOTE` del `.env` (`base/`,
+`qdrant/`, `config/`). La verificación de los domingos baja la copia
+más reciente de cada tipo, la descifra y comprueba que sirve: la base pasa un
+`integrity_check` de SQLite, y los tar de Qdrant y de configuración se leen
+enteros. Es un simulacro de restauración de punta a punta.
+
+Los scripts están en [`deploy/bin/`](bin/) (los cuatro cargan
+`johanfer-backup-lib`) y sus unidades en [`deploy/systemd/`](systemd/). Las de
+copia reintentan, cada 15 min, si falla la subida. Los temporales van a tmpfs
+([`deploy/fstab-tmpfs`](fstab-tmpfs)), no a la SD.
 
 La copia de configuración existe para **reinstalar en limpio**, no para clonar
 la tarjeta (se descartó guardar una imagen: casi 1 GB, se queda vieja y el
 sistema ya está descrito en esta guía). Lleva `.env`, `media/`, certificados,
 las claves y scripts de `/home/johan`, `authorized_keys`, y de `/etc` lo de
-nginx, fail2ban, ufw, systemd, logrotate, sysctl, modprobe, zram, sudoers y el
-WiFi, más `config.txt` y `cmdline.txt`. Y unos volcados que no se restauran
-tal cual pero sirven de lista de comprobación: crontab, paquetes instalados a
-mano, unidades habilitadas, `ufw status` y `pip freeze`. Son unos 12 MB.
+nginx, fail2ban, ufw, systemd, logrotate, sysctl, modprobe, zram, sudoers, el
+WiFi y `fstab`, más `config.txt` y `cmdline.txt`. Y unos volcados que no se
+restauran tal cual pero sirven de lista de comprobación (en
+`var/lib/johanfer-backup/config/` dentro del tar): crontab, paquetes instalados
+a mano, unidades habilitadas, `ufw status` y `pip freeze`.
 
-El destino del repositorio y las rutas de credenciales no van en los scripts:
-los leen de `/etc/johanfer-backup.env`, que no se versiona (plantilla en
-[`deploy/backup.env.example`](backup.env.example)).
+El destino y las rutas de credenciales no van en los scripts: los leen de
+`/etc/johanfer-backup.env`, que no se versiona (plantilla en
+[`deploy/backup.env.example`](backup.env.example)); `BACKUP_REMOTE` es la
+carpeta de las copias.
 
 ```bash
+sudo apt install -y rclone zstd gnupg
 sudo install -m 600 -o root -g root /ruta/a/la/copia/johanfer-backup.env /etc/johanfer-backup.env
-sudo install -m 700 -o root -g root deploy/bin/johanfer-{qdrant,db,config}-backup deploy/bin/johanfer-backup-maintenance /usr/local/sbin/
+sudo install -m 700 -o root -g root deploy/bin/johanfer-backup-lib deploy/bin/johanfer-{qdrant,db,config}-backup deploy/bin/johanfer-backup-maintenance /usr/local/sbin/
 sudo install -m 644 -o root -g root deploy/systemd/johanfer-{qdrant-backup,db-backup,config-backup,backup-maintenance}.* /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now johanfer-qdrant-backup.timer johanfer-db-backup.timer johanfer-config-backup.timer johanfer-backup-maintenance.timer
 ```
 
-Un tag nuevo necesita su línea de retención en `johanfer-backup-maintenance`,
-o crecería sin límite.
+**El repositorio de restic de antes** (`RESTIC_REPOSITORY` en el `.env`,
+hasta el 22/11/2026) ya no se escribe ni se poda. Se conserva como respaldo
+mientras las copias nuevas acumulan historia; se puede borrar a mano a partir
+de enero de 2027 (dará un último aviso de borrado masivo).
 
 **Qué se puede regenerar y qué no.** `database.db` se copia con
 `sqlite3.backup()` y no con `cp`, que con la base en WAL daría una copia
@@ -362,10 +380,26 @@ snapshots, por lo mismo. Y desde que la ventana de duplicados es de un año,
 **los vectores antiguos no se regeneran desde ninguna parte**: su noticia se
 purgó a los 15 días. `manage.py qdrant_backfill` solo alcanza a los recientes.
 
+Bajar y descifrar una copia (como root, con el `.env` cargado:
+`set -a; . /etc/johanfer-backup.env; set +a`). La más reciente de cada carpeta
+es la de fecha más alta en `rclone lsl`:
+
+```bash
+rclone lsl "$BACKUP_REMOTE/base"
+descifra() {   # descifra <carpeta/fichero> <salida>
+  rclone cat "$BACKUP_REMOTE/$1" \
+    | gpg --batch --pinentry-mode loopback --passphrase-file "$RESTIC_PASSWORD_FILE" -d \
+    | zstd -d -c > "$2"
+}
+descifra base/base-6h-3.db.zst.gpg database.db
+descifra qdrant/qdrant-1.snapshot.zst.gpg qdrant.snapshot
+descifra config/config-2.tar.zst.gpg config.tar && tar -xf config.tar -C /root/restaurado
+```
+
 Restaurar Qdrant desde el snapshot:
 
 ```bash
-sudo -u johan curl -X POST 'http://127.0.0.1:6333/collections/<coleccion>/snapshots/upload?priority=snapshot'   -H 'Content-Type: multipart/form-data' -F 'snapshot=@<fichero>.snapshot'
+sudo -u johan curl -X POST 'http://127.0.0.1:6333/collections/<coleccion>/snapshots/upload?priority=snapshot'   -H 'Content-Type: multipart/form-data' -F 'snapshot=@qdrant.snapshot'
 ```
 
 ## Restaurar tras perder la tarjeta
@@ -375,41 +409,42 @@ Lo que hace falta y dónde está:
 | | dónde |
 |---|---|
 | Código y configuración versionada | este repo |
-| Base, Qdrant, configuración y secretos | el repositorio de restic |
-| **Contraseña de restic** y `rclone.conf` | `deploy/secretos/` de la copia privada del proyecto (no va a GitHub) |
+| Base, Qdrant, configuración y secretos | la carpeta `BACKUP_REMOTE` del `.env` |
+| **Contraseña de las copias** (la de restic) y `rclone.conf` | `deploy/secretos/` de la copia privada del proyecto (no va a GitHub) |
 | `/etc/johanfer-backup.env` | `deploy/johanfer-backup.env` en esa misma copia |
 
-**Sin la contraseña de restic no se abre ningún backup.** Si se cambia en la
-Pi, hay que actualizar la copia de `deploy/secretos/`.
+**Sin esa contraseña no se abre ninguna copia.** Si se cambia en la Pi, hay
+que actualizar la copia de `deploy/secretos/`.
 
 1. Grabar Raspberry Pi OS Lite (64 bits) con Raspberry Pi Imager, con usuario
    `johan`, el WiFi y SSH activado, y arrancar.
-2. Poner las credenciales de restic:
+2. Poner las credenciales y comprobar que se llega a las copias:
    ```bash
-   sudo apt update && sudo apt install -y restic rclone git
+   sudo apt update && sudo apt install -y rclone zstd gnupg git
    sudo install -d -m 700 /root/.config/restic /root/.config/rclone
    sudo install -m 600 restic-password /root/.config/restic/johanfer-password
    sudo install -m 600 rclone.conf /root/.config/rclone/rclone.conf
    sudo install -m 600 johanfer-backup.env /etc/johanfer-backup.env
-   set -a; . /etc/johanfer-backup.env; set +a      # como root: sudo -i
-   restic snapshots --compact                        # comprobar que abre
+   sudo -i; set -a; . /etc/johanfer-backup.env; set +a
+   rclone lsl "$BACKUP_REMOTE"
    ```
-3. Recuperar la configuración en un directorio aparte y mirarla antes de
+3. Recuperar la configuración (la `config-N` más reciente) en un directorio
+   aparte con la función `descifra` de la sección anterior, y mirarla antes de
    copiar nada: es la de la máquina vieja, y puede no casar con una versión
    nueva del sistema.
    ```bash
-   restic restore latest --tag johanfer-config --target /root/restaurado
+   mkdir -p /root/restaurado
+   descifra config/config-2.tar.zst.gpg /root/config.tar && tar -xf /root/config.tar -C /root/restaurado
    ls /root/restaurado/var/lib/johanfer-backup/config/   # crontab, paquetes, unidades...
    ```
 4. Seguir la sección 2 de esta guía. Donde pide `.env`, los `jail.d/*.local`,
    los certificados o el WiFi, tomarlos de `/root/restaurado`.
 5. Antes de arrancar la aplicación, recuperar los datos:
    ```bash
-   restic restore latest --tag johanfer-database --target /root/restaurado
-   sudo install -o johan -g johan -m 644 /root/restaurado/var/lib/johanfer-backup/database.db /home/johan/My_Bookshelf/database.db
+   descifra base/base-6h-3.db.zst.gpg /root/database.db     # la más reciente
+   sudo install -o johan -g johan -m 644 /root/database.db /home/johan/My_Bookshelf/database.db
    cp -a /root/restaurado/home/johan/My_Bookshelf/media /home/johan/My_Bookshelf/
-   restic restore latest --tag johanfer-qdrant --target /root/restaurado
+   descifra qdrant/qdrant-1.snapshot.zst.gpg /root/qdrant.snapshot   # la más reciente
    # y subir el snapshot a Qdrant con el curl de la sección anterior
    ```
 6. Comprobar con la sección 4.
-

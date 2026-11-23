@@ -1,16 +1,54 @@
 #!/bin/bash
-# Retención y verificación completa del repositorio de restic, una vez a la
-# semana. Instalar en /usr/local/sbin/johanfer-backup-maintenance.
+# Verificación semanal de las copias: baja la más reciente de cada tipo, la
+# descifra y comprueba que sirve. Instalar en
+# /usr/local/sbin/johanfer-backup-maintenance (ver deploy/systemd/).
 #
-# `forget --prune` toma un cerrojo exclusivo del repositorio: mientras corre,
-# los demás backups fallarían. Por eso va el domingo de madrugada, lejos de
-# ellos, y la copia de configuración va el sábado.
+# Hasta noviembre de 2026 esto era `restic forget --prune` + `check
+# --read-data`. Con las copias en huecos fijos (ver johanfer-backup-lib) ya no
+# hay nada que podar: cada copia sustituye a la que ocupaba su hueco. Lo que
+# queda es lo importante de verdad, comprobar que una copia se puede
+# restaurar, y esto lo hace de punta a punta: remoto → gpg → zstd → SQLite.
+#
+# El repositorio de restic de antes (RESTIC_REPOSITORY en el .env) ya no se
+# toca. Se puede borrar a mano cuando las copias nuevas acumulen historia.
 set -Eeuo pipefail
 umask 077
-set -a; . /etc/johanfer-backup.env; set +a
-export RESTIC_CACHE_DIR=/var/cache/johanfer-restic
+. /usr/local/sbin/johanfer-backup-lib
 
-/usr/bin/restic forget --host raspberrypi --tag johanfer-database --keep-within 2d --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune
-/usr/bin/restic forget --host raspberrypi --tag johanfer-qdrant --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
-/usr/bin/restic forget --host raspberrypi --tag johanfer-config --keep-weekly 8 --keep-monthly 12 --prune
-/usr/bin/restic check --read-data
+PRUEBA="$WORK_DIR/verificacion"
+trap 'rm -rf "$PRUEBA"; terminar_gpg' EXIT
+install -d -m 700 "$PRUEBA"
+
+# La copia más reciente de una carpeta (por fecha de subida).
+mas_reciente() {
+  rclone lsjson --files-only "$BACKUP_REMOTE/$1" \
+    | python3 -c 'import json,sys; d=sorted(json.load(sys.stdin), key=lambda f: f["ModTime"]); print(d[-1]["Path"], d[-1]["ModTime"][:16]) if d else sys.exit("sin copias")'
+}
+
+fallos=0
+
+read -r f fecha < <(mas_reciente base)
+descifrar "base/$f" "$PRUEBA/database.db"
+resultado=$(python3 -c 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); print(c.execute("PRAGMA integrity_check").fetchone()[0], c.execute("select count(*) from my_news_news").fetchone()[0])' "$PRUEBA/database.db")
+echo "base   $f ($fecha): integrity_check y noticias: $resultado"
+[ "${resultado%% *}" = ok ] || fallos=$((fallos + 1))
+rm -f "$PRUEBA/database.db"
+
+for tipo in qdrant config; do
+  read -r f fecha < <(mas_reciente "$tipo")
+  # Descifrar y leer el tar entero sin escribirlo: si gpg, zstd o el tar están
+  # dañados, falla aquí.
+  if n=$(rclone cat "$BACKUP_REMOTE/$tipo/$f" \
+      | gpg --batch --quiet --pinentry-mode loopback --no-symkey-cache \
+            --passphrase-file "$RESTIC_PASSWORD_FILE" -d \
+      | zstd -q -d -c | tar -tf - | wc -l); then
+    echo "$tipo $f ($fecha): $n entradas"
+    [ "$n" -gt 0 ] || fallos=$((fallos + 1))
+  else
+    echo "$tipo $f ($fecha): NO SE PUEDE LEER" >&2
+    fallos=$((fallos + 1))
+  fi
+done
+
+[ "$fallos" -eq 0 ] || { echo "$fallos copia(s) no superan la verificación" >&2; exit 1; }
+echo "Todas las copias verificadas"
