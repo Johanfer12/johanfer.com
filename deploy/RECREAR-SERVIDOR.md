@@ -64,6 +64,8 @@ sudo curl -L -o /opt/qdrant/qdrant \
   https://github.com/qdrant/qdrant/releases/download/v1.15.4/qdrant-aarch64-unknown-linux-musl
 sudo chmod +x /opt/qdrant/qdrant
 sudo chown -R johan:johan /var/lib/qdrant
+# Antes, el tmpfs de los snapshots de deploy/fstab-tmpfs (ver 2.9): la unidad
+# lo exige (RequiresMountsFor) y sin él Qdrant no arranca.
 sudo cp deploy/qdrant.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now qdrant
 curl -s http://127.0.0.1:6333/collections   # debe responder
@@ -193,6 +195,36 @@ sudo sysctl --system
 sudo mkdir -p /etc/systemd/journald.conf.d
 sudo cp deploy/journald-size-limit.conf /etc/systemd/journald.conf.d/size-limit.conf
 sudo systemctl restart systemd-journald
+```
+
+**Menos escrituras en la SD (noviembre 2026).** Medido: la tarjeta recibía
+~1 GB al día. Tres ajustes, cada uno explicado en su fichero:
+
+```bash
+# Temporales de las copias en RAM (~240 MB/día menos). Antes de Qdrant (2.2)
+# para que su unidad encuentre montado /var/lib/qdrant/snapshots.
+grep -v '^#' deploy/fstab-tmpfs | grep -v '^$' | sudo tee -a /etc/fstab
+sudo mkdir -p /var/lib/johanfer-backup /var/lib/qdrant/snapshots
+sudo systemctl daemon-reload && sudo mount -a
+
+# cron sin líneas informativas en el journal (~1.800/día menos)
+sudo mkdir -p /etc/systemd/system/cron.service.d
+sudo cp deploy/cron-quiet.conf /etc/systemd/system/cron.service.d/quiet.conf
+sudo systemctl daemon-reload && sudo systemctl restart cron
+```
+
+La base va en `auto_vacuum=INCREMENTAL` y la pasada de noticias de las 22:00
+devuelve cada día las páginas libres (`PRAGMA incremental_vacuum` en
+`purge_old_news`). Una base restaurada de una copia anterior a ese cambio no
+lo trae: se fija una vez, con la web parada o entre pasadas.
+
+```bash
+python - <<'PY'
+import sqlite3
+c = sqlite3.connect('database.db', isolation_level=None)
+c.execute('PRAGMA auto_vacuum=INCREMENTAL'); c.execute('VACUUM')
+print(c.execute('PRAGMA auto_vacuum').fetchone())   # (2,)
+PY
 ```
 
 Lo que trae la imagen de Raspberry Pi OS y aquí no hace nada (octubre de 2026).

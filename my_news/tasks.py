@@ -298,6 +298,23 @@ def purge_old_news(days: int = 15, mantenimiento: bool = False):
             except Exception:
                 logger.exception("Error ejecutando PRAGMA optimize tras la purga")
 
+        # Devolver al sistema las páginas que dejan libres las purgas de cada
+        # pasada. Sin esto la base crecía sola: en noviembre de 2026 el 57% de
+        # database.db (12 de 21 MB) era espacio vacío, que además viajaba en
+        # cada una de las cuatro copias de seguridad diarias. Solo hace algo si
+        # la base está en auto_vacuum=INCREMENTAL (se fijó con un VACUUM en la
+        # Pi); si no, es una orden vacía. Va aparte del optimize porque las
+        # páginas libres las dejan todas las pasadas, no solo esta.
+        if mantenimiento and connection.vendor == 'sqlite':
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute('PRAGMA incremental_vacuum')
+                    # Avanza una página por paso: sin consumir el resultado,
+                    # el módulo sqlite3 solo liberaría la primera.
+                    cursor.fetchall()
+            except Exception:
+                logger.exception("Error ejecutando PRAGMA incremental_vacuum")
+
         logger.info(
             f"Purga completada: {deleted_count} noticias no guardadas eliminadas (> {days} días)"
         )

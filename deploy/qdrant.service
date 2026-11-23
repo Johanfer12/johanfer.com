@@ -28,6 +28,8 @@
 Description=Qdrant Vector DB
 After=network-online.target
 Wants=network-online.target
+# Los snapshots van a un tmpfs (ver deploy/fstab-tmpfs): que esté montado antes.
+RequiresMountsFor=/var/lib/qdrant/snapshots
 
 [Service]
 User=johan
@@ -37,6 +39,9 @@ Environment=QDRANT__SERVICE__HOST=127.0.0.1
 Environment=QDRANT__SERVICE__HTTP_PORT=6333
 # Qdrant envía por defecto estadísticas de uso anónimas a sus desarrolladores.
 Environment=QDRANT__TELEMETRY_DISABLED=true
+# Los temporales con los que arma un snapshot, en el mismo tmpfs que el
+# snapshot: por defecto iban a storage/snapshots_temp, en la SD.
+Environment=QDRANT__STORAGE__TEMP_PATH=/var/lib/qdrant/snapshots/tmp
 WorkingDirectory=/var/lib/qdrant
 ExecStart=/opt/qdrant/qdrant
 Restart=always
