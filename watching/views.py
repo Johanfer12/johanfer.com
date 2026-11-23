@@ -180,6 +180,7 @@ def clear_cards_cache(**kwargs):
     """Un cambio hecho en este mismo proceso (el admin) se ve al momento."""
     with _cards_lock:
         _cards_cache.update(huella=None, hasta=0.0, cards=None)
+        _stats_cache.update(huella=None, hasta=0.0, context=None)
 
 
 def _sort_cards(cards, orden):
@@ -275,29 +276,54 @@ def _stars_label(rating):
     return label
 
 
+# Las estadísticas se guardan igual que las tarjetas (misma huella, mismo
+# plazo): cambian una vez al día, con el sync, y calcularlas costaba ~630 ms en
+# la Pi en cada visita.
+_stats_cache = {'huella': None, 'hasta': 0.0, 'context': None}
+
+
 def watching_stats(request):
+    huella = _cards_fingerprint()
+    with _cards_lock:
+        if (_stats_cache['context'] is not None and _stats_cache['huella'] == huella
+                and time.monotonic() < _stats_cache['hasta']):
+            return render(request, 'watching_stats.html', _stats_cache['context'])
+    context = _build_stats_context()
+    with _cards_lock:
+        _stats_cache.update(huella=huella, hasta=time.monotonic() + CARDS_CACHE_TTL, context=context)
+    return render(request, 'watching_stats.html', context)
+
+
+def _build_stats_context():
     # El historial personal es pequeño: se agrupa en Python, lo que además
     # permite usar la zona horaria local (SQLite no convierte fechas solo).
+    # Solo las columnas que hacen falta: crear 2.372 modelos completos (con la
+    # sinopsis) era la mitad del coste. Y la zona se lee una vez: localtime()
+    # la vuelve a buscar en cada fila.
+    zona = timezone.get_current_timezone()
     shows_by_year = defaultdict(set)
     movies_by_year = defaultdict(set)
     work_ratings = {}  # una obra (tipo, tmdb_id) -> mi nota
     release_years = {}  # una obra (tipo, tmdb_id) -> año de estreno
 
-    for item in WatchedItem.objects.all():
-        work_key = (item.media_type == 'episode', item.tmdb_id)
-        if item.year:
-            release_years.setdefault(work_key, item.year)
-        if item.user_rating:
-            work_ratings.setdefault(work_key, item.user_rating)
-        local_dt = timezone.localtime(item.watched_at)
+    filas = WatchedItem.objects.values_list(
+        'media_type', 'tmdb_id', 'year', 'user_rating', 'watched_at',
+    ).order_by('-watched_at')  # el de siempre (Meta): gana la nota más reciente
+    for media_type, tmdb_id, year, user_rating, watched_at in filas:
+        work_key = (media_type == 'episode', tmdb_id)
+        if year:
+            release_years.setdefault(work_key, year)
+        if user_rating:
+            work_ratings.setdefault(work_key, user_rating)
+        local_dt = watched_at.astimezone(zona)
         # Trakt marca con el epoch Unix (1969/1970 local) lo visto sin fecha
         # conocida: fuera de las estadísticas temporales.
         if local_dt.year <= 1970:
             continue
-        if item.media_type == 'episode':
-            shows_by_year[local_dt.year].add(item.tmdb_id)
+        if media_type == 'episode':
+            shows_by_year[local_dt.year].add(tmdb_id)
         else:
-            movies_by_year[local_dt.year].add(item.tmdb_id)
+            movies_by_year[local_dt.year].add(tmdb_id)
 
     years = sorted(set(shows_by_year) | set(movies_by_year))
     rating_counts = Counter(work_ratings.values())
@@ -314,4 +340,4 @@ def watching_stats(request):
         'decades_labels': json.dumps([f'{decade}s' for decade in decades]),
         'decades_values': json.dumps([decade_counts[decade] for decade in decades]),
     }
-    return render(request, 'watching_stats.html', context)
+    return context

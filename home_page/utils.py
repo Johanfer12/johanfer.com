@@ -1,6 +1,7 @@
 from bs4 import BeautifulSoup
 import feedparser
 import requests
+import io
 import os
 from datetime import timezone as dt_timezone
 from email.utils import parsedate_to_datetime
@@ -22,40 +23,36 @@ logger = logging.getLogger(__name__)
 def modify_cover_url(cover_url):
     return re.sub(r'(_SX\d+_SY\d+_|_SY\d+_SX\d+_|_SX\d+_|_SY\d+_)', '_SY700_', cover_url)
 
-def convert_to_webp(source_path, destination_path):
-    try:
-        with Image.open(source_path) as img:
-            img.thumbnail((300, 450), Image.Resampling.LANCZOS)
-            if img.mode in ("RGBA", "P"):
-                img = img.convert("RGB")
-            img.save(destination_path, 'WEBP')
-    except Exception:
-        logger.exception("Error al convertir la imagen")
+def convert_to_webp(source, destination_path):
+    """Reduce la imagen a 300x450 como mucho y la guarda en webp.
+
+    `source` puede ser una ruta o un fichero en memoria. Los fallos se
+    propagan: quien llama decide cómo registrarlos.
+    """
+    with Image.open(source) as img:
+        img.thumbnail((300, 450), Image.Resampling.LANCZOS)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        img.save(destination_path, 'WEBP')
 
 
 def download_as_webp(url, file_path, *, error_label):
     """Descarga una imagen y la deja convertida a webp en `file_path`.
 
-    La usan las portadas de libros y las caratulas de la seccion TV, que hacian lo
-    mismo con dos copias del mismo try/finally. El temporal se borra pase lo
-    que pase, y un fallo se registra sin tumbar la sincronizacion entera: una
-    imagen que falta se vuelve a intentar en la siguiente pasada.
+    La usan las portadas de libros y las caratulas de la seccion TV. La imagen
+    se convierte en memoria: antes se escribía un JPG temporal en la SD solo
+    para volver a leerlo. Un fallo se registra sin tumbar la sincronización
+    entera (una imagen que falta se vuelve a intentar en la siguiente pasada) y
+    no anota color de una imagen que no se llegó a guardar.
     """
-    folder = os.path.dirname(file_path)
-    temp_path = os.path.join(folder, f"temp_{os.path.basename(file_path)}.jpg")
     try:
         response = requests.get(url, timeout=30)
         response.raise_for_status()
-        with open(temp_path, "wb") as f:
-            f.write(response.content)
-        convert_to_webp(temp_path, file_path)
+        convert_to_webp(io.BytesIO(response.content), file_path)
         # El color medio pinta el hueco de la tarjeta mientras carga la imagen.
         cover_colors.remember(file_path)
     except Exception:
         logger.exception("Error descargando %s", error_label)
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
 
 def parse_rss_datetime(value):
     if not value:

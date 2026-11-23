@@ -937,10 +937,12 @@ class FeedService:
     @staticmethod
     def get_full_article_content(url):
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-            response = requests.get(url, headers=headers, timeout=10)
+            # La misma cabecera de navegador que los extractores de comentarios.
+            # Antes se presentaba como Chrome 91, de 2021: justo lo que el
+            # propio detector de robots del sitio marca como navegador viejo, y
+            # algunos medios bloquean versiones tan atrasadas.
+            from .comment_extractors import REQUEST_HEADERS
+            response = requests.get(url, headers=REQUEST_HEADERS, timeout=10)
             response.raise_for_status()
             
             # Intentar decodificar explícitamente como UTF-8

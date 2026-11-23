@@ -1343,6 +1343,21 @@ class DownloadAsWebpTests(TestCase):
             self.assertEqual(os.listdir(carpeta), [])
 
 
+class HeadWithoutBodyTests(TestCase):
+    """Un HEAD (el monitor de disponibilidad) sale sin cuerpo y con las
+    cabeceras del GET, para que gunicorn no lo anote en el journal."""
+
+    def test_head_has_no_body_but_keeps_the_length(self):
+        get = self.client.get('/about/')
+        head = self.client.head('/about/')
+        self.assertEqual(head.status_code, 200)
+        self.assertEqual(head.content, b'')
+        self.assertEqual(head['Content-Length'], get['Content-Length'])
+
+    def test_get_keeps_its_body(self):
+        self.assertGreater(len(self.client.get('/about/').content), 0)
+
+
 class SitemapTests(TestCase):
     """El sitemap tiene que listar todas las secciones publicas.
 

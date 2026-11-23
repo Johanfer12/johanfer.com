@@ -114,7 +114,10 @@
     /* ---------------------------------------------------------------------
      *  Utilidades genéricas
      * ------------------------------------------------------------------ */
-    const log = (...args) => console.log('[news]', ...args);
+    // Trazas de depuración: solo con ?debug en la URL. En producción ensuciaban
+    // la consola de cualquier visitante.
+    const DEBUG = new URLSearchParams(location.search).has('debug');
+    const log = DEBUG ? (...args) => console.log('[news]', ...args) : () => {};
     const err = (...args) => console.error('[news]', ...args);
     const SHARE_ICON_HTML = '<svg class="share-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 483 483" aria-hidden="true"><path fill="currentColor" d="M395.72,0c-48.204,0-87.281,39.078-87.281,87.281c0,2.036,0.164,4.03,0.309,6.029l-161.233,75.674 c-15.668-14.971-36.852-24.215-60.231-24.215c-48.204,0.001-87.282,39.079-87.282,87.282c0,48.204,39.078,87.281,87.281,87.281 c15.206,0,29.501-3.907,41.948-10.741l69.789,58.806c-3.056,8.896-4.789,18.396-4.789,28.322c0,48.204,39.078,87.281,87.281,87.281 c48.205,0,87.281-39.078,87.281-87.281s-39.077-87.281-87.281-87.281c-15.205,0-29.5,3.908-41.949,10.74l-69.788-58.805 c3.057-8.891,4.789-18.396,4.789-28.322c0-2.035-0.164-4.024-0.308-6.029l161.232-75.674c15.668,14.971,36.852,24.215,60.23,24.215 c48.203,0,87.281-39.078,87.281-87.281C482.999,39.079,443.923,0,395.72,0z"/></svg>';
     const SHARE_CHECK_HTML = '<svg class="share-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.285 6.709a1 1 0 0 1 .006 1.414l-9.3 9.4a1 1 0 0 1-1.421.005L3.71 11.72a1 1 0 1 1 1.414-1.414l5.146 5.146 8.593-8.68a1 1 0 0 1 1.422-.063z"/></svg>';

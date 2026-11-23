@@ -16,6 +16,10 @@
      *  Selectores y estado
      * ------------------------------------------------------------------ */
     const $ = (sel) => document.querySelector(sel);
+    // Trazas solo con ?debug en la URL (ver news_script.js).
+    const log = new URLSearchParams(location.search).has('debug')
+        ? (...args) => console.log('[reader]', ...args)
+        : () => {};
     const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
     const DOM = {
@@ -152,11 +156,11 @@
             .sort((a, b) => scoreVoice(b) - scoreVoice(a))[0];
 
         if (spanishVoice) {
-            console.log(`[reader] Usando voz: ${spanishVoice.name} (${spanishVoice.lang})`);
+            log(`Usando voz: ${spanishVoice.name} (${spanishVoice.lang})`);
             return spanishVoice;
         }
 
-        console.log('[reader] No se encontró voz en español, usando voz por defecto');
+        log('No se encontró voz en español, usando voz por defecto');
         return null;
     };
 
@@ -196,7 +200,7 @@
             if (id !== STATE.speechId) return;
             if (i >= chunks.length) {
                 STATE.utterance = null;
-                console.log('[reader] Lectura finalizada');
+                log('Lectura finalizada');
                 if (onEnd) onEnd();
                 return;
             }
@@ -328,7 +332,7 @@
         const textToRead = `${data.title}. ${data.shortAnswer || ''}`;
         speak(textToRead, onSpeechEnd);
 
-        console.log(`[reader] Noticia ${index + 1} de ${STATE.newsCards.length}`);
+        log(`Noticia ${index + 1} de ${STATE.newsCards.length}`);
     };
 
     /** Ir a la siguiente noticia */
@@ -398,7 +402,7 @@
     const handleGesture = () => {
         // Prevenir gestos múltiples simultáneos
         if (STATE.processingGesture) {
-            console.log('[reader] Gesto ignorado: ya procesando otro gesto');
+            log('Gesto ignorado: ya procesando otro gesto');
             return;
         }
 
@@ -420,13 +424,13 @@
             // Swipe horizontal
             if (deltaX > 0) {
                 // Swipe derecha → Leer reverso
-                console.log('[reader] Gesto: Derecha - Leer reverso');
+                log('Gesto: Derecha - Leer reverso');
                 readBack();
                 // Liberar inmediatamente para permitir otro gesto
                 STATE.processingGesture = false;
             } else {
                 // Swipe izquierda → Eliminar y pasar a la siguiente
-                console.log('[reader] Gesto: Izquierda - Eliminar y pasar a siguiente');
+                log('Gesto: Izquierda - Eliminar y pasar a siguiente');
                 deleteCurrentNews();
                 // Liberar después de que la eliminación termine
                 setTimeout(() => {
@@ -437,13 +441,13 @@
             // Swipe vertical
             if (deltaY > 0) {
                 // Swipe abajo → Salir
-                console.log('[reader] Gesto: Abajo - Salir');
+                log('Gesto: Abajo - Salir');
                 exitReaderMode();
                 // Liberar inmediatamente
                 STATE.processingGesture = false;
             } else {
                 // Swipe arriba → Siguiente noticia (sin eliminar)
-                console.log('[reader] Gesto: Arriba - Siguiente sin eliminar');
+                log('Gesto: Arriba - Siguiente sin eliminar');
                 nextNews();
                 // Liberar inmediatamente
                 STATE.processingGesture = false;
@@ -460,7 +464,13 @@
         STATE.newsCards = getNewsCards();
 
         if (STATE.newsCards.length === 0) {
-            alert('No hay noticias disponibles');
+            // El mismo aviso que el resto del feed, no un alert() del navegador.
+            const feedback = document.getElementById('news-feedback');
+            if (feedback) {
+                document.getElementById('news-feedback-message').textContent = 'No hay noticias disponibles para leer.';
+                feedback.hidden = false;
+            }
+            STATE.active = false;
             return;
         }
 
@@ -492,7 +502,7 @@
         // Cargar primera noticia
         loadNews(0);
 
-        console.log('[reader] Modo lectura activado');
+        log('Modo lectura activado');
     };
 
     const exitReaderMode = () => {
@@ -529,7 +539,7 @@
             DOM.remaining.textContent = '';
         }
 
-        console.log('[reader] Modo lectura desactivado');
+        log('Modo lectura desactivado');
     };
 
     const toggleReaderMode = () => {
@@ -608,12 +618,12 @@
     if (speechSynthesis.onvoiceschanged !== undefined) {
         speechSynthesis.onvoiceschanged = () => {
             const voices = speechSynthesis.getVoices();
-            console.log(`[reader] ${voices.length} voces disponibles`);
+            log(`${voices.length} voces disponibles`);
         };
     }
 
     // Cargar voces inmediatamente
     speechSynthesis.getVoices();
 
-    console.log('[reader] Modo lectura inicializado');
+    log('Modo lectura inicializado');
 })();
