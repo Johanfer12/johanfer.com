@@ -20,7 +20,7 @@ const fmt = (v, d = 2) => `${v > 0 ? '+' : ''}${v.toFixed(d).replace('.', ',')}`
 // crece. Se hace así y no con las animaciones de Chart.js porque estas
 // gráficas van con `animation: false` (todo lo demás tiene que aparecer
 // quieto) y porque el recorte acaba exactamente en el último dato, no en el
-// borde del eje: la línea de 2026 solo llega hasta agosto.
+// borde del eje: la línea de 2026 solo llega hasta el último mes con dato.
 const revelar = {
     id: 'revelar',
     beforeInit(chart) {
@@ -262,7 +262,7 @@ alEntrarEnVista('co2Chart', () => new Chart(document.getElementById('co2Chart'),
 }));
 
 // Temperatura del aire: anomalía anual sobre 1850-1900, con la meta de París.
-// El punto de 2026 es enero-agosto: va aparte para que no parezca un año completo.
+// El punto de 2026 es lo que va del año: va aparte para que no parezca un año completo.
 alEntrarEnVista('airChart', () => new Chart(document.getElementById('airChart'), {
     type: 'line',
     plugins: [revelar],
@@ -283,8 +283,8 @@ alEntrarEnVista('airChart', () => new Chart(document.getElementById('airChart'),
                 revelar: true,
             },
             {
-                label: '2026 (ene-ago)',
-                data: AIRE.anios.map((a) => (a === 2026 ? AIRE.ene_ago_2026 : null)),
+                label: AIRE.etiqueta_2026,
+                data: AIRE.anios.map((a) => (a === 2026 ? AIRE.acumulado_2026 : null)),
                 borderColor: '#ffffff',
                 backgroundColor: '#e0745c',
                 borderWidth: 2,

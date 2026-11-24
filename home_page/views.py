@@ -150,7 +150,6 @@ def retos(request):
         'limites_superados': sum(1 for l in datos.LIMITES_PLANETARIOS if l['superado']),
         'limites_total': len(datos.LIMITES_PLANETARIOS),
         'nino34': datos.NINO34_MENSUAL,
-        'nino34_semanal': datos.NINO34_SEMANAL_ULTIMO,
         'nino34_comparacion': datos.comparacion_nino34(),
         'temp_mar': datos.TEMP_MAR_MENSUAL,
         'co2': {
