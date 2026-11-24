@@ -1,0 +1,70 @@
+            <div class="retos-grid">
+                <div class="chart-container retos-card">
+                    <h3>Límites planetarios superados</h3>
+                    <button type="button" class="retos-info" data-title="Límites planetarios superados" data-text="{{ info.limites }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead"><strong>{{ limites_superados }} de {{ limites_total }}</strong> fuera del margen seguro para la humanidad.</p>
+                    <div class="retos-boundaries">
+                        <div class="chart-canvas-frame retos-donut">
+                            <canvas id="boundariesChart"></canvas>
+                            <div class="retos-donut-center" aria-hidden="true"><strong>{{ limites_superados }}</strong><span>de {{ limites_total }}</span></div>
+                        </div>
+                        <ul class="retos-legend">
+                            {% for l in limites %}
+                            <li class="{% if l.superado %}is-crossed{% else %}is-safe{% endif %}">
+                                <span class="retos-dot" aria-hidden="true"></span><span class="retos-name">{{ l.nombre }}{% if l.nuevo %} <em>nuevo en 2025</em>{% endif %}</span>
+                                <button type="button" class="retos-help" data-title="{{ l.nombre }}" data-text="{{ l.descripcion }}" aria-haspopup="dialog" aria-label="Qué significa: {{ l.nombre }}">?</button>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://www.pik-potsdam.de/en/news/latest-news/seven-of-nine-planetary-boundaries-now-breached-2013-ocean-acidification-joins-the-danger-zone" target="_blank" rel="noopener">Planetary Health Check 2025</a>, Instituto de Potsdam (PIK).</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>El Niño 2026 frente a los dos anteriores</h3>
+                    <button type="button" class="retos-info" data-title="El Niño 2026 frente a los dos anteriores" data-text="{{ info.nino }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    {% with c=nino34_comparacion %}
+                    <p class="retos-lead">Temperatura de una zona del Pacífico (Niño 3.4) sobre lo normal. En la semana del {{ c.semanal_fecha }} iba en <strong>+{{ c.semanal }} °C</strong>{% if c.semanal_es_maximo %}, su máximo{% else %}; el máximo, +{{ c.semanal_maximo }}, fue el {{ c.semanal_maximo_fecha }}{% endif %}. Las semanas más cálidas de 1997 y 2015 se quedaron en +{{ c.semanal_previos.1997 }} y +{{ c.semanal_previos.2015 }}.</p>
+                    <p class="retos-lead">Frente a los dos más fuertes antes de él, 1997 y 2015: en {{ c.mes }} iba <strong>{{ c.diferencia }} °C por encima</strong> de ambos en el mismo mes (+{{ c.ahora }} contra +{{ c.mismo_mes.1997 }} y +{{ c.mismo_mes.2015 }}){% if c.supera_picos %} y ya por encima de sus picos mensuales{% else %}, y los picos mensuales de aquellos fueron{% endif %}, +{{ c.pico.1997 }} y +{{ c.pico.2015 }}.</p>
+                    {% endwith %}
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="ninoChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://www.cpc.ncep.noaa.gov/data/indices/sstoi.indices" target="_blank" rel="noopener">NOAA CPC</a>, medias mensuales hasta {{ nino34_comparacion.mes }} de 2026. Referencia 1991-2020.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Temperatura del mar</h3>
+                    <button type="button" class="retos-info" data-title="Temperatura del mar" data-text="{{ info.mar }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">En {{ resumen.mar_mes }} de 2026 los océanos estaban <strong>+{{ resumen.mar_ahora }} °C</strong> sobre el promedio del siglo XX{% if resumen.mar_es_record %}: el mes más cálido de toda la serie desde 1850 (el récord anterior, +{{ resumen.mar_record_previo }} °C, fue en enero y febrero de 2024){% endif %}.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="marChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/global/time-series/globe/ocean/1/8/1850-2026" target="_blank" rel="noopener">NOAA NCEI</a>, océano global, anomalía mensual sobre 1901-2000.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>CO₂ en la atmósfera</h3>
+                    <button type="button" class="retos-info" data-title="CO₂ en la atmósfera" data-text="{{ info.co2 }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">La media de {{ resumen.co2_anio }} fue de <strong>{{ resumen.co2_anual }} ppm</strong> (partes por millón), {{ resumen.co2_sobre_limite }} por encima del límite seguro de 350; el máximo de mayo de 2026 llegó a {{ resumen.co2_maximo }}. Antes de la industria eran unos 280.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="co2Chart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://gml.noaa.gov/ccgg/trends/" target="_blank" rel="noopener">NOAA GML</a>, observatorio de Mauna Loa, media anual.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Temperatura del aire</h3>
+                    <button type="button" class="retos-info" data-title="Temperatura del aire" data-text="{{ info.aire }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead"><strong>{{ resumen.aire_anio_record }}</strong> fue el año más cálido medido: <strong>+{{ resumen.aire_valor_record }} °C</strong> sobre 1850-1900. De enero a {{ resumen.aire_hasta_mes }} de 2026 va en <strong>+{{ resumen.aire_2026 }} °C</strong>{% if resumen.aire_2026_segundo %}, el segundo arranque más cálido de la serie (2024 y 2025 llevaban +{{ resumen.aire_2024_acumulado }} y +{{ resumen.aire_2025_acumulado }} en las mismas fechas){% endif %}.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="airChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/global/time-series/globe/land_ocean" target="_blank" rel="noopener">NOAA NCEI</a>, superficie global, sobre 1850-1900 (calculado con la propia serie).</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Nivel del mar</h3>
+                    <button type="button" class="retos-info" data-title="Nivel del mar" data-text="{{ info.nivel }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">En {{ resumen.nivel_anio }} el mar estaba unos <strong>{{ resumen.nivel_cm }} cm</strong> más alto que en 1993. El ritmo pasó de {{ resumen.nivel_ritmo_inicio }} mm al año en la primera década a {{ resumen.nivel_ritmo_actual }} en la última. La línea punteada prolonga esa tendencia: unos <strong>{{ resumen.nivel_2030 }} cm</strong> hacia 2030.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="nivelChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://sealevel.colorado.edu/" target="_blank" rel="noopener">CU Sea Level Research Group</a>, satélites. Media anual global; la punteada es una tendencia, no un pronóstico oficial.</p>
+                </div>
+            </div>

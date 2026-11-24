@@ -1,8 +1,11 @@
-"""Datos de la página de Retos (/retos/).
+"""Datos de la página de Retos (/retos/): la parte de clima.
 
 Cada tema se elige con ?tema= desde el botón flotante y se ve solo, sin
-agruparlos. De momento solo Clima tiene contenido; Economía e IA salen como
-«próximamente».
+agruparlos. Cada uno tiene su módulo de datos (este, `retos_economia` y
+`retos_ia`), su plantilla (`retos_<tema>.html`) y su script
+(`retos_<tema>.js`). `CONTEXTO_POR_TEMA`, al final, une las piezas: cada
+función devuelve el contexto de su plantilla, y en `datos_graficas` lo que
+viaja a la página como JSON (id del <script> → valor).
 """
 
 TEMAS = (
@@ -492,3 +495,44 @@ def resumen_aire_y_nivel():
         'nivel_ritmo_actual': _coma(_pendiente_mm_anio(ultimo - 9, ultimo), 1),
         'nivel_2030': _coma(nivel_mar_para_grafica()['proyeccion_final'], 1),
     }
+
+
+def contexto_clima():
+    return {
+        'limites': LIMITES_PLANETARIOS,
+        'limites_superados': sum(1 for l in LIMITES_PLANETARIOS if l['superado']),
+        'limites_total': len(LIMITES_PLANETARIOS),
+        'nino34_comparacion': comparacion_nino34(),
+        'resumen': {**resumen_mar_y_co2(), **resumen_aire_y_nivel()},
+        'info': INFO_GRAFICAS,
+        'datos_graficas': {
+            'retos-limites': LIMITES_PLANETARIOS,
+            'retos-nino34': NINO34_MENSUAL,
+            'retos-mar': TEMP_MAR_MENSUAL,
+            'retos-co2': {
+                'anios': list(CO2_ANUAL),
+                'valores': list(CO2_ANUAL.values()),
+                'preindustrial': CO2_PREINDUSTRIAL,
+                'limite': CO2_LIMITE_SEGURO,
+            },
+            'retos-aire': aire_para_grafica(),
+            'retos-nivel': nivel_mar_para_grafica(),
+        },
+    }
+
+
+def _contexto_economia():
+    from . import retos_economia
+    return retos_economia.contexto()
+
+
+def _contexto_ia():
+    from . import retos_ia
+    return retos_ia.contexto()
+
+
+CONTEXTO_POR_TEMA = {
+    'clima': contexto_clima,
+    'economia': _contexto_economia,
+    'ia': _contexto_ia,
+}

@@ -1642,3 +1642,21 @@ class ClearExpiredSessionsTests(TestCase):
                 call_command('update_books')
 
         libros.assert_called_once_with()
+
+
+class RetosTests(TestCase):
+    """Cada tema de /retos/ se pinta con sus datos y su script."""
+
+    def test_cada_tema_se_pinta(self):
+        for tema, id_dato in (('clima', 'retos-nino34'), ('economia', 'retos-inflacion'), ('ia', 'retos-computo')):
+            with self.subTest(tema=tema):
+                respuesta = self.client.get('/retos/', {'tema': tema})
+                self.assertEqual(respuesta.status_code, 200)
+                html = respuesta.content.decode()
+                self.assertIn(f'id="{id_dato}"', html)
+                self.assertIn(f'js/retos_{tema}', html)
+                self.assertNotIn('{{', html)
+
+    def test_tema_desconocido_cae_en_clima(self):
+        respuesta = self.client.get('/retos/', {'tema': 'nada'})
+        self.assertContains(respuesta, 'id="retos-nino34"')

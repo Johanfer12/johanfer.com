@@ -79,14 +79,6 @@
 
 .retos-line { flex: 1 1 auto; min-height: 260px; }
 
-.retos-soon {
-    margin: 40px 20px;
-    padding: 40px 20px;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--surface-border);
-    background: var(--surface);
-    color: rgba(238, 243, 251, 0.7);
-}
 
 .retos-tema-btn { text-decoration: none; }
 .retos-tema-btn.is-active { background: var(--fab-bg-hover); outline: 2px solid var(--accent-strong); }

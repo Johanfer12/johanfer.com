@@ -1,0 +1,58 @@
+{% with r=resumen %}
+            <div class="retos-grid">
+                <div class="chart-container retos-card">
+                    <h3>Cálculo para entrenar los modelos</h3>
+                    <button type="button" class="retos-info" data-title="Cálculo para entrenar los modelos" data-text="{{ info.computo }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">Se multiplica por unas <strong>{{ r.computo_multiplicador }} veces al año</strong> (se duplica cada {{ r.computo_duplicacion }} meses). El mayor conocido, {{ r.computo_record }} ({{ r.computo_record_fecha }}), usó {{ r.computo_vs_gpt4 }} veces el cálculo de GPT-4 y unas {{ r.computo_vs_gpt3 }} veces el de GPT-3.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="computoChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://epoch.ai/data/ai-models" target="_blank" rel="noopener">Epoch AI</a>, modelos notables con cálculo conocido (muchos estimados). Escala logarítmica.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Cuánto trabajo hace sola la IA</h3>
+                    <button type="button" class="retos-info" data-title="Cuánto trabajo hace sola la IA" data-text="{{ info.horizonte }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">Duración de las tareas (medida en tiempo de un experto humano) que un modelo completa solo la mitad de las veces. GPT-4 llegaba a <strong>{{ r.horizonte_gpt4 }}</strong>; {{ r.horizonte_mejor }}, a unas <strong>{{ r.horizonte_mejor_valor }}</strong>. Desde 2023 se duplica cada {{ r.horizonte_duplicacion }} meses.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="horizonteChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://metr.org/time-horizons/" target="_blank" rel="noopener">METR</a>, horizonte al 50 %. Escala logarítmica; por encima de 16 horas la medida es poco fiable.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Lo que cuesta la misma inteligencia</h3>
+                    <button type="button" class="retos-info" data-title="Lo que cuesta la misma inteligencia" data-text="{{ info.precio }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">Igualar a GPT-4 en la prueba MMLU costaba <strong>{{ r.precio_inicio }} dólares</strong> por millón de tokens en {{ r.precio_inicio_fecha }}; en {{ r.precio_fin_fecha }}, con {{ r.precio_fin_modelo }}, {{ r.precio_fin }}: <strong>{{ r.precio_veces }} veces menos</strong> en menos de dos años.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="precioChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://epoch.ai/data-insights/llm-inference-price-trends" target="_blank" rel="noopener">Epoch AI</a>, modelo más barato que alcanza cada nota. Escala logarítmica.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Inversión de las grandes tecnológicas</h3>
+                    <button type="button" class="retos-info" data-title="Inversión de las grandes tecnológicas" data-text="{{ info.capex }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">Microsoft, Alphabet, Amazon y Meta invirtieron <strong>{{ r.capex_total }} mil millones de dólares</strong> en {{ r.capex_anio }}, frente a {{ r.capex_anterior }} el año anterior y {{ r.capex_2020 }} en 2020. Para 2026 prevén unos <strong>{{ r.capex_guia }} mil millones</strong>, sobre todo en centros de datos.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="capexChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://www.sec.gov/search-filings" target="_blank" rel="noopener">SEC</a> (informes anuales; Microsoft, año fiscal a junio) y previsiones de las empresas para 2026.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Electricidad de los centros de datos</h3>
+                    <button type="button" class="retos-info" data-title="Electricidad de los centros de datos" data-text="{{ info.electricidad }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">En {{ r.twh_anio }} consumieron <strong>{{ r.twh_valor }} TWh</strong>, un {{ r.twh_crecimiento }} % más que el año anterior. La AIE prevé {{ r.twh_2030 }} TWh en 2030 (cerca del {{ r.twh_cuota_2030 }} % de la electricidad mundial, el doble que en 2024) y {{ r.twh_2035 }} en 2035.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="electricidadChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://www.iea.org/reports/key-questions-on-energy-and-ai" target="_blank" rel="noopener">AIE</a>, «Key Questions on Energy and AI» (abril de 2026). Punteado: caso base; franja: escenarios.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Usuarios de ChatGPT</h3>
+                    <button type="button" class="retos-info" data-title="Usuarios de ChatGPT" data-text="{{ info.usuarios }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">De {{ r.usuarios_primero }} millones de usuarios semanales en {{ r.usuarios_primero_fecha }} a <strong>más de {{ r.usuarios_ultimo }} millones</strong> en {{ r.usuarios_ultimo_fecha }}: más de una de cada diez personas del planeta.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="usuariosChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: anuncios de <a href="https://openai.com/index/scaling-ai-for-everyone/" target="_blank" rel="noopener">OpenAI</a> y sus directivos; cifras de la empresa, sin auditar.</p>
+                </div>
+            </div>
+{% endwith %}

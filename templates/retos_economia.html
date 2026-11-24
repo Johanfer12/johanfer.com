@@ -1,0 +1,67 @@
+{% with r=resumen %}
+            <div class="retos-grid">
+                <div class="chart-container retos-card">
+                    <h3>Precio mundial de los alimentos</h3>
+                    <button type="button" class="retos-info" data-title="Precio mundial de los alimentos" data-text="{{ info.alimentos }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">En {{ r.fao_mes }} el índice de la FAO estaba en <strong>{{ r.fao_valor }}</strong>, un {{ r.fao_interanual }} % {% if r.fao_sube %}más{% else %}menos{% endif %} que un año antes y un {{ r.fao_bajo_pico }} % por debajo del récord de {{ r.fao_pico_mes }} ({{ r.fao_pico }}). 100 es el promedio de 2014-2016.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="alimentosChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://www.fao.org/worldfoodsituation/foodpricesindex/es/" target="_blank" rel="noopener">FAO</a>, Índice de Precios de los Alimentos, mensual desde 1990.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Inflación</h3>
+                    <button type="button" class="retos-info" data-title="Inflación" data-text="{{ info.inflacion }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">Subida de los precios en doce meses. Colombia va en <strong>{{ r.inflacion.colombia.valor }} %</strong> ({{ r.inflacion.colombia.mes }}), lejos del {{ r.inflacion_pico_col }} % de {{ r.inflacion_pico_col_mes }}; la zona euro, en {{ r.inflacion.zona_euro.valor }} %, y EE. UU., en {{ r.inflacion.eeuu.valor }} % ({{ r.inflacion.eeuu.mes }}).</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="inflacionChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuentes: <a href="https://www.dane.gov.co/index.php/estadisticas-por-tema/precios-y-costos/indice-de-precios-al-consumidor-ipc" target="_blank" rel="noopener">DANE</a> (vía OCDE), <a href="https://fred.stlouisfed.org/series/CPIAUCSL" target="_blank" rel="noopener">BLS</a> y <a href="https://fred.stlouisfed.org/series/CP0000EZ19M086NEST" target="_blank" rel="noopener">Eurostat</a> (vía FRED).</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Tasas de interés de los bancos centrales</h3>
+                    <button type="button" class="retos-info" data-title="Tasas de interés de los bancos centrales" data-text="{{ info.tasas }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">El Banco de la República tiene su tasa en <strong>{{ r.tasas.banrep }} %</strong>, tras volver a subirla en 2026; la Fed, en {{ r.tasas.fed_techo }} % (techo del rango), y el Banco Central Europeo, en {{ r.tasas.bce_deposito }} %.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="tasasChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuentes: <a href="https://data.bis.org/topics/CBPOL" target="_blank" rel="noopener">BIS</a> (Banco de la República) y <a href="https://fred.stlouisfed.org/series/DFEDTARU" target="_blank" rel="noopener">FRED</a> (Fed y BCE), a fin de cada mes.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>El dólar en Colombia</h3>
+                    <button type="button" class="retos-info" data-title="El dólar en Colombia" data-text="{{ info.trm }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">La TRM del {{ r.trm_fecha }} es de <strong>${{ r.trm_valor }}</strong> por dólar. El promedio mensual más alto desde 2015 fue en {{ r.trm_pico_mes }}: ${{ r.trm_pico }}.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="trmChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://www.datos.gov.co/Econom-a-y-Finanzas/Tasa-de-Cambio-Representativa-del-Mercado-TRM/32sa-8pi3" target="_blank" rel="noopener">Superintendencia Financiera</a> (datos.gov.co), promedio mensual; el último mes va incompleto.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Deuda pública</h3>
+                    <button type="button" class="retos-info" data-title="Deuda pública" data-text="{{ info.deuda }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">En {{ r.deuda_anio }} los gobiernos del mundo debían el <strong>{{ r.deuda.mundo }} %</strong> del PIB; EE. UU., el {{ r.deuda.eeuu }} %, y Colombia, el {{ r.deuda.colombia }} %. El FMI prevé que en {{ r.deuda_anio_final }} el mundo pase del 100 % ({{ r.deuda_final.mundo }} %) y EE. UU. llegue al {{ r.deuda_final.eeuu }} %.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="deudaChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://www.imf.org/external/datamapper/GGXWDG_NGDP@WEO" target="_blank" rel="noopener">FMI</a>, Perspectivas de la Economía Mundial (octubre de 2026). Punteado: proyección.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>EE. UU.: intereses de la deuda frente a defensa</h3>
+                    <button type="button" class="retos-info" data-title="EE. UU.: intereses de la deuda frente a defensa" data-text="{{ info.intereses }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">En {{ r.int_primero }} los intereses superaron por primera vez al gasto militar. En {{ r.int_anio }} fueron <strong>{{ r.int_intereses }} mil millones de dólares</strong>, frente a {{ r.int_defensa }} en defensa. En {{ r.int_inicio_anio }} eran {{ r.int_inicio }}.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="interesesChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://fred.stlouisfed.org/series/A091RC1A027NBEA" target="_blank" rel="noopener">BEA vía FRED</a>, gobierno federal, dólares corrientes.</p>
+                </div>
+                <div class="chart-container retos-card">
+                    <h3>Aranceles de EE. UU.</h3>
+                    <button type="button" class="retos-info" data-title="Aranceles de EE. UU." data-text="{{ info.aranceles }}" aria-haspopup="dialog" aria-label="Por qué es importante esta gráfica" title="Por qué es importante">i</button>
+                    <p class="retos-lead">En {{ r.ar_anio }} el arancel efectivo medio fue del <strong>{{ r.ar_valor }} %</strong>, el más alto desde {{ r.ar_desde }} (en {{ r.ar_anio|add:-1 }} era {{ r.ar_anterior }} %). Tocó techo en el {{ r.ar_pico_trim }}, con {{ r.ar_pico_trim_valor }} %, y en el {{ r.ar_ultimo_trim }} bajó a {{ r.ar_ultimo_trim_valor }} %.</p>
+                    <div class="chart-canvas-frame retos-line">
+                        <canvas id="arancelesChart"></canvas>
+                    </div>
+                    <p class="retos-source">Fuente: <a href="https://fred.stlouisfed.org/series/B235RC1A027NBEA" target="_blank" rel="noopener">BEA vía FRED</a>: recaudación de aduanas entre importaciones de bienes, anual desde 1929.</p>
+                </div>
+            </div>
+{% endwith %}

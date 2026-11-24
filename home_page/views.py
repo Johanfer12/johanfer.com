@@ -146,22 +146,7 @@ def retos(request):
         'temas': datos.TEMAS,
         'tema': tema,
         'tema_nombre': dict(datos.TEMAS)[tema],
-        'limites': datos.LIMITES_PLANETARIOS,
-        'limites_superados': sum(1 for l in datos.LIMITES_PLANETARIOS if l['superado']),
-        'limites_total': len(datos.LIMITES_PLANETARIOS),
-        'nino34': datos.NINO34_MENSUAL,
-        'nino34_comparacion': datos.comparacion_nino34(),
-        'temp_mar': datos.TEMP_MAR_MENSUAL,
-        'co2': {
-            'anios': list(datos.CO2_ANUAL),
-            'valores': list(datos.CO2_ANUAL.values()),
-            'preindustrial': datos.CO2_PREINDUSTRIAL,
-            'limite': datos.CO2_LIMITE_SEGURO,
-        },
-        'resumen': {**datos.resumen_mar_y_co2(), **datos.resumen_aire_y_nivel()},
-        'aire': datos.aire_para_grafica(),
-        'nivel_mar': datos.nivel_mar_para_grafica(),
-        'info': datos.INFO_GRAFICAS,
+        **datos.CONTEXTO_POR_TEMA[tema](),
     }
     return render(request, 'retos.html', context)
 
