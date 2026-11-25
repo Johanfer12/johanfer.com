@@ -500,6 +500,29 @@ class GroqProvider(BaseProvider):
 
     def complete(self, prompt, traducir_titulo=False):
         esfuerzo, max_tokens = razonamiento_de(self.model_name, self.setting)
+        try:
+            return self._pedir(prompt, traducir_titulo, esfuerzo, max_tokens)
+        except _Truncada:
+            # El razonamiento de gpt-oss varía de una noticia a otra: casi
+            # siempre cabe en 512, pero no siempre (visto el 25/11/2026, con
+            # Gemini caído y todo pasando por aquí). Un truncamiento pausaba la
+            # pasada entera, así que se repite una vez con margen en vez de
+            # subir el presupuesto de todas las llamadas, que es lo que cuenta
+            # el limitador contra los 8.000 tokens por minuto.
+            ampliado = max(max_tokens * 2, TRUNCATION_RETRY_TOKENS)
+            logger.warning('Groq truncó con %s tokens; se repite con %s.', max_tokens, ampliado)
+            try:
+                return self._pedir(prompt, traducir_titulo, esfuerzo, ampliado)
+            except _Truncada as e:
+                raise AIProviderError(
+                    'error',
+                    f'La respuesta de {self.model_name} se truncó incluso con '
+                    f'max_completion_tokens ({ampliado}).',
+                    e.detalle,
+                    puede_reintentar_otro=False,
+                ) from e
+
+    def _pedir(self, prompt, traducir_titulo, esfuerzo, max_tokens):
         limiter = self.limiter()
         try:
             limiter.acquire(self.model_name, prompt, max_tokens)
@@ -538,6 +561,12 @@ class GroqProvider(BaseProvider):
         limiter.update_from_headers(r.headers)
 
         if r.status_code != 200:
+            # Con response_format estricto, Groq no siempre avisa del corte con
+            # finish_reason='length': a veces responde 400 json_validate_failed
+            # con 'max completion tokens reached' en failed_generation.
+            if (r.status_code == 400 and 'json_validate_failed' in (r.text or '')
+                    and 'max completion tokens' in (r.text or '').lower()):
+                raise _Truncada(r.text[:400])
             raise _traducir_error_groq(r, limiter)
 
         try:
@@ -549,15 +578,17 @@ class GroqProvider(BaseProvider):
 
         if eleccion.get('finish_reason') == 'length':
             # El presupuesto no le dio: con razonamiento activo la respuesta no
-            # llega recortada, llega sin JSON. Es un fallo de configuracion, no
-            # del proveedor, asi que el respaldo tampoco lo arreglaria.
-            raise AIProviderError(
-                'error',
-                f'La respuesta de {self.model_name} se truncó: '
-                f'max_completion_tokens ({max_tokens}) se queda corto.',
-                puede_reintentar_otro=False,
-            )
+            # llega recortada, llega sin JSON.
+            raise _Truncada(f'finish_reason=length con max_completion_tokens={max_tokens}')
         return eleccion.get('message', {}).get('content') or ''
+
+
+class _Truncada(Exception):
+    """Groq se quedó sin presupuesto antes de cerrar el JSON."""
+
+    def __init__(self, detalle=''):
+        super().__init__(detalle)
+        self.detalle = detalle
 
 
 # --- Razonamiento ------------------------------------------------------------
@@ -573,6 +604,8 @@ DEFAULT_MAX_COMPLETION_TOKENS = 512
 # Presupuesto minimo que necesita una respuesta con razonamiento por encima de
 # 'low'. Medido: con 2.048 falla el 12% de las llamadas y con 4.096 ninguna.
 MIN_REASONING_TOKENS = 4096
+# Presupuesto del único reintento tras un truncamiento.
+TRUNCATION_RETRY_TOKENS = 2048
 
 
 def razonamiento_de(model_name, setting=None):

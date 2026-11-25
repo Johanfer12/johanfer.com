@@ -1,7 +1,7 @@
 from datetime import timedelta
 import time
 import uuid
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
@@ -9,6 +9,7 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.test import SimpleTestCase
 from django.test import TestCase
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -420,6 +421,60 @@ class NewsContentProcessingTests(SimpleTestCase):
             respuesta='{"summary": null, "short_answer": null, "ai_filter": null}')
         resumen, _, _, _ = _procesar([proveedor], contenido='Texto original de la noticia.')
         self.assertIn('Texto original', resumen)
+
+
+class GroqTruncationRetryTests(SimpleTestCase):
+    """Un truncamiento de Groq se repite una vez con más presupuesto.
+
+    Visto el 25/11/2026: con Gemini dando 503, todo pasaba por Groq y de vez en
+    cuando 512 tokens no le bastaban; una sola noticia así pausaba la pasada.
+    """
+
+    TRUNCADA_400 = (
+        '{"error":{"message":"Failed to generate JSON.","type":"invalid_request_error",'
+        '"code":"json_validate_failed","failed_generation":'
+        '"max completion tokens reached before generating a valid document"}}'
+    )
+
+    def setUp(self):
+        limiter = AIRateLimiter()
+        limiter.SAFE_RPM_CAP = 500
+        GroqProvider._LIMITER = limiter
+        self.addCleanup(setattr, GroqProvider, '_LIMITER', None)
+
+    @staticmethod
+    def _respuesta(status, texto='', json_data=None):
+        r = Mock(status_code=status, text=texto, headers={})
+        r.json.return_value = json_data
+        return r
+
+    def _ok(self):
+        return self._respuesta(200, json_data={
+            'choices': [{'finish_reason': 'stop', 'message': {'content': '{"ok": 1}'}}]
+        })
+
+    @override_settings(GROQ_API_KEY='x')
+    def test_json_validate_400_is_retried_with_a_bigger_budget(self):
+        with patch('my_news.ai_providers.requests.post', side_effect=[
+            self._respuesta(400, self.TRUNCADA_400), self._ok(),
+        ]) as post:
+            texto = GroqProvider().complete('prompt')
+
+        self.assertEqual(texto, '{"ok": 1}')
+        presupuestos = [c.kwargs['json']['max_completion_tokens'] for c in post.call_args_list]
+        self.assertEqual(presupuestos, [512, 2048])
+
+    @override_settings(GROQ_API_KEY='x')
+    def test_finish_reason_length_twice_gives_up_without_fallback(self):
+        cortada = self._respuesta(200, json_data={
+            'choices': [{'finish_reason': 'length', 'message': {'content': '{"a'}}]
+        })
+        with patch('my_news.ai_providers.requests.post', side_effect=[cortada, cortada]):
+            with self.assertRaises(AIProviderError) as ctx:
+                GroqProvider().complete('prompt')
+
+        self.assertIn('2048', ctx.exception.reason)
+        self.assertFalse(ctx.exception.puede_reintentar_otro)
 
 
 class ReasoningConfigTests(SimpleTestCase):
