@@ -5,6 +5,9 @@
 Thumbs.db
 desktop.ini
 database.db
+# Ficheros del modo WAL de SQLite (ver Bookshelf/db_pragmas.py).
+database.db-wal
+database.db-shm
 my_news_update.lock
 staticfiles/
 /.claude
